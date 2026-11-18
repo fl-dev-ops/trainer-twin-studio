@@ -8,7 +8,8 @@ import { uploadBytes } from "@/lib/upload-bytes";
 import { createHash } from "node:crypto";
 import { db } from "@/lib/db";
 import { authorizeRuntimeSession } from "@/lib/interview-sessions";
-import { getAgentConfigForAgent } from "@/lib/specs";
+import { ensureSessionSnapshot } from "@/lib/session-snapshot";
+import { AppError } from "@/lib/errors";
 import { searchKnowledge } from "@/lib/knowledge";
 import { MainCollectionService } from "@/lib/main-collection";
 import { env } from "@/env";
@@ -736,7 +737,7 @@ export async function selectNextClaimEvidence(
   const round = resumeRoundOf(phase);
   const usedIds = [...(state.used_claim_ids ?? []), state.current_claim?.claimId ?? ""].filter(Boolean);
 
-  let storedClaims = await db.resumeClaim.findMany({
+  const storedClaims = await db.resumeClaim.findMany({
     where: { documentId: docId },
     orderBy: { claimNo: "asc" },
     select: { id: true, claimNo: true, section: true, kind: true, text: true, anchor: true, metric: true },
@@ -1992,6 +1993,9 @@ export async function handleCompletions(request: Request): Promise<Response> {
     return await runCompletionPipeline(session, body);
   } catch (error) {
     console.error("[interview-runtime] completion failed", error);
+    if (error instanceof AppError) {
+      return Response.json({ error: { message: error.message, type: "server_error", code: error.code } }, { status: error.status });
+    }
     return Response.json(
       {
         error: {
@@ -2034,14 +2038,7 @@ async function runCompletionPipeline(
   // Load and compile specs
   let configSnapshot = session.compiledSnapshot as Parameters<typeof buildSpecs>[0] | null;
   if (!configSnapshot) {
-    configSnapshot = await getAgentConfigForAgent(session.agentId, session.orgId, session.contextId ?? undefined);
-    if (!configSnapshot) {
-      return Response.json({ error: { message: "Session spec unavailable", type: "server_error" } }, { status: 500 });
-    }
-    await db.interviewSession.update({
-      where: { id: session.id },
-      data: { compiledSnapshot: configSnapshot },
-    });
+    configSnapshot = await ensureSessionSnapshot(session.id, session.orgId);
   }
   const specs = buildSpecs(configSnapshot);
   const personaVoiceAvailable = configSnapshot.personaVoiceAvailable !== false;

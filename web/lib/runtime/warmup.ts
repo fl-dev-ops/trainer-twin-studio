@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { getAgentConfigForAgent } from "@/lib/specs";
+import { ensureSessionSnapshot } from "@/lib/session-snapshot";
 import { buildSpecs } from "./compiler";
 import { MainCollectionService } from "@/lib/main-collection";
 import {
@@ -40,18 +40,9 @@ export async function prewarmSessionOpening(sessionId: string): Promise<boolean>
     if (!session) return false;
 
     // Compile snapshot if not yet cached on the row
-    let configSnapshot = session.compiledSnapshot as Record<string, any> | null;
+    let configSnapshot = session.compiledSnapshot as Record<string, unknown> | null;
     if (!configSnapshot) {
-      configSnapshot = await getAgentConfigForAgent(
-        session.agentSlug,
-        session.orgId,
-        session.contextId ?? undefined
-      );
-      if (!configSnapshot) return false;
-      await db.interviewSession.update({
-        where: { id: session.id },
-        data: { compiledSnapshot: configSnapshot },
-      });
+      configSnapshot = await ensureSessionSnapshot(session.id, session.orgId);
     }
 
     const specs = buildSpecs(configSnapshot);

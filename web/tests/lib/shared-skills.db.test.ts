@@ -91,7 +91,7 @@ describe.skipIf(!localMinutesDb)("Phase 1 shared skill publishing (real Postgres
     const lock = database.withLock;
     let calls = 0;
     lockSpies.push(spyOn(database, "withLock").mockImplementation(async (keys, work, options) => {
-      expect(keys).toEqual([`agent:${slug}`]);
+      expect(keys).toEqual([`skill-ownership:${f.org.id}`, `agent:${slug}`]);
       const call = ++calls;
       const index = finalCalls.indexOf(call);
       if (index !== -1) {
@@ -452,7 +452,7 @@ describe.skipIf(!localMinutesDb)("Phase 1 shared skill publishing (real Postgres
     });
     const lock = database.withLock;
     lockSpies.push(spyOn(database, "withLock").mockImplementation((keys, work, options) => {
-      expect(keys).toEqual([`agent:${previous.slug}`]);
+      expect(keys).toEqual([`skill-ownership:${f.org.id}`, `agent:${previous.slug}`]);
       if (!shortened && options?.timeout === 120_000) {
         shortened = true;
         return lock(keys, async (tx) => {
@@ -529,7 +529,7 @@ describe.skipIf(!localMinutesDb)("Phase 1 shared skill publishing (real Postgres
     expect(await agent(previous.slug)).toMatchObject({ version: winner.version, data: { artifacts: winner.artifacts, skill: input.skill } });
   });
 
-  test("pruning retains the actual previous committed Agent version across failed reservation gaps", async () => {
+  test("automatic pruning stays disabled across failed reservations and successive compatibility publications", async () => {
     const original = await ingestScenario(f.org.id, authored());
     prune.mockClear();
     storageFailure = true;
@@ -539,11 +539,11 @@ describe.skipIf(!localMinutesDb)("Phase 1 shared skill publishing (real Postgres
     storageFailure = false;
     const saved = await ingestScenario(f.org.id, authored("# Retry after a gap\n"));
     expect(saved.version).toBeGreaterThan(original.version + 1);
-    expect(prune).toHaveBeenLastCalledWith(f.org.id, saved.slug, original.version);
+    expect(prune).not.toHaveBeenCalled();
     expect(files.get(`${original.artifacts}/SKILL.md`)).toBe(authored().skill);
     const next = await ingestScenario(f.org.id, authored("# Another committed version\n"));
-    expect(prune).toHaveBeenLastCalledWith(f.org.id, next.slug, saved.version);
-    expect(prune).toHaveBeenCalledTimes(2);
+    expect(next.version).toBeGreaterThan(saved.version);
+    expect(prune).not.toHaveBeenCalled();
   });
 
   test("database rejects cross-org primarySkill references including an unowned Agent", async () => {

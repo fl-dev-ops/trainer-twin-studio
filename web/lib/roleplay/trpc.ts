@@ -2,6 +2,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { beforeSettings } from "@/lib/context-upload";
 import { db, withLock } from "@/lib/db";
+import { ownershipLock, packageFieldsOmitted, skillOwnership } from "@/lib/skill-ownership";
 import { reportStateOf, type ReportState } from "@/lib/report-model";
 import { refusals } from "@/lib/errors";
 import type { Prisma } from "@/lib/generated/prisma/client";
@@ -18,6 +19,8 @@ import { studioProcedure, t } from "@/lib/trpc";
 import { avatarPhotoUrl } from "@/lib/twin/avatar";
 import { durationSeconds, transcriptTurns } from "@/lib/twin/stats";
 import { toolSettings, toolSettingsInput } from "@/lib/agent-tools";
+import { hydrateAgentSkill } from "@/lib/skill-history";
+import { skillRefusals } from "@/lib/skills";
 
 /**
  * Role-play tRPC surface, mounted at /api/roleplay (the twin module's twin, plans/roleplay-skill.md step 6).
@@ -55,10 +58,10 @@ function clientOf(persona: PersonaRow, data: unknown) {
 async function findRoleplay(orgId: string, slug: string) {
   const agent = await db.agent.findFirst({
     where: { ...roleplaysOf(orgId), slug, archivedAt: null },
-    select: { id: true, slug: true, name: true, data: true, updatedAt: true, persona: { select: personaSelect } },
+    select: { id: true, slug: true, version: true, primarySkillId: true, name: true, data: true, updatedAt: true, persona: { select: personaSelect } },
   });
   if (!agent) throw new TRPCError({ code: "NOT_FOUND", message: "Role play not found" });
-  return agent;
+  return agent.primarySkillId ? hydrateAgentSkill(orgId, agent) : agent;
 }
 
 /** A finished role-play session's report, once made. */
@@ -121,11 +124,12 @@ const scenariosRouter = t.router({
   /** The Scenarios library: one card per role play with its client, opening line and learners. */
   list: studioProcedure.query(async ({ ctx }) => {
     const orgId = ctx.user.orgId;
-    const agents = await db.agent.findMany({
+    const rows = await db.agent.findMany({
       where: { ...anyRoleplayOf(orgId), archivedAt: null },
       orderBy: [{ order: "asc" }, { updatedAt: "desc" }],
-      select: { id: true, slug: true, name: true, data: true, updatedAt: true, persona: { select: personaSelect } },
+      select: { id: true, slug: true, version: true, primarySkillId: true, name: true, data: true, updatedAt: true, persona: { select: personaSelect } },
     });
+    const agents = await Promise.all(rows.map((agent) => agent.primarySkillId ? hydrateAgentSkill(orgId, agent) : agent));
     const ids = agents.map((agent) => agent.id);
     const [invites, sessions] = await Promise.all([
       invitesFor(orgId, ids),
@@ -252,13 +256,14 @@ const builderRouter = t.router({
       const agent = await findRoleplay(ctx.user.orgId, input.slug);
       // Under the role play's save lock, reading its data again (specs/practice.md rule 20): a builder save that just
       // landed isn't undone, and the version doesn't move.
-      await withLock([`agent:${agent.slug}`], async (tx) => {
-        const current = await tx.agent.findFirst({ where: { id: agent.id, archivedAt: null }, select: { data: true } });
+      await withLock([ownershipLock(ctx.user.orgId), `agent:${agent.slug}`], async (tx) => {
+        const current = await tx.agent.findFirst({ where: { id: agent.id, archivedAt: null }, select: { data: true, primarySkillId: true } });
         if (!current) throw refusals.notFound();
         const data = (current.data && typeof current.data === "object" ? current.data : {}) as Record<string, unknown>;
+        const managed = current.primarySkillId && (await skillOwnership(ctx.user.orgId, tx)).mode === "managed";
         await tx.agent.update({
           where: { id: agent.id },
-          data: { data: { ...data, ...(input.before ? { before: input.before } : {}), ...(input.tools ? { tools: input.tools } : {}) } as Prisma.InputJsonValue },
+          data: { data: { ...(managed ? packageFieldsOmitted(data) : data), ...(input.before ? { before: input.before } : {}), ...(input.tools ? { tools: input.tools } : {}) } as Prisma.InputJsonValue },
         });
       });
       return { ok: true };
@@ -282,12 +287,19 @@ const sessionsRouter = t.router({
   get: studioProcedure.input(z.object({ id: z.string().min(1).max(100) })).query(async ({ ctx, input }) => {
     const row = await db.interviewSession.findFirst({
       where: roleplaySessions(ctx.user.orgId, { id: input.id }),
-      select: { ...sessionSelect, transcript: true, agent: { select: { slug: true, name: true, data: true, persona: { select: personaSelect } } } },
+      select: { ...sessionSelect, transcript: true, compiledSnapshot: true, skillPinsVersion: true, agent: { select: { id: true, slug: true, version: true, primarySkillId: true, name: true, data: true, persona: { select: personaSelect } } } },
     });
     if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Session not found" });
+    const snapshot = asRecord(row.compiledSnapshot);
+    const savedData = asRecord(snapshot.agent).data;
+    if (row.skillPinsVersion != null && !savedData) throw skillRefusals.unavailable();
+    const current = !savedData && row.agent.primarySkillId
+      ? await hydrateAgentSkill(ctx.user.orgId, row.agent)
+      : row.agent;
+    const savedPersona = asRecord(snapshot.persona).data;
     return {
       ...sessionItem(row),
-      client: clientOf(row.agent.persona, row.agent.data),
+      client: clientOf(savedPersona ? { ...row.agent.persona, data: savedPersona as Prisma.JsonValue } : row.agent.persona, savedData ?? current.data),
       report: roleplayReport(row.report),
       turns: transcriptTurns(row.transcript).map((turn) => ({ who: turn.who === "learner" ? ("learner" as const) : ("client" as const), text: turn.text })),
     };

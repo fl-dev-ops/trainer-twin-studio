@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { db, withLock } from "@/lib/db";
 import { carryAgentSkillVersion } from "@/lib/skill-history";
+import { ownershipLock, packageFieldsOmitted, skillOwnership } from "@/lib/skill-ownership";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import { avatarPrefix, deleteObject, deletePrefix, getObjectBytes, presignedGetUrl, presignedPutUrl, putObject, voicePrefix } from "@/lib/s3";
 import { professionalHeadshot } from "@/lib/headshot";
@@ -166,7 +167,7 @@ export async function savePersonaVoice(orgId: string, input: { voiceId: string; 
     select: { id: true, slug: true, version: true, data: true },
   });
   // Twins that carry their own copy of a voice (written by the earlier setup) would override the persona's.
-  const copied = await withLock(twins.map((twin) => `agent:${twin.slug}`).sort(), async (tx) => {
+  const copied = await withLock([ownershipLock(orgId), ...twins.map((twin) => `agent:${twin.slug}`).sort()], async (tx) => {
     await tx.avatar.update({ where: { id: avatar.id }, data: { s3VideoKey: input.videoKey } });
     await tx.persona.update({ where: { id: persona.id }, data: { voiceId: voice.id } });
     const current = await tx.agent.findMany({
@@ -176,8 +177,9 @@ export async function savePersonaVoice(orgId: string, input: { voiceId: string; 
     for (const twin of copied) {
       const { voiceId: _dropped, ...data } = asRecord(twin.data);
       void _dropped;
-      await tx.specVersion.create({ data: { entityType: "agents", entitySlug: twin.slug, version: twin.version, data: json(twin.data), orgId } });
-      await tx.agent.update({ where: { id: twin.id }, data: { version: twin.version + 1, data: json(data) } });
+      const managed = twin.primarySkillId && (await skillOwnership(orgId, tx)).mode === "managed";
+      await tx.specVersion.create({ data: { entityType: "agents", entitySlug: twin.slug, version: twin.version, data: json(managed ? packageFieldsOmitted(asRecord(twin.data)) : twin.data), orgId } });
+      await tx.agent.update({ where: { id: twin.id }, data: { version: twin.version + 1, data: json(managed ? packageFieldsOmitted(data) : data) } });
       if (twin.primarySkillId) await carryAgentSkillVersion(orgId, twin.id, twin.version, twin.version + 1, tx);
     }
     return copied;

@@ -20,7 +20,8 @@ import { enqueueIngestionWork } from "@/lib/ingestion-queue";
 import { type DocumentManifest } from "@/lib/context-document-service";
 import { saveUploadToS3 } from "@/lib/uploads";
 import { contextUploadFromAgentData, type AgentContextUpload } from "@/lib/context-upload";
-import { hydrateAgentSkill } from "@/lib/skill-history";
+import { hydrateAgentSkill, readAgentSkillVersion } from "@/lib/skill-history";
+import { skillRefusals } from "@/lib/skills";
 
 export type SpecType = "personas" | "agents";
 
@@ -660,7 +661,14 @@ export function documentManifestOf(doc: { id: string; name: string; kind: string
   };
 }
 
-export async function getAgentConfigForAgent(agentId: string, orgId: string, contextId?: string, contextIds?: string[], client: Prisma.TransactionClient = db) {
+export async function getAgentConfigForAgent(
+  agentId: string,
+  orgId: string,
+  contextId?: string,
+  contextIds?: string[],
+  client: Prisma.TransactionClient = db,
+  identity?: { agentVersion: number; personaSlug: string; personaVersion: number },
+) {
   const savedAgent = await client.agent.findFirst({
     where: {
       OR: [{ id: agentId }, { slug: agentId }],
@@ -669,7 +677,39 @@ export async function getAgentConfigForAgent(agentId: string, orgId: string, con
     include: { persona: true },
   });
   if (!savedAgent) return null;
-  const agent = savedAgent.primarySkillId ? await hydrateAgentSkill(orgId, savedAgent, client) : savedAgent;
+  const agentHistory = identity && savedAgent.version !== identity.agentVersion
+    ? await client.specVersion.findUnique({
+        where: { orgId_entityType_entitySlug_version: { orgId, entityType: "agents", entitySlug: savedAgent.slug, version: identity.agentVersion } },
+      })
+    : null;
+  if (identity && savedAgent.version !== identity.agentVersion && !isRecord(agentHistory?.data)) throw skillRefusals.unavailable();
+  const savedPersona = !identity || savedAgent.persona.slug === identity.personaSlug
+    ? savedAgent.persona
+    : await client.persona.findFirst({
+        where: { slug: identity.personaSlug, OR: [{ orgId }, { orgId: null }] },
+        orderBy: { orgId: { sort: "asc", nulls: "last" } },
+      });
+  if (!savedPersona) throw skillRefusals.unavailable();
+  const personaHistory = identity && savedPersona.version !== identity.personaVersion
+    ? await client.specVersion.findUnique({
+        where: { orgId_entityType_entitySlug_version: { orgId, entityType: "personas", entitySlug: identity.personaSlug, version: identity.personaVersion } },
+      })
+    : null;
+  if (identity && savedPersona.version !== identity.personaVersion && !isRecord(personaHistory?.data)) throw skillRefusals.unavailable();
+  const historicalMapping = identity && savedAgent.version !== identity.agentVersion
+    ? await readAgentSkillVersion(orgId, savedAgent.id, identity.agentVersion, client)
+    : null;
+  const historicalData = isRecord(agentHistory?.data) ? agentHistory.data : {};
+  const historicalPackage = typeof historicalData.skill === "string"
+    || ["scenario-ingest", "roleplay-skill", "twin-creator"].includes(String(historicalData.source));
+  const versioned = {
+    ...savedAgent,
+    primarySkillId: agentHistory ? historicalMapping?.skillId ?? (historicalPackage ? savedAgent.primarySkillId : null) : savedAgent.primarySkillId,
+    version: identity?.agentVersion ?? savedAgent.version,
+    data: agentHistory?.data ?? savedAgent.data,
+    persona: { ...savedPersona, version: identity?.personaVersion ?? savedPersona.version, data: personaHistory?.data ?? savedPersona.data },
+  };
+  const agent = versioned.primarySkillId || identity ? await hydrateAgentSkill(orgId, versioned, client) : versioned;
 
   const docIds = Array.from(new Set([...(contextIds ?? []), ...(contextId ? [contextId] : [])])).filter(Boolean);
   const contextDocs = docIds.length

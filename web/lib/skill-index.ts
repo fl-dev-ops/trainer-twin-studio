@@ -5,13 +5,14 @@ import { roleplayItemSchema } from "@/lib/roleplay/skill";
 import { scenarioItemSchema } from "@/lib/scenario-ingest";
 import { getObjectText } from "@/lib/s3";
 import { skillRefusals, verifySkillEnvelope } from "@/lib/skills";
+import { ownershipLock } from "@/lib/skill-ownership";
 
 export async function rebuildSkillIndex(orgId: string, versionId: string) {
   const version = await db.skillVersion.findFirst({
     where: { id: versionId, skill: { orgId } }, include: { skill: { select: { ownerSlug: true } } },
   });
   if (!version) throw refusals.notFound();
-  const claimed = await withLock([`agent:${version.skill.ownerSlug}`], async (tx) => {
+  const claimed = await withLock([ownershipLock(orgId), `agent:${version.skill.ownerSlug}`], async (tx) => {
     const current = await tx.skillVersion.findFirst({ where: { id: versionId, skill: { orgId } } });
     if (!current) throw refusals.notFound();
     if (current.status !== "ready") throw skillRefusals.unavailable();

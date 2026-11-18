@@ -4,7 +4,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { embedTexts, searchKnowledge } from "@/lib/knowledge";
 import { MainCollectionService, type ScenarioScope, type ScenarioStep } from "@/lib/main-collection";
-import { type PinnedTwinSkill, TWIN_SOURCE, twinPlaybooks, sessionTwinPlaybooks } from "@/lib/twins";
+import { type PinnedTwinSkill, TWIN_SOURCE, twinPlaybooks, sessionTwinPlaybooks, resolveTwinCatalog } from "@/lib/twins";
 import { redactLearnerNames } from "@/lib/persona-voice";
 import { enqueueWorkspaceCommand } from "@/lib/workspace-commands";
 import { buildSessionContext, getCachedSessionContext } from "@/lib/session-context";
@@ -15,7 +15,8 @@ import { uploadBytes } from "@/lib/upload-bytes";
 import { resolveUpload, UploadError } from "@/lib/uploads";
 import { getObjectText } from "@/lib/s3";
 import { errorResponse } from "@/lib/errors";
-import { loadSessionSkills } from "@/lib/session-skills";
+import { loadSessionSkills, resolveSnapshotSkill } from "@/lib/session-skills";
+import { skillRefusals } from "@/lib/skills";
 
 /** How much of a knowledge document one read_knowledge_document call returns (about 3k tokens). */
 const KNOWLEDGE_PAGE_CHARS = 12_000;
@@ -303,9 +304,45 @@ export async function POST(request: Request) {
   // Real lines from a scenario-ingest scenario (items.json), for the chat tool scenario_examples.
   if (input.action === "searchScenarioItems") {
     try {
+    const previewAgent = !input.sessionId
+      ? await db.agent.findFirst({ where: { slug: input.agentSlug, orgId }, select: {
+        id: true, slug: true, primarySkillId: true, data: true, personaId: true, kind: true, version: true,
+      } })
+      : null;
+    const previewSkills = async () => {
+      if (!previewAgent) return null;
+      const data = previewAgent.data && typeof previewAgent.data === "object" && !Array.isArray(previewAgent.data)
+        ? previewAgent.data as Record<string, unknown> : {};
+      const isMainTwin = previewAgent.kind === "TWIN" && data.source === TWIN_SOURCE;
+      if (!isMainTwin && !previewAgent.primarySkillId) return null;
+      return db.$transaction(async (tx) => {
+        if (!isMainTwin) {
+          const version = await resolveSnapshotSkill(orgId, previewAgent, previewAgent.kind, tx);
+          return {
+            kind: previewAgent.kind, agentSlug: previewAgent.slug, personaId: previewAgent.personaId, isMainTwin,
+            catalog: [{ slug: previewAgent.slug, version: previewAgent.version, skillVersionId: version.id }],
+            pins: [{ alias: previewAgent.slug, position: 0, version }], data,
+          };
+        }
+        const selected = await resolveTwinCatalog(orgId, previewAgent.personaId, tx);
+        const versions = await tx.skillVersion.findMany({
+          where: { id: { in: selected.pins.map((pin) => pin.skillVersionId) }, status: "ready", indexStatus: "ready", skill: { orgId } },
+          select: {
+            id: true, version: true, skillId: true, status: true, indexStatus: true, format: true, skillText: true,
+            manifest: true, artifacts: true, itemCount: true, skill: { select: { orgId: true, ownerSlug: true } },
+          },
+        });
+        const pins = selected.pins.map((pin) => {
+          const version = versions.find((version) => version.id === pin.skillVersionId && version.skill.ownerSlug === pin.alias);
+          if (!version) throw skillRefusals.unavailable();
+          return { alias: pin.alias, position: pin.position, version };
+        });
+        return { kind: previewAgent.kind, agentSlug: previewAgent.slug, personaId: previewAgent.personaId, isMainTwin, catalog: selected.catalog, pins, data };
+      });
+    };
     const managedSkill = input.sessionId
       ? await loadSessionSkills(orgId, input.sessionId, input.agentSlug, true)
-      : null;
+      : await previewSkills();
     if (managedSkill) {
       const all = managedSkill.isMainTwin ? await sessionTwinPlaybooks(orgId, managedSkill) : [];
       const named = input.playbook ? all.filter((p) => p.id === input.playbook || p.slug === input.playbook) : [];
@@ -350,7 +387,7 @@ export async function POST(request: Request) {
     const queryEmbedding = embedTexts([input.query]).then(([embedding]) => embedding);
     queryEmbedding.catch(() => {}); // awaited in searchScenarioItems; this only stops an early DB error leaving it unhandled
     // scenario.json's steps map the newer items' `action` to a step, and a step to its moves.
-    const agent = await db.agent.findFirst({ where: { slug: input.agentSlug, orgId }, select: { data: true, personaId: true, kind: true, version: true } });
+    const agent = previewAgent ?? await db.agent.findFirst({ where: { slug: input.agentSlug, orgId }, select: { data: true, personaId: true, kind: true, version: true } });
     const data = agent?.data as { source?: unknown; skill?: unknown; scenario?: { steps?: unknown; situations?: unknown } } | null;
     let exampleData = data;
     let scope: { skills: ScenarioScope[]; steps: ScenarioStep[] };

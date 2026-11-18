@@ -4,6 +4,7 @@ import type { Prisma } from "@/lib/generated/prisma/client";
 import { beforeSettings, type BeforeSettings } from "@/lib/context-upload";
 import { findTwinAgent } from "@/lib/twin-access";
 import { carryAgentSkillVersion } from "@/lib/skill-history";
+import { ownershipLock, packageFieldsOmitted, skillOwnership } from "@/lib/skill-ownership";
 
 const asRecord = (value: unknown) => (value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {});
 const json = (value: unknown) => value as Prisma.InputJsonValue;
@@ -15,7 +16,7 @@ const json = (value: unknown) => value as Prisma.InputJsonValue;
 export async function updateTwin(orgId: string, slug: string, patch: { name?: string; description?: string; settings?: Partial<BeforeSettings> }) {
   const found = await findTwinAgent(orgId, slug);
   // One save at a time per twin (practice rule 20): read and write under its lock.
-  return withLock([`agent:${found.slug}`], async (tx) => {
+  return withLock([ownershipLock(orgId), `agent:${found.slug}`], async (tx) => {
   const current = await tx.agent.findUniqueOrThrow({ where: { id: found.id }, select: { name: true, version: true, data: true, primarySkillId: true } });
   const previous = asRecord(current.data);
   const name = patch.name ?? current.name;
@@ -28,8 +29,9 @@ export async function updateTwin(orgId: string, slug: string, patch: { name?: st
     before: { ...beforeSettings(current.data), ...patch.settings },
   };
   if (stableJson(data) === stableJson(current.data) && name === current.name) return { version: current.version, changed: false };
-  await tx.specVersion.create({ data: { entityType: "agents", entitySlug: found.slug, version: current.version, data: json(current.data), orgId } });
-  await tx.agent.update({ where: { id: found.id }, data: { name, version: current.version + 1, data: json(data) } });
+  const managed = current.primarySkillId && (await skillOwnership(orgId, tx)).mode === "managed";
+  await tx.specVersion.create({ data: { entityType: "agents", entitySlug: found.slug, version: current.version, data: json(managed ? packageFieldsOmitted(previous) : current.data), orgId } });
+  await tx.agent.update({ where: { id: found.id }, data: { name, version: current.version + 1, data: json(managed ? packageFieldsOmitted(data) : data) } });
   if (current.primarySkillId) await carryAgentSkillVersion(orgId, found.id, current.version, current.version + 1, tx);
   return { version: current.version + 1, changed: true };
   });

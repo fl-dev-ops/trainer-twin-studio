@@ -161,7 +161,7 @@ describe.skipIf(!localMinutesDb)("Module 6 REST retries, account ownership and c
     const lock = database.withLock; let arrivals = 0; let entered!: () => void; let release!: () => void;
     const writing = new Promise<void>((resolve) => { entered = resolve; }); const proceed = new Promise<void>((resolve) => { release = resolve; });
     spies.push(spyOn(database, "withLock").mockImplementation((keys, work, options) => {
-      expect(keys).toEqual([`agent:${slug}`]); const first = ++arrivals === 1;
+      expect(keys).toEqual([`skill-ownership:${f.org.id}`, `agent:${slug}`]); const first = ++arrivals === 1;
       if (!first) release();
       return lock(keys, async (tx) => { if (first) { entered(); await proceed; } return work(tx); }, options);
     }));
@@ -176,7 +176,7 @@ describe.skipIf(!localMinutesDb)("Module 6 REST retries, account ownership and c
     const lock = database.withLock;
     let calls = 0;
     spies.push(spyOn(database, "withLock").mockImplementation(async (keys, work, options) => {
-      expect(keys).toEqual([`agent:${f.roleplay.slug}`]);
+      expect(keys).toEqual([`skill-ownership:${f.org.id}`, `agent:${f.roleplay.slug}`]);
       if (++calls === 2) { entered(); await proceed; }
       return lock(keys, work, options);
     }));

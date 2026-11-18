@@ -172,10 +172,13 @@ const fakeDb = {
     },
   },
   $transaction: async (fn: (tx: unknown) => unknown) => fn(fakeDb),
+  $queryRaw: async () => [],
 };
 mock.module("@/lib/db", () => ({
   withLock: async (keys: string[], work: (tx: typeof fakeDb) => Promise<unknown>) => {
-    expect(keys).toHaveLength(1); expect(keys[0]).toMatch(/^agent:/);
+    expect(keys).toHaveLength(2);
+    expect(keys[0]).toMatch(/^skill-ownership:/);
+    expect(keys[1]).toMatch(/^agent:/);
     return work(fakeDb);
   },
   isUniqueViolation: (error: unknown) => typeof error === "object" && error !== null && "code" in error && error.code === "P2002", db: fakeDb }));
@@ -496,14 +499,14 @@ test("publishing onto an archived skill brings it back, whether or not its conte
   expect(agents[0].archivedAt).toBeNull();
 });
 
-test("a new version's items go in before the row switches to it; versions before the previous one are pruned after", async () => {
+test("a new version's items precede activation and old indexes await audited retention", async () => {
   await ingestScenario("org1", input());
   expect(pruned).toEqual([]); // a first publish has nothing to prune
   log.length = 0;
   await ingestScenario("org1", input({ scenario: { ...scenario, name: "Depth drill" } }));
   expect(storedItems).toMatchObject({ version: 2 });
-  expect(log).toEqual(["s3", "chroma", "agent.update", "prune"]);
-  expect(pruned).toEqual([{ agentSlug: "acme-fundamental-depth", keepFrom: 1 }]); // keeps v2 (live) and v1 (previous)
+  expect(log).toEqual(["s3", "chroma", "agent.update"]);
+  expect(pruned).toEqual([]);
   log.length = 0;
   await ingestScenario("org1", input({ scenario: { ...scenario, name: "Depth drill" } })); // unchanged
   expect(log).not.toContain("prune");

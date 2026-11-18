@@ -15,6 +15,8 @@ import {
   sessionReportJsonSchema,
 } from "@/lib/session-report";
 import { transcriptTurns, type Turn } from "@/lib/twin/stats";
+import { hydrateAgentSkill } from "@/lib/skill-history";
+import { skillRefusals } from "@/lib/skills";
 
 /**
  * After the call, for a role play: the learner scored against what the trainer set in `Agent.data.after`
@@ -75,18 +77,23 @@ export type RoleplayReportInput = RoleplayAfter & {
 const reportTurns = (turns: Turn[]): ReportTurn[] =>
   turns.map((turn) => ({ speaker: turn.who === "learner" ? "Learner" : "Client", learner: turn.who === "learner", text: turn.text, spokenAt: turn.spokenAt }));
 
-/** The role play as the session ran it (pinned in its snapshot at start), else the agent as it is now. */
+/** Saved session data wins; only legacy sessions may fall back to the current experience. */
 export async function loadRoleplayReportInput(sessionId: string): Promise<RoleplayReportInput> {
   const session = await db.interviewSession.findUnique({
     where: { id: sessionId },
-    select: { status: true, startedAt: true, transcript: true, evidence: true, compiledSnapshot: true, agent: { select: { kind: true, name: true, data: true } } },
+    select: { orgId: true, skillPinsVersion: true, status: true, startedAt: true, transcript: true, evidence: true, compiledSnapshot: true, agent: { select: { id: true, slug: true, version: true, primarySkillId: true, kind: true, name: true, data: true } } },
   });
   const snapshot = asRecord(session?.compiledSnapshot);
-  const agentData = asRecord(snapshot.agent).data ?? session?.agent.data;
+  const snapshotAgent = asRecord(snapshot.agent);
+  if (session?.skillPinsVersion != null && !snapshotAgent.data) throw skillRefusals.unavailable();
+  const currentAgent = !snapshotAgent.data && session?.agent.primarySkillId
+    ? await hydrateAgentSkill(session.orgId, session.agent)
+    : session?.agent;
+  const agentData = snapshotAgent.data ?? currentAgent?.data;
   const persona = asRecord(asRecord(snapshot.persona).data);
   const scenario = asRecord(asRecord(agentData).scenario);
   const skill = text(asRecord(agentData).skill);
-  const agentName = session?.agent.name ?? "Role play";
+  const agentName = text(asRecord(agentData).name) || text(snapshotAgent.name) || session?.agent.name || "Role play";
   const brief = [
     `Role play: ${agentName}`,
     `Client: ${[text(persona.name), text(persona.role)].filter(Boolean).join(", ") || "the client"}`,

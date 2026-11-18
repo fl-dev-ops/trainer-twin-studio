@@ -168,10 +168,13 @@ const fakeDb = {
     },
   },
   $transaction: async (fn: (tx: unknown) => unknown) => fn(fakeDb),
+  $queryRaw: async () => [],
 };
 mock.module("@/lib/db", () => ({
   withLock: async (keys: string[], work: (tx: typeof fakeDb) => Promise<unknown>) => {
-    expect(keys).toHaveLength(1); expect(keys[0]).toMatch(/^agent:/);
+    expect(keys).toHaveLength(2);
+    expect(keys[0]).toMatch(/^skill-ownership:/);
+    expect(keys[1]).toMatch(/^agent:/);
     return work(fakeDb);
   },
   isUniqueViolation: (error: unknown) => typeof error === "object" && error !== null && "code" in error && error.code === "P2002", db: fakeDb }));

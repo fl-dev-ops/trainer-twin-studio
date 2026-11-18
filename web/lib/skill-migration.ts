@@ -8,6 +8,7 @@ import { getObjectText, orgOwnKey } from "@/lib/s3";
 import { countSources } from "@/lib/skill-sources";
 import { skillPackageHash, verifySkillEnvelope, type SkillFiles, type SkillFormat } from "@/lib/skills";
 import { stableJson } from "@/lib/stable-json";
+import { ownershipLock } from "@/lib/skill-ownership";
 
 type Tx = Prisma.TransactionClient;
 type Candidate = { slug: string; version: number; projections: Prisma.JsonValue[]; current: boolean; required: boolean };
@@ -58,6 +59,19 @@ async function candidates(orgId: string, opts: SkillMigrationOptions) {
           SELECT 1 FROM "AgentSkillVersion" m
           WHERE m."orgId" = ${orgId} AND m."agentId" = s."agentId" AND m."agentVersion" = s."agentVersion"
         ))
+      UNION ALL
+      SELECT s."agentSlug", s."agentVersion", NULL::jsonb, false, true
+      FROM "InterviewSession" s JOIN "Agent" a ON a.id = s."agentId"
+      WHERE s."orgId" = ${orgId} AND (s."compiledSnapshot" IS NULL OR s."compiledSnapshot" = 'null'::jsonb) AND (
+        EXISTS (SELECT 1 FROM "SpecVersion" h WHERE h."orgId" = ${orgId} AND h."entityType" = 'agents'
+          AND h."entitySlug" = s."agentSlug" AND h.version = s."agentVersion" AND h.data ? 'skill')
+        OR ((a."primarySkillId" IS NOT NULL OR a.data ? 'skill') AND (
+          a.version = s."agentVersion" OR NOT EXISTS (
+            SELECT 1 FROM "SpecVersion" h WHERE h."orgId" = ${orgId} AND h."entityType" = 'agents'
+            AND h."entitySlug" = s."agentSlug" AND h.version = s."agentVersion"
+          )
+        ))
+      )
       UNION ALL
       SELECT ref->>'slug', (ref->>'version')::integer, NULL::jsonb, false, true
       FROM "InterviewSession", LATERAL jsonb_array_elements(
@@ -125,7 +139,7 @@ async function readPackage(orgId: string, row: Candidate, kind: string) {
   if (!files) refuse("No verified original package files.");
   const rawManifest: Prisma.JsonValue = JSON.parse(files[manifestName]);
   const parsedManifest = format === "twin" ? twinSkillManifestSchema.parse(rawManifest) : scenarioManifestSchema.parse(rawManifest);
-  if (format === "builder-roleplay") roleplayBuilderSchema.parse(object(rawManifest)?.roleplay);
+  if (format === "builder-roleplay") roleplayBuilderSchema.omit({ learnerGoals: true, rubric: true }).parse(object(rawManifest)?.roleplay);
   const rawItems: unknown = JSON.parse(files["items.json"]);
   const items = format === "builder-roleplay" ? roleplayItemSchema.array().max(5000).parse(rawItems)
     : scenarioItemSchema.array().max(5000).parse(rawItems);
@@ -193,7 +207,7 @@ async function mappedVersion(tx: Tx, orgId: string, agentId: string, row: Candid
 }
 
 async function importPackage(orgId: string, row: Candidate, pkg: Package, capturedAgent: { id: string; updatedAt: Date }) {
-  const claim = await withLock([`agent:${row.slug}`], async (tx) => {
+  const claim = await withLock([ownershipLock(orgId), `agent:${row.slug}`], async (tx) => {
     const existing = await mappedVersion(tx, orgId, capturedAgent.id, row, pkg);
     if (existing.version) {
       const version = existing.version;
@@ -221,7 +235,7 @@ async function importPackage(orgId: string, row: Candidate, pkg: Package, captur
   try {
     // Provider work stays bounded by the same owner lock as publication. The immutable
     // version/scope pair never collides with compatibility or live publication indexes.
-    return await withLock([`agent:${row.slug}`], async (tx) => {
+    return await withLock([ownershipLock(orgId), `agent:${row.slug}`], async (tx) => {
       const version = await tx.skillVersion.findUniqueOrThrow({ where: { id: claim.version.id } });
       if (version.indexGeneration !== claim.version.indexGeneration
         || version.publicationGeneration !== claim.version.publicationGeneration
@@ -258,7 +272,7 @@ async function importPackage(orgId: string, row: Candidate, pkg: Package, captur
       return version.id;
     }, { timeout: 120_000, maxWait: 120_000 });
   } catch (error) {
-    await withLock([`agent:${row.slug}`], async (tx) => {
+    await withLock([ownershipLock(orgId), `agent:${row.slug}`], async (tx) => {
       await tx.skillVersion.updateMany({ where: { id: claim.version.id, status: "pending", indexGeneration: claim.version.indexGeneration,
         publicationGeneration: claim.version.publicationGeneration, artifacts: claim.version.artifacts },
         data: { status: "failed", indexStatus: "failed", failure: String(error).slice(0, 500) } });

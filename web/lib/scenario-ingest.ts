@@ -3,6 +3,8 @@ import { z } from "zod";
 import { db, withLock } from "@/lib/db";
 import { stableJson } from "@/lib/stable-json";
 import { preserveAgentSkillVersion, recordPublicationSkillLinks } from "@/lib/skill-version-links";
+import { hydrateAgentSkill } from "@/lib/skill-history";
+import { ownershipLock, packageFieldsOmitted, skillOwnership } from "@/lib/skill-ownership";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import { MainCollectionService } from "@/lib/main-collection";
 import { putObject, s3Configured, scenarioRunPrefix } from "@/lib/s3";
@@ -213,7 +215,11 @@ async function storeSkillAgent(input: {
   const format: SkillFormat = kind === "ROLEPLAY"
     ? input.data?.source === ROLEPLAY_SOURCE ? "builder-roleplay" : "authored-roleplay"
     : input.built ? "twin" : "legacy-twin";
-  const reserved = await withLock([`agent:${slug}`], async (tx) => {
+  const publicationLocks = [ownershipLock(org.id), `agent:${slug}`];
+  const reserved = await withLock(publicationLocks, async (tx) => {
+    const ownership = await skillOwnership(org.id, tx);
+    const managed = ownership.mode === "managed";
+    const linkOptions = { compatibilitySources: !managed };
     // Slugs are global: refuse to touch another org's rows before writing anything.
     const currentAgent = await tx.agent.findUnique({ where: { slug } });
     if (currentAgent && currentAgent.orgId !== org.id) {
@@ -223,7 +229,8 @@ async function storeSkillAgent(input: {
       throw new ScenarioIngestError(kind === "TWIN" ? `"${slug}" is a role play, not a twin skill` : `"${slug}" is a twin skill, not a role play`, 409);
     }
 
-    const previous = (currentAgent?.data ?? {}) as Record<string, unknown>;
+    const comparisonAgent = managed && currentAgent ? await hydrateAgentSkill(org.id, currentAgent, tx) : currentAgent;
+    const previous = (comparisonAgent?.data ?? {}) as Record<string, unknown>;
     const kept = Object.fromEntries(KEPT_ACROSS_DURING_WRITES.filter((key) => previous[key] !== undefined).map((key) => [key, previous[key]]));
     const filesHash = skillPackageHash(format, files);
     const content = { ...agentData, ...kept, ...input.data, filesHash };
@@ -235,7 +242,13 @@ async function storeSkillAgent(input: {
         if (skill.currentVersion.status !== "ready" || skill.currentVersion.indexStatus !== "ready") throw skillRefusals.unavailable();
         await recordPublicationSkillLinks(tx, {
           orgId: org.id, agentId: currentAgent.id, agentVersion: currentAgent.version, skillVersionId: skill.currentVersion.id,
-        }, input.items);
+        }, input.items, linkOptions);
+        if (managed && skill.generation <= currentAgent.version) {
+          const settings = packageFieldsOmitted(currentAgent.data as Record<string, unknown>);
+          if (stableJson(settings) !== stableJson(currentAgent.data)) {
+            await tx.agent.update({ where: { id: currentAgent.id }, data: { data: json(settings) } });
+          }
+        }
         return { noop: true as const, agentVersion: currentAgent.version, artifacts: skill.currentVersion.artifacts };
       }
     }
@@ -255,18 +268,28 @@ async function storeSkillAgent(input: {
   }
   const { version: packageVersion, skillId, generation } = reserved;
   try {
-    const stored = await withLock([`agent:${slug}`], async (tx) => {
+    const stored = await withLock(publicationLocks, async (tx) => {
+      const ownership = await skillOwnership(org.id, tx);
+      const managed = ownership.mode === "managed";
+      const linkOptions = { compatibilitySources: !managed };
       const currentAgent = await tx.agent.findUnique({ where: { slug } });
       const currentSkill = await tx.skill.findUniqueOrThrow({ where: { id: skillId } });
       if (currentSkill.generation !== generation) throw skillRefusals.superseded();
       let currentVersion = await tx.skillVersion.findUniqueOrThrow({ where: { id: packageVersion.id } });
       if (currentVersion.status === "ready" && currentVersion.indexStatus !== "ready") throw skillRefusals.unavailable();
+      const comparisonAgent = managed && currentAgent ? await hydrateAgentSkill(org.id, currentAgent, tx) : currentAgent;
       if (currentAgent?.primarySkillId === skillId && currentSkill.currentVersionId === packageVersion.id
         && currentAgent.personaId === input.personaId && !currentAgent.archivedAt
-        && stableJson(Object.fromEntries(Object.entries(currentAgent.data as Record<string, unknown>).filter(([key]) => key !== "artifacts"))) === stableJson(reserved.content)) {
+        && stableJson(Object.fromEntries(Object.entries(comparisonAgent!.data as Record<string, unknown>).filter(([key]) => key !== "artifacts"))) === stableJson(reserved.content)) {
         await recordPublicationSkillLinks(tx, {
           orgId: org.id, agentId: currentAgent.id, agentVersion: currentAgent.version, skillVersionId: currentVersion.id,
-        }, input.items);
+        }, input.items, linkOptions);
+        if (managed) {
+          const settings = packageFieldsOmitted(currentAgent.data as Record<string, unknown>);
+          if (stableJson(settings) !== stableJson(currentAgent.data)) {
+            await tx.agent.update({ where: { id: currentAgent.id }, data: { data: json(settings) } });
+          }
+        }
         return { version: currentAgent.version, created: false, items: input.items.length, artifacts: currentVersion.artifacts, pruneBelow: 0 };
       }
       if (stableJson(currentAgent) !== stableJson(reserved.currentAgent)
@@ -274,7 +297,7 @@ async function storeSkillAgent(input: {
         throw skillRefusals.superseded();
       }
       verifySkillEnvelope(currentVersion);
-      if (currentAgent && !reserved.unchanged) await preserveAgentSkillVersion(tx, currentAgent);
+      if (currentAgent && !reserved.unchanged) await preserveAgentSkillVersion(tx, currentAgent, linkOptions);
       if (currentVersion.status !== "ready") {
         currentVersion = await tx.skillVersion.update({
           where: { id: currentVersion.id }, data: { artifacts: `${packageVersion.artifacts}/attempt-${randomUUID()}` },
@@ -289,40 +312,40 @@ async function storeSkillAgent(input: {
       await activateSkillVersion(tx, { skillId, generation, versionId: packageVersion.id });
       const artifacts = currentVersion.artifacts;
       const version = reserved.agentVersion;
-      const data = { ...reserved.content, artifacts };
-      const done = { version, created: !currentAgent, items: input.items.length, artifacts, pruneBelow: currentAgent && !reserved.unchanged ? currentAgent.version : 0 };
+      const data = managed ? packageFieldsOmitted(reserved.content) : { ...reserved.content, artifacts };
+      const done = { version, created: !currentAgent, items: input.items.length, artifacts, pruneBelow: !managed && currentAgent && !reserved.unchanged ? currentAgent.version : 0 };
       if (!currentAgent) {
         const created = await tx.agent.create({
           data: { slug, name: agentData.name, version, personaId: input.personaId, kind, data: json(data), orgId: org.id, primarySkillId: skillId },
         });
-        await recordPublicationSkillLinks(tx, { orgId: org.id, agentId: created.id, agentVersion: version, skillVersionId: currentVersion.id }, input.items);
+        await recordPublicationSkillLinks(tx, { orgId: org.id, agentId: created.id, agentVersion: version, skillVersionId: currentVersion.id }, input.items, linkOptions);
         return done;
       }
       // Publishing onto an archived skill / role play brings it back (archive is a soft delete; the slug stays taken).
       if (reserved.unchanged) {
         await tx.agent.update({ where: { id: currentAgent.id }, data: { archivedAt: null, primarySkillId: skillId, data: json(data) } });
-        await recordPublicationSkillLinks(tx, { orgId: org.id, agentId: currentAgent.id, agentVersion: version, skillVersionId: currentVersion.id }, input.items);
+        await recordPublicationSkillLinks(tx, { orgId: org.id, agentId: currentAgent.id, agentVersion: version, skillVersionId: currentVersion.id }, input.items, linkOptions);
         return done;
       }
       // Same versioning as a dashboard publish: snapshot the old spec, bump the version.
       await tx.specVersion.create({
-        data: { entityType: "agents", entitySlug: slug, version: currentAgent.version, data: json(currentAgent.data), orgId: org.id },
+        data: {
+          entityType: "agents", entitySlug: slug, version: currentAgent.version,
+          data: json(managed ? packageFieldsOmitted(currentAgent.data as Record<string, unknown>) : currentAgent.data), orgId: org.id,
+        },
       });
       await tx.agent.update({
         where: { id: currentAgent.id },
         data: { name: agentData.name, version, personaId: input.personaId, data: json(data), archivedAt: null, primarySkillId: skillId },
       });
-      await recordPublicationSkillLinks(tx, { orgId: org.id, agentId: currentAgent.id, agentVersion: version, skillVersionId: currentVersion.id }, input.items);
+      await recordPublicationSkillLinks(tx, { orgId: org.id, agentId: currentAgent.id, agentVersion: version, skillVersionId: currentVersion.id }, input.items, linkOptions);
       return done;
     }, { timeout: 120_000, maxWait: 120_000 });
 
-    if (stored.pruneBelow) {
-      await MainCollectionService.pruneScenarioItems(org.id, slug, stored.pruneBelow)
-        .catch((error: unknown) => console.warn(`[scenario-ingest] could not prune old items of ${slug}`, error));
-    }
     return { slug, name: agentData.name, version: stored.version, created: stored.created, items: stored.items, artifacts: stored.artifacts, runId: input.runId ?? null };
   } catch (error) {
-    await withLock([`agent:${slug}`], async (tx) => {
+    await withLock(publicationLocks, async (tx) => {
+      await skillOwnership(org.id, tx);
       const version = await tx.skillVersion.findUniqueOrThrow({ where: { id: packageVersion.id } });
       if (version.publicationGeneration === generation) await failSkillVersion(packageVersion.id, error, tx);
     });

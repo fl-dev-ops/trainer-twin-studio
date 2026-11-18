@@ -57,7 +57,7 @@ const fakeDb = {
 };
 mock.module("@/lib/db", () => ({
   withLock: async (keys: string[], work: (tx: typeof fakeDb) => Promise<unknown>) => {
-    expect(keys).toEqual(twins.map((twin) => `agent:${twin.slug}`).sort());
+    expect(keys).toEqual(["skill-ownership:o1", ...twins.map((twin) => `agent:${twin.slug}`).sort()]);
     beforeAgentLock?.();
     return work(fakeDb);
   },

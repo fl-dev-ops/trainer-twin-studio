@@ -91,7 +91,7 @@ describe.skipIf(!localMinutesDb)("Module 4 role-play saves (real Postgres locks)
     const lock = database.withLock;
     let calls = 0;
     spies.push(spyOn(database, "withLock").mockImplementation(async (keys, work, options) => {
-      expect(keys).toEqual([`agent:${f.roleplay.slug}`]);
+      expect(keys).toEqual([`skill-ownership:${f.org.id}`, `agent:${f.roleplay.slug}`]);
       if (++calls === 2) { entered(); await proceed; }
       return lock(keys, work, options);
     }));
@@ -126,7 +126,7 @@ describe.skipIf(!localMinutesDb)("Module 4 role-play saves (real Postgres locks)
     await saveRoleplay(f.org.id, builder(), f.roleplay.slug);
     const lock = database.withLock;
     spies.push(spyOn(database, "withLock").mockImplementation(async (keys, work, options) => {
-      expect(keys).toEqual([`agent:${f.roleplay.slug}`]);
+      expect(keys).toEqual([`skill-ownership:${f.org.id}`, `agent:${f.roleplay.slug}`]);
       await db.agent.update({ where: { id: f.roleplay.id }, data: { archivedAt: new Date() } });
       return lock(keys, work, options);
     }));
@@ -153,7 +153,7 @@ describe.skipIf(!localMinutesDb)("Module 4 role-play saves (real Postgres locks)
       await indexing;
       const lock = database.withLock;
       spies.push(spyOn(database, "withLock").mockImplementation((keys, work, options) => {
-        expect(keys).toEqual([`agent:${f.roleplay.slug}`]); attempted();
+        expect(keys).toEqual([`skill-ownership:${f.org.id}`, `agent:${f.roleplay.slug}`]); attempted();
         return lock(keys, async (tx) => { settingsEntered = true; return work(tx); }, options);
       }));
       settings = caller().builder.saveSettings({ slug: f.roleplay.slug, before });

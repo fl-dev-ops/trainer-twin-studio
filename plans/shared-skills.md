@@ -15,11 +15,12 @@ The durable plan is this file; do not delete it as a temporary planning artifact
 | 2 — Role-play runtime | Complete implementation/local verification | Exact pins, strict retrieval and recovery verified; live checks deferred |
 | 3 — Twin runtime | Complete implementation/local verification | Single/main/mixed/empty catalogs verified; live checks deferred |
 | 4 — Existing-data migration | Complete tooling/local verification | Production-copy rehearsal and production execution unapproved |
-| 5 — Sole package ownership | In progress | Default compatibility; explicit verified approval required for cutover |
+| 5 — Sole package ownership | Complete gated implementation/local verification | Compatibility default; real-org cutover and live verification NOT performed |
 
-Current checkpoint: registry/publisher and managed role-play runtime adoption are implemented. New managed role-play
-sessions pin exact packages; twins and null-marker sessions retain compatibility readers. No production credentials,
-data, migrations or deployments were used.
+Current checkpoint: all five implementation phases are complete and locally verified. Role plays and twins use exact
+managed pins; explicit legacy readers remain. Verified migration and approved ownership-switch tooling are implemented.
+Organizations remain compatibility-default until explicitly approved; no real-org cutover, production credentials,
+data, migrations, deployment or live-provider comparison was used.
 Broad legacy runtime tests attempted AI Gateway requests with test-placeholder credentials and received 401; those
 are not successful live-provider tests.
 
@@ -110,10 +111,10 @@ tested separately.
 2. Owner clarified the gates on 19 Nov: each phase must compile and pass local behavioral/integration checks. Real
    provider/voice comparison is deferred until ALL phases are implemented; it does not block the next implementation
    phase. Existing canary/release checklists remain deferred release evidence, not completed checks.
-3. Phase 2 is complete locally; see its checkpoint below. Next implement Phase 3 twin session pinning and runtime
-   adoption. Keep a separate commit and local verification record for each phase.
-4. Keep Phase 1's existing bounded publication lock until exact managed runtime adoption makes compatibility indexing
-   safe to separate. Legacy fallback and failed compatibility-index orphan behavior are not fixed by this checkpoint.
+3. All implementation phases now have separate local checkpoints below. Next configure isolated providers and perform
+   final live/performance comparison, then rehearse migration on an explicitly approved production-data copy.
+4. Bounded publication transactions remain because compatibility indexes still serve explicit legacy readers.
+   Automatic scenario-index pruning is disabled in Phase 5; retirement requires a separately audited operation.
 
 ### Phase 2 checkpoint — 19 Nov 2026
 
@@ -246,6 +247,73 @@ activated and no production migration ran.
 
 See `shared-skills-migration.md` for commands/safety/rollback. Next automatically finish Phase 5 package-free
 publication and reader/approval/rollback tests; leave real-org activation disabled pending final live verification.
+
+### Phase 5 checkpoint — 19 Nov 2026
+
+Phase 4 commit: `a3252b8`. Phase 5 commit subject: `feat(skills): gate managed package ownership cutover`.
+
+Implemented compatibility-default, per-org ownership state with SQL approval guards. Cutover requires explicit apply,
+fresh complete inventory/hash and a recorded canary attestation; local tests use clearly identified test attestations,
+not live approval. This implementation conservatively blocks ALL historical gaps, including optional historical gaps.
+Actual production activation remains unapproved and unperformed.
+
+After approved managed activation, publication stops copying `skill`, `scenario`, `artifacts`, `filesHash` into
+Agent/SpecVersion and stops generating legacy SkillSource rows. Experience fields/settings/scoring stay separate.
+Exact mappings, package-owned provenance and lightweight read-time hydration preserve public/editor/runtime shapes.
+Publication, migration, recovery claims, settings and legacy backfill coordinate with the ownership lock before Agent
+locks. Compatibility Chroma writes and bounded finalization remain while old readers can exist.
+
+Review-driven fixes:
+
+- All automatic scenario-index pruning is disabled, including compatibility publications. A deferred external DELETE
+  could otherwise finish after cutover or SQL timeout; merely checking state under a lock cannot fence that callback.
+  Retain records until separately approved, drained-caller/rollback-window retention. This deliberately increases storage.
+- All three lazy legacy snapshot paths now resolve saved Agent/persona versions and original settings, never today's
+  package onto yesterday's version. Missing managed snapshots or unrecoverable history return 503. Historical no-skill
+  interviews do not inherit today's package ownership. SQL/JSON-null package sessions are included in required coverage.
+- Builder manifests validate only published during-call fields: goals/rubrics belong to experience `after` settings,
+  not the immutable package. Actual rendered builder-package lifecycle tests caught and verified this boundary.
+- Legacy source backfill rereads mode/current Agent inside ownership/Agent locks; it cannot race new compatibility
+  writes after cutover. Original artifact org ownership is checked.
+
+New extensive suites include 24 managed-publication tests, 28 approved-ownership lifecycle tests / 682 assertions,
+20 approval/SQL/race tests / 100 assertions, package-free reader tests and saved historical snapshot tests.
+They exercise all four package formats, publish/no-op/retry/history, source links, settings, old/new calls, preview
+retrieval, empty/mixed catalogs, missing approval/stale coverage, index rebuild races and missing historical versions.
+
+| Check | Result |
+| --- | --- |
+| `bun test --parallel .db.test` | **974 pass, 0 fail**, 56 files / 5706 assertions |
+| Expanded focused web command | **155 pass, 0 fail**, 16 files |
+| `bun test --parallel tests/flows` | **150 pass, 0 fail**, 9 files |
+| `bun test tests` from `chat/` | **125 pass, 0 fail**, 19 files |
+| `bunx tsc --noEmit` | Pass |
+| ESLint on every changed/new TypeScript file | Pass, 0 errors; 9 existing unused warnings in `specs.ts` / `runtime/openai.ts` |
+| Local `bun run build` | Pass on security-advisory retry; existing Next.js advisory remains unresolved |
+| Fresh install in `trainertwin_shared_skills_install_test_20261119` | All **75 migrations** applied; no existing DB reset |
+| Fresh-DB Prisma schema diff | **No difference detected** |
+
+Focused command is Phase 1's listed command plus `tests/lib/roleplay-report.test.ts`,
+`tests/lib/interview-sessions.test.ts`, `tests/lib/session-snapshot.test.ts`, and
+`tests/lib/runtime/runtime-check.test.ts`. Runtime changes exposed one existing `prefer-const` error; the declaration
+was changed to const without behavioral change. Build-generated Next environment imports were restored to baseline.
+The broad legacy live-model/PDF failures recorded above were not relabeled green; that whole unit suite is not claimed.
+
+### Resume: final live verification / operating approval
+
+All implementation phases are locally checkpointed, not deployed. Inspect `git log` and the runbooks before proceeding.
+No push or real-org ownership activation has occurred. Local test approvals exist only in disposable fixtures.
+
+The checkout has `.env.example` / `.env.test`, not an isolated live environment. Sanitized configuration checks confirm
+S3 bucket/AWS credentials, Chroma key, LiveKit URL/key/secret, AI Gateway key and chat URL are absent. Final real S3,
+Chroma, chat/LiveKit multi-turn comparison and latency/strict-cardinality measurements therefore remain NOT RUN.
+Provide explicitly isolated destinations/credentials; do not reuse production resources by assumption.
+
+Then run builder/authored role plays, single/main/calibration twins, no-skill/mixed catalogs and source/history/report
+flows, including publication/archive mid-call and index recovery. Compare activation/context/retrieval latency. Rehearse
+org migration on an explicitly approved production-data copy. Only after coverage and live approval may an operator
+activate managed ownership. Legacy index retirement, production migration, deployment and security dependency upgrades
+each remain separate explicit operations.
 
 ## Goal
 

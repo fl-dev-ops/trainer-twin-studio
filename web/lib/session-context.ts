@@ -4,6 +4,7 @@ import { personaBrief } from "@/lib/persona";
 import { findOrgOrGlobalPersona } from "@/lib/specs";
 import { type PinnedTwinSkill, TWIN_SOURCE, twinPlaybooks, sessionTwinPlaybooks } from "@/lib/twins";
 import { loadSessionSkills } from "@/lib/session-skills";
+import { hydrateAgentSkill } from "@/lib/skill-history";
 
 const SHARED_KNOWLEDGE_BASE_SLUG = "acme-knowledge";
 
@@ -40,9 +41,9 @@ export async function buildSessionContext(input: {
   const agentSlug = session?.agentSlug ?? input.agentSlug;
   const personaSlug = session?.personaSlug ?? input.personaSlug;
   const snapshot = session?.compiledSnapshot as Snapshot | null;
-  const [liveAgent, livePersona, sharedKnowledgeBase] = await Promise.all([
+  const [savedAgent, livePersona, sharedKnowledgeBase] = await Promise.all([
     agentSlug
-      ? db.agent.findFirst({ where: { slug: { equals: agentSlug, mode: "insensitive" }, orgId: input.orgId }, select: { slug: true, version: true, data: true, personaId: true, kind: true } })
+      ? db.agent.findFirst({ where: { slug: { equals: agentSlug, mode: "insensitive" }, orgId: input.orgId }, select: { id: true, slug: true, primarySkillId: true, version: true, data: true, personaId: true, kind: true } })
       : null,
     personaSlug
       ? findOrgOrGlobalPersona(input.orgId, { equals: personaSlug, mode: "insensitive" }, { slug: true, version: true, data: true, isOwn: true })
@@ -56,6 +57,9 @@ export async function buildSessionContext(input: {
       select: { slug: true, name: true },
     }),
   ]);
+  const liveAgent = !managedSkill && !snapshot?.agent?.data && savedAgent?.primarySkillId
+    ? await hydrateAgentSkill(input.orgId, savedAgent)
+    : savedAgent;
 
   const docMap = new Map<string, {
     id: string;

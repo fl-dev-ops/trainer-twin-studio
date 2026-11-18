@@ -48,9 +48,26 @@ After approved activation, new managed package writes belong to SkillVersion rat
 Agent/SpecVersion. Experience settings and Agent versions remain separate; settings changes carry exact mappings.
 Existing historical snapshot decoders and unmanaged readers remain. Read boundaries preserve public response shapes.
 
+Operator commands (not executed against a real organization):
+
+```sh
+bun scripts/cutover-skills.ts --org <slug>
+bun scripts/cutover-skills.ts --org <slug> --apply --inventory-hash <reviewed-hash> --canary-reference <approval-reference>
+```
+
+Remote operation additionally requires `--production`. This implementation deliberately requires zero historical gaps,
+not just current/required gaps. Review the complete report rather than treating a single batch as coverage.
+SQL prevents managed state without nonempty inventory/canary references and verification/approval timestamps.
+
 Do not automatically delete legacy files, history or Chroma records. Current packages and live pins stay indexed;
 older indexes can be restored from verified original packages. Index retirement requires separate approval,
 drained legacy callers and an elapsed rollback-retention period.
+
+Automatic scenario-item pruning is disabled in both modes. A compatibility publication's delayed Chroma DELETE can
+outlive SQL locks/timeouts and cross the cutover boundary, so an in-lock mode check is not sufficient protection.
+Compatibility index writes continue; storage grows until an audited retention operation is approved and implemented.
+Org-wide ownership locks currently serialize package/settings writers during the bounded provider operations; measure
+this throughput tradeoff, as well as strict lookup cardinality reads, during final performance testing.
 
 Once package projections stop being written, a pre-cutover binary is not a safe rollback target. Drain callers and
 use the last managed-compatible release. Regenerating legacy projections is a separate rehearsed recovery operation.

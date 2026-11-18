@@ -186,6 +186,26 @@ the runtime contract: the session creation and runtime readers must ship togethe
 
 Phase 3 extends the same pin mechanism to twins; the role-play contracts below remain applicable.
 
+### Phase 5 gated ownership
+
+- Per-org `SkillOwnership` defaults to compatibility without a row. Managed activation requires explicit apply,
+  complete fresh coverage matching the reviewed hash and a recorded final-canary approval reference. SQL requires
+  approval/verification timestamps and nonempty references. Local test attestations do not constitute live approval.
+- Current implementation blocks every historical gap as well as current/required gaps. It does not auto-activate
+  organizations, run migration during builds or deploy a cutover.
+- In managed mode, SkillVersion solely owns new package content and package source links. New Agent/SpecVersion
+  writes omit only `skill`, `scenario`, `artifacts`, `filesHash`; existing historical data is not destructively rewritten.
+  Agent versions, personas, settings/scoring and experience fields remain independent.
+- Exact version mappings plus lightweight hydration preserve editor, public API, runtime, history and report shapes.
+  Saved null-marker sessions retain legacy decoding; missing lazy snapshots resolve saved versions or refuse 503.
+  Historical no-skill sessions must not inherit a current package. Missing package history remains required coverage.
+- Ownership lock precedes Agent locks for package writes, settings, import, index claims and legacy backfill. Raw-row
+  CAS, immutable physical publication attempts and generation fencing still apply.
+- Compatibility indexes remain written. ALL automatic scenario-index pruning is disabled until a separate audited
+  retention operation: external deletion cannot be fenced merely by SQL lock/state checks after a timeout.
+- Real-org migration/cutover, final live/performance comparison, index retirement, deployment and pre-cutover-binary
+  rollback are not implied by successful controlled-provider tests. Use the last managed-compatible binary after cutover.
+
 ### Phase 4 history mapping and import
 
 - `AgentSkillVersion` maps `(agentId, agentVersion)` to a ready same-org/owner package. Mapping updates are forbidden;

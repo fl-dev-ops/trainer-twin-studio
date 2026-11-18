@@ -3,6 +3,7 @@ import { countSources, skillSourceRows } from "@/lib/skill-sources";
 import { skillRefusals, verifySkillEnvelope } from "@/lib/skills";
 
 type Link = { orgId: string; agentId: string; agentVersion: number; skillVersionId: string };
+type LinkOptions = { compatibilitySources?: boolean };
 
 export async function ensureAgentSkillVersion(tx: Prisma.TransactionClient, input: Link) {
   const where = { agentId_agentVersion: { agentId: input.agentId, agentVersion: input.agentVersion } };
@@ -16,7 +17,7 @@ export async function ensureAgentSkillVersion(tx: Prisma.TransactionClient, inpu
   if (mapping.orgId !== input.orgId || mapping.skillVersionId !== input.skillVersionId) throw skillRefusals.unavailable();
 }
 
-export async function recordPublicationSkillLinks(tx: Prisma.TransactionClient, input: Link, items: unknown[]) {
+export async function recordPublicationSkillLinks(tx: Prisma.TransactionClient, input: Link, items: unknown[], options: LinkOptions = {}) {
   await ensureAgentSkillVersion(tx, input);
   const counts = countSources(items);
   const existing = await tx.skillVersionSource.findMany({ where: { skillVersionId: input.skillVersionId } });
@@ -28,12 +29,14 @@ export async function recordPublicationSkillLinks(tx: Prisma.TransactionClient, 
   }
   const rows = await skillSourceRows(input.orgId, input.agentId, input.agentVersion, items, tx);
   const sources = new Map([...rows, ...legacy, ...existing].map((row) => [row.documentId, row]));
-  await tx.skillSource.createMany({
-    data: [...sources.values()].map(({ documentId, title, items }) => ({
-      agentId: input.agentId, version: input.agentVersion, orgId: input.orgId, documentId, title, items,
-    })),
-    skipDuplicates: true,
-  });
+  if (options.compatibilitySources !== false) {
+    await tx.skillSource.createMany({
+      data: [...sources.values()].map(({ documentId, title, items }) => ({
+        agentId: input.agentId, version: input.agentVersion, orgId: input.orgId, documentId, title, items,
+      })),
+      skipDuplicates: true,
+    });
+  }
   await tx.skillVersionSource.createMany({
     data: [...sources.values()].map(({ documentId, title, items }) => ({
       skillVersionId: input.skillVersionId, orgId: input.orgId, documentId, title, items,
@@ -49,6 +52,7 @@ export async function recordPublicationSkillLinks(tx: Prisma.TransactionClient, 
 export async function preserveAgentSkillVersion(
   tx: Prisma.TransactionClient,
   agent: { id: string; slug: string; orgId: string | null; version: number; primarySkillId: string | null; data: Prisma.JsonValue },
+  options: LinkOptions = {},
 ) {
   const mapping = await tx.agentSkillVersion.findUnique({
     where: { agentId_agentVersion: { agentId: agent.id, agentVersion: agent.version } },
@@ -62,7 +66,7 @@ export async function preserveAgentSkillVersion(
     if (!Array.isArray(items)) throw skillRefusals.unavailable();
     await recordPublicationSkillLinks(tx, {
       orgId: mapping.orgId, agentId: agent.id, agentVersion: agent.version, skillVersionId: version.id,
-    }, items);
+    }, items, options);
     return;
   }
   if (!agent.orgId || !agent.primarySkillId) return;
@@ -78,5 +82,5 @@ export async function preserveAgentSkillVersion(
   if (!Array.isArray(items)) throw skillRefusals.unavailable();
   await recordPublicationSkillLinks(tx, {
     orgId: agent.orgId, agentId: agent.id, agentVersion: agent.version, skillVersionId: version.id,
-  }, items);
+  }, items, options);
 }
