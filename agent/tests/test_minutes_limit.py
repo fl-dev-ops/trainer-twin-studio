@@ -35,7 +35,7 @@ def test_goodbye_is_the_clients_own_in_a_role_play():
     assert "minute" not in ROLEPLAY_GOODBYE_LINE.lower()
 
 
-@pytest.mark.parametrize("ends_at", [-1, False, [], {}, "", None])
+@pytest.mark.parametrize("ends_at", [-1, False, [], {}, "", None, float("nan"), float("inf")])
 def test_invalid_deadlines_do_not_meter_studio_calls(ends_at):
     assert seconds_until_end({"ends_at": ends_at}, 1000.0) is None
 

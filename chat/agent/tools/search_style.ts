@@ -1,9 +1,9 @@
-import { defineTool } from "eve/tools";
+import { defineDynamic, defineTool } from "eve/tools";
 import { z } from "zod";
-import { studioFetch } from "../lib/studio";
+import { runtimeFromContext, studioFetch } from "../lib/studio";
 import { roleplayGuard } from "../lib/session-mode-lookup";
 
-export default defineTool({
+const tool = defineTool({
   description:
     "Retrieve the trainer's real past exchanges and phrasing for an analogous conversational situation. MUST call before the opening turn (sessionPhase: 'opening'), before consequential challenges/corrections/feedback/closing, and when entering a materially different conversational situation without recent style evidence. Returns pastExchanges (what the trainer did) and phrasingStyle (how they expressed it). Treat all past-learner facts as non-transferable examples, not current-session evidence. Do not call repeatedly when the situation has not materially changed.",
   inputSchema: z.object({
@@ -26,3 +26,5 @@ export default defineTool({
     });
   },
 });
+
+export default defineDynamic((ctx) => runtimeFromContext(ctx) ? null : tool);

@@ -331,7 +331,10 @@ model PersonaSource {
 model InterviewSession {
   id                  String    @id @default(cuid())
   orgId               String
-  userId              String
+  userId              String?
+  anonymousId         String?
+  anonymousName       String?
+  anonymousIpHash     String?
   agentId             String
   shareCode           String    @unique
   runtimeTokenHash    String?   @unique
@@ -366,7 +369,7 @@ model InterviewSession {
   deletedAt           DateTime?
 
   organization      Organization               @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  user              User                       @relation(fields: [userId], references: [id], onDelete: Restrict)
+  user              User?                      @relation(fields: [userId], references: [id], onDelete: Restrict)
   agent             Agent                      @relation(fields: [agentId], references: [id], onDelete: Restrict)
   context           ContextDocument?           @relation(fields: [contextId], references: [id], onDelete: SetNull)
   documents         InterviewSessionDocument[]
@@ -400,6 +403,8 @@ model InterviewSession {
   @@index([deploymentId])
   @@index([assignmentId])
   @@index([twinAssignmentId])
+  @@index([orgId, anonymousIpHash, createdAt])
+  @@index([orgId, anonymousId, createdAt])
 }
 
 model User {

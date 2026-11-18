@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { builtFrom } from "@/lib/skill-sources";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import { beforeSettings } from "@/lib/context-upload";
+import { publicTwinSettings, publicTwinSettingsSchema } from "@/lib/public-twin-settings";
 import { assignablePeople } from "@/lib/learners";
 import { LEARNER_ROLE } from "@/lib/org";
 import { LEARNER, orgPeople, orgPerson } from "@/lib/org-people";
@@ -60,7 +61,10 @@ const learnerSessions = (orgId: string, agentId?: string): Prisma.InterviewSessi
   status: { not: "failed" },
   twinCalibration: { is: null },
   agent: { kind: "TWIN" },
-  user: { members: { some: { organizationId: orgId, role: LEARNER_ROLE } } },
+  AND: [{ OR: [
+    { user: { members: { some: { organizationId: orgId, role: LEARNER_ROLE } } } },
+    { userId: null, anonymousId: { not: null } },
+  ] }],
   ...(agentId ? { agentId } : {}),
 });
 
@@ -73,6 +77,7 @@ const sessionRowSelect = {
   reportStatus: true,
   feedbackRating: true,
   transcript: true,
+  anonymousName: true,
   agent: { select: { slug: true, name: true } },
   user: { select: { id: true, name: true, email: true, image: true } },
   report: true,
@@ -85,8 +90,9 @@ function sessionItem(row: SessionRow) {
   const { question, answer } = firstExchange(transcriptTurns(row.transcript));
   return {
     id: row.id,
-    learner: row.user.name || row.user.email,
-    learnerEmail: row.user.email,
+    learner: row.user ? row.user.name || row.user.email : row.anonymousName || "Anonymous visitor",
+    learnerEmail: row.user?.email ?? null,
+    anonymous: row.user === null,
     agentSlug: row.agent.slug,
     agentName: row.agent.name,
     at: (row.startedAt ?? row.createdAt).toISOString(),
@@ -112,7 +118,7 @@ export function learnerActivity(
 ) {
   return assignments
     .map((row) => {
-      const mine = sessions.filter((session) => session.user.id === row.user.id);
+      const mine = sessions.filter((session) => session.user?.id === row.user.id);
       const rated = mine.map((session) => session.feedbackRating).filter((r): r is number => r !== null);
       return {
         email: row.email,
@@ -274,6 +280,7 @@ const agentsRouter = t.router({
         ? skillAgents.map((skill) => ({ agentId: skill.id, version: skill.version }))
         : [{ agentId: found.id, version: agent.version }]),
       settings: beforeSettings(data),
+      publicAccess: publicTwinSettings(data),
       credit: {
         // Minutes of this twin's learners (each learner's own, shared with their other twins and role plays).
         minutes: active.reduce((sum, row) => sum + row.minutesGiven, 0),
@@ -313,24 +320,25 @@ const agentsRouter = t.router({
   /** Name, description and conversation settings. Saved like any spec change: snapshot, then version + 1. */
   update: studioProcedure
     .input(slugInput.extend({
-      name: z.string().trim().min(1).max(120),
-      description: z.string().trim().max(2000),
+      name: z.string().trim().min(1).max(120).optional(),
+      description: z.string().trim().max(2000).optional(),
       settings: z.object({
         preScreenshare: z.boolean(),
         preUpload: z.boolean(),
         duringUpload: z.boolean(),
         uploadTitle: z.string().trim().max(80),
         uploadInstruction: z.string().trim().max(300),
-      }).strict(),
+      }).strict().optional(),
+      publicAccess: publicTwinSettingsSchema.partial().optional(),
     }))
     .mutation(({ ctx, input }) => twinCall(async () => {
-      const { version } = await updateTwin(ctx.user.orgId, input.slug, { name: input.name, description: input.description, settings: input.settings });
+      const { version } = await updateTwin(ctx.user.orgId, input.slug, { name: input.name, description: input.description, settings: input.settings, publicAccess: input.publicAccess });
       return { version };
     })),
 
   /**
    * The twin's readable link (/t/<username> or /t/<short slug>). Creates nothing: the link only opens for people in
-   * the org with an active assignment on this twin (their own minutes), so sharing it grants no access.
+   * the org with an active assignment on this twin, or signed-out visitors when public access is enabled.
    */
   shareLink: studioProcedure.input(slugInput).mutation(({ ctx, input }) => twinCall(async () => {
     const found = await findTwinAgent(ctx.user.orgId, input.slug);

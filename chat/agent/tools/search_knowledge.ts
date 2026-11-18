@@ -1,11 +1,11 @@
-import { defineTool } from "eve/tools";
+import { defineDynamic, defineTool } from "eve/tools";
 import { z } from "zod";
 import { roleplayGuard } from "../lib/session-mode-lookup";
-import { callStudio } from "../lib/studio";
+import { callStudio, runtimeFromContext } from "../lib/studio";
 
 const SHARED_KNOWLEDGE_BASE_SLUG = "acme-knowledge";
 
-export default defineTool({
+const tool = defineTool({
   description:
     "MUST call before stating that a substantive technical claim is correct, incorrect, or incomplete; teaching or extending a technical concept; recommending an approach; or making a technical judgment. Searches the approved TrainerTwin knowledge base. Do NOT call for neutral evidence-gathering questions, acknowledgments, greetings, or participant facts (use read_document for document facts). Reuse relevant results across adjacent turns. If result is relevant=false or empty, ask a neutral question or acknowledge uncertainty instead of validating or rejecting. The query must name the technical concept and stand alone.",
   inputSchema: z.object({
@@ -23,3 +23,5 @@ export default defineTool({
     }, ctx);
   },
 });
+
+export default defineDynamic((ctx) => runtimeFromContext(ctx) ? null : tool);

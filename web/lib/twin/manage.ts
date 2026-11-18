@@ -3,6 +3,7 @@ import { stableJson } from "@/lib/stable-json";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import { beforeSettings, type BeforeSettings } from "@/lib/context-upload";
 import { findTwinAgent } from "@/lib/twin-access";
+import { publicTwinSettings, type PublicTwinSettings } from "@/lib/public-twin-settings";
 
 const asRecord = (value: unknown) => (value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {});
 const json = (value: unknown) => value as Prisma.InputJsonValue;
@@ -11,7 +12,7 @@ const json = (value: unknown) => value as Prisma.InputJsonValue;
  * Changes a twin's name, description and Before settings (Configure page, copilot). Missing fields keep their value.
  * A real change snapshots the old spec and bumps the version, like a publish; no change returns the current version.
  */
-export async function updateTwin(orgId: string, slug: string, patch: { name?: string; description?: string; settings?: Partial<BeforeSettings> }) {
+export async function updateTwin(orgId: string, slug: string, patch: { name?: string; description?: string; settings?: Partial<BeforeSettings>; publicAccess?: Partial<PublicTwinSettings> }) {
   const found = await findTwinAgent(orgId, slug);
   // One save at a time per twin (practice rule 20): read and write under its lock.
   return withLock([`agent:${found.slug}`], async (tx) => {
@@ -25,6 +26,7 @@ export async function updateTwin(orgId: string, slug: string, patch: { name?: st
     name,
     objective: patch.description ?? previous.objective,
     before: { ...beforeSettings(current.data), ...patch.settings },
+    ...(patch.publicAccess ? { publicAccess: { ...publicTwinSettings(current.data), ...patch.publicAccess } } : {}),
   };
   if (stableJson(data) === stableJson(current.data) && name === current.name) return { version: current.version, changed: false };
   await tx.specVersion.create({ data: { entityType: "agents", entitySlug: found.slug, version: current.version, data: json(current.data), orgId } });

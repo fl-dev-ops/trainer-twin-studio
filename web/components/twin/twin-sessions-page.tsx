@@ -20,10 +20,11 @@ export function TwinSessionsPage({ sessions }: { sessions: TwinSessionItemData[]
   const [dateFilter, setDateFilter] = useState("30");
 
   const agentOptions = optionsOf("All twin agents", sessions.map((s) => [s.agentSlug, s.agentName]));
-  const learnerOptions = optionsOf("All learners", sessions.map((s) => [s.learnerEmail, s.learner]));
+  const learnerOptions = optionsOf("All participants", sessions.flatMap((s) => s.learnerEmail ? [[s.learnerEmail, s.learner] as [string, string]] : []));
+  if (sessions.some((s) => s.anonymous)) learnerOptions.push({ value: "visitors", label: "Anonymous visitors" });
   const filteredSessions = sessions.filter((s) => {
     if (botFilter !== "all" && s.agentSlug !== botFilter) return false;
-    if (learnerFilter !== "all" && s.learnerEmail !== learnerFilter) return false;
+    if (learnerFilter === "visitors" ? !s.anonymous : learnerFilter !== "all" && s.learnerEmail !== learnerFilter) return false;
     return inDateRange(s.at, dateFilter);
   });
 

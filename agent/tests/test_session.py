@@ -4,7 +4,7 @@ from session import build_agent_session
 from tts import build_tts
 
 
-def test_build_agent_session_configuration():
+async def test_build_agent_session_configuration():
     session = build_agent_session(
         base_url="http://localhost:3000/api/v1",
         api_key="dynamic-runtime-token",

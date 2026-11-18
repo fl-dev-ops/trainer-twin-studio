@@ -1,7 +1,7 @@
 import { isCalibrationSession, scenarioPlaybook, twinSessionPlaybooks } from "./brain";
 import { roleplaySkill } from "./roleplay";
 import { sessionMode, type SessionMode } from "./session-mode";
-import { studioFetch } from "./studio";
+import { runtimeFromContext, studioFetch } from "./studio";
 
 /**
  * The session mode for code that runs outside the instructions (the channel, tools), cached per session. The
@@ -76,6 +76,7 @@ function refOf(ctx: GuardContext): SessionRef {
 
 /** Whether the current eve session runs a client role play. */
 export async function isRoleplaySession(ctx: GuardContext): Promise<boolean> {
+  if (runtimeFromContext(ctx)) return false;
   return (await sessionModeFor(refOf(ctx))) === "roleplay-client";
 }
 
@@ -85,7 +86,8 @@ export const ROLEPLAY_DISABLED = {
 } as const;
 
 /** The disabled result for role-play sessions, or null to run the tool normally. */
-export async function roleplayGuard(ctx: GuardContext): Promise<typeof ROLEPLAY_DISABLED | null> {
+export async function roleplayGuard(ctx: GuardContext): Promise<{ disabled: true; reason: string } | null> {
+  if (runtimeFromContext(ctx)) return { disabled: true, reason: "Only twin lookups and finish_session are available in public calls." };
   return (await isRoleplaySession(ctx)) ? ROLEPLAY_DISABLED : null;
 }
 

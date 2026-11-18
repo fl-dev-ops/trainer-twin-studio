@@ -25,6 +25,7 @@ await db.minuteLedger.deleteMany({ where });
 await db.interviewSession.deleteMany({ where });
 await db.rolePlayAssignment.deleteMany({ where });
 await db.deployment.deleteMany({ where });
+await db.specVersion.deleteMany({ where });
 await db.agent.deleteMany({ where });
 await db.persona.deleteMany({ where });
 await db.organization.deleteMany({ where: { id: ORG.id } });

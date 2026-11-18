@@ -38,8 +38,7 @@ function CheckGlyph() {
 }
 
 /**
- * Share popup (reference `botShareDialog`): the twin's /t/ link with Copy. The link opens only for learners
- * assigned to the twin, so sharing it grants no access by itself.
+ * Share popup (reference `botShareDialog`): the twin's existing /t/ link with Copy.
  */
 export function ShareTwinDialog({
   open,
@@ -75,7 +74,7 @@ export function ShareTwinDialog({
     try {
       await navigator.clipboard.writeText(url);
       setCopied(true);
-      toast.success("Link copied. Only learners assigned to this twin can open it.");
+      toast.success("Link copied");
     } catch {
       toast.error("Could not copy. Select the link and copy it.");
     }
@@ -116,6 +115,7 @@ export function ShareTwinDialog({
                   ? "Send this link to your learners so they can talk to your twin."
                   : "Send this link to your learners so they can ask the bot."}
               </DialogPrimitive.Description>
+              <p className="m-0 text-xs text-muted-foreground">Anonymous voice calls are available only when Public access is enabled in this twin&apos;s settings.</p>
             </div>
 
             <div className="flex w-full flex-col gap-2">

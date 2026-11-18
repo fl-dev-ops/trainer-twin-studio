@@ -80,6 +80,7 @@ export async function activateLiveKitSession(input: {
   endsAt?: number;
   /** TWIN or ROLEPLAY: which goodbye the voice agent says before it ends the call at endsAt. */
   agentKind?: string;
+  anonymous?: boolean;
 }) {
   const { config, rooms, dispatches, egress } = clients();
   const room = input.sessionId;
@@ -91,6 +92,7 @@ export async function activateLiveKitSession(input: {
     ...(input.voice ? { voice: input.voice } : {}),
     ...(input.endsAt ? { ends_at: input.endsAt } : {}),
     ...(input.agentKind ? { agent_kind: input.agentKind } : {}),
+    ...(input.anonymous ? { anonymous: true } : {}),
   };
   // Every participant can read the room's metadata: the agent's runtime token goes only in its dispatch (rule 26).
   const metadata = JSON.stringify(shared);
@@ -132,6 +134,7 @@ export async function activateLiveKitSession(input: {
   const token = new AccessToken(config.apiKey, config.apiSecret, {
     identity: `user-${input.userId}`,
     name: input.userName || "Candidate",
+    ...(input.anonymous && input.endsAt ? { ttl: Math.max(1, input.endsAt - Math.floor(Date.now() / 1000)) } : {}),
   });
   token.addGrant({ roomJoin: true, room, canPublish: true, canSubscribe: true, canPublishData: true });
 

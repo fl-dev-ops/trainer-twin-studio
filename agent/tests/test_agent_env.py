@@ -47,7 +47,7 @@ async def test_inactivity_nudge_only_runs_after_opening():
             self.replies.append(instructions)
 
     session = Session()
-    trainer = SimpleNamespace(opening_complete=False, room_name="room-1")
+    trainer = SimpleNamespace(opening_complete=False, room_name="room-1", input_allowed=lambda: True)
     agent.register_inactivity_nudge(session, trainer)
 
     session.callback(SimpleNamespace(new_state="away"))
@@ -144,6 +144,8 @@ def test_on_session_end_sends_transcript(monkeypatch):
         type = "message"
         role = "assistant"
         text_content = "Tell me about a project.  "
+        metrics = None
+        created_at = None
 
     class History:
         items = [Item()]

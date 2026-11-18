@@ -11,7 +11,7 @@ import { summarizeToolInput, summarizeToolOutput, withoutImageBytes } from "../l
 import { thinkingBudgetSchema } from "../lib/thinking-budget";
 import { CALIBRATION_FEEDBACK_EVENT, userInactiveEvent } from "../lib/session-mode";
 import { sessionModeFor } from "../lib/session-mode-lookup";
-import { studioFetch } from "../lib/studio";
+import { authorizeRuntimeSession, studioFetch } from "../lib/studio";
 
 /** Lookups shown in "Why this answer" (the web describes and resolves them; UI tools are left out). */
 const EVIDENCE_TOOLS = new Set(["scenario_examples", "search_knowledge", "read_knowledge_document", "search_style", "read_document", "eve__skill"]);
@@ -195,6 +195,24 @@ export default defineChannel({
       }
 
       const body = (await request.json().catch(() => null)) as ChatCompletionBody | null;
+      const runtimeSessionId = request.headers.get("x-trainertwin-session-id")?.trim();
+      const runtimeToken = request.headers.get("x-trainertwin-runtime-token")?.trim();
+      let anonymous = false;
+      if (runtimeToken && !runtimeSessionId) return Response.json({ error: "Runtime session required" }, { status: 403 });
+      if (runtimeSessionId) {
+        try {
+          anonymous = await authorizeRuntimeSession(orgId, runtimeSessionId, runtimeToken, request.signal);
+        } catch {
+          return Response.json({ error: "Runtime session unauthorized" }, { status: 403 });
+        }
+      }
+      if (anonymous && request.headers.get("x-trainertwin-mode")?.trim() === "chat") {
+        return Response.json({ error: "Public sessions are voice only" }, { status: 403 });
+      }
+      if (anonymous && body?.messages?.some((m) =>
+        (m.role === "developer" && contentToText(m.content).includes("[SCREEN OBSERVER")) ||
+        (Array.isArray(m.content) && m.content.some((part) => !part || typeof part !== "object" || !("type" in part) || part.type !== "text"))
+      )) return Response.json({ error: "Public sessions accept voice input only" }, { status: 403 });
       const latestRaw = [...(body?.messages ?? [])].reverse().find(
         (m) => m.role === "user" || m.role === "tool" || contentToText(m.content).trim() === "session-start"
       );
@@ -243,8 +261,8 @@ export default defineChannel({
         agentSlug: request.headers.get("x-trainertwin-agent-slug")?.trim() || undefined,
       };
       if (message === USER_INACTIVE_SIGNAL) {
-        message = userInactiveEvent(await sessionModeFor(sessionRef));
-      } else if (message && sessionRef.sessionId && isFeelsOff(message) && (await sessionModeFor(sessionRef)) === "twin-calibration") {
+        message = userInactiveEvent(anonymous ? "twin" : await sessionModeFor(sessionRef));
+      } else if (!anonymous && message && sessionRef.sessionId && isFeelsOff(message) && (await sessionModeFor(sessionRef)) === "twin-calibration") {
         message = CALIBRATION_FEEDBACK_EVENT;
       }
       // One line per transport request (before any early return) so dropped/rejected turns are visible.
@@ -279,6 +297,7 @@ export default defineChannel({
         mode,
         clientTools: [...advertisedTools].sort().join(","),
         ...(requestedModel ? { model: requestedModel } : {}),
+        ...(anonymous ? { anonymous: "1", runtimeToken: runtimeToken! } : {}),
       };
       // What this turn delivers: turn.started instruction resolvers see history without it (agent/instructions/twin-lines.ts).
       attributes.turnText = message.slice(0, 1000);
@@ -316,7 +335,7 @@ export default defineChannel({
       const t_tail = t_resolved;
       let delivery: Delivery;
       try {
-        delivery = await source.send(inputKind === "learner" ? withAttachments(message) : message, { auth, turnPolicy: "steer" });
+        delivery = await source.send(inputKind === "learner" && !anonymous ? withAttachments(message) : message, { auth, turnPolicy: "steer" });
       } catch (sendErr) {
         console.error("[EVE SEND ERROR]", sendErr);
         return Response.json({ error: String(sendErr) }, { status: 400 });
@@ -606,7 +625,7 @@ export default defineChannel({
                     reply: replyText.trim().slice(0, 8000),
                     inputKind,
                     calls: evidenceCalls,
-                  }).catch((error) => console.error("[openai-compat] turn evidence failed", error)),
+                   }, undefined, anonymous ? { sessionId: sessionIdHeader, token: runtimeToken!, anonymous: true } : undefined).catch((error) => console.error("[openai-compat] turn evidence failed", error)),
                 );
               }
 

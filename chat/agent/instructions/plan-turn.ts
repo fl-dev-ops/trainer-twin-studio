@@ -10,7 +10,7 @@ import { projectKnowledgeEnabled } from "../lib/project-knowledge";
  */
 export default defineDynamic(async (ctx) => {
   const attributes = (ctx.session.auth.current?.attributes ?? {}) as Record<string, string | undefined>;
-  if (attributes.mode === "chat") return null;
+  if (attributes.mode === "chat" || attributes.anonymous === "1") return null;
   // Once per turn, as at turn start before 0.91: eve runs this before every model call.
   const content = await ctx.memo(["plan-turn", ctx.turn?.id ?? null], () => {
     const { candidates, usedClaimIds } = resumeCandidateState.get();

@@ -86,6 +86,8 @@ const classification: Record<string, Guard> = {
   "GET onboarding": "public",
   "POST onboarding": "signed_in",
   "PATCH org/settings": "studio",
+  "POST public/twins/[agentId]/sessions": "public",
+  "POST public/sessions/[sessionId]/end": "browser_token",
   "GET personas/[slug]/avatar": "signed_in",
   "POST personas/[slug]/media": "studio",
   "PATCH personas/[slug]": "studio",

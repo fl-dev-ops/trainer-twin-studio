@@ -19,14 +19,15 @@ import { PageContainer } from "@/components/page-container";
 import { AccessUntil } from "@/components/twin/access-until";
 import { TWIN_UPLOAD_TITLE_DEFAULT } from "@/lib/context-upload";
 import { SettingCard, SettingsPanel, SettingsSection } from "@/components/settings-cards";
+import { PUBLIC_CALL_DURATIONS, type PublicTwinSettings } from "@/lib/public-twin-settings";
 
 type LearnerAssign = TwinOutputs["assignments"]["list"][number];
 
 /**
  * Copies the twin's /t/ share link. Same call and cache as the Share dialog; fetched on click, so viewing the page never
- * creates a link. The link opens only for learners assigned to the twin.
+ * creates a link.
  */
-function CopyShareLinkButton({ slug }: { slug: string }) {
+function CopyShareLinkButton({ slug, publicEnabled = false }: { slug: string; publicEnabled?: boolean }) {
   const queryClient = useQueryClient();
   const [state, setState] = useState<"idle" | "busy" | "copied">("idle");
   async function copy() {
@@ -39,7 +40,7 @@ function CopyShareLinkButton({ slug }: { slug: string }) {
       });
       await navigator.clipboard.writeText(url);
       setState("copied");
-      toast.success("Link copied. Only learners assigned to this twin can open it.");
+      toast.success(publicEnabled ? "Link copied. Signed-out visitors can start a short voice call." : "Link copied. Sign in with assigned learner access to talk.");
       setTimeout(() => setState("idle"), 2000);
     } catch {
       setState("idle");
@@ -59,7 +60,7 @@ export function TwinEditPage({
   learners,
   defaultTab = "general",
 }: {
-  twin: Pick<TwinOutputs["agents"]["get"], "slug" | "name" | "description" | "settings">;
+  twin: Pick<TwinOutputs["agents"]["get"], "slug" | "name" | "description" | "settings" | "publicAccess">;
   learners: LearnerAssign[];
   /** /edit opens on General, /assign on Learners. General saves with its button; the other tabs save as you go. */
   defaultTab?: "general" | "conversation" | "learners";
@@ -194,7 +195,7 @@ export function TwinEditPage({
             Set conversation permissions and manage learner access for this twin.
           </p>
         </div>
-        <CopyShareLinkButton slug={id} />
+        <CopyShareLinkButton slug={id} publicEnabled={twin.publicAccess.enabled} />
       </div>
 
       <div className="mt-6 flex flex-col gap-4">
@@ -202,6 +203,7 @@ export function TwinEditPage({
         <TabsList>
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="conversation">Conversation</TabsTrigger>
+          <TabsTrigger value="public">Public access</TabsTrigger>
           <TabsTrigger value="learners">
             Learners
             <span className="text-muted-foreground tabular-nums">· {assigned.length}</span>
@@ -353,6 +355,9 @@ export function TwinEditPage({
       </TabsContent>
 
       {/* Card 3: learners assigned to this twin; Assign opens the shared dialog */}
+      <TabsContent value="public">
+        <PublicAccessSettings twin={twin} />
+      </TabsContent>
       <TabsContent value="learners">
       <article id="assign" className="flex flex-col gap-4 rounded-tt-lg border border-(--card-border) bg-card p-6 shadow-card">
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -404,5 +409,49 @@ export function TwinEditPage({
 
       </div>
     </PageContainer>
+  );
+}
+
+function PublicAccessSettings({ twin }: { twin: Pick<TwinOutputs["agents"]["get"], "slug" | "name" | "description" | "settings" | "publicAccess"> }) {
+  const refresh = useRefresh();
+  const [saved, setSaved] = useState(twin.publicAccess);
+  const [duration, setDuration] = useState(twin.publicAccess.maxSeconds);
+  const [saving, setSaving] = useState(false);
+
+  async function save(patch: Partial<PublicTwinSettings>) {
+    setSaving(true);
+    try {
+      await twinClient.agents.update.mutate({ slug: twin.slug, publicAccess: patch });
+      setSaved((current) => ({ ...current, ...patch }));
+      toast.success("Public access updated");
+      refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not save public access");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <SettingsPanel>
+      <SettingsSection title="Public voice calls" description="Anyone signed out with this link can talk without an account. Signed-in learner access stays unchanged.">
+        <SettingCard title="Allow anonymous visitors" description="This exposes the twin’s current available skills. Short visitor calls are funded by your organization’s balance, not learner credits."
+          control={<SwitchToggle checked={saved.enabled} onChange={(enabled) => { if (!saving) void save({ enabled }); }} label="Allow anonymous visitors" />} />
+        <SettingCard title="Maximum call duration" description="The server ends each public voice call at this limit." control={null}>
+          <form className="flex flex-wrap items-center gap-3" onSubmit={(event) => { event.preventDefault(); void save({ maxSeconds: duration }); }}>
+            <label htmlFor="public-call-duration" className="sr-only">Maximum call duration</label>
+            <select id="public-call-duration" value={duration} disabled={saving} className="h-9 rounded-lg border bg-card px-3 text-sm"
+              onChange={(event) => { const seconds = PUBLIC_CALL_DURATIONS.find((value) => String(value) === event.target.value); if (seconds) setDuration(seconds); }}>
+              {PUBLIC_CALL_DURATIONS.map((seconds) => <option key={seconds} value={seconds}>{seconds / 60} min</option>)}
+            </select>
+            <Button variant="ghost" type="button" disabled={saving || duration === saved.maxSeconds} onClick={() => setDuration(saved.maxSeconds)}>Cancel</Button>
+            <Button type="submit" disabled={saving || duration === saved.maxSeconds}>Save</Button>
+          </form>
+        </SettingCard>
+        <SettingCard title="Public URL" description="Share your existing twin link. Visitors enter a self-reported name before starting a voice-only call." control={null}>
+          <CopyShareLinkButton slug={twin.slug} publicEnabled={saved.enabled} />
+        </SettingCard>
+      </SettingsSection>
+    </SettingsPanel>
   );
 }

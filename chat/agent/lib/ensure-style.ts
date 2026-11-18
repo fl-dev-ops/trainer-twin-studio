@@ -1,5 +1,5 @@
 import { styleCacheState } from "./plan-state";
-import { studioFetch } from "./studio";
+import { runtimeFromContext, studioFetch } from "./studio";
 import { fetchStyleCache } from "./style-cache";
 
 const inFlight = new Map<string, Promise<void>>();
@@ -9,6 +9,7 @@ const inFlight = new Map<string, Promise<void>>();
  * (bridged reply / question), so the 1.5–3.7 s lookup never delays the trainer's first word.
  */
 export async function ensureStyleCache(ctx: any): Promise<void> {
+  if (runtimeFromContext(ctx)) return;
   if (styleCacheState.get().cache) return;
   const orgId = ctx.session?.auth?.initiator?.principalId ?? ctx.session?.auth?.current?.principalId;
   const attributes = (ctx.session?.auth?.current?.attributes ?? {}) as Record<string, string | undefined>;

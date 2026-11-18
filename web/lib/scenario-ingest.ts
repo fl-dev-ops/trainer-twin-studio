@@ -172,7 +172,7 @@ async function requireOrg(orgId: string) {
  * Data a During write carries over from the agent it replaces: Before and After belong to their own phases (configure
  * page, builder), and the intro video is provisioned separately. Without this a re-ingest dropped them.
  */
-const KEPT_ACROSS_DURING_WRITES = ["introVideo", "before", "twinSettings", "after", "tools"] as const;
+const KEPT_ACROSS_DURING_WRITES = ["introVideo", "before", "twinSettings", "after", "tools", "publicAccess"] as const;
 
 /**
  * Writes a skill package as an Agent of `kind` (twin skill or role play): S3 files, then Chroma items, then the

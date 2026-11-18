@@ -59,7 +59,7 @@ export function SessionsList({ data: { range, scenario, learner, scenarios, lear
         ) : (
           <ul className="divide-y overflow-hidden rounded-2xl border bg-card shadow-xs">
             {sessions.map((session) => {
-              const name = session.user.name || session.user.email;
+              const name = session.user ? session.user.name || session.user.email : session.anonymousName || "Anonymous visitor";
               const { ask, reply } = session;
               const status = STATUS_LABEL[session.status];
               const snippet = ask ? `“${ask}”${reply ? ` · ${reply}` : ""}` : reply;
@@ -69,9 +69,10 @@ export function SessionsList({ data: { range, scenario, learner, scenarios, lear
                     href={`/sessions/${session.id}`}
                     className="group flex items-start gap-3.5 px-5 py-4 outline-none transition-colors hover:bg-muted/40 focus-visible:bg-muted/40"
                   >
-                    <UserAvatar user={session.user} size="lg" />
+                    {session.user ? <UserAvatar user={session.user} size="lg" /> : <span className="grid size-10 place-items-center rounded-full bg-muted">{name.charAt(0).toUpperCase()}</span>}
                     <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                       <span className="truncate text-sm font-medium">{name}</span>
+                      {!session.user ? <span className="text-xs text-muted-foreground">Anonymous visitor · self-reported name</span> : null}
                       <span className="truncate text-body-s text-muted-foreground">
                         {session.agent.name || session.agentSlug} ·{" "}
                         <SessionTime iso={(session.startedAt ?? session.createdAt).toISOString()} />
