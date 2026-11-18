@@ -11,7 +11,12 @@ test("floating handshake, microphone delegation, active minimise/reopen and focu
   await expect(page.locator("iframe")).toHaveAttribute("sandbox", "allow-scripts allow-same-origin allow-forms");
   await expect(page.locator("iframe")).toHaveAttribute("referrerpolicy", "no-referrer");
   await expect(page.locator("iframe")).toBeHidden();
+  const closedLauncher = await launcher(page).boundingBox();
   await launcher(page).click();
+  await expect.poll(async () => {
+    const openedLauncher = await launcher(page).boundingBox();
+    return Math.round((openedLauncher!.x + openedLauncher!.width) - (closedLauncher!.x + closedLauncher!.width));
+  }).toBe(0);
   await expect(frame(page).locator("#state")).toHaveText("Ready");
   await frame(page).getByRole("button", { name: "Start fixture call" }).click();
   await expect(page.getByRole("status")).toHaveText("AI twin call in progress");

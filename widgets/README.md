@@ -66,6 +66,11 @@ Minimising hides but **does not unload** the iframe or end the call. Reopening
 preserves the hosted conversation. The launcher reports expanded state, the
 dialog has an accessible name, and closing returns focus to the launcher.
 The panel is bounded to the viewport, with mobile sizing below 480px.
+The hosted UI uses a dark portrait-led card, the trainer's existing photo (initials if unavailable), and explicit
+name/microphone consent. Photos remain in colour; initials appear only when no photo is available. Call-state indicators follow
+LiveKit listening/thinking/speaking events; captions can expand within the same frame without reconnecting.
+Mute, hang-up and minimise are distinct controls. Reduced-motion preferences disable decorative animation.
+The loader stays credential-free: its phone launcher exposes only open/active status, not trainer or visitor data.
 
 Escape in the parent minimises an open floating panel. The hosted page must
 handle its own Escape key and close button by sending `close`, because keyboard

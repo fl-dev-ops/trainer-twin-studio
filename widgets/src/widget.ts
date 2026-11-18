@@ -112,6 +112,26 @@ function button(className: string, text: string): HTMLButtonElement {
   return node;
 }
 
+const PHONE = "M5 3h3l2 5-2 2a14 14 0 0 0 6 6l2-2 5 2v3a2 2 0 0 1-2 2A18 18 0 0 1 3 5a2 2 0 0 1 2-2Z";
+const MICROPHONE = "M12 3a3 3 0 0 0-3 3v5a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3ZM6 11a6 6 0 0 0 12 0M12 17v4M9 21h6";
+
+function icon(path: string) {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("fill", "none");
+  svg.setAttribute("stroke", "currentColor");
+  svg.setAttribute("stroke-width", "1.7");
+  svg.setAttribute("stroke-linecap", "round");
+  svg.setAttribute("stroke-linejoin", "round");
+  svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("focusable", "false");
+  svg.classList.add("tt-icon");
+  const shape = document.createElementNS(svg.namespaceURI, "path");
+  shape.setAttribute("d", path);
+  svg.append(shape);
+  return svg;
+}
+
 function mediaError(failure: unknown): string {
   if (failure instanceof Error) {
     if (failure.name === "NotAllowedError" || failure.name === "SecurityError") {
@@ -162,47 +182,55 @@ function mount(root: HTMLElement, config: Config) {
     return channel <= .04045 ? channel / 12.92 : ((channel + .055) / 1.055) ** 2.4;
   });
   const luminance = .2126 * channels[0] + .7152 * channels[1] + .0722 * channels[2];
-  card.style.setProperty("--tt-on-accent", luminance > .179 ? "#111111" : "#ffffff");
+  card.style.setProperty("--tt-action", luminance < .04 ? "#f2eee5" : config.accentColor);
+  card.style.setProperty("--tt-on-accent", luminance < .04 || luminance > .179 ? "#111111" : "#ffffff");
   card.setAttribute("aria-label", `${config.name} voice assistant`);
   const header = element("header", "tt-header");
   function portrait(className: string) {
     const node = element("div", `tt-portrait ${className}`);
     node.setAttribute("aria-hidden", "true");
     const initials = config.trainerName.trim().split(/\s+/u).slice(0, 2).map((part) => part.charAt(0)).join("");
-    node.textContent = initials;
+    const fallback = element("span", "tt-initials", initials);
+    node.append(fallback);
     if (config.photoUrl) {
+      fallback.hidden = true;
       const image = element("img", "tt-photo");
       image.alt = "";
       image.referrerPolicy = "no-referrer";
       image.src = config.photoUrl;
-      image.addEventListener("error", () => image.remove(), { once: true });
+      image.addEventListener("error", () => {
+        image.remove();
+        fallback.hidden = false;
+      }, { once: true });
       node.append(image);
     }
     return node;
   }
   const heading = element("div", "tt-heading");
   const title = element("h1", "tt-title", config.name);
-  const subtitle = element("p", "tt-subtitle", "AI voice twin");
+  const subtitle = element("p", "tt-subtitle", `${config.trainerName}’s AI twin`);
   heading.append(title, subtitle);
-  const minimise = button("tt-icon-button", "−");
+  const minimise = button("tt-icon-button", "");
+  minimise.append(icon("M5 12h14"));
   minimise.setAttribute("aria-label", "Minimise voice widget");
   minimise.title = "Minimise — your call will continue";
   minimise.addEventListener("click", () => post("close"));
-  header.append(portrait("tt-avatar"), heading);
+  header.append(heading);
   if (config.mode === "floating") header.append(minimise);
 
   const body = element("div", "tt-body");
   const hero = element("div", "tt-hero");
+  const portraitStage = element("div", "tt-portrait-stage");
   const heroPortrait = portrait("tt-hero-portrait");
   const waves = element("div", "tt-waves");
   waves.setAttribute("aria-hidden", "true");
   for (let i = 0; i < 5; i++) waves.append(element("span", "tt-wave"));
-  const status = element("p", "tt-status", "A conversation, not another form.");
+  const status = element("p", "tt-status");
   status.setAttribute("role", "status");
   status.setAttribute("aria-live", "polite");
   const introduction = element("h2", "tt-introduction", config.welcome);
-  const description = element("p", "tt-description", `Speak naturally with ${config.trainerName}’s AI twin. Ask a question and see where the conversation takes you.`);
-  hero.append(heroPortrait, waves, status, introduction, description);
+  portraitStage.append(heroPortrait, waves);
+  hero.append(portraitStage, status, introduction);
 
   const form = element("form", "tt-prejoin");
   const label = element("label", "tt-label", "Your name");
@@ -215,19 +243,18 @@ function mount(root: HTMLElement, config: Config) {
   name.maxLength = 80;
   name.placeholder = "What should I call you?";
   name.required = true;
-  name.setAttribute("aria-describedby", "tt-name-note tt-error");
-  const nameNote = element("p", "tt-field-note", "Just your name. No account needed.");
-  nameNote.id = "tt-name-note";
+  name.setAttribute("aria-describedby", "tt-error");
   const disclosure = element("details", "tt-disclosure");
-  const summary = element("summary", "", "Before you begin");
-  const disclosureText = element("p", "", `You’ll speak with an AI twin, not ${config.trainerName}. This call is transcribed and may be recorded. The organization can review your self-reported name, transcript, any recording and call usage. The twin can use its currently published skills. No camera or screen sharing.`);
+  const summary = element("summary", "", "Privacy & call details");
+  const disclosureText = element("p", "", `You’ll speak with an AI twin, not ${config.trainerName}. No account is needed. This call is transcribed and may be recorded. The organization funds the call and can review your self-reported name, transcript, any recording and call usage. The twin can use its currently published skills. No camera or screen sharing.`);
   disclosure.append(summary, disclosureText);
   const consent = element("p", "tt-consent", "AI voice call · Transcribed · May be recorded");
   const start = button("tt-primary", "Start voice call");
+  start.prepend(icon(PHONE));
   start.type = "submit";
   start.disabled = true;
-  const allowance = element("p", "tt-allowance", `Up to ${clock(config.maxSeconds)} · Funded by the organization`);
-  form.append(label, name, nameNote, disclosure, consent, start, allowance);
+  const allowance = element("p", "tt-allowance", `Up to ${clock(config.maxSeconds)}`);
+  form.append(label, name, consent, start, allowance, disclosure);
 
   const call = element("section", "tt-call");
   call.hidden = true;
@@ -236,8 +263,25 @@ function mount(root: HTMLElement, config: Config) {
   const captionLabel = element("h2", "tt-captions-label", "Live captions");
   const countdown = element("span", "tt-countdown", `${clock(config.maxSeconds)} left`);
   countdown.setAttribute("aria-label", "Time remaining");
-  callMeta.append(captionLabel, countdown);
+  const captionToggle = button("tt-icon-button tt-caption-toggle", "");
+  captionToggle.append(icon("M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"));
+  captionToggle.setAttribute("aria-label", "Expand captions");
+  captionToggle.setAttribute("aria-expanded", "false");
+  captionToggle.setAttribute("aria-controls", "tt-captions");
+  captionToggle.title = "Expand captions";
+  function expandCaptions(expanded: boolean) {
+    captionToggle.replaceChildren(icon(expanded
+      ? "M20 10h-6V4M4 14h6v6M14 10l7-7M3 21l7-7"
+      : "M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"));
+    captionToggle.setAttribute("aria-expanded", String(expanded));
+    captionToggle.setAttribute("aria-label", expanded ? "Collapse captions" : "Expand captions");
+    captionToggle.title = expanded ? "Collapse captions" : "Expand captions";
+    card.classList.toggle("tt-captions-expanded", expanded);
+  }
+  captionToggle.addEventListener("click", () => expandCaptions(captionToggle.getAttribute("aria-expanded") !== "true"));
+  callMeta.append(captionLabel, countdown, captionToggle);
   const transcript = element("div", "tt-transcript");
+  transcript.id = "tt-captions";
   transcript.setAttribute("role", "log");
   transcript.setAttribute("aria-label", "Conversation captions");
   transcript.setAttribute("aria-live", "polite");
@@ -253,10 +297,21 @@ function mount(root: HTMLElement, config: Config) {
     void currentRoom.startAudio().catch((failure: unknown) => showError(mediaError(failure)));
   });
   const controls = element("div", "tt-controls");
-  const mute = button("tt-secondary tt-mute", "Mute microphone");
+  const mute = button("tt-secondary tt-mute", "");
+  mute.append(icon(MICROPHONE));
+  mute.setAttribute("aria-label", "Mute microphone");
+  mute.title = "Mute microphone";
   mute.setAttribute("aria-pressed", "false");
-  const end = button("tt-end", "End call");
-  controls.append(mute, end);
+  const end = button("tt-end", "");
+  end.append(icon(PHONE));
+  end.setAttribute("aria-label", "End call");
+  end.title = "End call";
+  const muteControl = element("div", "tt-control");
+  const muteLabel = element("span", "tt-control-label", "Mute");
+  const endControl = element("div", "tt-control");
+  muteControl.append(mute, muteLabel);
+  endControl.append(end, element("span", "tt-control-label", "End call"));
+  controls.append(muteControl, endControl);
   call.append(callMeta, transcript, sound, controls);
 
   const finished = element("section", "tt-finished");
@@ -267,6 +322,7 @@ function mount(root: HTMLElement, config: Config) {
   retry.addEventListener("click", () => {
     if (starting || finishing || destroyed) return;
     phase = "ready";
+    expandCaptions(false);
     clearError();
     render();
     name.focus();
@@ -312,13 +368,15 @@ function mount(root: HTMLElement, config: Config) {
     call.hidden = phase !== "connecting" && phase !== "live";
     finished.hidden = phase !== "ended";
     introduction.hidden = phase !== "ready";
-    description.hidden = phase !== "ready";
+    status.hidden = phase === "ready" && initialized;
     waves.hidden = phase !== "live";
     start.disabled = !initialized || starting || finishing;
     retry.disabled = starting || finishing || !initialized;
     name.disabled = starting;
     mute.disabled = phase !== "live" || mutePending || reconnecting;
-    mute.textContent = muted ? "Unmute microphone" : "Mute microphone";
+    mute.setAttribute("aria-label", muted ? "Unmute microphone" : "Mute microphone");
+    mute.title = muted ? "Unmute microphone" : "Mute microphone";
+    muteLabel.textContent = muted ? "Unmute" : "Mute";
     mute.setAttribute("aria-pressed", String(muted));
     status.textContent = phase === "ready" ? (initialized ? "Ready when you are" : "Waiting for a secure connection…")
       : phase === "connecting" ? "Connecting your call…"
@@ -537,6 +595,7 @@ function mount(root: HTMLElement, config: Config) {
     const attempt = ++generation;
     const cancelled = () => destroyed || generation !== attempt;
     phase = "connecting";
+    expandCaptions(false);
     captions.clear();
     transcript.replaceChildren(captionPlaceholder);
     countdown.textContent = `${clock(config.maxSeconds)} left`;

@@ -229,7 +229,7 @@ test.describe.serial("cross-origin hosted voice widget", () => {
     await expect(hosted.getByText("AI voice call · Transcribed · May be recorded", { exact: true })).toBeVisible();
     await expect(hosted.locator('textarea, input[type="file"], input[type="email"], video')).toHaveCount(0);
     await expect(hosted.getByRole("button", { name: /camera|screen|upload|send message/i })).toHaveCount(0);
-    await page.screenshot({ path: testInfo.outputPath("widget-mobile-prejoin.png"), fullPage: true });
+    await page.screenshot({ path: testInfo.outputPath("widget-mobile-prejoin.png"), fullPage: true, animations: "disabled" });
     await hosted.getByLabel("Your name", { exact: true }).fill("   ");
     await hosted.getByRole("button", { name: "Start voice call", exact: true }).click();
     await expect(hosted.getByRole("alert")).toContainText("1–80 characters");
@@ -248,6 +248,74 @@ test.describe.serial("cross-origin hosted voice widget", () => {
     expect(await hosted.evaluate(() => window.__widgetFetches)).toEqual([]);
     expect(calls.starts).toHaveLength(0);
     await expect(hosted.getByRole("button", { name: "Start a new call", exact: true })).toBeEnabled();
+  });
+
+  test("portrait-led design keeps consent, captions and controls usable across call states", async ({ page, context }, testInfo) => {
+    await page.setViewportSize({ width: 1280, height: 1000 });
+    await environment(context);
+    const calls = await simulatedCalls(page);
+    await page.route((url) => url.pathname === `/embed/${agentId}`, async (route) => {
+      const response = await route.fetch();
+      const html = await response.text();
+      expect(html).toContain('"photoUrl":null');
+      await route.fulfill({ response, body: html.replace('"photoUrl":null', `"photoUrl":"${widgetOrigin()}/vasanth.png"`) });
+    });
+    const hosted = await open(page);
+    const photo = hosted.locator(".tt-hero-portrait img");
+    await expect(photo).toBeVisible();
+    await expect.poll(() => photo.evaluate((node) => node instanceof HTMLImageElement && node.complete && node.naturalWidth > 0)).toBe(true);
+    await expect(hosted.locator(".tt-initials")).toBeHidden();
+    expect(await photo.evaluate((node) => getComputedStyle(node).filter)).toBe("none");
+    await photo.hover();
+    expect(await photo.evaluate((node) => getComputedStyle(node).filter)).toBe("none");
+    expect(await hosted.getByLabel("Your name", { exact: true }).evaluate((node) => getComputedStyle(node).backgroundColor))
+      .not.toBe(await hosted.locator(".tt-card").evaluate((node) => getComputedStyle(node).backgroundColor));
+    await expect(hosted.getByText("Ask a question. Think out loud. See where it takes you.", { exact: true })).toHaveCount(0);
+    await expect(hosted.getByText("AI voice call · Transcribed · May be recorded", { exact: true })).toBeVisible();
+    expect(await hosted.getByRole("button", { name: "Start voice call", exact: true }).evaluate((node) => node.getBoundingClientRect().bottom <= innerHeight)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath("widget-desktop-portrait.png"), animations: "disabled" });
+    await begin(hosted, "Design review");
+    await expect(hosted.getByRole("button", { name: "Mute microphone", exact: true })).toBeEnabled();
+    await hosted.evaluate(() => {
+      window.__widgetRoom?.agentState("speaking");
+      window.__widgetRoom?.caption("question", "How should I approach this conversation?", "visitor");
+      window.__widgetRoom?.caption("answer", "Start by listening. What matters most to the person you are speaking with?");
+    });
+    await expect(hosted.getByRole("status")).toContainText("is speaking");
+    await page.screenshot({ path: testInfo.outputPath("widget-desktop-speaking.png"), animations: "disabled" });
+    await hosted.getByRole("button", { name: "Expand captions", exact: true }).click();
+    await expect(hosted.getByRole("button", { name: "Collapse captions", exact: true })).toHaveAttribute("aria-expanded", "true");
+    await expect(hosted.locator(".tt-portrait-stage")).toBeHidden();
+    await expect(hosted.getByRole("log")).toContainText("What matters most");
+    await page.screenshot({ path: testInfo.outputPath("widget-expanded-captions.png"), animations: "disabled" });
+    await hosted.getByRole("button", { name: "Collapse captions", exact: true }).click();
+    await expect(hosted.locator(".tt-portrait-stage")).toBeVisible();
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await expect.poll(() => hosted.locator(".tt-wave").first().evaluate((node) => getComputedStyle(node).animationName)).toBe("none");
+    await hosted.getByRole("button", { name: "End call", exact: true }).click();
+    await expect.poll(() => calls.ends.length).toBe(1);
+    await hosted.getByRole("button", { name: "Start a new call", exact: true }).click();
+    await expect(hosted.getByLabel("Your name", { exact: true })).toBeFocused();
+    await expect(hosted.locator(".tt-portrait-stage")).toBeVisible();
+    expect(calls.starts).toHaveLength(1);
+    await page.setViewportSize({ width: 320, height: 568 });
+    await expect(hosted.getByRole("button", { name: "Start voice call", exact: true })).toBeVisible();
+    expect(await hosted.getByRole("button", { name: "Start voice call", exact: true }).evaluate((node) => {
+      const body = node.closest(".tt-body");
+      return body !== null && node.getBoundingClientRect().bottom <= body.getBoundingClientRect().bottom;
+    })).toBe(true);
+    expect(await hosted.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath("widget-small-portrait.png"), animations: "disabled" });
+    await photo.evaluate((node) => node.dispatchEvent(new Event("error")));
+    await expect(photo).toHaveCount(0);
+    await expect(hosted.locator(".tt-hero-portrait")).toHaveText("ET");
+    await expectOnlySafeMessages(page);
+    const inline = await open(page, "/?mode=inline");
+    await expect(inline.getByRole("button", { name: "Minimise voice widget", exact: true })).toHaveCount(0);
+    await expect(inline.getByRole("button", { name: "Start voice call", exact: true })).toBeEnabled();
+    expect(await inline.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath("widget-inline-mobile.png"), animations: "disabled", fullPage: true });
+    expect(calls.starts).toHaveLength(1);
   });
 
   test("an ancestor microphone policy blocks the real browser API before any session request", async ({ page }) => {
