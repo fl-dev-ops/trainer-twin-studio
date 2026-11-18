@@ -46,14 +46,19 @@ test.describe.serial("twin settings layout", () => {
     let updates = 0;
     page.on("request", (request) => { if (request.url().includes("agents.update") && request.method() === "POST") updates++; });
     await panel.getByLabel("Bot name", { exact: true }).fill("Updated E2E Coach");
-    await panel.getByLabel("Description", { exact: true }).fill("Settings style regression");
+    const description = "Learn from real-world expertise in client communication, negotiation and closing deals. Discuss situations, practise your approach and get guidance grounded in experience. ".repeat(4).trim();
+    await panel.getByLabel("Description", { exact: true }).fill(description);
+    const nameBox = await panel.getByLabel("Bot name", { exact: true }).boundingBox();
+    const descriptionBox = await panel.getByLabel("Description", { exact: true }).boundingBox();
+    expect(descriptionBox!.width).toBeGreaterThan(600);
+    expect(descriptionBox!.x).toBe(nameBox!.x);
     expect(updates).toBe(0);
     const saved = page.waitForResponse((response) => response.url().includes("agents.update") && response.request().method() === "POST");
     await panel.getByRole("button", { name: "Save changes", exact: true }).click();
     expect((await saved).ok()).toBe(true);
     await page.reload();
     await expect(panel.getByLabel("Bot name", { exact: true })).toHaveValue("Updated E2E Coach");
-    await expect(panel.getByLabel("Description", { exact: true })).toHaveValue("Settings style regression");
+    await expect(panel.getByLabel("Description", { exact: true })).toHaveValue(description);
     await page.screenshot({ path: testInfo.outputPath("general-desktop.png"), animations: "disabled" });
   });
 
@@ -186,6 +191,9 @@ test.describe.serial("twin settings layout", () => {
       expect(copied).toContain(`data-twin-id="${original.widget.id}"`);
       expect(copied).toContain(`data-mode="${mode}"`);
       expect(copied).toContain("/widgets/v1.js");
+      const code = install.getByRole("region", { name, exact: true }).locator("pre");
+      await expect(code).toContainText("\n  src=");
+      expect(await code.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
     }
   });
 
@@ -209,6 +217,14 @@ test.describe.serial("twin settings layout", () => {
       expect(box!.x).toBeGreaterThanOrEqual(0);
       expect(box!.x + box!.width).toBeLessThanOrEqual(390);
       await page.screenshot({ path: testInfo.outputPath(`${tab.toLowerCase().replaceAll(" ", "-")}-mobile.png`), animations: "disabled" });
+      if (tab === "Embed") {
+        const install = panel.getByRole("region", { name: "Install", exact: true });
+        for (const code of await install.locator("pre").all()) {
+          expect(await code.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+        }
+        await install.scrollIntoViewIfNeeded();
+        await page.screenshot({ path: testInfo.outputPath("install-mobile.png"), animations: "disabled" });
+      }
     }
   });
 });

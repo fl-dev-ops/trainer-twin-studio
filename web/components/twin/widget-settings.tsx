@@ -81,22 +81,22 @@ export function WidgetSettingsPanel({ twin }: { twin: Twin }) {
               <SectionRow title="Enable widget" detail="Allow this twin on the websites below. Changes apply when you save.">
                 <SwitchToggle checked={draft.enabled} onChange={(enabled) => setDraft({ ...draft, enabled })} label="Enable website widget" />
               </SectionRow>
-              <SectionRow title={<label htmlFor="widget-origins">Allowed website origins</label>} detail="One exact origin per line, up to 20. Include HTTPS and any non-default port; no paths, trailing slashes or wildcards.">
-                <div className="w-full sm:w-80">
-                  <Textarea id="widget-origins" rows={4} value={origins} onChange={(event) => setOrigins(event.target.value)}
-                    placeholder={"https://example.com\nhttps://www.example.com"} aria-describedby="widget-origins-help" className="min-h-24 resize-y text-sm" />
-                  <p id="widget-origins-help" className="m-0 mt-2 text-xs text-muted-foreground">HTTP is supported only for localhost development.</p>
-                </div>
-              </SectionRow>
+              <div className="flex flex-col gap-2 border-t border-(--border) p-5">
+                <label htmlFor="widget-origins" className="text-sm font-medium">Allowed website origins</label>
+                <p className="m-0 text-sm text-muted-foreground">One exact origin per line, up to 20. Include HTTPS and any non-default port; no paths, trailing slashes or wildcards.</p>
+                <Textarea id="widget-origins" rows={4} value={origins} onChange={(event) => setOrigins(event.target.value)}
+                  placeholder={"https://example.com\nhttps://www.example.com"} aria-describedby="widget-origins-help" className="min-h-24 resize-y font-mono text-sm" />
+                <p id="widget-origins-help" className="m-0 text-xs text-muted-foreground">HTTP is supported only for localhost development.</p>
+              </div>
             </div>
           </PageSection>
           <PageSection title="Appearance" description="The welcome message and accent visitors see before starting a call.">
             <div className={SECTION_CARD}>
-              <SectionRow title={<label htmlFor="widget-welcome">Welcome message</label>} detail="Up to 120 characters.">
-                <div className="w-full sm:w-80">
-                  <Input id="widget-welcome" value={draft.welcome} maxLength={120} onChange={(event) => setDraft({ ...draft, welcome: event.target.value })} />
-                </div>
-              </SectionRow>
+              <div className="flex flex-col gap-2 p-5">
+                <label htmlFor="widget-welcome" className="text-sm font-medium">Welcome message</label>
+                <Input id="widget-welcome" value={draft.welcome} maxLength={120} onChange={(event) => setDraft({ ...draft, welcome: event.target.value })} />
+                <p className="m-0 text-xs text-muted-foreground">Up to 120 characters.</p>
+              </div>
               <SectionRow title={<label htmlFor="widget-colour">Accent colour</label>} detail="A six-digit hex colour.">
                 <svg className="size-8 shrink-0 rounded-lg border border-(--border)" aria-hidden="true" viewBox="0 0 32 32">
                   <rect width="32" height="32" fill={/^#[0-9a-f]{6}$/i.test(draft.accentColor) ? draft.accentColor : "#111111"} />
@@ -104,9 +104,11 @@ export function WidgetSettingsPanel({ twin }: { twin: Twin }) {
                 <Input id="widget-colour" value={draft.accentColor} maxLength={7} onChange={(event) => setDraft({ ...draft, accentColor: event.target.value })}
                   placeholder="#111111" className="w-32 font-mono" />
               </SectionRow>
-              <SectionRow title="Text preview" detail="No call is opened or microphone requested.">
-                <p className="m-0 max-w-80 break-words text-sm font-medium">{draft.welcome}</p>
-              </SectionRow>
+              <div className="flex flex-col gap-3 border-t border-(--border) p-5">
+                <span className="text-sm font-medium">Text preview</span>
+                <p className="m-0 break-words rounded-lg border border-(--border) bg-muted/30 p-4 text-sm">{draft.welcome}</p>
+                <p className="m-0 text-xs text-muted-foreground">No call is opened or microphone requested.</p>
+              </div>
             </div>
           </PageSection>
         </fieldset>
@@ -118,19 +120,29 @@ export function WidgetSettingsPanel({ twin }: { twin: Twin }) {
       </form>
       <PageSection title="Install" description="Add one snippet to an allowed website. The embed ID is public; no credentials are included.">
         <div className={cn(SECTION_CARD, "min-w-0 overflow-hidden")}>
-          <SectionRow title="Embed ID" detail="This twin’s stable public identifier.">
-            <code className="break-all text-xs">{twin.widget.id}</code>
-            <Button variant="outline" size="sm" onClick={() => void copy(twin.widget.id)}><Copy data-icon="inline-start" />Copy ID</Button>
-          </SectionRow>
+          <div className="flex flex-col gap-3 p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h3 className="m-0 text-sm font-medium">Embed ID</h3>
+              <Button variant="outline" size="sm" onClick={() => void copy(twin.widget.id)}><Copy data-icon="inline-start" />Copy ID</Button>
+            </div>
+            <code className="block break-all rounded-lg border border-(--border) bg-muted/30 p-4 text-xs">{twin.widget.id}</code>
+          </div>
           {(["floating", "inline"] as const).map((mode) => {
             const snippet = widgetInstallSnippet(twin.widget.origin, twin.widget.id, mode);
+            const displaySnippet = snippet
+              .replace(" src=", "\n  src=")
+              .replace(" data-twin-id=", "\n  data-twin-id=")
+              .replace(" data-mode=", "\n  data-mode=")
+              .replace(" referrerpolicy=", "\n  referrerpolicy=")
+              .replace(" defer>", "\n  defer\n>");
             return (
-              <section key={mode} aria-label={mode === "floating" ? "Floating launcher" : "Inline panel"} className="border-t border-(--border)">
-                <SectionRow title={mode === "floating" ? "Floating launcher" : "Inline panel"}
-                  detail={mode === "floating" ? "Place once before your page’s closing body tag." : "Place the script where the panel should appear."}>
+              <section key={mode} aria-label={mode === "floating" ? "Floating launcher" : "Inline panel"} className="flex min-w-0 flex-col gap-3 border-t border-(--border) p-5">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <h3 className="m-0 text-sm font-medium">{mode === "floating" ? "Floating launcher" : "Inline panel"}</h3>
                   <Button variant="outline" size="sm" onClick={() => void copy(snippet)}><Copy data-icon="inline-start" />Copy snippet</Button>
-                </SectionRow>
-                <pre className="m-0 overflow-x-auto border-t border-(--border) bg-muted/30 px-5 py-4 text-xs leading-6"><code>{snippet}</code></pre>
+                </div>
+                <p className="m-0 text-sm text-muted-foreground">{mode === "floating" ? "Place once before your page’s closing body tag." : "Place the script where the panel should appear."}</p>
+                <pre className="m-0 whitespace-pre-wrap break-all rounded-lg border border-(--border) bg-muted/30 p-4 text-xs leading-6"><code>{displaySnippet}</code></pre>
               </section>
             );
           })}

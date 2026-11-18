@@ -218,17 +218,17 @@ export function TwinEditPage({
       <TabsContent value="general">
         <PageSection title="Twin details" description="The name and description shown across your workspace.">
           <form className="flex flex-col gap-3" onSubmit={(event) => { event.preventDefault(); void handleSave(); }}>
-            <fieldset disabled={saving} className={cn(SECTION_CARD, "min-w-0")}>
-              <SectionRow title={<label htmlFor="bot-name">Bot name</label>}>
-                <div className="w-full sm:w-80">
-                  <Input id="bot-name" value={name} onChange={(event) => setName(event.target.value)} />
-                </div>
-              </SectionRow>
-              <SectionRow title={<label htmlFor="bot-desc">Description</label>} detail="A short introduction to this twin.">
-                <div className="w-full sm:w-80">
-                  <Textarea id="bot-desc" rows={3} value={description} onChange={(event) => setDescription(event.target.value)} />
-                </div>
-              </SectionRow>
+            <fieldset disabled={saving} className={cn(SECTION_CARD, "flex min-w-0 flex-col gap-6 p-5")}>
+              <div className="flex flex-col gap-2">
+                <label htmlFor="bot-name" className="text-sm font-medium">Bot name</label>
+                <Input id="bot-name" value={name} onChange={(event) => setName(event.target.value)} />
+              </div>
+              <div className="flex flex-col gap-2">
+                <label htmlFor="bot-desc" className="text-sm font-medium">Description</label>
+                <Textarea id="bot-desc" rows={6} value={description} onChange={(event) => setDescription(event.target.value)}
+                  aria-describedby="bot-desc-help" className="min-h-40" />
+                <p id="bot-desc-help" className="m-0 text-sm text-muted-foreground">A short introduction to this twin.</p>
+              </div>
             </fieldset>
             <div className="flex items-center justify-end gap-3">
               <Button variant="ghost" nativeButton={false} render={<Link href={`/twin/${id}`} />}>Cancel</Button>
@@ -257,21 +257,21 @@ export function TwinEditPage({
                     label="Upload a file before the conversation" />
                 </SectionRow>
                 {preUpload ? (
-                  <>
-                    <SectionRow title={<label htmlFor="upload-title">Upload title</label>} detail={`The heading shown before the conversation. Empty shows “${TWIN_UPLOAD_TITLE_DEFAULT}”.`}>
-                      <div className="w-full sm:w-80">
+                  <div className="flex flex-col gap-6 border-t border-(--border) p-5">
+                      <div className="flex flex-col gap-2">
+                        <label htmlFor="upload-title" className="text-sm font-medium">Upload title</label>
                         <Input id="upload-title" maxLength={80} value={card.uploadTitle} placeholder={TWIN_UPLOAD_TITLE_DEFAULT}
                           onChange={(event) => setCard({ ...card, uploadTitle: event.target.value })} />
+                        <p className="m-0 text-sm text-muted-foreground">The heading shown before the conversation. Empty shows “{TWIN_UPLOAD_TITLE_DEFAULT}”.</p>
                       </div>
-                    </SectionRow>
-                    <SectionRow title={<label htmlFor="upload-instruction">What to upload</label>} detail="Tell learners which file to add. Leave empty for no instruction.">
-                      <div className="w-full sm:w-80">
+                      <div className="flex flex-col gap-2">
+                        <label htmlFor="upload-instruction" className="text-sm font-medium">What to upload</label>
                         <Input id="upload-instruction" maxLength={300} value={card.uploadInstruction}
                           placeholder="e.g. Upload the property brochure."
                           onChange={(event) => setCard({ ...card, uploadInstruction: event.target.value })} />
+                        <p className="m-0 text-sm text-muted-foreground">Tell learners which file to add. Leave empty for no instruction.</p>
                       </div>
-                    </SectionRow>
-                  </>
+                  </div>
                 ) : null}
               </div>
               {preUpload ? (
@@ -391,10 +391,9 @@ function PublicAccessSettings({ twin }: { twin: Pick<TwinOutputs["agents"]["get"
         </form>
       </PageSection>
       <PageSection title="Public URL" description="Share your existing twin link. Visitors enter their name before starting a voice call.">
-        <div className={SECTION_CARD}>
-          <SectionRow title="Share this twin" detail="The link stays the same when you change public access.">
-            <CopyShareLinkButton slug={twin.slug} publicEnabled={saved.enabled} />
-          </SectionRow>
+        <div className={cn(SECTION_CARD, "flex flex-col items-start gap-4 p-5")}>
+          <p className="m-0 text-sm text-muted-foreground">The link stays the same when you change public access.</p>
+          <CopyShareLinkButton slug={twin.slug} publicEnabled={saved.enabled} />
         </div>
       </PageSection>
     </div>
