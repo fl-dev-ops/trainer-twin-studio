@@ -39,9 +39,11 @@ test("floating handshake, microphone delegation, active minimise/reopen and focu
   await expect(launcher(page)).toBeFocused();
   await open(page);
   expect(await originalFrame?.evaluate("window.active")).toBe(true);
-  expect(await originalFrame?.evaluate("window.received")).toEqual([
+  expect(await originalFrame?.evaluate("window.received")).toEqual(expect.arrayContaining([
     { source: "trainertwin-host", version: 1, type: "init" },
-  ]);
+    { source: "trainertwin-host", version: 1, type: "visibility", open: true },
+    { source: "trainertwin-host", version: 1, type: "visibility", open: false },
+  ]));
   await page.keyboard.press("Escape");
   await expect(page.locator("iframe")).toBeHidden();
   await expect(launcher(page)).toBeFocused();
@@ -66,6 +68,8 @@ test("floating mounts remain independent and inline mode is rejected", async ({ 
 test("hover expands one surface, crosses into the iframe, and shrinks only after leaving", async ({ page }) => {
   await page.goto("/");
   await hoverOpen(page);
+  expect(await page.locator("[data-trainertwin-widget] .floating").evaluate((node) =>
+    Number.parseFloat(getComputedStyle(node).borderTopLeftRadius))).toBeLessThanOrEqual(28);
   await expect(page.getByRole("dialog")).toBeVisible();
   await expect(launcher(page)).toBeHidden();
   await frame(page).getByRole("button", { name: "Start fixture call" }).hover();

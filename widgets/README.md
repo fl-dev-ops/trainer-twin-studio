@@ -54,12 +54,17 @@ until explicit minimise/Escape, so keyboard and touch users never need hover. Ho
 Minimising hides but **does not unload** the iframe or end the call. Reopening
 preserves the hosted conversation. The launcher reports expanded state, the
 dialog has an accessible name, and closing returns focus to the launcher.
-The panel is capped at 580px high and bounded to the viewport.
+The welcome card fits its content without a bottom spacer; trusted, integer-only size updates are bounded to
+280–580px and the viewport's safe areas. Active calls retain a bounded caption area rather than resizing every turn.
 The hosted UI uses a dark portrait-led card, the trainer's existing photo (initials if unavailable), and explicit
 name/microphone consent. Photos remain in colour; initials appear only when no photo is available. Call-state indicators follow
 LiveKit listening/thinking/speaking events; captions can expand within the same frame without reconnecting.
 Mute, hang-up and minimise are distinct controls. Reduced-motion preferences disable decorative animation.
-The loader stays credential-free: it receives only open/active status and an editing-focus boolean, not trainer or visitor data.
+The loader stays credential-free: it receives only lifecycle status, bounded height and an editing-focus boolean,
+not trainer or visitor data.
+The portrait is preloaded by the hosted HTML and loaded eagerly/high-priority while the iframe is still closed.
+On open/close the photo, heading, input and CTA independently fade/translate upward/downward, without scaling.
+Controls become interactive when the outer surface settles, preventing moving-target clicks during expansion.
 
 Escape in the parent minimises an open floating panel. The hosted page must
 handle its own Escape key and close button by sending `close`, because keyboard
@@ -99,14 +104,17 @@ Every message is an object using **`version: 1`**, never `v: 1`.
 | iframe → parent | `trainertwin-widget` | `close` | none |
 | iframe → parent | `trainertwin-widget` | `status` | `active: boolean` |
 | iframe → parent | `trainertwin-widget` | `interaction` | `editing: boolean`, name field focused; no field contents |
+| iframe → parent | `trainertwin-widget` | `resize` | `height: integer`, 280–580 only |
 | parent → iframe | `trainertwin-host` | `init` | none |
 | parent → iframe | `trainertwin-host` | `destroy` | none |
+| parent → iframe | `trainertwin-host` | `visibility` | `open: boolean`, triggers content reveal only |
 
 The iframe installs its listener and sends `ready`; the loader replies `init`.
 The loader requires both `event.source === iframe.contentWindow` and
 `event.origin === widgetOrigin`, plus the versioned schema. It always sends with
 an exact `targetOrigin`. `status` only updates a polite accessibility
-announcement; it cannot resize the panel or start/end a call. Repeated `ready`
+announcement; it cannot resize the panel or start/end a call. Only a validated `resize` message from the exact
+hosted frame can update the bounded panel height; arbitrary/oversized sizes are ignored. Repeated `ready`
 messages receive `init` again, so hosted initialization must be idempotent.
 
 The hosted page must validate `event.source === window.parent` and exact

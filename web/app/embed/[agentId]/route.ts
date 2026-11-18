@@ -7,6 +7,12 @@ function scriptData(value: object) {
   return JSON.stringify(value).replace(/</g, "\\u003c").replace(/&/g, "\\u0026").replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029");
 }
 
+function attribute(value: string) {
+  return value.replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  })[character]!);
+}
+
 export async function GET(request: Request, context: { params: Promise<{ agentId: string }> }) {
   try {
     const org = await widgetPageOrg(request);
@@ -29,7 +35,8 @@ export async function GET(request: Request, context: { params: Promise<{ agentId
     ].join("; ");
     return new Response(`<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Talk to an AI twin</title><link rel="stylesheet" href="/widgets/voice-v1.css"></head>
+<title>Talk to an AI twin</title><link rel="stylesheet" href="/widgets/voice-v1.css">
+${config.photoUrl ? `<link rel="preload" as="image" href="${attribute(config.photoUrl)}" fetchpriority="high" referrerpolicy="no-referrer">` : ""}</head>
 <body><div id="trainertwin-widget"></div><script id="trainertwin-config" type="application/json">${scriptData(config)}</script>
 <script src="/widgets/voice-v1.js" defer></script></body></html>`, {
       headers: {

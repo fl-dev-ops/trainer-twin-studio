@@ -1,5 +1,6 @@
 import { Room, RoomEvent, Track, type Participant, type RemoteTrack, type TranscriptionSegment } from "livekit-client";
 import "./widget.css";
+import { MAX_WIDGET_HEIGHT, MIN_WIDGET_HEIGHT } from "./protocol";
 
 type Config = {
   mode: "floating";
@@ -198,6 +199,9 @@ function mount(root: HTMLElement, config: Config) {
       const image = element("img", "tt-photo");
       image.alt = "";
       image.referrerPolicy = "no-referrer";
+      image.loading = "eager";
+      image.fetchPriority = "high";
+      image.decoding = "async";
       image.src = config.photoUrl;
       image.addEventListener("error", () => {
         image.remove();
@@ -334,6 +338,20 @@ function mount(root: HTMLElement, config: Config) {
   body.append(hero, form, call, finished, error);
   card.append(header, body, footer);
   root.replaceChildren(card);
+  card.dataset.visible = "false";
+  let reportedHeight = 0;
+  function reportSize() {
+    if (!initialized || destroyed || window.parent === window) return;
+    const natural = phase === "connecting" || phase === "live" ? MAX_WIDGET_HEIGHT
+      : body.scrollHeight + footer.offsetHeight + (phase === "ready" ? 0 : header.offsetHeight) + 2;
+    const height = Math.max(MIN_WIDGET_HEIGHT, Math.min(MAX_WIDGET_HEIGHT, Math.ceil(natural)));
+    if (height === reportedHeight) return;
+    reportedHeight = height;
+    window.parent.postMessage({ source: "trainertwin-widget", version: 1, type: "resize", height }, config.parentOrigin);
+  }
+  const sizeObserver = new ResizeObserver(reportSize);
+  sizeObserver.observe(body);
+  sizeObserver.observe(footer);
   const audioContainer = document.getElementById("trainertwin-audio") ?? element("div", "tt-audio");
   audioContainer.hidden = true;
   const ownsAudioContainer = !audioContainer.isConnected;
@@ -383,6 +401,7 @@ function mount(root: HTMLElement, config: Config) {
       : agentState === "thinking" ? "Thinking…"
       : muted ? "Microphone muted" : "Listening to you";
     sound.hidden = phase !== "live" || room?.canPlaybackAudio !== false;
+    reportSize();
   }
 
   function readVisitorToken() {
@@ -705,6 +724,7 @@ function mount(root: HTMLElement, config: Config) {
   function destroy() {
     if (destroyed) return;
     destroyed = true;
+    sizeObserver.disconnect();
     initialized = false;
     window.removeEventListener("message", receive);
     window.removeEventListener("pageshow", ready);
@@ -724,6 +744,8 @@ function mount(root: HTMLElement, config: Config) {
     if (data.type === "init") {
       initialized = true;
       render();
+    } else if (data.type === "visibility" && typeof data.open === "boolean") {
+      card.dataset.visible = String(data.open);
     } else if (data.type === "destroy") {
       destroy();
     }

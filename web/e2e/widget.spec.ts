@@ -169,10 +169,12 @@ async function expectOnlySafeMessages(page: Page) {
   for (const value of messages) {
     const parsed = z.object({
       source: z.literal("trainertwin-widget"), version: z.literal(1),
-      type: z.enum(["ready", "close", "status", "interaction"]), active: z.boolean().optional(), editing: z.boolean().optional(),
+      type: z.enum(["ready", "close", "status", "interaction", "resize"]), active: z.boolean().optional(), editing: z.boolean().optional(),
+      height: z.number().int().min(280).max(580).optional(),
     }).strict().parse(value);
     if (parsed.type === "status") expect(typeof parsed.active).toBe("boolean");
     if (parsed.type === "interaction") expect(typeof parsed.editing).toBe("boolean");
+    if (parsed.type === "resize") expect(typeof parsed.height).toBe("number");
   }
   expect(JSON.stringify(messages)).not.toMatch(/secret|Bearer|grant|visitorToken|participantToken|embedToken|runtimeToken/);
 }
@@ -269,6 +271,8 @@ test.describe.serial("cross-origin hosted voice widget", () => {
     const hosted = await frame(page);
     const dialog = page.getByRole("dialog", { name: "AI twin conversation", exact: true });
     await expect(dialog).toBeVisible();
+    await expect(dialog).toHaveAttribute("data-interactive", "true");
+    await hosted.getByLabel("Your name", { exact: true }).click();
     await hosted.getByLabel("Your name", { exact: true }).fill("Hover visitor");
     await expect.poll(() => page.evaluate(() => (window.__widgetMessages ?? []).some((value) =>
       typeof value === "object" && value !== null && "type" in value && value.type === "interaction"
@@ -299,7 +303,17 @@ test.describe.serial("cross-origin hosted voice widget", () => {
       expect(html).toContain('"photoUrl":null');
       await route.fulfill({ response, body: html.replace('"photoUrl":null', `"photoUrl":"${widgetOrigin()}/vasanth.png"`) });
     });
-    const hosted = await open(page);
+    await page.goto(CUSTOMER_ORIGIN);
+    const prefetched = await frame(page);
+    await expect.poll(() => prefetched.locator(".tt-photo").evaluate((node) =>
+      node instanceof HTMLImageElement && node.complete && node.naturalWidth > 0)).toBe(true);
+    await expect(prefetched.locator(".tt-photo")).toHaveAttribute("loading", "eager");
+    await expect(prefetched.locator(".tt-photo")).toHaveAttribute("fetchpriority", "high");
+    const launcher = page.getByRole("button", { name: "Talk to AI twin", exact: true });
+    await launcher.focus();
+    await launcher.press("Enter");
+    const hosted = await frame(page);
+    await expect(hosted.getByRole("button", { name: "Start voice call", exact: true })).toBeEnabled();
     const photo = hosted.locator(".tt-hero-portrait img");
     await expect(photo).toBeVisible();
     await expect.poll(() => photo.evaluate((node) => node instanceof HTMLImageElement && node.complete && node.naturalWidth > 0)).toBe(true);
@@ -314,6 +328,7 @@ test.describe.serial("cross-origin hosted voice widget", () => {
     await expect(hosted.getByText("Ask a question. Think out loud. See where it takes you.", { exact: true })).toHaveCount(0);
     await expect(hosted.getByText("AI voice call · Transcribed · May be recorded", { exact: true })).toBeVisible();
     expect(await hosted.getByRole("button", { name: "Start voice call", exact: true }).evaluate((node) => node.getBoundingClientRect().bottom <= innerHeight)).toBe(true);
+    await expect.poll(() => hosted.locator(".tt-card").evaluate((node) => Math.abs(innerHeight - node.getBoundingClientRect().height))).toBeLessThanOrEqual(2);
     await page.screenshot({ path: testInfo.outputPath("widget-desktop-portrait.png"), animations: "disabled" });
     await begin(hosted, "Design review");
     await expect(hosted.getByRole("button", { name: "Mute microphone", exact: true })).toBeEnabled();

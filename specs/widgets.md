@@ -33,12 +33,15 @@ Public profile imagery uses the same signed image URLs as the existing public tw
 
 The loader derives the widget origin from its own script URL, delegates microphone access to that origin and
 validates message origin **and** source window. The widget waits for trusted parent initialization before allowing
-Start. Messages contain only versioned initialization, minimise/destroy, editing-focus boolean and active-call state—never visitor data,
+Start. Messages contain only versioned initialization, visibility, minimise/destroy, bounded integer height,
+editing-focus boolean and active-call state—never visitor data,
 transcripts or credentials. Minimising preserves the iframe/call and visibly marks the launcher as in progress.
 SPA owners must explicitly destroy mounts before removing containers; tab unload and durable deadlines are additional cleanup.
 Fine-pointer hover expands the launcher into the card; leaving the whole surface shrinks it after a short grace
 period, unless the name field is focused. Click/tap and keyboard opening remain available and pinned.
-The card is viewport-bounded and 580px high at most. Hover/minimising never starts or ends a call.
+The card is content-sized, viewport-bounded and 580px high at most; resize messages accept only 280–580px.
+Image preload/eager fetching happens before opening. Independent fade/translate reveals do not scale the content.
+Hover/minimising/visibility messages never start or end a call.
 
 Browser framing restrictions do not prove a human or make public IDs secret. A non-browser client can claim an
 allowed origin; server-side rate, concurrency and spend limits remain mandatory.

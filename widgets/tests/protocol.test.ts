@@ -32,15 +32,20 @@ describe("widget protocol", () => {
     }
     expect(isWidgetMessage({ source: "trainertwin-widget", version: 1, type: "status", active: true })).toBe(true);
     expect(isWidgetMessage({ source: "trainertwin-widget", version: 1, type: "interaction", editing: true })).toBe(true);
+    expect(isWidgetMessage({ source: "trainertwin-widget", version: 1, type: "resize", height: 540 })).toBe(true);
     for (const value of [null, {}, "ready", { source: "trainertwin-host", version: 1, type: "ready" },
       { source: "trainertwin-widget", version: 2, type: "ready" },
       { source: "trainertwin-widget", version: 1, type: "resize", height: 100000 },
+      { source: "trainertwin-widget", version: 1, type: "resize", height: 100 },
+      { source: "trainertwin-widget", version: 1, type: "resize", height: 400.5 },
       { source: "trainertwin-widget", version: 1, type: "interaction", editing: "yes" },
       { source: "trainertwin-widget", version: 1, type: "status", active: "yes" }]) {
       expect(isWidgetMessage(value)).toBe(false);
     }
     expect(isHostMessage({ source: "trainertwin-host", version: 1, type: "init" })).toBe(true);
     expect(isHostMessage({ source: "trainertwin-host", version: 1, type: "destroy" })).toBe(true);
+    expect(isHostMessage({ source: "trainertwin-host", version: 1, type: "visibility", open: true })).toBe(true);
+    expect(isHostMessage({ source: "trainertwin-host", version: 1, type: "visibility", open: "yes" })).toBe(false);
     expect(isHostMessage({ source: "trainertwin-host", version: 1, type: "start", token: "secret" })).toBe(false);
   });
 });

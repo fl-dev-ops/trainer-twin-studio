@@ -25,7 +25,7 @@ p, h1, h2 { margin: 0; }
 .tt-card {
   --tt-accent: #111111;
   --tt-action: #f2eee5;
-  height: 100%;
+  height: auto;
   max-height: 100svh;
   width: 100%;
   display: flex;
@@ -60,7 +60,7 @@ p, h1, h2 { margin: 0; }
 .tt-icon-button:hover { background: #ffffff0d; border-color: #ffffff1c; }
 .tt-body {
   min-height: 0;
-  flex: 1;
+  flex: 0 1 auto;
   display: flex;
   flex-direction: column;
   overflow-y: auto;
@@ -231,7 +231,22 @@ p, h1, h2 { margin: 0; }
 .tt-card[data-phase="ended"] .tt-status::before { background: #9c9f94; }
 .tt-captions-expanded .tt-portrait-stage { display: none; }
 .tt-captions-expanded .tt-transcript { max-height: none; min-height: 240px; }
-.tt-card[data-phase="ready"] .tt-portrait-stage { animation: tt-enter .45s ease-out both; }
+.tt-card[data-phase="connecting"], .tt-card[data-phase="live"] { height: 100%; }
+.tt-card[data-phase="connecting"] .tt-body, .tt-card[data-phase="live"] .tt-body { flex: 1; }
+.tt-portrait-stage, .tt-introduction, .tt-prejoin > *, .tt-call, .tt-finished, .tt-status, .tt-header, .tt-footer, .tt-error {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity .24s ease, transform .32s cubic-bezier(.22,1,.36,1);
+}
+.tt-card[data-visible="false"] .tt-portrait-stage,
+.tt-card[data-visible="false"] .tt-introduction,
+.tt-card[data-visible="false"] .tt-prejoin > *,
+.tt-card[data-visible="false"] .tt-call,
+.tt-card[data-visible="false"] .tt-finished,
+.tt-card[data-visible="false"] .tt-status,
+.tt-card[data-visible="false"] .tt-header,
+.tt-card[data-visible="false"] .tt-footer,
+.tt-card[data-visible="false"] .tt-error { opacity: 0; transform: translateY(12px); }
 .tt-card[data-phase="ready"] .tt-header { position: absolute; top: 0; left: 0; width: 100%; z-index: 2; padding: 20px; pointer-events: none; }
 .tt-card[data-phase="ready"] .tt-heading { visibility: hidden; }
 .tt-card[data-phase="ready"] .tt-header .tt-icon-button { pointer-events: auto; color: #fff; background: #121410a6; border-color: #ffffff24; }
@@ -244,7 +259,6 @@ p, h1, h2 { margin: 0; }
 @keyframes tt-wave { to { transform: scaleY(.3); } }
 @keyframes tt-think { to { transform: translateY(-4px); opacity: .4; } }
 @keyframes tt-breathe { 50% { opacity: .4; } }
-@keyframes tt-enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
 @media (max-width: 340px) {
   .tt-header { padding: 16px 16px 12px; }
