@@ -59,6 +59,7 @@ trigger one unbilled bootstrap retry; charged starts are never automatically ret
 Grants use purpose-separated signing with `COPILOT_SERVICE_SECRET`. Visitor tokens last 30 days;
 start grants last five minutes; session-end capabilities last 24 hours and cannot start calls or access history.
 Old grants cannot bypass a disabled widget/removed origin. End remains usable after disable so existing calls can clean up.
+Grant expiry is rechecked immediately before reservation, including time spent waiting for locks and balance checks.
 `InterviewSession.embedOrigin` records the website and is constrained to anonymous sessions. Org history shows it.
 Code: `web/lib/widget-tokens.ts`, `web/lib/widget-access.ts`, `web/app/api/public/widgets/`,
 `web/prisma/migrations/20261118160000_widget_session_origin/migration.sql`.

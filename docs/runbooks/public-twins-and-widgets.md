@@ -6,16 +6,20 @@ The local, uncommitted `plan.md` records implementation progress; this file is t
 
 ## Verification checkpoint (2026-11-18)
 
-Automated verification passed: 886 PostgreSQL tests, 1,167 self-contained web tests, 13 widget unit/artifact tests,
-18 integrated Chromium checks (including seed setup), and 12 loader checks across Chromium/Firefox.
+Automated verification passed: 888 PostgreSQL tests, 1,172 self-contained web tests, 13 widget unit/artifact tests,
+19 integrated Chromium checks (including seed setup), and 20 loader/playground checks across Chromium/Firefox.
+The hosted-widget Firefox suite passed 12 checks with 1 explicit native-policy introspection skip (counts include setup).
 Web, widget and browser-test typechecks, changed web-file lint and the Next.js 16.4.5 production build passed.
 The web unit run excludes database tests, seeded/live flow suites, legacy e2e tests, runtime-stream and persona-analysis-queue.
 
-**Not release clearance:** browser tests simulate LiveKit and charged-session transport; database tests verify billing
-separately. Actual LiveKit/voice-agent/STT/TTS/chat calls remain unverified. WebKit could not launch on this macOS host:
-both the test matrix and an independent launch timed out before opening a page. Safari/iOS microphone, audio,
-reconnect, minimise and teardown must be verified on a working environment. Existing web dependency advisories
-also require deployed-path review. Nothing has been enabled or migrated in production.
+An approved non-production canary completed two spoken turns through real LiveKit/voice-agent/STT/TTS/chat, with
+persisted transcript/recording, room cleanup and exactly-once Meteroid Sandbox usage. It used native RTC with
+synthesized microphone speech, not browser permissions or physical audio hardware.
+
+**Not release clearance:** automated browser tests still simulate transport. WebKit could not launch on this macOS host;
+Safari/iOS and real-browser audio remain unverified. A live deadline-repeat was rate-limited and must run after the
+window resets; do not bypass limits. Existing web dependency advisories require deployed-path review.
+See [Phase 4 evidence and remaining gates](../validation/public-twins-phase4.md). Nothing has been enabled or migrated in production.
 
 ## What ships
 

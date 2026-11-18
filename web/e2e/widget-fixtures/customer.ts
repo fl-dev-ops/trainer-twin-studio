@@ -8,6 +8,11 @@ export async function customerServer(widgetOrigin: string, agentId: string): Pro
   const frame = `${widgetOrigin}/embed/${encodeURIComponent(agentId)}?parentOrigin=${encodeURIComponent(CUSTOMER_ORIGIN)}`;
   const server = createServer((request, response) => {
     const path = new URL(request.url ?? "/", CUSTOMER_ORIGIN);
+    if (path.pathname === "/message-source") {
+      response.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
+      response.end("<!doctype html><title>Message source fixture</title>");
+      return;
+    }
     const manual = path.pathname === "/manual";
     const mode = path.searchParams.get("mode") === "inline" ? "inline" : "floating";
     response.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store",

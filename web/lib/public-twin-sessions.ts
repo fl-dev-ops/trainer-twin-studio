@@ -82,6 +82,7 @@ export async function startPublicTwinSession(input: {
     }
     const credits = await orgCredits(input.orgId, { tx });
     if (!credits.billed || credits.seconds < settings.maxSeconds) throw publicCallRefusals.unavailable();
+    if (input.grantExpiresAt !== undefined && input.grantExpiresAt * 1000 <= Date.now()) throw widgetCredentialInvalid();
     return tx.interviewSession.create({
       data: {
         orgId: input.orgId, agentId: agent.id,

@@ -7,6 +7,7 @@ import {
   EncodingOptionsPreset,
   RoomServiceClient,
   S3Upload,
+  TrackSource,
 } from "livekit-server-sdk";
 
 export type LiveKitConfig = {
@@ -136,7 +137,10 @@ export async function activateLiveKitSession(input: {
     name: input.userName || "Candidate",
     ...(input.anonymous && input.endsAt ? { ttl: Math.max(1, input.endsAt - Math.floor(Date.now() / 1000)) } : {}),
   });
-  token.addGrant({ roomJoin: true, room, canPublish: true, canSubscribe: true, canPublishData: true });
+  token.addGrant({
+    roomJoin: true, room, canPublish: true, canSubscribe: true, canPublishData: true,
+    ...(input.anonymous ? { canPublishSources: [TrackSource.MICROPHONE] } : {}),
+  });
 
   return {
     token: await token.toJwt(),

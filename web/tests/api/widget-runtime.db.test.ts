@@ -10,6 +10,7 @@ import { BASE_DOMAIN } from "@/lib/base-domain";
 import { browserToken, runtimeToken } from "@/lib/interview-sessions";
 import { publicIpHash } from "@/lib/public-twin-request";
 import { startPublicTwinSession } from "@/lib/public-twin-sessions";
+import { expirePublicCall } from "@/workflows/steps/public-call-deadline";
 import { readWidgetGrant, readWidgetVisitor, widgetEndToken, widgetStartGrant, WIDGET_GRANT_SECONDS } from "@/lib/widget-tokens";
 import { fundOrg, availableOrgSeconds } from "../setup/meteroid";
 import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "../lib/minutes-test-db";
@@ -130,6 +131,46 @@ describe.skipIf(!localMinutesDb)("widget cookieless lifecycle (real database)", 
       grantExpiresAt: Math.floor(Date.now() / 1000) - 1,
     })).rejects.toMatchObject({ code: "widget_token_invalid", status: 401 });
     await noStart();
+  });
+  test("a grant expiring while blocked on the twin row cannot reserve credits", async () => {
+    const credentials = await grant();
+    const scope = readWidgetGrant(credentials.grant);
+    const locked = Promise.withResolvers<number>();
+    const release = Promise.withResolvers<void>();
+    const holder = db.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT 1 FROM "Agent" WHERE id = ${f.twin.id} FOR UPDATE`;
+      const [backend] = await tx.$queryRaw<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`;
+      locked.resolve(backend.pid);
+      await release.promise;
+    }, { timeout: 10_000 });
+    const blocker = await locked.promise;
+    const pending = startPublicTwinSession({
+      orgId: f.org.id, agentId: f.twin.id, visitorId: scope.visitorId, name: "Visitor",
+      ipHash: publicIpHash(f.org.id, new Headers()), embedOrigin: parent,
+      grantExpiresAt: scope.expiresAt,
+    }).then((value) => value, (error: unknown) => error);
+    let clock: ReturnType<typeof spyOn<typeof Date, "now">> | undefined;
+    try {
+      let blocked = false;
+      for (let attempt = 0; attempt < 200; attempt++) {
+        const [waiting] = await db.$queryRaw<{ count: number }[]>`
+          SELECT COUNT(*)::int AS count FROM pg_stat_activity
+          WHERE ${blocker} = ANY(pg_blocking_pids(pid))`;
+        if (waiting.count > 0) { blocked = true; break; }
+        await Bun.sleep(10);
+      }
+      expect(blocked).toBe(true);
+      clock = spyOn(Date, "now").mockReturnValue(scope.expiresAt * 1000 + 1);
+      release.resolve();
+      await holder;
+      expect(await pending).toMatchObject({ code: "widget_token_invalid", status: 401 });
+      await noStart();
+    } finally {
+      release.resolve();
+      await holder;
+      await pending;
+      clock?.mockRestore();
+    }
   });
   test.each(["forged", "wrong-purpose", "other-org", "other-parent"])("widget_token_invalid: bootstrap %s visitor", async (kind) => {
     const first = await grant();
@@ -268,6 +309,41 @@ describe.skipIf(!localMinutesDb)("widget cookieless lifecycle (real database)", 
     expect(await availableOrgSeconds(f.org.id)).toBe(600);
     expect(await db.interviewSession.findFirstOrThrow({ where: { orgId: f.org.id } })).toMatchObject({ status: "failed", runtimeTokenHash: null });
     expect(await db.minuteLedger.count({ where: { orgId: f.org.id, type: "org_usage" } })).toBe(0);
+  });
+  test("a vanished browser during activation leaves no room or credit hold after its durable deadline", async () => {
+    const credentials = await grant();
+    const connecting = Promise.withResolvers<string>();
+    const release = Promise.withResolvers<void>();
+    let roomExists = false;
+    transport.mockImplementationOnce(async (input) => {
+      roomExists = true;
+      connecting.resolve(input.sessionId);
+      await release.promise;
+      return { room: input.sessionId, token: "late-participant", dispatchId: "late-dispatch", videoEgressId: null, videoS3Key: null };
+    });
+    spies.push(spyOn(livekit, "closeLiveKitSession").mockImplementation(async () => { roomExists = false; }));
+    const pending = launch(credentials.grant);
+    const id = await connecting.promise;
+    expect(await availableOrgSeconds(f.org.id)).toBe(480);
+    await db.interviewSession.update({ where: { id }, data: { startedAt: new Date(Date.now() - 121_000) } });
+    try {
+      await expirePublicCall(id);
+      expect(roomExists).toBe(false);
+      release.resolve();
+      expect((await pending).status).not.toBe(200);
+      await expirePublicCall(id);
+      expect(await db.interviewSession.findUniqueOrThrow({ where: { id } })).toMatchObject({
+        status: "abandoned", runtimeTokenHash: null, livekitRoom: null,
+      });
+      const ledger = await db.minuteLedger.findMany({ where: { sessionId: id } });
+      expect(ledger).toHaveLength(1);
+      expect(ledger[0]).toMatchObject({ type: "org_usage", seconds: -120, userId: null, email: null });
+      expect(await availableOrgSeconds(f.org.id)).toBe(480);
+      expect(roomExists).toBe(false);
+    } finally {
+      release.resolve();
+      await pending;
+    }
   });
   test("database rejects embedOrigin on signed-in ownership and unallowed anonymous origins", async () => {
     await expect(Promise.resolve(f.session({ agentId: f.twin.id, agentSlug: f.twin.slug, userId: f.trainer.id, embedOrigin: parent }))).rejects.toThrow("session_embed_owner_check");

@@ -14,6 +14,8 @@ signed-in learner practice. [Website widgets](widgets.md) reuse this session/run
   It discloses AI, transcription, possible recording and org review before requesting microphone access.
 - Public calls are voice-only, through LiveKit and the Python voice agent to `chat/`. No public completion proxy,
   typed messages, attachments, private documents, learner memory or workspaces.
+- Anonymous LiveKit participant tokens allow microphone publishing only, bind one room/identity and expire at
+  the persisted call deadline. UI controls are not the transport's security boundary.
 
 Code: `web/lib/public-twin-settings.ts`, `web/lib/twin/manage.ts`, `web/lib/twin/trpc.ts`,
 `web/lib/pages/learner.ts`, `web/components/twin/public-twin-call.tsx`, `web/lib/scenario-ingest.ts`.
