@@ -74,14 +74,14 @@ function refOf(ctx: GuardContext): SessionRef {
   };
 }
 
-/** Whether the current eve session runs a client role play. */
+/** Whether the current eve session runs a skill-based role play (builder or authored). */
 export async function isRoleplaySession(ctx: GuardContext): Promise<boolean> {
   return (await sessionModeFor(refOf(ctx))) === "roleplay-client";
 }
 
 export const ROLEPLAY_DISABLED = {
   disabled: true,
-  reason: "Not available in client role play. Stay in character and answer as the client.",
+  reason: "Not available in skill-based role play. Follow the role play and use its enabled tools.",
 } as const;
 
 /** The disabled result for role-play sessions, or null to run the tool normally. */

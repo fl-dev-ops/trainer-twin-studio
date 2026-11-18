@@ -3,7 +3,7 @@
  *
  *   twin                the trainer's twin advises a learner on a real situation (all-skills or one skill twin)
  *   twin-calibration    the same twin while its trainer tests it; only the "Feels off" feedback differs
- *   roleplay-client     the AI plays a client from a role play's SKILL.md
+ *   roleplay-client     skill-based role plays: the builder's client or a recording-authored role
  *   roleplay-interview  the AI plays an interviewer (role plays without a skill, e.g. Vasanth's v1); runs on the
  *                       whole of prompts/base-instructions.md, frozen as it is
  *   legacy-playbook     a SKILL.md run as a session script (scenario-ingest); no prod agent uses it.

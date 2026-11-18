@@ -3,22 +3,19 @@ import { z } from "zod";
 import { isRoleplaySession } from "../lib/session-mode-lookup";
 import { studioFetch } from "../lib/studio";
 
-/**
- * Client role play only: the client hangs up. Twins and interviews end with finish_session instead, so this tool
- * refuses there. Ported from the client role-play branch.
- */
+/** Skill-based role plays end here; twins and legacy interviews keep finish_session. */
 export default defineTool({
-  description: `Client role play only: hang up the call. Never use it outside a client role play.
+  description: `Skill-based role play only: end the call when the published skill's ending condition is reached.
 
-Call it in the SAME reply as your short goodbye, after the goodbye words, when the call has reached its end: you agreed to a next step, you declined, or your guard reached 5.
+Call it in the SAME reply as your short goodbye, after the goodbye words. A builder's client call ends when you agree to a next step, decline, or your guard reaches 5. An authored practice ends when its own procedure is complete.
 Never call it while the conversation is still going, for a pause, or because the learner asked you to stay on.
 After it returns, say nothing more.`,
   inputSchema: z.object({
-    outcome: z.enum(["agreed", "declined", "guard_ran_out"]).describe("How the call ended for you, the client."),
+    outcome: z.enum(["agreed", "declined", "guard_ran_out", "completed"]).describe("How the role play ended; completed for an authored practice that reached its ending condition."),
   }),
   async execute(input, ctx) {
     if (!(await isRoleplaySession(ctx))) {
-      return { disabled: true, reason: "end_call is only for client role play. Other sessions end with finish_session." };
+      return { disabled: true, reason: "end_call is only for skill-based role play. Other sessions end with finish_session." };
     }
     const orgId = ctx.session.auth.initiator?.principalId ?? ctx.session.auth.current?.principalId;
     const sessionId = String(ctx.session.auth.current?.attributes?.sessionId ?? "");

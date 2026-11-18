@@ -278,17 +278,16 @@ async function storeSkillAgent(input: {
   return { slug, name: agentData.name, version: stored.version, created: stored.created, items: stored.items, artifacts: stored.artifacts, runId: input.runId ?? null };
 }
 
-/** Creates or updates a skill twin from the scenario-ingest agent's files. */
+/** Publishes authored scenario files; twins require an own persona, role plays may use any org persona. */
 export async function ingestScenario(orgId: string, input: ScenarioIngestInput) {
+  const kind = input.kind ?? "TWIN";
   const [org, persona] = await Promise.all([
     requireOrg(orgId),
-    // Case-insensitive like the session context lookup: the ingest agent sends its source folder name ("vasanth").
-    // A skill twin speaks as the user's own persona (also enforced by a DB trigger).
-    db.persona.findFirst({ where: { orgId, isOwn: true, slug: { equals: input.personaSlug, mode: "insensitive" } }, select: { id: true } }),
+    db.persona.findFirst({ where: { orgId, ...(kind === "TWIN" ? { isOwn: true } : {}), slug: { equals: input.personaSlug, mode: "insensitive" } }, select: { id: true } }),
   ]);
   if (!persona) throw new ScenarioIngestError(`Persona "${input.personaSlug}" was not found in this organization`, 404);
   return storeSkillAgent({
-    org, kind: input.kind ?? "TWIN", personaId: persona.id, manifest: input.scenario, skill: input.skill, items: input.items,
+    org, kind, personaId: persona.id, manifest: input.scenario, skill: input.skill, items: input.items,
     patterns: input.patterns, runId: input.runId,
   });
 }

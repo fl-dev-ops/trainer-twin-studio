@@ -194,8 +194,8 @@ export async function listRunnableSpecs(type: "personas" | "agents", orgId: stri
 export function isRunnableAgentData(kind: AgentKind, data: Record<string, unknown>) {
   if (typeof data.objective !== "string") return false;
   if (kind === "TWIN") return data.source === "twin" || typeof data.skill === "string";
-  // "roleplay-skill" = ROLEPLAY_SOURCE (lib/scenario-ingest.ts imports this file, so not imported here).
-  if (data.source === "roleplay-skill") return typeof data.skill === "string";
+  // Builder and recording-authored packages both run from their published skill.
+  if (data.source === "roleplay-skill" || data.source === "scenario-ingest") return typeof data.skill === "string" && Boolean(data.skill.trim());
   return typeof data.opening === "string" && isRecord(data.config);
 }
 

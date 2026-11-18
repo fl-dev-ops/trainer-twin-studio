@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, test } from "node:test";
+import { z } from "zod";
 import { formatSessionSpec, scenarioPlaybook, type SessionSpecs } from "../../../agent/lib/brain";
 import { roleplaySkill } from "../../../agent/lib/roleplay";
+import scenarioExamples from "../../../agent/tools/scenario_examples";
+import endCall from "../../../agent/tools/end_call";
 import { clearSessionModeCache, isRoleplaySession, primeSessionMode, roleplayGuard } from "../../../agent/lib/session-mode-lookup";
 
 // What web's role-play builder stores (lib/roleplay/skill.ts renderRoleplay), trimmed.
@@ -53,7 +56,8 @@ const base: SessionSpecs = {
 };
 
 describe("client role play (kind ROLEPLAY with a SKILL.md)", () => {
-  afterEach(() => clearSessionModeCache());
+  const originalFetch = globalThis.fetch;
+  afterEach(() => { clearSessionModeCache(); globalThis.fetch = originalFetch; });
 
   test("only ROLEPLAY agents with a skill are role plays; difficulty, opening and client name come from scenario.json", () => {
     assert.equal(roleplaySkill("TWIN", roleplayData), undefined);
@@ -88,12 +92,67 @@ describe("client role play (kind ROLEPLAY with a SKILL.md)", () => {
     assert.match(formatSessionSpec({ ...base, mode: "chat", roleplay: roleplaySkill("ROLEPLAY", roleplayData) }), /This is a live chat/);
   });
 
+  test("authored practice follows its full skill, roles and attachments without the sales wrapper", () => {
+    const skill = "# Technical discussion\nAsk what a closure retains. Follow the candidate's answer with a concrete example. End after they explain the mechanism.";
+    const data = { source: "scenario-ingest", skill, scenario: { trainer_role: "interviewer", learner_role: "candidate" }, after: { rubric: [{ name: "private scoring criterion", points: 100 }] } };
+    const authored = roleplaySkill("ROLEPLAY", data);
+    assert.deepEqual(authored?.authored, { actorRole: "interviewer" });
+    const prompt = formatSessionSpec({ ...base, roleplay: authored, tools: { canvas: false, preview: true, codeEditor: false, choice: false }, documents: [{ id: "resume-1", name: "CV.pdf", kind: "pdf", mimeType: "application/pdf", size: 100 }] });
+    assert.match(prompt, /You play interviewer\. The learner plays candidate/);
+    assert.ok(prompt.includes(skill));
+    assert.match(prompt, /resume-1/);
+    assert.match(prompt, /scenario_examples/);
+    assert.match(prompt, /end_call\(\{ outcome: "completed" \}\)/);
+    assert.doesNotMatch(prompt, /a CLIENT|a salesperson|# Guard level|private scoring criterion|say exactly:/);
+    const withoutWorkspace = formatSessionSpec({ ...base, roleplay: authored });
+    assert.match(withoutWorkspace, /Use read_document for attached document facts/);
+    assert.match(withoutWorkspace, /No workspace surfaces are enabled/);
+    assert.equal(roleplaySkill("ROLEPLAY", { source: "scenario-ingest", skill: " " }), undefined);
+  });
+
+  test("example lookup takes identity from the session and leaves the default side to Studio", async () => {
+    process.env.COPILOT_SERVICE_SECRET ??= "test-secret";
+    const calls: Record<string, unknown>[] = [];
+    globalThis.fetch = (async (_url, init) => {
+      const body = init?.body;
+      assert.ok(typeof body === "string");
+      calls.push(JSON.parse(body));
+      return Response.json({ examples: [] });
+    }) as typeof fetch;
+    const ctx = { session: { auth: { current: { principalId: "org1", attributes: { sessionId: "call1", agentSlug: "acme-authored" } } } } } as unknown as Parameters<NonNullable<typeof scenarioExamples.execute>>[1];
+    await scenarioExamples.execute!({ situation: "candidate explains closures", limit: 3 }, ctx);
+    assert.deepEqual(calls[0], { action: "searchScenarioItems", agentSlug: "acme-authored", query: "candidate explains closures", limit: 3, sessionId: "call1" });
+    await scenarioExamples.execute!({ situation: "candidate explains closures", role: "learner", limit: 3 }, ctx);
+    assert.equal(calls[1].role, "learner");
+  });
+
+  test("an authored practice can end as completed; legacy interviews still cannot use end_call", async () => {
+    process.env.COPILOT_SERVICE_SECRET ??= "test-secret";
+    const calls: Record<string, unknown>[] = [];
+    globalThis.fetch = (async (_url, init) => {
+      const body = init?.body;
+      assert.ok(typeof body === "string");
+      calls.push(JSON.parse(body));
+      return Response.json({});
+    }) as typeof fetch;
+    const ctx = { session: { auth: { current: { principalId: "org1", attributes: { sessionId: "call1", agentSlug: "acme-authored" } } } } } as unknown as Parameters<NonNullable<typeof endCall.execute>>[1];
+    const schema = endCall.inputSchema;
+    assert.ok(schema instanceof z.ZodType);
+    assert.equal(schema.safeParse({ outcome: "completed" }).success, true);
+    primeSessionMode("org1", "call1", "acme-authored", "roleplay-client");
+    assert.deepEqual(await endCall.execute!({ outcome: "completed" }, ctx), { status: "ended", outcome: "completed", instruction: "The call has ended. Say nothing more." });
+    assert.deepEqual(calls, [{ action: "finishSession", sessionId: "call1" }]);
+    primeSessionMode("org1", "call1", "acme-authored", "roleplay-interview");
+    assert.deepEqual(await endCall.execute!({ outcome: "completed" }, ctx), { disabled: true, reason: "end_call is only for skill-based role play. Other sessions end with finish_session." });
+    assert.equal(calls.length, 1);
+  });
+
   test("tool guard: trainer tools are disabled in role plays only (primed from the loaded context)", async () => {
     const ctx = (sessionId: string) => ({ session: { auth: { current: { principalId: "org1", attributes: { sessionId, agentSlug: "x" } } } } });
     primeSessionMode("org1", "rp", "x", "roleplay-client");
     primeSessionMode("org1", "tw", "x", "twin");
     assert.equal(await isRoleplaySession(ctx("rp")), true);
-    assert.deepEqual(await roleplayGuard(ctx("rp")), { disabled: true, reason: "Not available in client role play. Stay in character and answer as the client." });
+    assert.deepEqual(await roleplayGuard(ctx("rp")), { disabled: true, reason: "Not available in skill-based role play. Follow the role play and use its enabled tools." });
     assert.equal(await roleplayGuard(ctx("tw")), null);
     assert.equal(await isRoleplaySession({ session: { auth: { current: { principalId: "org1", attributes: {} } } } }), false);
   });

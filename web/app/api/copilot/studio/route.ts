@@ -301,7 +301,8 @@ export async function POST(request: Request) {
     queryEmbedding.catch(() => {}); // awaited in searchScenarioItems; this only stops an early DB error leaving it unhandled
     // scenario.json's steps map the newer items' `action` to a step, and a step to its moves.
     const agent = await db.agent.findFirst({ where: { slug: input.agentSlug, orgId }, select: { data: true, personaId: true, kind: true, version: true } });
-    const data = agent?.data as { source?: unknown; scenario?: { steps?: unknown; situations?: unknown } } | null;
+    const data = agent?.data as { source?: unknown; skill?: unknown; scenario?: { steps?: unknown; situations?: unknown } } | null;
+    let exampleData = data;
     let scope: { skills: ScenarioScope[]; steps: ScenarioStep[] };
     if (agent?.kind === "TWIN" && data?.source === TWIN_SOURCE) {
       // The all-skills twin searches its persona's skill twins: all of them, or the one the model has loaded.
@@ -316,18 +317,19 @@ export async function POST(request: Request) {
       // Each skill at the version the call pinned (or the live one).
       scope = { skills: chosen.map((p) => ({ slug: p.slug, version: p.version })), steps: chosen.flatMap((p) => p.steps as ScenarioStep[]) };
     } else {
-      // A twin-creator skill lists situations where a scenario lists steps.
-      const steps = data?.scenario?.steps ?? data?.scenario?.situations;
-      // A call reads the version it started on (a publish mid-call doesn't change its examples); no call: the live one.
+      // Pin the example role and step mapping as well as its version; publishing must not change a running call.
       const started = input.sessionId
-        ? (await db.interviewSession.findFirst({ where: { id: input.sessionId, orgId, agentSlug: input.agentSlug }, select: { agentVersion: true } }))?.agentVersion
-        : undefined;
-      const version = started ?? agent?.version;
+        ? await db.interviewSession.findFirst({ where: { id: input.sessionId, orgId, agentSlug: input.agentSlug }, select: { agentVersion: true, compiledSnapshot: true } })
+        : null;
+      const snapshot = started?.compiledSnapshot as { agent?: { data?: typeof data } } | null | undefined;
+      exampleData = snapshot?.agent?.data ?? data;
+      const steps = exampleData?.scenario?.steps ?? exampleData?.scenario?.situations;
+      const version = started?.agentVersion ?? agent?.version;
       scope = { skills: version ? [{ slug: input.agentSlug, version }] : [], steps: Array.isArray(steps) ? (steps as ScenarioStep[]) : [] };
     }
     const examples = await MainCollectionService.searchScenarioItems(orgId, scope.skills, input.query, {
       step: input.step,
-      role: input.role,
+      role: input.role ?? (agent?.kind === "ROLEPLAY" && typeof exampleData?.skill === "string" && exampleData.source !== "scenario-ingest" ? "client" : "trainer"),
       limit: input.limit,
       steps: scope.steps,
       queryEmbedding,

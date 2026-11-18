@@ -17,10 +17,11 @@ const fakeDb = {
       ({ org1: { id: "org1", slug: "acme" }, org2: { id: "org2", slug: "other" } })[where.id] ?? null,
   },
   persona: {
-    // Skill twin: only the org's own persona (case-insensitive). Role play: any persona of the org, by exact slug.
     findFirst: async ({ where }: { where: { orgId: string; isOwn?: boolean; slug: string | { equals: string; mode: string } } }) => {
-      if (typeof where.slug === "string") return where.orgId === "org1" && where.slug === "rohan" ? { id: "p-rohan", data: { role: "Prospect" } } : null;
-      return where.orgId === "org1" && where.isOwn === true && where.slug.mode === "insensitive" && where.slug.equals.toLowerCase() === "vasanth" ? { id: "p1" } : null;
+      if (where.orgId !== "org1") return null;
+      const slug = typeof where.slug === "string" ? where.slug : where.slug.equals.toLowerCase();
+      const persona = [{ slug: "vasanth", id: "p1", isOwn: true }, { slug: "rohan", id: "p-rohan", isOwn: false, data: { role: "Prospect" } }].find(persona => persona.slug === slug);
+      return persona && (where.isOwn === undefined || persona.isOwn === where.isOwn) ? persona : null;
     },
   },
   agent: {
@@ -311,6 +312,16 @@ test("the copilot's roleplay-creator publishes a ROLEPLAY (same package, kind RO
   expect(agents[0]).toMatchObject({ kind: "ROLEPLAY", personaId: "p1" });
   expect((agents[0].data as Row).source).toBe("scenario-ingest");
   expect(() => input({ kind: "DOMAIN" })).toThrow();
+});
+
+test("authored role plays accept org characters, but twins and other orgs cannot use them", async () => {
+  const saved = await ingestScenario("org1", input({ kind: "ROLEPLAY", personaSlug: "Rohan" }));
+  expect(saved.created).toBe(true);
+  expect(agents[0]).toMatchObject({ kind: "ROLEPLAY", personaId: "p-rohan" });
+  log.length = 0;
+  await expect(ingestScenario("org1", input({ personaSlug: "Rohan" }))).rejects.toThrow("was not found");
+  await expect(ingestScenario("org2", input({ kind: "ROLEPLAY", personaSlug: "Rohan" }))).rejects.toThrow("was not found");
+  expect(log).toEqual([]);
 });
 
 test("publishing onto an archived skill brings it back, whether or not its content changed", async () => {

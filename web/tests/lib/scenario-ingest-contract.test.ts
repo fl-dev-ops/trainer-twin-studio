@@ -7,14 +7,24 @@ const agents: Row[] = [];
 const s3 = new Map<string, string>();
 let chroma: { agentSlug: string; count: number } | null = null;
 let knowledgeWhere: Row | null = null;
+let personaWhere: Row | null = null;
+let savedSession: Row | null = null;
+const searches: { orgId: string; scope: { slug: string; version: number }[]; options: { role?: string; steps?: unknown[] } }[] = [];
+const vectors: { orgId: string; slug: string; version: number; items: unknown[] }[] = [];
 const knowledgeDocs: { id: string; title: string; s3MarkdownKey: string; updatedAt: Date }[] = [];
 
 const fakeDb = {
   organization: { findUnique: async () => ({ id: "org1", slug: "acme" }) },
   persona: {
-    findFirst: async ({ where }: { where: { slug: { equals: string } } }) => (where.slug.equals.toLowerCase() === "vasanth" ? { id: "p1" } : null),
+    findFirst: async ({ where }: { where: Row & { slug: { equals: string } } }) => {
+      personaWhere = where;
+      return where.slug.equals.toLowerCase() === "vasanth" ? { id: "p1", slug: "vasanth", name: "Vasanth", version: 1, data: { name: "Vasanth" }, isOwn: true } : null;
+    },
   },
+  interviewSession: { findFirst: async ({ where }: { where: Row }) => savedSession && Object.entries(where).every(([key, value]) => savedSession![key] === value) ? savedSession : null },
+  knowledgeBase: { findFirst: async () => null },
   agent: {
+    findFirst: async ({ where }: { where: { orgId: string; slug: string | { equals: string } } }) => agents.find(agent => agent.orgId === where.orgId && agent.slug === (typeof where.slug === "string" ? where.slug : where.slug.equals)) ?? null,
     findUnique: async ({ where }: { where: { slug: string } }) => agents.find((a) => a.slug === where.slug) ?? null,
     create: async ({ data }: { data: Row }) => {
       const row = { id: "a1", ...data };
@@ -56,14 +66,27 @@ mock.module("@/lib/main-collection", () => ({
   invalidateCollectionCache: () => {},
   invalidatePersonaStyleCache: () => {},
   MainCollectionService: {
-    writeScenarioItems: async (_org: string, agentSlug: string, _id: string, _version: number, items: unknown[]) => {
+    writeScenarioItems: async (orgId: string, agentSlug: string, _id: string, version: number, items: unknown[]) => {
       chroma = { agentSlug, count: items.length };
+      vectors.push({ orgId, slug: agentSlug, version, items });
       return items.length;
+    },
+    searchScenarioItems: async (orgId: string, scope: { slug: string; version: number }[], _query: string, options: { role?: string; steps?: unknown[] }) => {
+      searches.push({ orgId, scope, options });
+      return vectors.filter(vector => vector.orgId === orgId && scope.some(entry => entry.slug === vector.slug && entry.version === vector.version))
+        .flatMap(vector => vector.items as { role: string; text: string }[]).filter(item => item.role === options.role);
     },
     pruneScenarioItems: async () => {},
   },
 }));
 
+const realKnowledge = await import("@/lib/knowledge");
+mock.module("@/lib/knowledge", () => ({ ...realKnowledge, embedTexts: async () => [[0]] }));
+const realCache = await import("next/cache");
+mock.module("next/cache", () => ({ ...realCache, unstable_cache: <A extends unknown[], R>(fn: (...args: A) => R) => fn }));
+const { POST: studio } = await import("@/app/api/copilot/studio/route");
+const { roleplaySkill, formatRoleplaySession } = await import("../../../chat/agent/lib/roleplay");
+const { isRunnableAgentData } = await import("@/lib/specs");
 const { POST: scenarios } = await import("@/app/api/internal/scenarios/route");
 const { POST: runs } = await import("@/app/api/internal/scenario-runs/route");
 const { publishToStudio, runIdFor } = await import("../../../copilot/agent/lib/studio-publish");
@@ -125,7 +148,37 @@ test("an ingest publication lands in S3, Chroma and Postgres, files byte for byt
   expect(chroma).toEqual({ agentSlug: "acme-fundamental-depth", count: 1 });
   // The copilot's roleplay-creator publishes role plays, never twin skills.
   expect(agents[0]).toMatchObject({ slug: "acme-fundamental-depth", personaId: "p1", orgId: "org1", kind: "ROLEPLAY" });
-  expect((agents[0].data as Row).skill).toBe(skill);
+  const published = agents[0].data as Row;
+  expect(published.skill).toBe(skill);
+  expect(isRunnableAgentData("ROLEPLAY", published)).toBe(true);
+  expect(personaWhere).not.toHaveProperty("isOwn");
+
+  // A real-shaped Start snapshot; mutate the live package afterwards to exercise the pinned read path.
+  savedSession = { id: "call1", orgId: "org1", agentSlug: "acme-fundamental-depth", personaSlug: "vasanth", agentVersion: 1, context: null, documents: [], compiledSnapshot: { agent: { slug: "acme-fundamental-depth", version: 1, data: published } } };
+  agents[0] = { ...agents[0], version: 2, data: { ...published, source: "roleplay-skill", skill: "# Changed live skill", scenario: { roleplay: { clientName: "Changed client" }, steps: [] } } };
+  process.env.COPILOT_SERVICE_SECRET = "studio-test-secret";
+  const request = (body: Row, orgId = "org1") => studio(new Request("https://studio.test/api/copilot/studio", { method: "POST", headers: { authorization: "Bearer studio-test-secret", "content-type": "application/json", "x-trainertwin-org-id": orgId }, body: JSON.stringify(body) }));
+  const contextResponse = await request({ action: "getSessionContext", sessionId: "call1" });
+  expect(contextResponse.status).toBe(200);
+  const context = await contextResponse.json();
+  expect(context.agent.version).toBe(1);
+  expect(context.agent.data.skill).toBe(skill);
+  const roleplay = roleplaySkill(context.agent.kind, context.agent.data)!;
+  const prompt = formatRoleplaySession({ agentName: scenarioJson.name, agentSlug: context.agent.slug, agentVersion: context.agent.version, personaBrief: context.personaBrief }, roleplay, { learnerBlock: "Learner: Test candidate" });
+  expect(prompt).toContain(skill);
+  expect(prompt).toContain("You play interviewer. The learner plays candidate");
+  expect(prompt).not.toContain("CLIENT ROLE-PLAY MODE");
+
+  const search = { action: "searchScenarioItems", agentSlug: "acme-fundamental-depth", sessionId: "call1", query: "candidate named closures" };
+  const results = await (await request(search)).json();
+  expect(results.examples.map((item: { text: string }) => item.text)).toEqual([items[0].text]);
+  expect(searches.at(-1)).toMatchObject({ orgId: "org1", scope: [{ slug: "acme-fundamental-depth", version: 1 }], options: { role: "trainer", steps: scenarioJson.steps } });
+  expect((await (await request(search, "other-org")).json()).examples).toEqual([]);
+  await request({ ...search, sessionId: undefined });
+  expect(searches.at(-1)).toMatchObject({ scope: [{ slug: "acme-fundamental-depth", version: 2 }], options: { role: "client" } });
+  await request({ ...search, role: "learner" });
+  expect(searches.at(-1)?.options.role).toBe("learner");
+  savedSession = null;
 });
 
 test("failures come back per call instead of throwing", async () => {

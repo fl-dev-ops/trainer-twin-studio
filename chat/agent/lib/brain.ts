@@ -640,7 +640,7 @@ ${claimList}\n`;
 
   switch (sessionMode(specs)) {
     case "roleplay-client":
-      return formatRoleplaySession(specs, specs.roleplay!, { learnerBlock }, specs.tools ?? NO_TOOLS);
+      return formatRoleplaySession(specs, specs.roleplay!, { learnerBlock, docsBlock, uiStateBlock }, specs.tools ?? NO_TOOLS);
     case "twin":
     case "twin-calibration":
       return formatTwinSession(specs, specs.twin!, { learnerBlock, uiStateBlock, warmBlock, docsBlock });
