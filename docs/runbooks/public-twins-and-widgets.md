@@ -187,8 +187,12 @@ transcripts or credentials. Public/domain identifiers are not secrets and domain
 
 - [ ] `/widgets/v1.js`, `/widgets/voice-v1.js` and `/widgets/voice-v1.css` return successfully from the org host.
 - [ ] Allowed website loads the floating widget; an unlisted origin is blocked by CSP and backend policy.
-- [ ] Hover expands the launcher; crossing into the frame keeps it open; leaving shrinks it without ending calls.
-      Name entry, keyboard/touch opening, explicit minimise/Escape and reduced motion work. Old inline snippets are rejected.
+- [ ] Hover expands the launcher; crossing into the frame keeps it open; leaving shrinks it only when no call is active.
+      Connecting/live calls remain open across pointer leave, Escape and API minimise; no minus button is shown.
+      Name entry, keyboard/touch opening, inactive minimise/Escape and reduced motion work. Old inline snippets are rejected.
+- [ ] Verify square portrait, no call header/speaking labels, latest-two plain-text captions and expanded history.
+      Agent and microphone audio drive independent green/orange glows; mute silences the microphone glow.
+      Call-start gesture unlocks audio without a sound button; browser-blocked playback can recover by tapping the widget.
 - [ ] Opening/minimising alone creates no billable session or microphone prompt.
 - [ ] Name is required; microphone denial creates no call. No text/upload/camera/screen-share controls appear.
 - [ ] Third-party cookies blocked: name → voice call still works.

@@ -1,6 +1,7 @@
-import { Room, RoomEvent, Track, type Participant, type RemoteTrack, type TranscriptionSegment } from "livekit-client";
+import { createAudioAnalyser, Room, RoomEvent, Track, type Participant, type RemoteAudioTrack, type RemoteTrack, type TranscriptionSegment } from "livekit-client";
 import "./widget.css";
 import { MAX_WIDGET_HEIGHT, MIN_WIDGET_HEIGHT } from "./protocol";
+import { drawCallWaves, MIC_NOISE_GATE } from "../../shared/call-waves";
 
 type Config = {
   mode: "floating";
@@ -187,7 +188,6 @@ function mount(root: HTMLElement, config: Config) {
   card.style.setProperty("--tt-action", luminance < .04 ? "#f2eee5" : config.accentColor);
   card.style.setProperty("--tt-on-accent", luminance < .04 || luminance > .179 ? "#111111" : "#ffffff");
   card.setAttribute("aria-label", `${config.name} voice assistant`);
-  const header = element("header", "tt-header");
   function portrait(className: string) {
     const node = element("div", `tt-portrait ${className}`);
     node.setAttribute("aria-hidden", "true");
@@ -211,30 +211,17 @@ function mount(root: HTMLElement, config: Config) {
     }
     return node;
   }
-  const heading = element("div", "tt-heading");
-  const title = element("h1", "tt-title", config.name);
-  const subtitle = element("p", "tt-subtitle", `${config.trainerName}’s AI twin`);
-  heading.append(title, subtitle);
-  const minimise = button("tt-icon-button", "");
-  minimise.append(icon("M5 12h14"));
-  minimise.setAttribute("aria-label", "Minimise voice widget");
-  minimise.title = "Minimise — your call will continue";
-  minimise.addEventListener("click", () => post("close"));
-  header.append(heading);
-  if (config.mode === "floating") header.append(minimise);
-
   const body = element("div", "tt-body");
   const hero = element("div", "tt-hero");
   const portraitStage = element("div", "tt-portrait-stage");
   const heroPortrait = portrait("tt-hero-portrait");
-  const waves = element("div", "tt-waves");
+  const waves = element("canvas", "tt-waves");
   waves.setAttribute("aria-hidden", "true");
-  for (let i = 0; i < 5; i++) waves.append(element("span", "tt-wave"));
   const status = element("p", "tt-status");
   status.setAttribute("role", "status");
   status.setAttribute("aria-live", "polite");
   const introduction = element("h2", "tt-introduction", config.welcome);
-  portraitStage.append(heroPortrait, waves);
+  portraitStage.append(heroPortrait);
   hero.append(portraitStage, status, introduction);
 
   const form = element("form", "tt-prejoin");
@@ -261,7 +248,6 @@ function mount(root: HTMLElement, config: Config) {
   call.hidden = true;
   call.setAttribute("aria-label", "Voice call");
   const callMeta = element("div", "tt-call-meta");
-  const captionLabel = element("h2", "tt-captions-label", "Live captions");
   const countdown = element("span", "tt-countdown", `${clock(config.maxSeconds)} left`);
   countdown.setAttribute("aria-label", "Time remaining");
   const captionToggle = button("tt-icon-button tt-caption-toggle", "");
@@ -278,9 +264,14 @@ function mount(root: HTMLElement, config: Config) {
     captionToggle.setAttribute("aria-label", expanded ? "Collapse captions" : "Expand captions");
     captionToggle.title = expanded ? "Collapse captions" : "Expand captions";
     card.classList.toggle("tt-captions-expanded", expanded);
+    updateCaptionVisibility();
+  }
+  function updateCaptionVisibility() {
+    const latest = [...captions.values()].slice(-2);
+    for (const caption of captions.values()) caption.hidden = !card.classList.contains("tt-captions-expanded") && !latest.includes(caption);
   }
   captionToggle.addEventListener("click", () => expandCaptions(captionToggle.getAttribute("aria-expanded") !== "true"));
-  callMeta.append(captionLabel, countdown, captionToggle);
+  callMeta.append(countdown, captionToggle);
   const transcript = element("div", "tt-transcript");
   transcript.id = "tt-captions";
   transcript.setAttribute("role", "log");
@@ -288,15 +279,9 @@ function mount(root: HTMLElement, config: Config) {
   transcript.setAttribute("aria-live", "polite");
   transcript.setAttribute("aria-relevant", "additions text");
   transcript.tabIndex = 0;
-  const captionPlaceholder = element("p", "tt-caption-placeholder", "Your conversation will appear here.");
-  transcript.append(captionPlaceholder);
-  const sound = button("tt-sound", "Turn on sound");
-  sound.hidden = true;
-  sound.addEventListener("click", () => {
-    const currentRoom = room;
-    if (!currentRoom) return;
-    void currentRoom.startAudio().catch((failure: unknown) => showError(mediaError(failure)));
-  });
+  const playbackHint = element("p", "tt-playback-hint", "Audio is blocked by your browser. Tap the widget to hear the call.");
+  playbackHint.hidden = true;
+  playbackHint.setAttribute("role", "alert");
   const controls = element("div", "tt-controls");
   const mute = button("tt-secondary tt-mute", "");
   mute.append(icon(MICROPHONE));
@@ -313,7 +298,7 @@ function mount(root: HTMLElement, config: Config) {
   muteControl.append(mute, muteLabel);
   endControl.append(end, element("span", "tt-control-label", "End call"));
   controls.append(muteControl, endControl);
-  call.append(callMeta, transcript, sound, controls);
+  call.append(transcript, playbackHint, controls);
 
   const finished = element("section", "tt-finished");
   finished.hidden = true;
@@ -336,14 +321,14 @@ function mount(root: HTMLElement, config: Config) {
   error.setAttribute("role", "alert");
   const footer = element("footer", "tt-footer", "Powered by TrainerTwin");
   body.append(hero, form, call, finished, error);
-  card.append(header, body, footer);
+  card.append(waves, callMeta, body, footer);
   root.replaceChildren(card);
   card.dataset.visible = "false";
   let reportedHeight = 0;
   function reportSize() {
     if (!initialized || destroyed || window.parent === window) return;
     const natural = phase === "connecting" || phase === "live" ? MAX_WIDGET_HEIGHT
-      : body.scrollHeight + footer.offsetHeight + (phase === "ready" ? 0 : header.offsetHeight) + 2;
+      : body.scrollHeight + footer.offsetHeight + 2;
     const height = Math.max(MIN_WIDGET_HEIGHT, Math.min(MAX_WIDGET_HEIGHT, Math.ceil(natural)));
     if (height === reportedHeight) return;
     reportedHeight = height;
@@ -356,6 +341,35 @@ function mount(root: HTMLElement, config: Config) {
   audioContainer.hidden = true;
   const ownsAudioContainer = !audioContainer.isConnected;
   if (ownsAudioContainer) root.after(audioContainer);
+  let stopWaves: (() => void) | undefined;
+  function updateWaves() {
+    stopWaves?.();
+    stopWaves = undefined;
+    if (!room || phase !== "live") return;
+    const tracks = [
+      [...attachedTracks].find((track): track is RemoteAudioTrack => track.kind === Track.Kind.Audio),
+      room.localParticipant.getTrackPublication(Track.Source.Microphone)?.audioTrack,
+    ];
+    const analysers = tracks.map((track) => track ? createAudioAnalyser(track) : undefined);
+    let observing = true;
+    for (const analyser of analysers) {
+      if (analyser?.analyser.context instanceof AudioContext && analyser.analyser.context.state === "suspended") {
+        void analyser.analyser.context.resume().catch((failure: unknown) => {
+          if (observing) showError(mediaError(failure));
+        });
+      }
+    }
+    const stop = drawCallWaves(waves, tracks.map((track, index) => ({
+      color: index === 0 ? "#16a34a" : "#ff5a00",
+      gate: index === 0 ? 0.02 : MIC_NOISE_GATE,
+      volume: () => track?.isMuted ? 0 : (analysers[index]?.calculateVolume() ?? 0),
+    })));
+    stopWaves = () => {
+      observing = false;
+      stop();
+      for (const analyser of analysers) void analyser?.cleanup();
+    };
+  }
 
   function clearError() {
     error.textContent = "";
@@ -381,9 +395,11 @@ function mount(root: HTMLElement, config: Config) {
     card.dataset.agentState = agentState;
     form.hidden = phase !== "ready";
     call.hidden = phase !== "connecting" && phase !== "live";
+    callMeta.hidden = call.hidden;
     finished.hidden = phase !== "ended";
     introduction.hidden = phase !== "ready";
-    status.hidden = phase === "ready" && initialized;
+    const connecting = phase === "connecting" || (phase === "live" && reconnecting);
+    status.hidden = !connecting;
     waves.hidden = phase !== "live";
     start.disabled = !initialized || starting || finishing;
     retry.disabled = starting || finishing || !initialized;
@@ -393,14 +409,8 @@ function mount(root: HTMLElement, config: Config) {
     mute.title = muted ? "Unmute microphone" : "Mute microphone";
     muteLabel.textContent = muted ? "Unmute" : "Mute";
     mute.setAttribute("aria-pressed", String(muted));
-    status.textContent = phase === "ready" ? (initialized ? "Ready when you are" : "Waiting for a secure connection…")
-      : phase === "connecting" ? "Connecting your call…"
-       : phase === "ended" ? "Call ended"
-       : reconnecting ? "Reconnecting your call…"
-      : agentState === "speaking" ? `${config.name} is speaking`
-      : agentState === "thinking" ? "Thinking…"
-      : muted ? "Microphone muted" : "Listening to you";
-    sound.hidden = phase !== "live" || room?.canPlaybackAudio !== false;
+    status.textContent = connecting ? "Connecting…" : "";
+    playbackHint.hidden = phase !== "live" || room?.canPlaybackAudio !== false;
     reportSize();
   }
 
@@ -466,6 +476,8 @@ function mount(root: HTMLElement, config: Config) {
   }
 
   async function disconnect(closing: Room) {
+    stopWaves?.();
+    stopWaves = undefined;
     closing.removeAllListeners();
     for (const track of attachedTracks) {
       for (const attached of track.detach()) attached.remove();
@@ -523,24 +535,26 @@ function mount(root: HTMLElement, config: Config) {
       attachedTracks.add(track);
       const audio = track.attach();
       audioContainer.append(audio);
+      updateWaves();
     });
     current.on(RoomEvent.TrackUnsubscribed, (track) => {
       for (const audio of track.detach()) audio.remove();
       attachedTracks.delete(track);
+      updateWaves();
     });
+    current.on(RoomEvent.LocalTrackPublished, updateWaves);
+    current.on(RoomEvent.LocalTrackUnpublished, updateWaves);
     current.on(RoomEvent.TranscriptionReceived, (segments: TranscriptionSegment[], participant?: Participant) => {
       if (current !== room || destroyed) return;
       const nearBottom = transcript.scrollHeight - transcript.scrollTop - transcript.clientHeight < 64;
       for (const segment of segments) {
         if (!segment.text.trim()) continue;
-        captionPlaceholder.remove();
         const key = `${participant?.identity ?? "agent"}:${segment.id}`;
         let caption = captions.get(key);
         if (!caption) {
           caption = element("p", participant?.identity === current.localParticipant.identity ? "tt-caption tt-caption-you" : "tt-caption");
-          const speaker = element("span", "tt-speaker", participant?.identity === current.localParticipant.identity ? "You" : config.name);
           const text = element("span", "tt-caption-text");
-          caption.append(speaker, text);
+          caption.append(text);
           captions.set(key, caption);
           transcript.append(caption);
         }
@@ -554,6 +568,7 @@ function mount(root: HTMLElement, config: Config) {
         oldest[1].remove();
         captions.delete(oldest[0]);
       }
+      updateCaptionVisibility();
       if (nearBottom) transcript.scrollTop = transcript.scrollHeight;
     });
     const updateAgent = (attributes: Record<string, string>, participant: Participant) => {
@@ -613,7 +628,7 @@ function mount(root: HTMLElement, config: Config) {
     phase = "connecting";
     expandCaptions(false);
     captions.clear();
-    transcript.replaceChildren(captionPlaceholder);
+    transcript.replaceChildren();
     countdown.textContent = `${clock(config.maxSeconds)} left`;
     muted = false;
     reconnecting = false;
@@ -621,6 +636,13 @@ function mount(root: HTMLElement, config: Config) {
     post("status", true);
     render();
     try {
+      const current = new Room({
+        audioCaptureDefaults: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      });
+      room = current;
+      bindRoom(current);
+      await current.startAudio();
+      if (cancelled()) return;
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
       for (const track of stream.getTracks()) track.stop();
       if (cancelled()) return;
@@ -671,11 +693,6 @@ function mount(root: HTMLElement, config: Config) {
       timer = setInterval(tick, 250);
       tick();
       if (cancelled()) return;
-      const current = new Room({
-        audioCaptureDefaults: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-      });
-      room = current;
-      bindRoom(current);
       await current.connect(config.livekitUrl, launch.participantToken);
       if (cancelled()) { await disconnect(current); return; }
       for (const participant of current.remoteParticipants.values()) {
@@ -685,6 +702,7 @@ function mount(root: HTMLElement, config: Config) {
       await current.localParticipant.setMicrophoneEnabled(true);
       if (cancelled()) { await disconnect(current); return; }
       phase = "live";
+      updateWaves();
       render();
       end.focus();
     } catch (failure) {
@@ -698,6 +716,11 @@ function mount(root: HTMLElement, config: Config) {
   form.addEventListener("submit", (event) => {
     event.preventDefault();
     void startCall();
+  });
+  card.addEventListener("click", () => {
+    if (phase === "live" && room?.canPlaybackAudio === false) {
+      void room.startAudio().catch((failure: unknown) => showError(mediaError(failure)));
+    }
   });
   name.addEventListener("input", () => {
     name.removeAttribute("aria-invalid");

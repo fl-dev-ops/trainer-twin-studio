@@ -15,7 +15,7 @@ async function hoverOpen(page: Page) {
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
 }
 
-test("floating handshake, microphone delegation, active minimise/reopen and focus return", async ({ page }) => {
+test("floating handshake, microphone delegation and active call stays open", async ({ page }) => {
   await page.goto("/");
   await expect(launcher(page)).toBeVisible();
   await expect(page.locator("iframe")).toHaveAttribute("allow", `microphone ${widgetOrigin}`);
@@ -35,15 +35,18 @@ test("floating handshake, microphone delegation, active minimise/reopen and focu
   const originalFrame = page.frames().find((item) => item.url().startsWith(`${widgetOrigin}/embed/`));
   expect(originalFrame).toBeDefined();
   await frame(page).getByRole("button", { name: "Minimise" }).click();
-  await expect(page.locator("iframe")).toBeHidden();
-  await expect(launcher(page)).toBeFocused();
-  await open(page);
+  await expect(page.locator("iframe")).toBeVisible();
   expect(await originalFrame?.evaluate("window.active")).toBe(true);
   expect(await originalFrame?.evaluate("window.received")).toEqual(expect.arrayContaining([
     { source: "trainertwin-host", version: 1, type: "init" },
     { source: "trainertwin-host", version: 1, type: "visibility", open: true },
-    { source: "trainertwin-host", version: 1, type: "visibility", open: false },
   ]));
+  await page.keyboard.press("Escape");
+  await expect(page.locator("iframe")).toBeVisible();
+  await originalFrame?.evaluate(() => window.parent.postMessage({
+    source: "trainertwin-widget", version: 1, type: "status", active: false,
+  }, "http://127.0.0.1:43181"));
+  await expect(page.getByRole("status")).toHaveText("AI twin call ended");
   await page.keyboard.press("Escape");
   await expect(page.locator("iframe")).toBeHidden();
   await expect(launcher(page)).toBeFocused();
@@ -66,6 +69,7 @@ test("floating mounts remain independent and inline mode is rejected", async ({ 
 });
 
 test("hover expands one surface, crosses into the iframe, and shrinks only after leaving", async ({ page }) => {
+  await page.clock.install();
   await page.goto("/");
   await hoverOpen(page);
   expect(await page.locator("[data-trainertwin-widget] .floating").evaluate((node) =>
@@ -78,12 +82,14 @@ test("hover expands one surface, crosses into the iframe, and shrinks only after
   const child = page.frames().find((item) => item.url().startsWith(`${widgetOrigin}/embed/`));
   if (!child) throw new Error("Expected hosted frame");
   await page.getByRole("heading", { name: "Customer website" }).hover();
-  await expect(page.getByRole("dialog")).toBeHidden();
-  await expect(launcher(page)).toBeVisible();
-  expect(await child.evaluate("window.active")).toBe(true);
-  await hoverOpen(page);
+  await page.clock.runFor(1000);
   await expect(page.getByRole("dialog")).toBeVisible();
+  await expect(launcher(page)).toBeHidden();
   expect(await child.evaluate("window.active")).toBe(true);
+  await child.evaluate(() => window.parent.postMessage({
+    source: "trainertwin-widget", version: 1, type: "status", active: false,
+  }, "http://127.0.0.1:43181"));
+  await expect(page.getByRole("dialog")).toBeHidden();
 });
 
 test("touch uses tap rather than hover", async ({ browser }) => {

@@ -48,27 +48,34 @@ outer mount element from deliberate customer CSS.
 
 Floating mounts start minimised. On a fine mouse pointer, hovering “Talk to AI twin” expands the same surface
 into a non-modal dialog, anchored at the bottom-right. Moving between the button and iframe keeps it open.
-After leaving the entire widget, a 350ms grace period precedes a 600ms shrink transition; re-entry cancels closure.
+When no call is active, leaving the entire widget starts a 350ms grace period before a 600ms shrink transition; re-entry cancels closure.
 Name-field focus keeps a hover-opened widget open while typing. Click/tap, Enter/Space or the `open()` API pins it
 until explicit minimise/Escape, so keyboard and touch users never need hover. Hover alone never requests a microphone.
-Minimising hides but **does not unload** the iframe or end the call. Reopening
-preserves the hosted conversation. The launcher reports expanded state, the
+Connecting and active calls keep the card open; pointer leave, Escape, close messages and API minimise cannot hide it.
+There is no minus button in the hosted card. Inactive minimising hides but **does not unload** the iframe.
+The launcher reports expanded state, the
 dialog has an accessible name, and closing returns focus to the launcher.
 The welcome card fits its content without a bottom spacer; trusted, integer-only size updates are bounded to
 280–580px and the viewport's safe areas. Active calls retain a bounded caption area rather than resizing every turn.
 The hosted UI uses a dark portrait-led card, the trainer's existing photo (initials if unavailable), and explicit
 name/microphone consent. Photos remain in colour; initials appear only when no photo is available. Call-state indicators follow
-LiveKit listening/thinking/speaking events; captions can expand within the same frame without reconnecting.
-Mute, hang-up and minimise are distinct controls. Reduced-motion preferences disable decorative animation.
+LiveKit audio tracks drive the exact shared Twin-session green/orange glow renderer, including noise gates,
+attack/release smoothing and muted-track silence. A square portrait replaces the landscape crop in every phase.
+The call has no header; only connecting/reconnecting shows “Connecting…”, not speaking/listening text.
+Compact captions follow Portfolio v4's last-two-entry centered plain-text presentation with an older-entry fade;
+expansion reveals history in the same frame without reconnecting. Mute and end are icon-only, with accessible names.
+The remaining allowance stays accessible and appears visually in the final 15 seconds.
+Mute and hang-up remain distinct controls. Reduced-motion preferences disable decorative animation.
 The loader stays credential-free: it receives only lifecycle status, bounded height and an editing-focus boolean,
 not trainer or visitor data.
 The portrait is preloaded by the hosted HTML and loaded eagerly/high-priority while the iframe is still closed.
 On open/close the photo, heading, input and CTA independently fade/translate upward/downward, without scaling.
 Controls become interactive when the outer surface settles, preventing moving-target clicks during expansion.
+LiveKit audio is unlocked from the original call-start gesture before network awaits. There is no standalone sound
+button; if a browser later blocks playback, a short message asks the visitor to tap the widget to retry audio.
 
-Escape in the parent minimises an open floating panel. The hosted page must
-handle its own Escape key and close button by sending `close`, because keyboard
-events do not cross iframe boundaries. The loader supplies `parentOrigin` and `mode=floating` in the iframe URL.
+Escape in the parent minimises an inactive floating panel; active calls ignore collapse requests.
+Keyboard events do not cross iframe boundaries. The loader supplies `parentOrigin` and `mode=floating` in the iframe URL.
 
 After the async loader executes, the deliberately small API is available:
 

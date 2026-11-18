@@ -2,6 +2,9 @@ export type WidgetRoomDriver = {
   connects: number;
   disconnects: number;
   microphone: boolean[];
+  audioStarts: number;
+  levels: (agent: number, microphone: number) => void;
+  blockPlayback: () => void;
   caption: (id: string, text: string, speaker?: "agent" | "visitor", final?: boolean) => void;
   agentState: (state: "listening" | "thinking" | "speaking") => void;
   attachAudio: () => void;
@@ -34,8 +37,18 @@ export const RoomEvent = {
   Reconnecting: "reconnecting",
   Reconnected: "reconnected",
   DataReceived: "dataReceived",
+  LocalTrackPublished: "localTrackPublished",
+  LocalTrackUnpublished: "localTrackUnpublished",
 };
-export const Track = { Kind: { Audio: "audio", Video: "video" } };
+export const Track = { Kind: { Audio: "audio", Video: "video" }, Source: { Microphone: "microphone" } };
+export function createAudioAnalyser(track: { isMuted: boolean; volume: number }) {
+  const context = new AudioContext();
+  return {
+    analyser: context.createAnalyser(),
+    calculateVolume: () => track.isMuted ? 0 : track.volume,
+    cleanup: () => context.close(),
+  };
+}
 type Listener = (...args: unknown[]) => void;
 
 export class Room {
@@ -44,6 +57,8 @@ export class Room {
   private audio: HTMLAudioElement[] = [];
   private remoteAudio = {
     kind: "audio",
+    isMuted: false,
+    volume: 0,
     attach: () => {
       const audio = document.createElement("audio");
       audio.dataset.widgetFixture = "remote-audio";
@@ -56,6 +71,7 @@ export class Room {
       return attached;
     },
   };
+  private microphoneTrack = { isMuted: false, volume: 0 };
   canPlaybackAudio = false;
   remoteParticipants = new Map([
     ["agent", { identity: "agent", attributes: { "lk.agent.state": "listening" } }],
@@ -64,12 +80,24 @@ export class Room {
     identity: "visitor",
     setMicrophoneEnabled: async (enabled: boolean) => {
       this.driver.microphone.push(enabled);
+      this.microphoneTrack.isMuted = !enabled;
+      this.emit(RoomEvent.LocalTrackPublished);
     },
+    getTrackPublication: () => ({ audioTrack: this.microphoneTrack }),
   };
   private driver: WidgetRoomDriver = {
     connects: 0,
     disconnects: 0,
     microphone: [],
+    audioStarts: 0,
+    levels: (agent, microphone) => {
+      this.remoteAudio.volume = agent;
+      this.microphoneTrack.volume = microphone;
+    },
+    blockPlayback: () => {
+      this.canPlaybackAudio = false;
+      this.emit(RoomEvent.AudioPlaybackStatusChanged);
+    },
     caption: (id, text, speaker = "agent", final = true) => {
       this.emit(RoomEvent.TranscriptionReceived, [{ id, text, final }], { identity: speaker });
     },
@@ -110,6 +138,7 @@ export class Room {
   }
 
   async startAudio() {
+    this.driver.audioStarts++;
     this.canPlaybackAudio = true;
     this.emit(RoomEvent.AudioPlaybackStatusChanged);
   }

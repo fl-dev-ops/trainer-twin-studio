@@ -36,16 +36,6 @@ p, h1, h2 { margin: 0; }
   overflow: hidden;
   position: relative;
 }
-.tt-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-shrink: 0;
-  padding: 20px 24px 12px;
-}
-.tt-heading { flex: 1; min-width: 0; }
-.tt-title { font-size: 14px; line-height: 20px; font-weight: 600; overflow-wrap: anywhere; }
-.tt-subtitle { margin-top: 4px; color: #b7b8ad; font-size: 12px; line-height: 16px; overflow-wrap: anywhere; }
 .tt-icon-button {
   display: grid;
   place-items: center;
@@ -66,17 +56,19 @@ p, h1, h2 { margin: 0; }
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
-  padding: 8px 24px 20px;
-  gap: 24px;
+  padding: 12px 24px 20px;
+  gap: 16px;
+  position: relative;
+  z-index: 1;
 }
 .tt-hero { display: flex; align-items: center; flex-direction: column; text-align: center; gap: 12px; }
 .tt-portrait-stage {
   position: relative;
   display: grid;
   place-items: center;
-  width: 100%;
-  max-width: 380px;
-  height: 200px;
+  width: min(100%, 280px);
+  aspect-ratio: 1;
+  flex-shrink: 0;
   border-radius: 20px;
   background: #121410;
   overflow: hidden;
@@ -102,7 +94,7 @@ p, h1, h2 { margin: 0; }
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: center 30%;
+  object-position: center;
 }
 .tt-status {
   display: flex;
@@ -113,7 +105,6 @@ p, h1, h2 { margin: 0; }
   font-size: 12px;
   line-height: 16px;
 }
-.tt-status::before { content: ""; width: 6px; height: 6px; flex-shrink: 0; border-radius: 50%; background: #a7bb8d; }
 .tt-introduction { font-size: 23px; line-height: 28px; letter-spacing: -.5px; font-weight: 500; overflow-wrap: anywhere; }
 .tt-description { max-width: 440px; color: #b7b8ad; font-size: 13px; line-height: 20px; overflow-wrap: anywhere; }
 .tt-prejoin { display: flex; flex-direction: column; width: 100%; max-width: 440px; align-self: center; }
@@ -161,41 +152,46 @@ p, h1, h2 { margin: 0; }
   font-size: 10px;
   line-height: 16px;
   border-top: 1px solid #ffffff0a;
+  position: relative;
+  z-index: 1;
 }
-.tt-call { display: flex; flex-direction: column; gap: 12px; flex: 1; min-height: 220px; width: 100%; max-width: 600px; align-self: center; }
-.tt-call-meta { display: flex; align-items: center; gap: 8px; }
-.tt-captions-label { color: #b7b8ad; font-weight: 400; font-size: 12px; line-height: 20px; flex: 1; }
-.tt-countdown { color: #c8cbbd; font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.tt-countdown.tt-urgent { color: #ffb3a6; }
+.tt-call { display: flex; flex-direction: column; gap: 12px; flex: 1; min-height: 172px; width: 100%; align-self: center; }
+.tt-call-meta { position: absolute; top: 16px; right: 16px; z-index: 2; display: flex; align-items: center; gap: 8px; }
+.tt-countdown { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); color: #c8cbbd; font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tt-countdown.tt-urgent { position: static; width: auto; height: auto; overflow: visible; clip-path: none; color: #ffb3a6; }
 .tt-caption-toggle { width: 32px; height: 32px; }
 .tt-caption-toggle .tt-icon { width: 16px; height: 16px; }
 .tt-transcript {
-  flex: 1;
-  min-height: 100px;
-  max-height: 160px;
-  overflow-y: auto;
+  margin-top: auto;
+  height: 84px;
+  flex-shrink: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 6px;
   overscroll-behavior: contain;
   scrollbar-width: thin;
-  padding: 4px;
+  text-align: center;
+  mask-image: linear-gradient(to bottom, transparent 0%, #000 45%);
 }
-.tt-caption-placeholder { color: #b7b8ad; font-size: 12px; line-height: 20px; text-align: center; padding: 20px 8px; }
 .tt-caption {
-  padding: 12px;
-  margin: 0 auto 12px 0;
-  max-width: 92%;
-  border-radius: 16px 16px 16px 4px;
-  background: #ffffff08;
-  border: 1px solid #ffffff0a;
+  flex-shrink: 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
   font-size: 13px;
   line-height: 20px;
   overflow-wrap: anywhere;
+  animation: tt-caption-in .45s cubic-bezier(.22,1,.36,1) both;
 }
-.tt-caption-you { margin-left: auto; margin-right: 0; border-radius: 16px 16px 4px 16px; background: #ffffff0f; }
+.tt-caption:not(:last-child) { opacity: .45; }
+.tt-caption-you { color: #b7b8ad; }
 .tt-caption[data-final="false"] .tt-caption-text { opacity: .75; }
-.tt-speaker { display: block; margin-bottom: 4px; color: #b7b8ad; font-size: 10px; }
 .tt-controls { display: flex; justify-content: center; gap: 24px; padding-top: 8px; margin-top: auto; }
 .tt-control { display: flex; align-items: center; flex-direction: column; gap: 8px; }
-.tt-control-label { color: #c8cbbd; font-size: 11px; line-height: 16px; }
+.tt-control-label { display: none; }
 .tt-secondary, .tt-end {
   display: grid;
   place-items: center;
@@ -213,27 +209,19 @@ p, h1, h2 { margin: 0; }
 .tt-end { background: #d8464d; color: #fff; border-color: transparent; }
 .tt-end .tt-icon { transform: rotate(135deg); }
 .tt-end:hover { background: #bd363e; }
-.tt-sound { border: 1px solid #e4dcbf55; border-radius: 12px; padding: 12px; background: #e4dcbf12; color: #e4dcbf; font-size: 12px; line-height: 20px; }
+.tt-playback-hint { color: #e4dcbf; font-size: 12px; line-height: 20px; text-align: center; }
 .tt-finished { display: flex; flex-direction: column; gap: 16px; text-align: center; margin: auto 0; }
 .tt-finished-title { font-size: 22px; font-weight: 500; line-height: 28px; letter-spacing: -.4px; }
 .tt-error { border: 1px solid #eda59844; border-radius: 12px; padding: 12px; color: #ffc6ba; background: #512e2633; font-size: 12px; line-height: 20px; overflow-wrap: anywhere; }
 .tt-config-error { padding: 24px; color: #ffc6ba; background: #1b1c19; font-size: 14px; line-height: 24px; }
-.tt-waves { position: absolute; bottom: 16px; z-index: 1; display: flex; gap: 4px; height: 20px; align-items: center; justify-content: center; }
-.tt-wave { width: 3px; height: 6px; border-radius: 4px; background: #e7ecdf; }
-.tt-wave:nth-child(2), .tt-wave:nth-child(4) { height: 12px; animation-delay: -.3s; }
-.tt-wave:nth-child(3) { height: 20px; animation-delay: -.6s; }
-.tt-card[data-agent-state="speaking"] .tt-wave { animation: tt-wave .7s ease-in-out infinite alternate; }
-.tt-card[data-phase="live"][data-agent-state="speaking"] .tt-status::before { background: #e7ecdf; animation: tt-breathe 1.5s ease-in-out infinite; }
-.tt-card[data-phase="live"][data-agent-state="listening"] .tt-status::before { animation: tt-breathe 2s ease-in-out infinite; }
-.tt-card[data-phase="live"][data-agent-state="thinking"] .tt-wave { height: 4px; width: 4px; animation: tt-think 1s ease-in-out infinite alternate; }
-.tt-card[data-phase="connecting"] .tt-status::before { animation: tt-breathe 1s ease-in-out infinite; background: #d9cfae; }
-.tt-card[data-phase="ended"] .tt-portrait-stage { height: 160px; opacity: .65; }
-.tt-card[data-phase="ended"] .tt-status::before { background: #9c9f94; }
+.tt-waves { position: absolute; inset-inline: 0; bottom: -32px; width: 100%; height: 224px; filter: blur(24px); pointer-events: none; }
 .tt-captions-expanded .tt-portrait-stage { display: none; }
-.tt-captions-expanded .tt-transcript { max-height: none; min-height: 240px; }
+.tt-captions-expanded .tt-transcript { flex: 1; height: auto; min-height: 240px; overflow-y: auto; mask-image: none; justify-content: flex-start; }
+.tt-captions-expanded .tt-caption { display: block; overflow: visible; opacity: 1; }
+.tt-captions-expanded .tt-call { padding-top: 44px; }
 .tt-card[data-phase="connecting"], .tt-card[data-phase="live"] { height: 100%; }
 .tt-card[data-phase="connecting"] .tt-body, .tt-card[data-phase="live"] .tt-body { flex: 1; }
-.tt-portrait-stage, .tt-introduction, .tt-prejoin > *, .tt-call, .tt-finished, .tt-status, .tt-header, .tt-footer, .tt-error {
+.tt-portrait-stage, .tt-introduction, .tt-prejoin > *, .tt-call, .tt-finished, .tt-status, .tt-footer, .tt-error {
   opacity: 1;
   transform: translateY(0);
   transition: opacity .24s ease, transform .32s cubic-bezier(.22,1,.36,1);
@@ -244,38 +232,27 @@ p, h1, h2 { margin: 0; }
 .tt-card[data-visible="false"] .tt-call,
 .tt-card[data-visible="false"] .tt-finished,
 .tt-card[data-visible="false"] .tt-status,
-.tt-card[data-visible="false"] .tt-header,
 .tt-card[data-visible="false"] .tt-footer,
 .tt-card[data-visible="false"] .tt-error { opacity: 0; transform: translateY(12px); }
-.tt-card[data-phase="ready"] .tt-header { position: absolute; top: 0; left: 0; width: 100%; z-index: 2; padding: 20px; pointer-events: none; }
-.tt-card[data-phase="ready"] .tt-heading { visibility: hidden; }
-.tt-card[data-phase="ready"] .tt-header .tt-icon-button { pointer-events: auto; color: #fff; background: #121410a6; border-color: #ffffff24; }
 .tt-card[data-phase="ready"] .tt-body { padding: 12px 12px 16px; gap: 20px; }
-.tt-card[data-phase="ready"] .tt-portrait-stage { max-width: none; height: 260px; }
 .tt-card[data-phase="ready"] .tt-hero { gap: 20px; }
 .tt-card[data-phase="ready"] .tt-introduction { padding-inline: 12px; font-size: 22px; line-height: 28px; }
 .tt-card[data-phase="ready"] .tt-prejoin { padding-inline: 12px; }
-.tt-card[data-phase="ready"] .tt-icon-button:hover { background: #121410; }
-@keyframes tt-wave { to { transform: scaleY(.3); } }
-@keyframes tt-think { to { transform: translateY(-4px); opacity: .4; } }
-@keyframes tt-breathe { 50% { opacity: .4; } }
+@keyframes tt-caption-in { from { transform: translateY(12px); } to { transform: translateY(0); } }
 
 @media (max-width: 340px) {
-  .tt-header { padding: 16px 16px 12px; }
   .tt-body { padding: 8px 16px 16px; gap: 16px; }
   .tt-introduction { font-size: 21px; line-height: 28px; }
 }
-@media (max-height: 520px) {
+@media (max-height: 560px) {
   .tt-body { gap: 16px; }
-  .tt-portrait-stage { height: 112px; }
+  .tt-portrait-stage { width: min(100%, 180px); }
   .tt-introduction { font-size: 20px; line-height: 24px; }
   .tt-description { font-size: 12px; line-height: 16px; }
-  .tt-card[data-phase="ready"] .tt-portrait-stage { height: 128px; }
   .tt-card[data-phase="ready"] .tt-body, .tt-card[data-phase="ready"] .tt-hero { gap: 16px; }
 }
-@media (min-height: 521px) and (max-height: 660px) {
-  .tt-portrait-stage { height: 128px; }
-  .tt-card[data-phase="ready"] .tt-portrait-stage { height: 220px; }
+@media (min-height: 561px) and (max-height: 660px) {
+  .tt-portrait-stage { width: min(100%, 240px); }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }

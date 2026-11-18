@@ -108,6 +108,7 @@ function createAPI(): WidgetsAPI {
       let opened = false;
       let hovered = false;
       let editing = false;
+      let active = false;
       let pinned = false;
       let exitTimer: ReturnType<typeof setTimeout> | undefined;
       const hover = window.matchMedia("(hover: hover) and (pointer: fine)");
@@ -152,7 +153,7 @@ function createAPI(): WidgetsAPI {
             || Math.abs(container.getBoundingClientRect().height - panel.offsetHeight) < 1) enablePanel();
       };
       const collapse = (focus: boolean) => {
-          if (destroyed) return;
+          if (destroyed || active) return;
           cancelExit();
           opened = false;
           pinned = false;
@@ -169,9 +170,9 @@ function createAPI(): WidgetsAPI {
       };
       const scheduleExit = () => {
         cancelExit();
-        if (!opened || hovered || editing || pinned) return;
+        if (!opened || hovered || editing || pinned || active) return;
         exitTimer = setTimeout(() => {
-          if (!hovered && !editing && !pinned) collapse(false);
+          if (!hovered && !editing && !pinned && !active) collapse(false);
         }, 350);
       };
       const onEnter = (event: PointerEvent) => {
@@ -219,6 +220,9 @@ function createAPI(): WidgetsAPI {
         } else if (event.data.type === "resize") {
           container.style.setProperty("--content-height", `${Math.min(MAX_WIDGET_HEIGHT, event.data.height)}px`);
         } else {
+          active = event.data.active;
+          if (active) expand(false);
+          else scheduleExit();
           status.textContent = event.data.active ? "AI twin call in progress" : "AI twin call ended";
           launcherLabel.textContent = event.data.active ? "Call in progress" : "Talk to AI twin";
           launcher.dataset.active = String(event.data.active);

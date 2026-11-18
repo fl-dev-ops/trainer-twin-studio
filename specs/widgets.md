@@ -41,6 +41,7 @@ Fine-pointer hover expands the launcher into the card; leaving the whole surface
 period, unless the name field is focused. Click/tap and keyboard opening remain available and pinned.
 The card is content-sized, viewport-bounded and 580px high at most; resize messages accept only 280–580px.
 Image preload/eager fetching happens before opening. Independent fade/translate reveals do not scale the content.
+Connecting and active calls stay open regardless of pointer leave, Escape or minimise requests; no minus button is shown.
 Hover/minimising/visibility messages never start or end a call.
 
 Browser framing restrictions do not prove a human or make public IDs secret. A non-browser client can claim an
