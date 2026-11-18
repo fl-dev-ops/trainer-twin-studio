@@ -126,6 +126,26 @@ messages. `src/protocol.ts` is a dependency-free shared schema/URL helper.
 
 ## Build and verification
 
+### Manual embed test page
+
+Run `bun run playground` from `widgets/`. It serves a standalone page on loopback port 43190, separate from Studio.
+Paste a full installation snippet or `/embed/<id>` URL and click **Load widget**. The page displays the exact origin
+to add in the Twin's Embed allowlist. You can switch floating/inline or remove a mount; it never starts voice automatically.
+It extracts only the loader URL, Twin ID and display mode, rather than executing pasted HTML or inline handlers.
+Only load snippets from a widget server you trust.
+
+With the existing port-8443 HTTPS proxy/SSH tunnel:
+
+```sh
+PORTLESS_PORT=8443 portless alias widget-test 43190
+```
+
+Open `https://widget-test.localhost:8443` on the computer with the SSH tunnel. Allow that exact origin on your Twin.
+If the copied snippet omits the local proxy port, set **Widget server override** to
+`https://<org>.trainertwin.localhost:8443`. The override is an origin, not a full path.
+Use the same trusted development CA as the Studio. No extra SSH forwarding or production deployment is needed.
+Stop the playground with Ctrl+C and remove its route with `PORTLESS_PORT=8443 portless alias --remove widget-test`.
+
 From `widgets/`:
 
 ```sh

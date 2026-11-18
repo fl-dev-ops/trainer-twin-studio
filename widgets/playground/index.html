@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Twin embed test</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #f5f5f3; color: #202321; font: 16px/1.5 system-ui, sans-serif; }
+    main { max-width: 960px; margin: 48px auto; padding: 0 24px 96px; }
+    h1 { margin: 0 0 8px; font-size: 32px; letter-spacing: -.04em; }
+    h2 { margin: 0 0 16px; font-size: 20px; }
+    p { margin: 0 0 16px; }
+    .muted { color: #616761; }
+    .card { margin-top: 24px; padding: 24px; background: white; border: 1px solid #dedfda; border-radius: 16px; }
+    code { overflow-wrap: anywhere; }
+    label { display: block; margin: 16px 0 8px; font-weight: 600; }
+    textarea, input, select, button { font: inherit; }
+    textarea, input, select { width: 100%; padding: 12px; border: 1px solid #c3c8c0; border-radius: 8px; background: white; color: inherit; }
+    textarea { min-height: 144px; resize: vertical; font-family: ui-monospace, monospace; font-size: 14px; }
+    .row { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 24px; }
+    button { padding: 12px 20px; border: 1px solid #c3c8c0; border-radius: 8px; cursor: pointer; background: white; color: inherit; }
+    button.primary { background: #284a39; color: white; border-color: #284a39; }
+    button:disabled { opacity: .5; cursor: default; }
+    :focus-visible { outline: 3px solid #547d65; outline-offset: 4px; }
+    #status { margin-top: 16px; overflow-wrap: anywhere; }
+    #error { margin-top: 16px; color: #a52c23; }
+    #preview { max-width: 400px; margin: 0 auto; }
+    .help { margin-top: 8px; font-size: 14px; }
+    @media (max-width: 600px) { main { margin-top: 24px; padding-inline: 16px; } .card { padding: 16px; } }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Twin embed test</h1>
+    <p class="muted">Try the same widget your visitors will use, on a separate website origin.</p>
+    <section class="card" aria-labelledby="setup">
+      <h2 id="setup">1. Allow this website</h2>
+      <p>In your Twin's settings, enable Public access and Embed, then add this exact allowed origin:</p>
+      <code id="origin"></code>
+      <p class="help muted">Save your settings before loading. Voice calls use your development org's credits and configured providers.</p>
+    </section>
+    <form class="card" id="form">
+      <h2>2. Load your widget</h2>
+      <label for="embed">Embed snippet or hosted-widget URL</label>
+      <textarea id="embed" required spellcheck="false" placeholder='Paste the &lt;script … data-twin-id="…" …&gt;&lt;/script&gt; snippet from Embed settings, or an https://…/embed/… URL'></textarea>
+      <label for="override">Widget server override (optional)</label>
+      <input id="override" type="url" placeholder="https://your-org.trainertwin.localhost:8443" spellcheck="false">
+      <p class="help muted">For your SSH setup, use this if the copied snippet omits :8443. Use the org host, not the dash host.</p>
+      <label for="mode">Display</label>
+      <select id="mode">
+        <option value="">Use snippet's display mode</option>
+        <option value="floating">Floating</option>
+        <option value="inline">Inline</option>
+      </select>
+      <div class="row">
+        <button class="primary" id="load" type="submit">Load widget</button>
+        <button id="remove" type="button" disabled>Remove widget</button>
+      </div>
+      <p id="status" role="status">No widget loaded.</p>
+      <p id="error" role="alert" hidden></p>
+    </form>
+    <section class="card" aria-labelledby="preview-title">
+      <h2 id="preview-title">Website preview</h2>
+      <p class="muted">Inline widgets appear below. Floating widgets appear in the bottom-right corner. Loading does not start a call.</p>
+      <div id="preview"></div>
+    </section>
+  </main>
+  <script>
+    const form = document.getElementById("form");
+    const input = document.getElementById("embed");
+    const override = document.getElementById("override");
+    const display = document.getElementById("mode");
+    const load = document.getElementById("load");
+    const remove = document.getElementById("remove");
+    const status = document.getElementById("status");
+    const error = document.getElementById("error");
+    let installed = null;
+    let loading = false;
+    document.getElementById("origin").textContent = location.origin;
+
+    function safeURL(value) {
+      const url = new URL(value);
+      const local = url.hostname === "localhost" || url.hostname === "127.0.0.1" || url.hostname.endsWith(".localhost");
+      if (url.username || url.password || !(url.protocol === "https:" || (url.protocol === "http:" && local))) {
+        throw new Error("Use an HTTPS widget URL, or HTTP on localhost for development.");
+      }
+      return url;
+    }
+
+    function configuration(value) {
+      let url;
+      let id;
+      let mode;
+      if (value.startsWith("<")) {
+        const template = document.createElement("template");
+        template.innerHTML = value;
+        const scripts = template.content.querySelectorAll("script");
+        if (scripts.length !== 1) throw new Error("Paste one installation snippet from your Twin's Embed settings.");
+        const script = scripts[0];
+        url = safeURL(script.getAttribute("src") || "");
+        if (url.pathname !== "/widgets/v1.js") throw new Error("The snippet must use the /widgets/v1.js loader.");
+        id = script.dataset.twinId;
+        mode = script.dataset.mode || "floating";
+      } else {
+        url = safeURL(value);
+        const match = /^\/embed\/([a-zA-Z0-9_-]+)$/.exec(url.pathname);
+        if (!match) throw new Error("Paste the full installation snippet or a hosted URL ending in /embed/TWIN_ID.");
+        id = match[1];
+        mode = url.searchParams.get("mode") || "floating";
+      }
+      if (!id || !/^[a-zA-Z0-9_-]{1,128}$/.test(id)) throw new Error("The embed ID is missing or invalid.");
+      mode = display.value || mode;
+      if (mode !== "floating" && mode !== "inline") throw new Error("Display mode must be floating or inline.");
+      if (override.value.trim()) {
+        url = safeURL(override.value.trim());
+        if (url.pathname !== "/" || url.search || url.hash) throw new Error("The server override must be an origin only, without a path or query.");
+      }
+      if (url.origin === location.origin) throw new Error("Use your Twin's org host, not this test website's origin.");
+      return { src: `${url.origin}/widgets/v1.js`, id, mode };
+    }
+
+    function uninstall() {
+      if (installed) {
+        window.TrainerTwinWidgets?.destroy(installed);
+        installed.remove();
+        installed = null;
+      }
+      remove.disabled = true;
+      status.textContent = "No widget loaded.";
+    }
+
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      if (loading) return;
+      error.hidden = true;
+      let config;
+      try {
+        config = configuration(input.value.trim());
+      } catch (failure) {
+        error.textContent = failure.message;
+        error.hidden = false;
+        return;
+      }
+      uninstall();
+      loading = true;
+      load.disabled = true;
+      const script = document.createElement("script");
+      script.src = config.src;
+      script.dataset.twinId = config.id;
+      script.dataset.mode = config.mode;
+      if (config.mode === "inline") script.dataset.target = "preview";
+      script.referrerPolicy = "no-referrer";
+      installed = script;
+      status.textContent = `Loading ${config.src}…`;
+      const complete = () => {
+        loading = false;
+        load.disabled = false;
+        remove.disabled = false;
+      };
+      script.onload = () => {
+        complete();
+        try {
+          if (!window.TrainerTwinWidgets) throw new Error("The URL did not return a TrainerTwin widget loader.");
+          window.TrainerTwinWidgets.mount({ script });
+          status.textContent = `Loader mounted in ${config.mode} mode from ${config.src}. If the widget is unavailable, check its enabled settings and allowed origins.`;
+        } catch (failure) {
+          uninstall();
+          error.textContent = failure.message;
+          error.hidden = false;
+        }
+      };
+      script.onerror = () => {
+        complete();
+        uninstall();
+        error.textContent = "Could not load the widget script. Check the org URL, port, SSH tunnel and HTTPS certificate trust.";
+        error.hidden = false;
+      };
+      document.body.append(script);
+    });
+    remove.addEventListener("click", () => {
+      uninstall();
+      error.hidden = true;
+    });
+  </script>
+</body>
+</html>

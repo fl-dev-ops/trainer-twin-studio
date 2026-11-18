@@ -8,5 +8,5 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "skipLibCheck": true
   },
-  "include": ["src/**/*.ts", "tests/**/*.ts", "e2e/**/*.ts", "build.ts", "playwright.config.ts"]
+  "include": ["src/**/*.ts", "tests/**/*.ts", "e2e/**/*.ts", "playground/**/*.ts", "build.ts", "playwright.config.ts"]
 }
