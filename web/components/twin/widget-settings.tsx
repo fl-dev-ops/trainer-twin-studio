@@ -72,7 +72,7 @@ export function WidgetSettingsPanel({ twin }: { twin: Twin }) {
   }
 
   return (
-    <div className="flex min-w-0 flex-col gap-10 pt-8">
+    <div className="flex min-w-0 flex-col gap-10">
       <form className="flex flex-col gap-3" onSubmit={(event) => { event.preventDefault(); void save(); }}>
         <fieldset disabled={saving} className="flex min-w-0 flex-col gap-10">
           <PageSection title="Website widget" description="Add voice conversations to your website. Public call duration and organization-funded limits apply.">
