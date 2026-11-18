@@ -14,6 +14,7 @@ let writes: { op: string; args: Row }[];
 let puts: string[];
 let deleted: string[];
 let nextId = 0;
+let beforeAgentLock: (() => void) | null = null;
 
 const personaView = () => ({
   ...persona,
@@ -21,10 +22,7 @@ const personaView = () => ({
   voice: persona.voiceId ? { name: "Olga voice" } : null,
 });
 
-mock.module("@/lib/db", () => ({
-  withLock: async () => { throw new Error("Unexpected locked write in read-only fixture"); },
-  isUniqueViolation: (error: unknown) => typeof error === "object" && error !== null && "code" in error && error.code === "P2002",
-  db: {
+const fakeDb = {
     agent: {
       findFirst: async () => ({ persona: personaView() }),
       findMany: async () => twins,
@@ -56,7 +54,15 @@ mock.module("@/lib/db", () => ({
     },
     specVersion: { create: (args: Row) => (writes.push({ op: "specVersion.create", args }), args) },
     $transaction: async (ops: unknown[]) => ops,
+};
+mock.module("@/lib/db", () => ({
+  withLock: async (keys: string[], work: (tx: typeof fakeDb) => Promise<unknown>) => {
+    expect(keys).toEqual(twins.map((twin) => `agent:${twin.slug}`).sort());
+    beforeAgentLock?.();
+    return work(fakeDb);
   },
+  isUniqueViolation: (error: unknown) => typeof error === "object" && error !== null && "code" in error && error.code === "P2002",
+  db: fakeDb,
 }));
 const realS3 = await import("@/lib/s3");
 mock.module("@/lib/s3", () => ({
@@ -87,6 +93,7 @@ const { AvatarError, avatarImageKey, avatarState, avatarVideoUpload, decodePhoto
 const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]).toString("base64");
 
 beforeEach(() => {
+  beforeAgentLock = null;
   persona = { id: "p1", slug: "olga", name: "Olga", isOwn: true, voiceId: null, avatarId: null };
   avatars = new Map();
   voices = [
@@ -190,6 +197,16 @@ test("recording again replaces the old video and deletes the previous voice when
   expect(deleted).toContain(first.key);
   expect(voices.find((v) => v.id === "v1")).toBeUndefined();
   expect(deleted.some((key) => key.includes("/tts-voices/v1/"))).toBe(true);
+});
+
+test("voice cleanup re-reads published skill data under the agent lock", async () => {
+  const { key } = await avatarVideoUpload("o1", "video/webm");
+  beforeAgentLock = () => {
+    twins[0] = { ...twins[0], version: 6, data: { source: "twin-creator", skill: "# Newly published", voiceId: "old" } };
+  };
+  await savePersonaVoice("o1", { voiceId: "v1", videoKey: key });
+  const update = writes.find((write) => write.op === "agent.update")!.args;
+  expect(update.data).toEqual({ version: 7, data: { source: "twin-creator", skill: "# Newly published" } });
 });
 
 test("a previous voice still named by an agent is kept", async () => {

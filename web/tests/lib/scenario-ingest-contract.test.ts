@@ -3,6 +3,11 @@ import { expect, mock, test } from "bun:test";
 // Contract: the copilot (scenario-ingest agent) publisher against the real web routes.
 // Postgres, S3 and Chroma are faked; everything between them is the production code of both services.
 type Row = Record<string, unknown>;
+type SkillRow = Row & { id: string; nextVersion: number; generation: number; currentVersionId: string | null };
+type SkillVersionRow = Row & { id: string; skillId: string; version: number; contentHash: string; status: string };
+const skills: SkillRow[] = [];
+const skillVersions: SkillVersionRow[] = [];
+const skillItems = new Map<string, unknown[]>();
 const agents: Row[] = [];
 const s3 = new Map<string, string>();
 let chroma: { agentSlug: string; count: number } | null = null;
@@ -25,13 +30,72 @@ const fakeDb = {
   knowledgeBase: { findFirst: async () => null },
   agent: {
     findFirst: async ({ where }: { where: { orgId: string; slug: string | { equals: string } } }) => agents.find(agent => agent.orgId === where.orgId && agent.slug === (typeof where.slug === "string" ? where.slug : where.slug.equals)) ?? null,
-    findUnique: async ({ where }: { where: { slug: string } }) => agents.find((a) => a.slug === where.slug) ?? null,
+    findUnique: async ({ where }: { where: { slug: string } }) => {
+      const row = agents.find((a) => a.slug === where.slug);
+      return row ? { ...row } : null;
+    },
     create: async ({ data }: { data: Row }) => {
-      const row = { id: "a1", ...data };
+      const row = { id: crypto.randomUUID(), updatedAt: new Date(), ...data };
       agents.push(row);
       return row;
     },
-    update: async () => {},
+    update: async ({ where, data }: { where: { id: string }; data: Row }) => {
+      const row = agents.find(agent => agent.id === where.id)!;
+      Object.assign(row, data, { updatedAt: new Date() });
+      return { ...row };
+    },
+  },
+  skill: {
+    updateMany: async ({ where, data }: { where: { id: string; generation: number }; data: Row }) => {
+      const rows = skills.filter(skill => skill.id === where.id && skill.generation === where.generation);
+      rows.forEach(row => Object.assign(row, data));
+      return { count: rows.length };
+    },
+    upsert: async ({ where, create, update }: { where: { orgId_ownerSlug: { orgId: string; ownerSlug: string } }; create: Row; update: Row }) => {
+      let row = skills.find(skill => skill.orgId === where.orgId_ownerSlug.orgId && skill.ownerSlug === where.orgId_ownerSlug.ownerSlug);
+      if (!row) {
+        row = { id: crypto.randomUUID(), nextVersion: 1, generation: 0, currentVersionId: null, ...create };
+        skills.push(row);
+      } else Object.assign(row, update);
+      return { ...row };
+    },
+    findUniqueOrThrow: async ({ where, include }: { where: { id: string }; include?: { currentVersion: boolean } }) => {
+      const row = skills.find(skill => skill.id === where.id);
+      if (!row) throw new Error(`Missing skill ${where.id}`);
+      return { ...row, ...(include?.currentVersion ? { currentVersion: skillVersions.find(version => version.id === row.currentVersionId) ?? null } : {}) };
+    },
+    update: async ({ where, data }: { where: { id: string }; data: Row & { nextVersion?: { increment: number } } }) => {
+      const row = skills.find(skill => skill.id === where.id)!;
+      const nextVersion = data.nextVersion ? row.nextVersion + data.nextVersion.increment : row.nextVersion;
+      Object.assign(row, data, { nextVersion });
+      return { ...row };
+    },
+  },
+  skillVersion: {
+    findUniqueOrThrow: async ({ where }: { where: { id: string } }) => {
+      const row = skillVersions.find(version => version.id === where.id);
+      if (!row) throw new Error(`Missing skill version ${where.id}`);
+      return { ...row };
+    },
+    findFirst: async ({ where }: { where: { skillId: string; contentHash: string; status: { in: string[] } } }) => {
+      const row = skillVersions.filter(version => version.skillId === where.skillId && version.contentHash === where.contentHash && where.status.in.includes(version.status)).sort((a, b) => b.version - a.version)[0];
+      return row ? { ...row } : null;
+    },
+    create: async ({ data }: { data: Row & { skillId: string; version: number; contentHash: string } }) => {
+      const row = { ...data, id: crypto.randomUUID(), status: "pending", indexStatus: "pending", failure: null, updatedAt: new Date() };
+      skillVersions.push(row);
+      return { ...row };
+    },
+    update: async ({ where, data }: { where: { id: string }; data: Row }) => {
+      const row = skillVersions.find(version => version.id === where.id)!;
+      Object.assign(row, data, { updatedAt: new Date() });
+      return { ...row };
+    },
+    updateMany: async ({ where, data }: { where: { id: string; status: string }; data: Row }) => {
+      const rows = skillVersions.filter(version => version.id === where.id && version.status === where.status);
+      rows.forEach(row => Object.assign(row, data, { updatedAt: new Date() }));
+      return { count: rows.length };
+    },
   },
   domain: { findUnique: async () => null, create: async () => {} },
   specVersion: { create: async () => {} },
@@ -58,7 +122,11 @@ mock.module("@/lib/s3", () => ({
   scenarioRunPrefix: (orgId: string, runId: string) => `p/${orgId}/runs/${runId}`,
   putObject: async (key: string, body: string) => void s3.set(key, body),
   deletePrefix: async () => {},
-  getObjectText: async () => "",
+  getObjectText: async (key: string) => {
+    const text = s3.get(key);
+    if (text === undefined) throw new Error(`Missing S3 object ${key}`);
+    return text;
+  },
   kbPrefix: () => "",
   presignedGetUrl: async (key: string) => `https://s3.test/${key}`,
 }));
@@ -66,6 +134,11 @@ mock.module("@/lib/main-collection", () => ({
   invalidateCollectionCache: () => {},
   invalidatePersonaStyleCache: () => {},
   MainCollectionService: {
+    writeSkillItems: async (orgId: string, skillVersionId: string, _scenarioId: string, items: unknown[], indexScope = skillVersionId) => {
+      skillItems.set(`${orgId}/${skillVersionId}/${indexScope}`, items);
+      return items.length;
+    },
+    skillItemCount: async (orgId: string, skillVersionId: string, indexScope = skillVersionId) => skillItems.get(`${orgId}/${skillVersionId}/${indexScope}`)?.length ?? 0,
     writeScenarioItems: async (orgId: string, agentSlug: string, _id: string, version: number, items: unknown[]) => {
       chroma = { agentSlug, count: items.length };
       vectors.push({ orgId, slug: agentSlug, version, items });
@@ -138,7 +211,9 @@ test("an ingest publication lands in S3, Chroma and Postgres, files byte for byt
     scenarios: [{ id: "fundamental-depth", ok: true, slug: "acme-fundamental-depth", version: 1, created: true, items: 1 }],
   });
 
-  const v1 = "p/org1/scenarios/acme-fundamental-depth/v1";
+  const v1 = (agents[0].data as { artifacts: string }).artifacts;
+  expect(v1.startsWith(`${realS3.orgPrefix("org1")}/skills/${skills[0].id}/v1/attempt-`)).toBe(true);
+  expect(v1).toMatch(/\/attempt-[0-9a-f-]{36}$/);
   for (const [name, path] of [["SKILL.md", "fundamental-depth/SKILL.md"], ["scenario.json", "fundamental-depth/scenario.json"], ["items.json", "fundamental-depth/items.json"], ["patterns.md", "fundamental-depth/patterns.md"]]) {
     expect(s3.get(`${v1}/${name}`)).toBe(files.find((f) => f.path === path)!.text);
   }
@@ -148,6 +223,10 @@ test("an ingest publication lands in S3, Chroma and Postgres, files byte for byt
   expect(chroma).toEqual({ agentSlug: "acme-fundamental-depth", count: 1 });
   // The copilot's roleplay-creator publishes role plays, never twin skills.
   expect(agents[0]).toMatchObject({ slug: "acme-fundamental-depth", personaId: "p1", orgId: "org1", kind: "ROLEPLAY" });
+  expect(agents[0].primarySkillId).toBe(skills[0].id);
+  expect(skills[0].currentVersionId).toBe(skillVersions[0].id);
+  expect(skillVersions[0]).toMatchObject({ status: "ready", indexStatus: "ready", itemCount: 1 });
+  expect(skillItems.get(`org1/${skillVersions[0].id}/${v1}`)).toEqual(items);
   const published = agents[0].data as Row;
   expect(published.skill).toBe(skill);
   expect(isRunnableAgentData("ROLEPLAY", published)).toBe(true);
@@ -334,7 +413,13 @@ test("twin-creator: builds a twin skill from the trainer's own words, and publis
   expect(data.source).toBe("twin-creator");
   expect((data.scenario as Row).situations).toEqual(twinHead.situations);
   expect(data.stages).toEqual([{ id: "buyer-waits", name: "Buyer waits for prices", objective: "Buyer waits for prices" }, { id: "wants-cashback", name: "Buyer asks for cashback", objective: "Buyer asks for cashback" }]);
-  expect([...s3.keys()].some((k) => k.endsWith("acme-off-plan-waiting/v1/skill.json"))).toBe(true);
+  const artifacts = (agent.data as { artifacts: string }).artifacts;
+  const managedSkill = skills.find(entry => entry.id === agent.primarySkillId)!;
+  expect(artifacts.startsWith(`${realS3.orgPrefix("org1")}/skills/${managedSkill.id}/v1/attempt-`)).toBe(true);
+  expect(artifacts).toMatch(/\/attempt-[0-9a-f-]{36}$/);
+  for (const name of ["SKILL.md", "skill.json", "items.json", "patterns.md"]) {
+    expect(s3.get(`${artifacts}/${name}`)).toBe(files.find(file => file.path.endsWith(`/${name}`))!.text);
+  }
   expect(chroma).toEqual({ agentSlug: "acme-off-plan-waiting", count: 8 });
 });
 

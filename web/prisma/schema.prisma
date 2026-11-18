@@ -66,11 +66,59 @@ model Agent {
   sessions        InterviewSession[]
   twinAssignments TwinAssignment[]
   twinShareLinks  TwinShareLink[]
+  primarySkillId  String?
+  primarySkill    Skill?             @relation(fields: [primarySkillId, orgId], references: [id, orgId], onDelete: Restrict, onUpdate: Restrict)
 
   @@index([orgId])
+  @@index([primarySkillId, orgId])
   @@index([personaId])
   @@index([orgId, kind])
   @@index([personaId, kind])
+}
+
+model Skill {
+  id               String         @id @default(cuid())
+  orgId            String
+  ownerSlug        String
+  name             String
+  nextVersion      Int            @default(1)
+  generation       Int            @default(0)
+  publicationHash  String?
+  currentVersionId String?
+  organization     Organization   @relation(fields: [orgId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  versions         SkillVersion[] @relation("SkillVersions")
+  agents           Agent[]
+  currentVersion   SkillVersion?  @relation("SkillCurrentVersion", fields: [currentVersionId, id], references: [id, skillId], onDelete: Restrict, onUpdate: Restrict)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  @@unique([orgId, ownerSlug])
+  @@unique([id, orgId])
+  @@index([currentVersionId, id])
+}
+
+model SkillVersion {
+  id                    String   @id @default(cuid())
+  skillId               String
+  version               Int
+  format                String
+  status                String   @default("pending")
+  indexStatus           String   @default("pending")
+  publicationGeneration Int      @default(0)
+  contentHash           String
+  skillText             String
+  manifest              Json
+  files                 Json
+  artifacts             String
+  itemCount             Int
+  failure               String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  skill                 Skill    @relation("SkillVersions", fields: [skillId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  currentForSkills      Skill[]  @relation("SkillCurrentVersion")
+
+  @@unique([skillId, version])
+  @@unique([id, skillId])
 }
 
 // Immutable snapshot taken on every changed save. entityData in {persona|agent}
@@ -537,6 +585,7 @@ model Organization {
   minuteLedger       MinuteLedger[]
   creditPurchases    CreditPurchase[]
   billing            OrgBilling?
+  skills             Skill[]
 
   @@unique([slug])
   @@map("organization")

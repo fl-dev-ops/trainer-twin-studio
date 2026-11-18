@@ -492,7 +492,7 @@ export class MainCollectionService {
    * the Agent row points at the new version). Idempotent: re-sending the same version writes the same records. Embeds
    * the situation with the line, so retrieval can match "what just happened" to "what the trainer said next".
    */
-  static async writeScenarioItems(orgId: string, agentSlug: string, scenarioId: string, agentVersion: number, items: (ScenarioItem | RoleplayItem)[]): Promise<number> {
+  static async writeScenarioItems(orgId: string, agentSlug: string, scenarioId: string, agentVersion: number, items: (ScenarioItem | RoleplayItem)[], skillVersionId?: string, skillIndexScope?: string): Promise<number> {
     if (items.length === 0) return 0;
     const collection = await this.getCollection(orgId);
 
@@ -514,7 +514,9 @@ export class MainCollectionService {
           type: "scenario_item",
           orgId,
           agentSlug,
-          agentVersion,
+           agentVersion,
+          skillVersionId: skillVersionId ?? "",
+          skillIndexScope: skillIndexScope ?? "",
           scenarioId,
           itemId: item.id,
           itemIndex: i + j,
@@ -524,6 +526,26 @@ export class MainCollectionService {
       });
     }
     return items.length;
+  }
+
+  static async writeSkillItems(orgId: string, skillVersionId: string, scenarioId: string, items: (ScenarioItem | RoleplayItem)[], indexScope: string) {
+    const count = await this.writeScenarioItems(orgId, `skill:${indexScope}`, scenarioId, 1, items, skillVersionId, indexScope);
+    const indexed = await this.skillItemCount(orgId, skillVersionId, indexScope);
+    if (indexed !== count) throw new Error(`Skill index count mismatch: expected ${count}, found ${indexed}`);
+    return count;
+  }
+
+  static async skillItemCount(orgId: string, skillVersionId: string, indexScope: string) {
+    const collection = await this.getCollection(orgId);
+    let count = 0;
+    for (;;) {
+      const page = await collection.get({
+        where: { $and: [{ type: "scenario_item" }, { orgId }, { skillVersionId }, { skillIndexScope: indexScope }] } as Where,
+        include: ["metadatas"], limit: 300, offset: count,
+      });
+      count += page.ids.length;
+      if (page.ids.length < 300) return count;
+    }
   }
 
   /**

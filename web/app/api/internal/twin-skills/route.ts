@@ -1,4 +1,5 @@
 import { ingestAuthorized, ingestTwinSkill, ScenarioIngestError, twinSkillIngestSchema, type TwinSkillIngestInput } from "@/lib/scenario-ingest";
+import { AppError, errorResponse } from "@/lib/errors";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -24,6 +25,7 @@ export async function POST(request: Request) {
     const result = await ingestTwinSkill(orgId, body as TwinSkillIngestInput);
     return Response.json({ ok: true, skill: result }, { status: result.created ? 201 : 200 });
   } catch (error) {
+    if (error instanceof AppError) return errorResponse(error);
     if (error instanceof ScenarioIngestError) return Response.json({ error: error.message }, { status: error.status });
     console.error("[API:internal:twin-skills] ingest failed:", error);
     return Response.json({ error: "Could not store the twin skill" }, { status: 500 });

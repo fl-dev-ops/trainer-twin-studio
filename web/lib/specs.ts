@@ -357,6 +357,7 @@ export async function saveSpec(type: SpecType, slug: string, text: string, orgId
       ? await tx.persona.findUnique({ where: { orgId_slug: { orgId, slug } } })
       : await tx.agent.findUnique({ where: { slug } });
     if (!current || current.orgId !== orgId) throw new Error("Not found");
+    if (type === "agents") assertSpecBuilt(current as { kind?: AgentKind; data: unknown });
     if (stableJson(current.data) === stableJson(data)) return { created: false, versionBumped: false, version: current.version };
     const nextVersion = current.version + 1;
     await tx.specVersion.create({
@@ -735,4 +736,3 @@ export async function listSessions(orgId: string) {
     take: 50,
   });
 }
-

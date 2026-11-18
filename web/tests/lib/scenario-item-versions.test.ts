@@ -10,6 +10,7 @@ const { MainCollectionService, scenarioScopeWhere } = (await import("../../lib/m
 
 type Meta = Record<string, string | number | boolean>;
 let rows: { id: string; document: string; metadata: Meta }[] = [];
+let dropUpserts = false;
 
 /** Just enough of Chroma's filter language for these searches: $and, $or, $in, $lt and equality. */
 function matches(meta: Meta, where: Record<string, unknown>): boolean {
@@ -25,6 +26,13 @@ function matches(meta: Meta, where: Record<string, unknown>): boolean {
   });
 }
 const fake = {
+  upsert: async ({ ids, documents, metadatas }: { ids: string[]; documents: string[]; metadatas: Meta[] }) => {
+    if (dropUpserts) return;
+    ids.forEach((id, i) => {
+      rows = rows.filter((row) => row.id !== id);
+      rows.push({ id, document: documents[i], metadata: metadatas[i] });
+    });
+  },
   query: async ({ where, nResults }: { where: Record<string, unknown>; nResults: number }) => {
     const hits = rows.filter((row) => matches(row.metadata, where)).slice(0, nResults);
     return { ids: [hits.map((h) => h.id)], documents: [hits.map((h) => h.document)], metadatas: [hits.map((h) => h.metadata)], distances: [hits.map(() => 0.1)] };
@@ -47,7 +55,46 @@ const line = (slug: string, version: number | undefined, text: string) => ({
 });
 
 beforeEach(() => {
+  dropUpserts = false;
   rows = [line("olga-wait", 19, "v19 line"), line("olga-wait", 20, "v20 line"), line("olga-price", 4, "price v4 line")];
+});
+
+const managedItem = {
+  id: "example-1", role: "trainer" as const, context: "The buyer hesitates", text: "What is holding you back?",
+  metadata: { step: "explore", skillVersionId: "forged-version", skillIndexScope: "forged-scope", orgId: "forged-org" },
+};
+
+test("managed examples have an authoritative org/version scope and survive legacy pruning", async () => {
+  await MainCollectionService.writeSkillItems("org", "package-1", "hesitation", [managedItem], "scope-1");
+  await MainCollectionService.writeScenarioItems("org", "olga-wait", "hesitation", 21, [managedItem]);
+  expect(await MainCollectionService.skillItemCount("org", "package-1", "scope-1")).toBe(1);
+  expect(await MainCollectionService.skillItemCount("other-org", "package-1", "scope-1")).toBe(0);
+  expect(await MainCollectionService.skillItemCount("org", "forged-version", "scope-1")).toBe(0);
+  await MainCollectionService.pruneScenarioItems("org", "olga-wait", 22);
+  expect(await MainCollectionService.skillItemCount("org", "package-1", "scope-1")).toBe(1);
+  const hits = rows.filter((row) => row.metadata.skillVersionId === "package-1");
+  expect(hits).toHaveLength(1);
+  expect(hits[0].metadata).toMatchObject({ orgId: "org", role: "trainer", step: "explore" });
+});
+
+test("managed indexing is idempotent and verifies a valid zero-item package", async () => {
+  await MainCollectionService.writeSkillItems("org", "package-1", "hesitation", [managedItem], "scope-1");
+  await MainCollectionService.writeSkillItems("org", "package-1", "hesitation", [managedItem], "scope-1");
+  expect(await MainCollectionService.skillItemCount("org", "package-1", "scope-1")).toBe(1);
+  expect(await MainCollectionService.writeSkillItems("org", "empty-package", "hesitation", [], "scope-empty")).toBe(0);
+});
+
+test("index count verification refuses silent partial upserts", async () => {
+  dropUpserts = true;
+  await expect(MainCollectionService.writeSkillItems("org", "package-1", "hesitation", [managedItem], "scope-1")).rejects.toThrow("Skill index count mismatch");
+});
+
+test("late writes from an expired attempt cannot alter the committed attempt's index", async () => {
+  await MainCollectionService.writeSkillItems("org", "package-1", "hesitation", [managedItem], "attempt-current");
+  await MainCollectionService.writeSkillItems("org", "package-1", "hesitation", [managedItem, managedItem], "attempt-expired");
+  expect(await MainCollectionService.skillItemCount("org", "package-1", "attempt-current")).toBe(1);
+  expect(await MainCollectionService.skillItemCount("org", "package-1", "attempt-expired")).toBe(2);
+  expect(await MainCollectionService.skillItemCount("org", "package-1", "forged-scope")).toBe(0);
 });
 
 test("a search reads exactly the pinned versions", async () => {

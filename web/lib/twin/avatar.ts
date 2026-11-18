@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { db } from "@/lib/db";
+import { db, withLock } from "@/lib/db";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import { avatarPrefix, deleteObject, deletePrefix, getObjectBytes, presignedGetUrl, presignedPutUrl, putObject, voicePrefix } from "@/lib/s3";
 import { professionalHeadshot } from "@/lib/headshot";
@@ -165,19 +165,21 @@ export async function savePersonaVoice(orgId: string, input: { voiceId: string; 
     select: { id: true, slug: true, version: true, data: true },
   });
   // Twins that carry their own copy of a voice (written by the earlier setup) would override the persona's.
-  const copied = twins.filter((twin) => typeof asRecord(twin.data).voiceId === "string");
-  await db.$transaction([
-    db.avatar.update({ where: { id: avatar.id }, data: { s3VideoKey: input.videoKey } }),
-    db.persona.update({ where: { id: persona.id }, data: { voiceId: voice.id } }),
-    ...copied.flatMap((twin) => {
+  const copied = await withLock(twins.map((twin) => `agent:${twin.slug}`).sort(), async (tx) => {
+    await tx.avatar.update({ where: { id: avatar.id }, data: { s3VideoKey: input.videoKey } });
+    await tx.persona.update({ where: { id: persona.id }, data: { voiceId: voice.id } });
+    const current = await tx.agent.findMany({
+      where: { id: { in: twins.map((twin) => twin.id) }, orgId, kind: "TWIN", personaId: persona.id },
+    });
+    const copied = current.filter((twin) => typeof asRecord(twin.data).voiceId === "string");
+    for (const twin of copied) {
       const { voiceId: _dropped, ...data } = asRecord(twin.data);
       void _dropped;
-      return [
-        db.specVersion.create({ data: { entityType: "agents", entitySlug: twin.slug, version: twin.version, data: json(twin.data), orgId } }),
-        db.agent.update({ where: { id: twin.id }, data: { version: twin.version + 1, data: json(data) } }),
-      ];
-    }),
-  ]);
+      await tx.specVersion.create({ data: { entityType: "agents", entitySlug: twin.slug, version: twin.version, data: json(twin.data), orgId } });
+      await tx.agent.update({ where: { id: twin.id }, data: { version: twin.version + 1, data: json(data) } });
+    }
+    return copied;
+  });
   if (avatar.s3VideoKey && avatar.s3VideoKey !== input.videoKey) await deleteObject(avatar.s3VideoKey).catch(() => {});
   if (previousVoiceId) await removeUnusedVoice(orgId, previousVoiceId);
   return { twins: copied.length };

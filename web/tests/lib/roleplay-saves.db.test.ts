@@ -11,7 +11,15 @@ import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "./minut
 // Real Postgres and advisory locks; only files, embeddings and the model boundary are replaced.
 const files = new Map<string, string>();
 const s3 = await import("@/lib/s3");
-mock.module("@/lib/s3", () => ({ ...s3, s3Configured: true, putObject: async (key: string, body: string) => { files.set(key, body); } }));
+mock.module("@/lib/s3", () => ({
+  ...s3, s3Configured: true,
+  putObject: async (key: string, body: string) => { files.set(key, body); },
+  getObjectText: async (key: string) => {
+    const body = files.get(key);
+    if (body === undefined) throw new Error(`Missing test object: ${key}`);
+    return body;
+  },
+}));
 const { saveRoleplay, ROLEPLAY_SOURCE } = await import("@/lib/scenario-ingest");
 const { saveSpec } = await import("@/lib/specs");
 const { saveSpecDraft, publishSpecDraft } = await import("@/lib/spec-drafts");
@@ -39,11 +47,15 @@ describe.skipIf(!localMinutesDb)("Module 4 role-play saves (real Postgres locks)
   beforeEach(async () => {
     f = minutesFixture(); other = minutesFixture(); await f.create(); await other.create(); files.clear(); items.clear();
     model = spyOn(generation, "generateSpecBundle").mockRejectedValue(new Error("Model must not be called"));
-    spies.push(model, spyOn(MainCollectionService, "writeScenarioItems").mockImplementation(async (_org, _slug, _scenario, version, input) => { items.set(version, input); return input.length; }), spyOn(MainCollectionService, "pruneScenarioItems").mockResolvedValue(undefined), spyOn(org, "studioOrRefusal").mockResolvedValue({ ...f.org, accentColor: null, role: "admin", user: f.trainer }));
+    spies.push(model, spyOn(MainCollectionService, "writeSkillItems").mockImplementation(async (_org, _version, _scenario, input) => input.length), spyOn(MainCollectionService, "writeScenarioItems").mockImplementation(async (_org, _slug, _scenario, version, input) => { items.set(version, input); return input.length; }), spyOn(MainCollectionService, "pruneScenarioItems").mockResolvedValue(undefined), spyOn(org, "studioOrRefusal").mockResolvedValue({ ...f.org, accentColor: null, role: "admin", user: f.trainer }));
   });
   afterEach(async () => {
     for (const spy of spies.splice(0).reverse()) spy.mockRestore();
     for (const fixture of [other, f]) {
+      await db.agent.updateMany({ where: { orgId: fixture.org.id }, data: { primarySkillId: null } });
+      await db.skill.updateMany({ where: { orgId: fixture.org.id }, data: { currentVersionId: null } });
+      await db.skillVersion.deleteMany({ where: { skill: { orgId: fixture.org.id } } });
+      await db.skill.deleteMany({ where: { orgId: fixture.org.id } });
       await db.specDraft.deleteMany({ where: { orgId: fixture.org.id } });
       await db.specVersion.deleteMany({ where: { orgId: fixture.org.id } });
       await fixture.clean();
@@ -69,27 +81,39 @@ describe.skipIf(!localMinutesDb)("Module 4 role-play saves (real Postgres locks)
     for (const [key, text] of previousFiles) expect(files.get(key)).toBe(text);
   });
 
-  test("saveSettings concurrent with a builder save re-reads under its lock and never restores the old script or bumps version", async () => {
+  test("settings changed during builder publication are preserved by refusal and explicit retry", async () => {
     const original = await saveRoleplay(f.org.id, builder("Old script"), f.roleplay.slug);
     let entered!: () => void; let release!: () => void;
     const writing = new Promise<void>((resolve) => { entered = resolve; });
     const proceed = new Promise<void>((resolve) => { release = resolve; });
     const lock = database.withLock;
-    let calls = 0; let readOld = false;
-    spies.push(spyOn(database, "withLock").mockImplementation((keys, work, options) => {
+    let calls = 0;
+    spies.push(spyOn(database, "withLock").mockImplementation(async (keys, work, options) => {
       expect(keys).toEqual([`agent:${f.roleplay.slug}`]);
-      const first = ++calls === 1;
-      if (!first) { readOld = true; release(); }
-      return lock(keys, async (tx) => {
-        if (first) { entered(); await proceed; }
-        return work(tx);
-      }, options);
+      if (++calls === 2) { entered(); await proceed; }
+      return lock(keys, work, options);
     }));
-    const save = saveRoleplay(f.org.id, builder("New script"), f.roleplay.slug);
-    await writing;
-    const [, settings] = await Promise.all([save, caller().builder.saveSettings({ slug: f.roleplay.slug, before })]);
-    expect(readOld).toBe(true); expect(settings).toEqual({ ok: true });
-    const current = await row(); expect(current.version).toBe(original.version + 1);
+    const save = Promise.allSettled([saveRoleplay(f.org.id, builder("New script"), f.roleplay.slug)]);
+    try {
+      await writing;
+      expect(await caller().builder.saveSettings({ slug: f.roleplay.slug, before })).toEqual({ ok: true });
+      expect(await row()).toMatchObject({ version: original.version, data: { before, skill: expect.stringContaining("Old script") } });
+    } finally {
+      release();
+    }
+    const [outcome] = await save;
+    expect(outcome.status).toBe("rejected");
+    if (outcome.status === "rejected") {
+      const error: unknown = outcome.reason;
+      expect(error).toMatchObject({ code: "skill_publication_superseded", status: 409 });
+    }
+    const skill = await db.skill.findUniqueOrThrow({ where: { orgId_ownerSlug: { orgId: f.org.id, ownerSlug: f.roleplay.slug } }, include: { versions: { orderBy: { version: "desc" } } } });
+    const failed = skill.versions[0];
+    expect(failed.status).toBe("failed");
+    const retry = await saveRoleplay(f.org.id, builder("New script"), f.roleplay.slug);
+    const current = await row(); expect(current.version).toBe(retry.version); expect(current.version).toBeGreaterThan(original.version);
+    expect((await db.skill.findUniqueOrThrow({ where: { id: skill.id } })).currentVersionId).toBe(failed.id);
+    expect(await db.skillVersion.count({ where: { skillId: skill.id } })).toBe(2);
     expect(current.data).toMatchObject({ before, source: ROLEPLAY_SOURCE });
     expect((current.data as Record<string, unknown>).skill).toContain("New script");
     expect((current.data as Record<string, unknown>).skill).not.toContain("Old script");
@@ -107,6 +131,48 @@ describe.skipIf(!localMinutesDb)("Module 4 role-play saves (real Postgres locks)
     const beforeRow = await row();
     await expect(caller().builder.saveSettings({ slug: f.roleplay.slug, before })).rejects.toMatchObject({ code: "NOT_FOUND", cause: { code: "not_found", status: 404 } });
     const after = await row(); expect(after.data).toEqual(beforeRow.data); expect(after.version).toBe(beforeRow.version); expect(after.archivedAt).not.toBeNull();
+  });
+
+  test("settings cannot mutate Agent data or collide with the scenario namespace while final publication writes providers under lock", async () => {
+    const original = await saveRoleplay(f.org.id, builder("Old script"), f.roleplay.slug);
+    const oldItems = items.get(original.version);
+    let entered!: () => void; let release!: () => void; let attempted!: () => void;
+    const indexing = new Promise<void>((resolve) => { entered = resolve; });
+    const proceed = new Promise<void>((resolve) => { release = resolve; });
+    const settingsRequested = new Promise<void>((resolve) => { attempted = resolve; });
+    let pendingVersion = 0; let settingsEntered = false;
+    spies.push(spyOn(MainCollectionService, "writeScenarioItems").mockImplementationOnce(async (_org, _slug, _scenario, version, input) => {
+      pendingVersion = version; items.set(version, input);
+      entered(); await proceed; return input.length;
+    }));
+    const publish = Promise.allSettled([saveRoleplay(f.org.id, builder("New script"), f.roleplay.slug)]);
+    let settings: ReturnType<ReturnType<typeof caller>["builder"]["saveSettings"]> | undefined;
+    try {
+      await indexing;
+      const lock = database.withLock;
+      spies.push(spyOn(database, "withLock").mockImplementation((keys, work, options) => {
+        expect(keys).toEqual([`agent:${f.roleplay.slug}`]); attempted();
+        return lock(keys, async (tx) => { settingsEntered = true; return work(tx); }, options);
+      }));
+      settings = caller().builder.saveSettings({ slug: f.roleplay.slug, before });
+      await settingsRequested;
+      expect(settingsEntered).toBe(false);
+      expect(await row()).toMatchObject({ version: original.version, data: { skill: expect.stringContaining("Old script"), artifacts: original.artifacts } });
+      expect(pendingVersion).toBeGreaterThan(original.version);
+      expect(items.get(original.version)).toEqual(oldItems);
+      expect(items.get(pendingVersion)).toEqual(expect.arrayContaining([expect.objectContaining({ text: "New script" })]));
+    } finally {
+      release();
+    }
+    const [outcome] = await publish;
+    expect(outcome.status).toBe("fulfilled");
+    if (outcome.status === "rejected") throw outcome.reason;
+    if (!settings) throw new Error("Settings write was not started");
+    expect(await settings).toEqual({ ok: true });
+    expect(settingsEntered).toBe(true);
+    expect(outcome.value.version).toBe(pendingVersion);
+    expect(await row()).toMatchObject({ version: pendingVersion, data: { before, skill: expect.stringContaining("New script"), artifacts: outcome.value.artifacts } });
+    expect((await versions()).map((version) => version.version)).toEqual([1, original.version]);
   });
 
   test.each(["builder", "twin"] as const)("refuses invalid_input on saveSpec for a %s; nothing is written", async (kind) => {

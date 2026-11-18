@@ -38,6 +38,7 @@ const classification: Record<string, Guard> = {
   "GET eve/v1/[[...path]]": "studio",
   "POST eve/v1/[[...path]]": "studio",
   "GET health": "public",
+  "GET skills/[slug]": "studio",
   "POST internal/bench/session": "internal/cron secret",
   "GET internal/billing/check": "internal/cron secret",
   "POST internal/billing/check": "internal/cron secret",
