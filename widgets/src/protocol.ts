@@ -1,6 +1,6 @@
 export const PROTOCOL_VERSION = 1;
 export const MIN_WIDGET_HEIGHT = 280;
-export const MAX_WIDGET_HEIGHT = 580;
+export const MAX_WIDGET_HEIGHT = 4096;
 
 export type WidgetMessage =
   | { source: "trainertwin-widget"; version: 1; type: "ready" }

@@ -190,9 +190,14 @@ transcripts or credentials. Public/domain identifiers are not secrets and domain
 - [ ] Hover expands the launcher; crossing into the frame keeps it open; leaving shrinks it only when no call is active.
       Connecting/live calls remain open across pointer leave, Escape and API minimise; no minus button is shown.
       Name entry, keyboard/touch opening, inactive minimise/Escape and reduced motion work. Old inline snippets are rejected.
-- [ ] Verify square portrait, no call header/speaking labels, latest-two plain-text captions and expanded history.
+- [ ] Verify 340px maximum width, full-width portrait in all phases, and 16px portrait/form insets.
+      Autofill keeps the dark field surface; verify with real saved-profile autofill on supported browsers.
+      No call header/speaking labels; compact captions show the latest two entries as plain text.
       Agent and microphone audio drive independent green/orange glows; mute silences the microphone glow.
       Call-start gesture unlocks audio without a sound button; browser-blocked playback can recover by tapping the widget.
+- [ ] Verify failed starts show a friendly failure/retry view, not a thank-you or raw transport/provider error.
+      The card must not scroll or stop at a fixed 580px height; on short screens portrait height adapts while
+      retaining full width. Mute/end remain visible in their own row above the footer, including reconnect/blocked audio.
 - [ ] Opening/minimising alone creates no billable session or microphone prompt.
 - [ ] Name is required; microphone denial creates no call. No text/upload/camera/screen-share controls appear.
 - [ ] Third-party cookies blocked: name → voice call still works.

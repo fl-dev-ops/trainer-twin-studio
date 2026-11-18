@@ -164,6 +164,40 @@ async function begin(hosted: Frame, name = "  Visitor Name  ") {
   await hosted.getByRole("button", { name: "Start voice call", exact: true }).click();
 }
 
+async function expectPortraitInsets(hosted: Frame) {
+  await expect.poll(() => hosted.locator(".tt-portrait-stage").evaluate((node) => {
+    const card = document.querySelector(".tt-card")!.getBoundingClientRect();
+    const portrait = node.getBoundingClientRect();
+    return {
+      left: Math.round(portrait.left - card.left),
+      right: Math.round(card.right - portrait.right),
+      top: Math.round(portrait.top - card.top),
+    };
+  })).toEqual({ left: 16, right: 16, top: 16 });
+}
+
+async function expectNoCardScroll(hosted: Frame) {
+  await expect.poll(() => hosted.evaluate(() => {
+    const card = document.querySelector(".tt-card");
+    const body = document.querySelector(".tt-body");
+    if (!card || !body) return false;
+    return card.getBoundingClientRect().height <= innerHeight + 1
+      && body.scrollHeight <= body.clientHeight + 1
+      && document.documentElement.scrollHeight <= innerHeight + 1;
+  })).toBe(true);
+}
+
+async function expectCallControlsAboveFooter(hosted: Frame) {
+  for (const name of ["Mute microphone", "End call"]) {
+    await expect.poll(() => hosted.getByRole("button", { name, exact: true }).evaluate((node) => {
+      const bounds = node.getBoundingClientRect();
+      const footer = document.querySelector(".tt-footer")!.getBoundingClientRect();
+      return bounds.top >= 0 && bounds.bottom <= footer.top && footer.bottom <= innerHeight + 1;
+    })).toBe(true);
+  }
+  await expectNoCardScroll(hosted);
+}
+
 async function expectOnlySafeMessages(page: Page) {
   const messages = await page.evaluate(() => window.__widgetMessages ?? []);
   expect(messages.length).toBeGreaterThan(0);
@@ -171,7 +205,7 @@ async function expectOnlySafeMessages(page: Page) {
     const parsed = z.object({
       source: z.literal("trainertwin-widget"), version: z.literal(1),
       type: z.enum(["ready", "close", "status", "interaction", "resize"]), active: z.boolean().optional(), editing: z.boolean().optional(),
-      height: z.number().int().min(280).max(580).optional(),
+      height: z.number().int().min(280).max(4096).optional(),
     }).strict().parse(value);
     if (parsed.type === "status") expect(typeof parsed.active).toBe("boolean");
     if (parsed.type === "interaction") expect(typeof parsed.editing).toBe("boolean");
@@ -248,7 +282,7 @@ test.describe.serial("cross-origin hosted voice widget", () => {
     await expectOnlySafeMessages(page);
   });
 
-  test("denied microphone never reaches bootstrap or charged start", async ({ page, context }) => {
+  test("denied microphone never reaches bootstrap or charged start", async ({ page, context }, testInfo) => {
     await environment(context, { denyMicrophone: true });
     const calls = await simulatedCalls(page);
     const hosted = await open(page);
@@ -256,7 +290,10 @@ test.describe.serial("cross-origin hosted voice widget", () => {
     await expect(hosted.getByRole("alert")).toContainText("Microphone access is blocked");
     expect(await hosted.evaluate(() => window.__widgetFetches)).toEqual([]);
     expect(calls.starts).toHaveLength(0);
-    await expect(hosted.getByRole("button", { name: "Start a new call", exact: true })).toBeEnabled();
+    await expect(hosted.getByRole("heading", { name: "We couldn’t start the conversation.", exact: true })).toBeVisible();
+    await expect(hosted.getByRole("button", { name: "Try again", exact: true })).toBeEnabled();
+    await expectNoCardScroll(hosted);
+    await page.locator("[data-trainertwin-widget] .floating").screenshot({ path: testInfo.outputPath("widget-microphone-denied.png"), animations: "disabled" });
   });
 
   test("hover keeps the whole surface open, protects name entry and shrinks without starting a call", async ({ page, context }, testInfo) => {
@@ -294,7 +331,7 @@ test.describe.serial("cross-origin hosted voice widget", () => {
     await expectOnlySafeMessages(page);
   });
 
-  test("portrait-led design keeps name entry, captions and controls usable across call states", async ({ page, context }, testInfo) => {
+  test("portrait-led design keeps name entry, captions and controls usable across call states", async ({ page, context, browserName }, testInfo) => {
     await page.setViewportSize({ width: 1280, height: 1000 });
     await environment(context);
     const calls = await simulatedCalls(page, { pendingStart: true });
@@ -341,7 +378,42 @@ test.describe.serial("cross-origin hosted voice widget", () => {
     expect(await hosted.locator(".tt-card").evaluate((node) => getComputedStyle(node).backgroundColor)).toBe("rgb(27, 28, 25)");
     expect(await hosted.getByRole("button", { name: "Start voice call", exact: true }).evaluate((node) => node.getBoundingClientRect().bottom <= innerHeight)).toBe(true);
     await expect.poll(() => hosted.locator(".tt-card").evaluate((node) => Math.abs(innerHeight - node.getBoundingClientRect().height))).toBeLessThanOrEqual(2);
+    await expect.poll(() => page.locator("[data-trainertwin-widget] .floating").evaluate((node) => Math.round(node.getBoundingClientRect().width))).toBe(340);
+    await expectPortraitInsets(hosted);
+    await expectNoCardScroll(hosted);
+    expect(await hosted.locator(".tt-prejoin").evaluate((node) => {
+      const form = node.getBoundingClientRect();
+      const card = document.querySelector(".tt-card")!.getBoundingClientRect();
+      return { left: Math.round(form.left - card.left), right: Math.round(card.right - form.right) };
+    })).toEqual({ left: 16, right: 16 });
     await page.locator("[data-trainertwin-widget] .floating").screenshot({ path: testInfo.outputPath("widget-desktop-portrait.png"), animations: "disabled" });
+    if (browserName === "chromium") {
+      const client = await context.newCDPSession(page);
+      try {
+        await client.send("DOM.enable");
+        await client.send("CSS.enable");
+        await hosted.getByLabel("Your name", { exact: true }).fill("Surya Umapathy");
+        const { root } = await client.send("DOM.getDocument", { depth: -1, pierce: true });
+        function findNameField(node: typeof root): typeof root | undefined {
+          if (node.nodeName === "INPUT" && node.attributes?.includes("tt-visitor-name")) return node;
+          for (const child of [...(node.children ?? []), ...(node.shadowRoots ?? []), ...(node.contentDocument ? [node.contentDocument] : [])]) {
+            const found = findNameField(child);
+            if (found) return found;
+          }
+        }
+        const field = findNameField(root);
+        if (!field) throw new Error("Expected hosted name field in the browser DOM");
+        await client.send("CSS.forcePseudoState", { nodeId: field.nodeId, forcedPseudoClasses: ["autofill"] });
+        await expect(hosted.getByLabel("Your name", { exact: true })).toHaveValue("Surya Umapathy");
+        expect(await hosted.getByLabel("Your name", { exact: true }).evaluate((node) => node.matches(":autofill"))).toBe(true);
+        expect(await hosted.getByLabel("Your name", { exact: true }).evaluate((node) => getComputedStyle(node).backgroundClip)).toBe("text");
+        expect(await hosted.locator(".tt-name-field").evaluate((node) => getComputedStyle(node).backgroundColor)).toBe("rgb(9, 10, 8)");
+        await page.locator("[data-trainertwin-widget] .floating").screenshot({ path: testInfo.outputPath("widget-autofilled.png"), animations: "disabled" });
+        await client.send("CSS.forcePseudoState", { nodeId: field.nodeId, forcedPseudoClasses: [] });
+      } finally {
+        await client.detach();
+      }
+    }
     await expect(hosted.getByRole("button", { name: "Minimise voice widget", exact: true })).toHaveCount(0);
     await begin(hosted, "Design review");
     await expect.poll(() => calls.starts.length).toBe(1);
@@ -349,6 +421,8 @@ test.describe.serial("cross-origin hosted voice widget", () => {
     await expect(hosted.locator("header")).toHaveCount(0);
     expect(await photo.evaluate((node) => getComputedStyle(node).objectFit)).toBe("cover");
     expect(await hosted.locator(".tt-portrait-stage").evaluate((node) => Math.abs(node.clientWidth - node.clientHeight))).toBeLessThanOrEqual(1);
+    await expectPortraitInsets(hosted);
+    await expectCallControlsAboveFooter(hosted);
     await page.locator("[data-trainertwin-widget] .floating").screenshot({ path: testInfo.outputPath("widget-starting-call.png"), animations: "disabled" });
     calls.release();
     await expect(hosted.getByRole("button", { name: "Mute microphone", exact: true })).toBeEnabled();
@@ -360,6 +434,7 @@ test.describe.serial("cross-origin hosted voice widget", () => {
     });
     await expect(hosted.locator(".tt-card")).toHaveAttribute("data-agent-state", "speaking");
     await expect(hosted.locator(".tt-status")).toBeHidden();
+    await expectPortraitInsets(hosted);
     await expect(hosted.getByRole("button", { name: "Turn on sound", exact: true })).toHaveCount(0);
     await hosted.evaluate(() => {
       window.__widgetRoom?.attachAudio();
@@ -381,6 +456,13 @@ test.describe.serial("cross-origin hosted voice widget", () => {
       return color !== undefined && color[0] > color[1];
     })).toBe(true);
     await page.locator("[data-trainertwin-widget] .floating").screenshot({ path: testInfo.outputPath("widget-visitor-speaking.png"), animations: "disabled" });
+    await page.setViewportSize({ width: 1280, height: 480 });
+    await expectCallControlsAboveFooter(hosted);
+    await page.locator("[data-trainertwin-widget] .floating").screenshot({ path: testInfo.outputPath("widget-short-call.png"), animations: "disabled" });
+    await hosted.getByRole("button", { name: "Expand captions", exact: true }).click();
+    await expectCallControlsAboveFooter(hosted);
+    await hosted.getByRole("button", { name: "Collapse captions", exact: true }).click();
+    await page.setViewportSize({ width: 1280, height: 1000 });
     await hosted.getByRole("button", { name: "Expand captions", exact: true }).click();
     await expect(hosted.getByRole("button", { name: "Collapse captions", exact: true })).toHaveAttribute("aria-expanded", "true");
     await expect(hosted.locator(".tt-caption:visible")).toHaveCount(3);
@@ -396,6 +478,8 @@ test.describe.serial("cross-origin hosted voice widget", () => {
     await expect(hosted.getByRole("heading", { name: "Thanks for the conversation.", exact: true })).toBeVisible();
     await expect(hosted.getByRole("button", { name: "Start a new call", exact: true })).toBeEnabled();
     await expect.poll(() => hosted.locator(".tt-card").evaluate((node) => Math.abs(innerHeight - node.getBoundingClientRect().height))).toBeLessThanOrEqual(2);
+    await expectPortraitInsets(hosted);
+    await expectNoCardScroll(hosted);
     await page.locator("[data-trainertwin-widget] .floating").screenshot({ path: testInfo.outputPath("widget-ended-call.png"), animations: "disabled" });
     await hosted.getByRole("button", { name: "Start a new call", exact: true }).click();
     await expect(hosted.getByLabel("Your name", { exact: true })).toBeFocused();
@@ -408,10 +492,46 @@ test.describe.serial("cross-origin hosted voice widget", () => {
       return body !== null && node.getBoundingClientRect().bottom <= body.getBoundingClientRect().bottom;
     })).toBe(true);
     expect(await hosted.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await expectPortraitInsets(hosted);
     await page.locator("[data-trainertwin-widget] .floating").screenshot({ path: testInfo.outputPath("widget-small-portrait.png"), animations: "disabled" });
     await photo.evaluate((node) => node.dispatchEvent(new Event("error")));
     await expect(photo).toHaveCount(0);
     await expect(hosted.locator(".tt-hero-portrait")).toHaveText("ET");
+    await expectOnlySafeMessages(page);
+  });
+
+  test("a failed start shows a friendly retry screen without scrolling or claiming a completed call", async ({ page, context }, testInfo) => {
+    await environment(context);
+    await page.route((url) => url.pathname === `/embed/${agentId}`, async (route) => {
+      const response = await route.fetch();
+      const html = await response.text();
+      await route.fulfill({ response, body: html.replace('"photoUrl":null', `"photoUrl":"${widgetOrigin()}/vasanth.png"`) });
+    });
+    const calls = await simulatedCalls(page);
+    const failedPath = `**${sessionsPath()}`;
+    await page.route(failedPath, (route) => route.abort("failed"));
+    const hosted = await open(page);
+    await begin(hosted, "Retry visitor");
+    await expect(hosted.getByRole("heading", { name: "We couldn’t start the conversation.", exact: true })).toBeVisible();
+    await expect(hosted.getByRole("alert")).toHaveText("Please try again in a little while.");
+    await expect(hosted.getByRole("heading", { name: "Thanks for the conversation.", exact: true })).toHaveCount(0);
+    await expect(hosted.locator(".tt-error")).toBeHidden();
+    await expect(hosted.getByRole("button", { name: "Try again", exact: true })).toBeEnabled();
+    await expectPortraitInsets(hosted);
+    await expectNoCardScroll(hosted);
+    await page.locator("[data-trainertwin-widget] .floating").screenshot({ path: testInfo.outputPath("widget-start-failed.png"), animations: "disabled" });
+    await page.setViewportSize({ width: 1280, height: 480 });
+    await expectNoCardScroll(hosted);
+    await page.locator("[data-trainertwin-widget] .floating").screenshot({ path: testInfo.outputPath("widget-short-failed.png"), animations: "disabled" });
+    await page.unroute(failedPath);
+    await hosted.getByRole("button", { name: "Try again", exact: true }).click();
+    await expect(hosted.getByLabel("Your name", { exact: true })).toHaveValue("Retry visitor");
+    await begin(hosted, "Retry visitor");
+    await expect(hosted.getByRole("button", { name: "Mute microphone", exact: true })).toBeEnabled();
+    await expectCallControlsAboveFooter(hosted);
+    await hosted.getByRole("button", { name: "End call", exact: true }).click();
+    await expect.poll(() => calls.ends.length).toBe(1);
+    expect(calls.starts).toHaveLength(1);
     await expectOnlySafeMessages(page);
   });
 
@@ -593,10 +713,10 @@ test.describe.serial("cross-origin hosted voice widget", () => {
     const hosted = await open(page);
     expect(new URL(hosted.url()).searchParams.get("mode")).toBe("floating");
     await begin(hosted);
-    await expect(hosted.getByRole("alert")).toHaveText("The call service returned an unreadable response. Please try again.");
+    await expect(hosted.getByRole("alert")).toHaveText("Please try again in a little while.");
     expect(calls.starts).toHaveLength(1);
-    await expect(hosted.getByRole("button", { name: "Start a new call", exact: true })).toBeEnabled();
-    await hosted.getByRole("button", { name: "Start a new call", exact: true }).click();
+    await expect(hosted.getByRole("button", { name: "Try again", exact: true })).toBeEnabled();
+    await hosted.getByRole("button", { name: "Try again", exact: true }).click();
     await begin(hosted, "Second attempt");
     await expect.poll(() => calls.starts.length).toBe(2);
     await expect(hosted.getByRole("alert")).not.toContainText("private credential");

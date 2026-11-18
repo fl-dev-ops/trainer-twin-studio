@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseConfig, parseSession, remainingCallMs, visitorName } from "../src/widget";
+import { callStartError, parseConfig, parseSession, remainingCallMs, visitorName } from "../src/widget";
 
 const config = {
   agentId: "agent_123", parentOrigin: "https://customer.example", name: "Asha's twin",
@@ -8,6 +8,13 @@ const config = {
 };
 
 describe("hosted widget input boundaries", () => {
+  test("keeps start failures friendly without exposing transport details", () => {
+    for (const failure of [new TypeError("Failed to fetch"), new Error("private provider credential"), null]) {
+      expect(callStartError(failure)).toBe("Please try again in a little while.");
+    }
+    expect(callStartError(new DOMException("denied", "NotAllowedError"))).toContain("Microphone access is blocked");
+    expect(callStartError(new DOMException("missing", "NotFoundError"))).toContain("No microphone was found");
+  });
   test("accepts the hosted JSON contract without requiring a portrait", () => {
     expect(parseConfig(config).photoUrl).toBeNull();
     expect(parseConfig(config).parentOrigin).toBe(config.parentOrigin);

@@ -9,7 +9,7 @@
 }
 
 * { box-sizing: border-box; }
-body { margin: 0; }
+body { margin: 0; overflow: hidden; }
 [hidden] { display: none !important; }
 button, input { font: inherit; }
 button { cursor: pointer; touch-action: manipulation; }
@@ -26,12 +26,11 @@ p, h1, h2 { margin: 0; }
   --tt-accent: #111111;
   --tt-action: #f2eee5;
   height: auto;
-  max-height: 100svh;
   width: 100%;
   display: flex;
   flex-direction: column;
   background: #1b1c19;
-  border: 1px solid #ffffff1c;
+  box-shadow: inset 0 0 0 1px #ffffff1c;
   border-radius: 28px;
   overflow: hidden;
   position: relative;
@@ -50,23 +49,20 @@ p, h1, h2 { margin: 0; }
 .tt-icon-button:hover { background: #ffffff0d; border-color: #ffffff1c; }
 .tt-body {
   min-height: 0;
-  flex: 0 1 auto;
+  flex: none;
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-width: thin;
-  padding: 12px 24px 20px;
+  padding: 16px;
   gap: 16px;
   position: relative;
   z-index: 1;
 }
-.tt-hero { display: flex; align-items: center; flex-direction: column; text-align: center; gap: 12px; }
+.tt-hero { display: flex; align-items: center; flex-direction: column; text-align: center; gap: 8px; }
 .tt-portrait-stage {
   position: relative;
   display: grid;
   place-items: center;
-  width: min(100%, 280px);
+  width: 100%;
   aspect-ratio: 1;
   flex-shrink: 0;
   border-radius: 20px;
@@ -108,6 +104,7 @@ p, h1, h2 { margin: 0; }
 .tt-introduction { font-size: 23px; line-height: 28px; letter-spacing: -.5px; font-weight: 500; overflow-wrap: anywhere; }
 .tt-description { max-width: 440px; color: #b7b8ad; font-size: 13px; line-height: 20px; overflow-wrap: anywhere; }
 .tt-prejoin { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 52px; align-items: center; gap: 12px; width: 100%; align-self: center; }
+.tt-name-field { min-width: 0; position: relative; background: #090a08; border-radius: 999px; }
 .tt-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .tt-input {
   width: 100%;
@@ -125,6 +122,7 @@ p, h1, h2 { margin: 0; }
 .tt-input::placeholder { color: #a2a69a; font-size: 13px; }
 .tt-input:focus-visible { outline: none; box-shadow: 0 0 0 2px #d7e5c5, 0 4px 16px #0005; }
 .tt-input[aria-invalid="true"] { box-shadow: 0 0 0 2px #eea59a; }
+.tt-input:is(:autofill, :-webkit-autofill) { background-clip: text; -webkit-background-clip: text; -webkit-text-fill-color: #f2eee5; caret-color: #f2eee5; }
 .tt-start { display: grid; place-items: center; width: 52px; height: 52px; padding: 0; border: 0; border-radius: 50%; background: #090a08; color: #f2eee5; box-shadow: 0 4px 16px #0003; transition: background .2s; }
 .tt-start:hover:not(:disabled) { background: #30332c; }
 .tt-primary {
@@ -156,7 +154,7 @@ p, h1, h2 { margin: 0; }
   position: relative;
   z-index: 1;
 }
-.tt-call { display: flex; flex-direction: column; gap: 12px; flex: 1; min-height: 172px; width: 100%; align-self: center; }
+.tt-call { display: flex; flex-direction: column; gap: 12px; width: 100%; align-self: center; }
 .tt-call-meta { position: absolute; top: 16px; right: 16px; z-index: 2; display: flex; align-items: center; gap: 8px; }
 .tt-countdown { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); color: #c8cbbd; font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .tt-countdown.tt-urgent { position: static; width: auto; height: auto; overflow: visible; clip-path: none; color: #ffb3a6; }
@@ -190,7 +188,7 @@ p, h1, h2 { margin: 0; }
 .tt-caption:not(:last-child) { opacity: .45; }
 .tt-caption-you { color: #b7b8ad; }
 .tt-caption[data-final="false"] .tt-caption-text { opacity: .75; }
-.tt-controls { display: flex; justify-content: center; gap: 24px; padding-top: 8px; margin-top: auto; }
+.tt-controls { display: flex; justify-content: center; gap: 24px; padding: 0 16px 16px; flex-shrink: 0; position: relative; z-index: 1; }
 .tt-control { display: flex; align-items: center; flex-direction: column; gap: 8px; }
 .tt-control-label { display: none; }
 .tt-secondary, .tt-end {
@@ -216,12 +214,10 @@ p, h1, h2 { margin: 0; }
 .tt-error { border: 1px solid #eda59844; border-radius: 12px; padding: 12px; color: #ffc6ba; background: #512e2633; font-size: 12px; line-height: 20px; overflow-wrap: anywhere; }
 .tt-config-error { padding: 24px; color: #ffc6ba; background: #1b1c19; font-size: 14px; line-height: 24px; }
 .tt-waves { position: absolute; inset-inline: 0; bottom: -32px; width: 100%; height: 224px; filter: blur(24px); pointer-events: none; }
-.tt-captions-expanded .tt-portrait-stage { display: none; }
-.tt-captions-expanded .tt-transcript { flex: 1; height: auto; min-height: 240px; overflow-y: auto; mask-image: none; justify-content: flex-start; }
+.tt-captions-expanded .tt-hero { display: none; }
+.tt-captions-expanded .tt-transcript { height: min(360px, max(0px, calc(100svh - 180px))); overflow-y: auto; mask-image: none; justify-content: flex-start; }
 .tt-captions-expanded .tt-caption { display: block; overflow: visible; opacity: 1; }
 .tt-captions-expanded .tt-call { padding-top: 44px; }
-.tt-card[data-phase="connecting"], .tt-card[data-phase="live"] { height: 100%; }
-.tt-card[data-phase="connecting"] .tt-body, .tt-card[data-phase="live"] .tt-body { flex: 1; }
 .tt-portrait-stage, .tt-introduction, .tt-prejoin > *, .tt-call, .tt-finished, .tt-status, .tt-footer, .tt-error {
   opacity: 1;
   transform: translateY(0);
@@ -235,26 +231,18 @@ p, h1, h2 { margin: 0; }
 .tt-card[data-visible="false"] .tt-status,
 .tt-card[data-visible="false"] .tt-footer,
 .tt-card[data-visible="false"] .tt-error { opacity: 0; transform: translateY(12px); }
-.tt-card[data-phase="ready"] .tt-body { padding: 12px 12px 16px; gap: 20px; }
-.tt-card[data-phase="ready"] .tt-portrait-stage { width: 100%; }
-.tt-card[data-phase="ready"] .tt-hero { gap: 20px; }
-.tt-card[data-phase="ready"] .tt-introduction { padding-inline: 12px; font-size: 22px; line-height: 28px; }
-.tt-card[data-phase="ready"] .tt-prejoin { padding-inline: 12px; }
+.tt-card[data-phase="ready"] .tt-hero { gap: 16px; }
+.tt-card[data-phase="ready"] .tt-introduction { font-size: 22px; line-height: 28px; }
 @keyframes tt-caption-in { from { transform: translateY(12px); } to { transform: translateY(0); } }
 
 @media (max-width: 340px) {
-  .tt-body { padding: 8px 16px 16px; gap: 16px; }
   .tt-introduction { font-size: 21px; line-height: 28px; }
 }
 @media (max-height: 560px) {
   .tt-body { gap: 16px; }
-  .tt-portrait-stage { width: min(100%, 180px); }
   .tt-introduction { font-size: 20px; line-height: 24px; }
   .tt-description { font-size: 12px; line-height: 16px; }
   .tt-card[data-phase="ready"] .tt-body, .tt-card[data-phase="ready"] .tt-hero { gap: 16px; }
-}
-@media (min-height: 561px) and (max-height: 660px) {
-  .tt-portrait-stage { width: min(100%, 240px); }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }

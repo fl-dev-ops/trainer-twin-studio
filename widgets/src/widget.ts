@@ -17,7 +17,7 @@ type Config = {
 };
 type EndCapability = { id: string; embedToken: string };
 type Session = EndCapability & { secondsLeft: number; endsAt?: number; serverTime?: number };
-type Phase = "ready" | "connecting" | "live" | "ended";
+type Phase = "ready" | "connecting" | "live" | "ended" | "failed";
 type AgentState = "listening" | "thinking" | "speaking";
 
 function record(value: unknown): value is Record<string, unknown> {
@@ -146,6 +146,12 @@ function mediaError(failure: unknown): string {
   return "Could not start the voice call. Please try again.";
 }
 
+export function callStartError(failure: unknown): string {
+  if (failure instanceof WidgetRequestError) return failure.message;
+  if (failure instanceof Error && ["NotAllowedError", "SecurityError", "NotFoundError", "NotReadableError"].includes(failure.name)) return mediaError(failure);
+  return "Please try again in a little while.";
+}
+
 function mount(root: HTMLElement, config: Config) {
   let phase: Phase = "ready";
   let agentState: AgentState = "listening";
@@ -162,6 +168,8 @@ function mount(root: HTMLElement, config: Config) {
   let muted = false;
   let reconnecting = false;
   let mutePending = false;
+  let connected = false;
+  let finishMessage: string | undefined;
   let visitorToken: string | undefined;
   let storageAvailable = true;
   const tokenKey = `trainertwin-widget:visitor:${config.agentId}:${config.parentOrigin}`;
@@ -242,7 +250,9 @@ function mount(root: HTMLElement, config: Config) {
   start.title = "Start voice call";
   start.type = "submit";
   start.disabled = true;
-  form.append(label, name, start);
+  const nameField = element("div", "tt-name-field");
+  nameField.append(label, name);
+  form.append(nameField, start);
 
   const call = element("section", "tt-call");
   call.hidden = true;
@@ -298,7 +308,7 @@ function mount(root: HTMLElement, config: Config) {
   muteControl.append(mute, muteLabel);
   endControl.append(end, element("span", "tt-control-label", "End call"));
   controls.append(muteControl, endControl);
-  call.append(transcript, playbackHint, controls);
+  call.append(transcript, playbackHint);
 
   const finished = element("section", "tt-finished");
   finished.hidden = true;
@@ -321,14 +331,17 @@ function mount(root: HTMLElement, config: Config) {
   error.setAttribute("role", "alert");
   const footer = element("footer", "tt-footer", "Powered by TrainerTwin");
   body.append(hero, form, call, finished, error);
-  card.append(waves, callMeta, body, footer);
+  card.append(waves, callMeta, body, controls, footer);
   root.replaceChildren(card);
   card.dataset.visible = "false";
   let reportedHeight = 0;
   function reportSize() {
     if (!initialized || destroyed || window.parent === window) return;
-    const natural = phase === "connecting" || phase === "live" ? MAX_WIDGET_HEIGHT
-      : body.scrollHeight + footer.offsetHeight + 2;
+    const portraitHeight = portraitStage.hidden || card.classList.contains("tt-captions-expanded") ? 0 : portraitStage.offsetHeight;
+    const chromeHeight = card.offsetHeight - portraitHeight;
+    const squareHeight = card.classList.contains("tt-captions-expanded") ? 0 : portraitStage.offsetWidth;
+    const natural = chromeHeight + squareHeight;
+    if (squareHeight) portraitStage.style.height = `${Math.max(0, Math.min(squareHeight, innerHeight - chromeHeight))}px`;
     const height = Math.max(MIN_WIDGET_HEIGHT, Math.min(MAX_WIDGET_HEIGHT, Math.ceil(natural)));
     if (height === reportedHeight) return;
     reportedHeight = height;
@@ -337,6 +350,8 @@ function mount(root: HTMLElement, config: Config) {
   const sizeObserver = new ResizeObserver(reportSize);
   sizeObserver.observe(body);
   sizeObserver.observe(footer);
+  sizeObserver.observe(controls);
+  window.addEventListener("resize", reportSize);
   const audioContainer = document.getElementById("trainertwin-audio") ?? element("div", "tt-audio");
   audioContainer.hidden = true;
   const ownsAudioContainer = !audioContainer.isConnected;
@@ -396,7 +411,14 @@ function mount(root: HTMLElement, config: Config) {
     form.hidden = phase !== "ready";
     call.hidden = phase !== "connecting" && phase !== "live";
     callMeta.hidden = call.hidden;
-    finished.hidden = phase !== "ended";
+    controls.hidden = call.hidden;
+    finished.hidden = phase !== "ended" && phase !== "failed";
+    finishedTitle.textContent = phase === "failed" ? "We couldn’t start the conversation." : "Thanks for the conversation.";
+    finishedText.textContent = phase === "failed" ? finishMessage ?? "Please try again in a little while."
+      : "Your call has ended. You can start a new conversation whenever you’re ready.";
+    if (phase === "failed") finishedText.setAttribute("role", "alert");
+    else finishedText.removeAttribute("role");
+    retry.textContent = phase === "failed" ? "Try again" : "Start a new call";
     introduction.hidden = phase !== "ready";
     const connecting = phase === "connecting" || (phase === "live" && reconnecting);
     status.hidden = !connecting;
@@ -499,10 +521,11 @@ function mount(root: HTMLElement, config: Config) {
     const closingRoom = room;
     session = null;
     room = null;
-    phase = "ended";
+    finishMessage = message;
+    phase = message && !connected ? "failed" : "ended";
     post("status", false);
     render();
-    if (message && !unloading) showError(message);
+    if (message && !unloading && phase !== "failed") showError(message);
     const results = await Promise.allSettled([
       closingSession ? closeSession(closingSession) : Promise.resolve(null),
       closingRoom ? disconnect(closingRoom) : Promise.resolve(),
@@ -633,6 +656,8 @@ function mount(root: HTMLElement, config: Config) {
     muted = false;
     reconnecting = false;
     agentState = "listening";
+    connected = false;
+    finishMessage = undefined;
     post("status", true);
     render();
     try {
@@ -702,11 +727,12 @@ function mount(root: HTMLElement, config: Config) {
       await current.localParticipant.setMicrophoneEnabled(true);
       if (cancelled()) { await disconnect(current); return; }
       phase = "live";
+      connected = true;
       updateWaves();
       render();
       end.focus();
     } catch (failure) {
-      if (!cancelled()) await finish(false, mediaError(failure));
+      if (!cancelled()) await finish(false, callStartError(failure));
     } finally {
       starting = false;
       render();
@@ -748,6 +774,7 @@ function mount(root: HTMLElement, config: Config) {
     if (destroyed) return;
     destroyed = true;
     sizeObserver.disconnect();
+    window.removeEventListener("resize", reportSize);
     initialized = false;
     window.removeEventListener("message", receive);
     window.removeEventListener("pageshow", ready);

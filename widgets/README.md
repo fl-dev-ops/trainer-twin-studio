@@ -55,8 +55,13 @@ Connecting and active calls keep the card open; pointer leave, Escape, close mes
 There is no minus button in the hosted card. Inactive minimising hides but **does not unload** the iframe.
 The launcher reports expanded state, the
 dialog has an accessible name, and closing returns focus to the launcher.
-The welcome card fits its content without a bottom spacer; trusted, integer-only size updates are bounded to
-280–580px and the viewport's safe areas. Active calls retain a bounded caption area rather than resizing every turn.
+The panel is capped at 340px wide and the viewport safe areas. Portraits fill the available content width in every
+call phase, with consistent 16px top/left/right insets; forms also sit 16px from each side. The welcome card fits
+its content without a bottom spacer. Every phase is content-sized with no fixed 580px card limit or scrollable
+card body. The host bounds the surface only to the viewport's safe areas. On short screens, the portrait retains
+full width and adapts its height to leave room for text, actions and footer. Mute/end occupy a separate,
+non-shrinking row above the footer. Only explicitly expanded transcript history scrolls.
+Trusted size messages accept integers 280–4096px; the upper bound is protocol validation, not a rendered card limit.
 The hosted UI uses a dark portrait-led card, the trainer's existing photo (initials if unavailable), and explicit
 name entry and browser microphone permission. The ready card uses a full-width square portrait on black, a simple
 title, and one row with a black pill-shaped name input and circular phone-only call button. The name label remains
@@ -64,7 +69,7 @@ accessible but is visually hidden. Input/focus shadows are external, never inset
 and “Up to” duration text lines are removed from this card; the required name and enforced call allowance remain.
 Photos remain in colour; initials appear only when no photo is available. Call-state indicators follow
 LiveKit audio tracks drive the exact shared Twin-session green/orange glow renderer, including noise gates,
-attack/release smoothing and muted-track silence. A square portrait replaces the landscape crop in every phase.
+attack/release smoothing and muted-track silence. The portrait is full width in every phase and square when screen space permits.
 The call has no header; only connecting/reconnecting shows “Connecting…”, not speaking/listening text.
 Compact captions follow Portfolio v4's last-two-entry centered plain-text presentation with an older-entry fade;
 expansion reveals history in the same frame without reconnecting. Mute and end are icon-only, with accessible names.
@@ -77,6 +82,10 @@ On open/close the photo, heading, input and CTA independently fade/translate upw
 Controls become interactive when the outer surface settles, preventing moving-target clicks during expansion.
 LiveKit audio is unlocked from the original call-start gesture before network awaits. There is no standalone sound
 button; if a browser later blocks playback, a short message asks the visitor to tap the widget to retry audio.
+Autofill retains the black pill surface and light text: the field wrapper supplies the background while
+`:autofill`/`:-webkit-autofill` clips browser autofill paint to text. No inset fill-shadow or long transition is used.
+Failed starts show “We couldn’t start the conversation.” and a retry action, not a completed-call thank-you.
+Network/provider details stay generic; microphone permission/device errors retain actionable guidance.
 
 Escape in the parent minimises an inactive floating panel; active calls ignore collapse requests.
 Keyboard events do not cross iframe boundaries. The loader supplies `parentOrigin` and `mode=floating` in the iframe URL.
@@ -115,7 +124,7 @@ Every message is an object using **`version: 1`**, never `v: 1`.
 | iframe → parent | `trainertwin-widget` | `close` | none |
 | iframe → parent | `trainertwin-widget` | `status` | `active: boolean` |
 | iframe → parent | `trainertwin-widget` | `interaction` | `editing: boolean`, name field focused; no field contents |
-| iframe → parent | `trainertwin-widget` | `resize` | `height: integer`, 280–580 only |
+| iframe → parent | `trainertwin-widget` | `resize` | `height: integer`, 280–4096 only; host clips sizing to available screen |
 | parent → iframe | `trainertwin-host` | `init` | none |
 | parent → iframe | `trainertwin-host` | `destroy` | none |
 | parent → iframe | `trainertwin-host` | `visibility` | `open: boolean`, triggers content reveal only |

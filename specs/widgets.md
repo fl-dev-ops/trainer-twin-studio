@@ -39,7 +39,11 @@ transcripts or credentials. Minimising preserves the iframe/call and visibly mar
 SPA owners must explicitly destroy mounts before removing containers; tab unload and durable deadlines are additional cleanup.
 Fine-pointer hover expands the launcher into the card; leaving the whole surface shrinks it after a short grace
 period, unless the name field is focused. Click/tap and keyboard opening remain available and pinned.
-The card is content-sized, viewport-bounded and 580px high at most; resize messages accept only 280–580px.
+The card is content-sized in every phase, viewport-bounded and at most 340px wide, without a fixed-height card cap.
+Resize messages accept only integers 280–4096px as a protocol safety boundary; the host uses available screen height.
+Portraits are full content width in every phase, with 16px top/side insets; the form has matching 16px side insets.
+On short screens, portrait height adapts so actions and the footer remain visible. The card body never scrolls;
+call controls sit outside it above the footer. Failed starts have a friendly failure/retry view, not a thank-you.
 Image preload/eager fetching happens before opening. Independent fade/translate reveals do not scale the content.
 Connecting and active calls stay open regardless of pointer leave, Escape or minimise requests; no minus button is shown.
 Hover/minimising/visibility messages never start or end a call.

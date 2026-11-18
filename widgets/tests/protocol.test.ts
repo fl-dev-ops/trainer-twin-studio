@@ -33,9 +33,11 @@ describe("widget protocol", () => {
     expect(isWidgetMessage({ source: "trainertwin-widget", version: 1, type: "status", active: true })).toBe(true);
     expect(isWidgetMessage({ source: "trainertwin-widget", version: 1, type: "interaction", editing: true })).toBe(true);
     expect(isWidgetMessage({ source: "trainertwin-widget", version: 1, type: "resize", height: 540 })).toBe(true);
+    expect(isWidgetMessage({ source: "trainertwin-widget", version: 1, type: "resize", height: 900 })).toBe(true);
     for (const value of [null, {}, "ready", { source: "trainertwin-host", version: 1, type: "ready" },
       { source: "trainertwin-widget", version: 2, type: "ready" },
       { source: "trainertwin-widget", version: 1, type: "resize", height: 100000 },
+      { source: "trainertwin-widget", version: 1, type: "resize", height: 4097 },
       { source: "trainertwin-widget", version: 1, type: "resize", height: 100 },
       { source: "trainertwin-widget", version: 1, type: "resize", height: 400.5 },
       { source: "trainertwin-widget", version: 1, type: "interaction", editing: "yes" },
