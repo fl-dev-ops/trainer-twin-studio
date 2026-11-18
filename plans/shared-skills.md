@@ -99,7 +99,8 @@ tested separately.
 
 ### Next action / completion boundary
 
-1. The Phase 1 code/local-test checkpoint is ready to commit; record its SHA here after commit.
+1. Phase 1 code/local-test checkpoint: **`0d974e0`**, `feat(skills): add managed package registry and publisher`.
+   Local branch only; not pushed, no PR opened. This ledger update follows in a documentation-only commit.
 2. Finish the real-provider/voice canary in [the Phase 1 runbook](shared-skills-phase-1-release.md) using explicitly
    isolated resources. This is the outstanding Phase 1 completion gate, not a production-deploy request.
 3. Only after the gate is met, begin Phase 2: SessionSkill schema, coherent transactional activation snapshots,
