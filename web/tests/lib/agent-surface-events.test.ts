@@ -20,6 +20,7 @@ describe("session document surfaces", () => {
         fileName: "Vasanth Resume.pdf",
         page: 2,
         highlightQuery: "40%",
+        resumeDocument: false,
       },
     });
   });
@@ -38,6 +39,59 @@ describe("session document surfaces", () => {
         fileId: "doc-123",
         page: undefined,
         highlightQuery: "Redis",
+        claimId: undefined,
+        searchRequestId: undefined,
+        exactHighlight: false,
+        resumeDocument: false,
+      },
+    });
+  });
+
+  it("preserves an explicit resume flag when opening a PDF", () => {
+    expect(parseAgentSurfaceMessage({
+      type: "open_pdf",
+      eventId: "event-resume",
+      fileId: "doc-123",
+      fileName: "Vasanth Resume.pdf",
+      page: 2,
+      highlightQuery: "40%",
+      resumeDocument: true,
+    })).toEqual({
+      surface: {
+        key: "agent-pdf-event-resume",
+        tool: "pdf",
+        sourceUrl: "/api/documents/doc-123/raw",
+        fileId: "doc-123",
+        fileName: "Vasanth Resume.pdf",
+        page: 2,
+        highlightQuery: "40%",
+        resumeDocument: true,
+      },
+    });
+  });
+
+  it("preserves explicit claim, search and exact resume-highlight fields", () => {
+    expect(parseAgentSurfaceMessage({
+      type: "highlight_document",
+      eventId: "event-claim",
+      fileId: "doc-123",
+      query: "Redis",
+      claimId: "claim-1",
+      commandId: "search-1",
+      exactHighlight: true,
+      resumeDocument: true,
+    })).toEqual({
+      surface: {
+        key: "agent-pdf-event-claim",
+        tool: "pdf",
+        sourceUrl: "/api/documents/doc-123/raw",
+        fileId: "doc-123",
+        page: undefined,
+        highlightQuery: "Redis",
+        claimId: "claim-1",
+        searchRequestId: "search-1",
+        exactHighlight: true,
+        resumeDocument: true,
       },
     });
   });

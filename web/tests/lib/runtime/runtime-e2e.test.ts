@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeAll, afterAll } from "bun:test";
 import { db } from "@/lib/db";
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, createHmac, randomBytes } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import yaml from "js-yaml";
@@ -405,16 +405,19 @@ describe("Interview Runtime End-to-End Suite", () => {
   });
 
   it("9. Snapshot route GET /api/sessions/[id]: returns authoritative state and coverage", async () => {
+    const secret = process.env.COPILOT_SERVICE_SECRET;
+    if (!secret) throw new Error("COPILOT_SERVICE_SECRET is required for browser-token fixtures");
+    const browserToken = createHmac("sha256", secret).update(`browser:${sessionId}`).digest("base64url");
     const req = new Request(`http://localhost/api/sessions/${sessionId}`, {
       method: "GET",
       headers: {
-        Authorization: `Bearer ${runtimeToken}`,
+        Authorization: `Bearer ${browserToken}`,
       },
     });
 
     const res = await getSessionSnapshot(req, { params: Promise.resolve({ id: sessionId }) });
     expect(res.status).toBe(200);
-    const snap = (await res.json()) as any;
+    const snap = await res.json();
 
     expect(snap.id).toBe(sessionId);
     expect(snap.status).toBe("active");
@@ -422,6 +425,14 @@ describe("Interview Runtime End-to-End Suite", () => {
     expect(snap.phase_index).toBe(0);
     expect(snap.runtimeRevision).toBeGreaterThanOrEqual(1);
   }, 30000);
+
+  it("snapshot refuses the agent runtime token with 401 runtime_token_invalid", async () => {
+    const res = await getSessionSnapshot(new Request(`http://localhost/api/sessions/${sessionId}`, {
+      headers: { Authorization: `Bearer ${runtimeToken}` },
+    }), { params: Promise.resolve({ id: sessionId }) });
+    expect(res.status).toBe(401);
+    expect(await res.json()).toMatchObject({ code: "runtime_token_invalid" });
+  });
 
   it("10. Pre-warms session opening in background and serves it instantly on start", async () => {
     const prewarmSessionId = `test-sess-pw-${randomBytes(4).toString("hex")}`;

@@ -19,8 +19,8 @@ The durable plan is this file; do not delete it as a temporary planning artifact
 
 Current checkpoint: all five implementation phases are complete and locally verified. Role plays and twins use exact
 managed pins; explicit legacy readers remain. Verified migration and approved ownership-switch tooling are implemented.
-Organizations remain compatibility-default until explicitly approved; no real-org cutover, production credentials,
-data, migrations, deployment or live-provider comparison was used.
+Partial real-provider/chat/voice verification now follows below and in `shared-skills-live-verification.md`.
+Organizations remain compatibility-default until explicitly approved; no real-org cutover or deployment was performed.
 Broad legacy runtime tests attempted AI Gateway requests with test-placeholder credentials and received 401; those
 are not successful live-provider tests.
 
@@ -299,7 +299,7 @@ Focused command is Phase 1's listed command plus `tests/lib/roleplay-report.test
 was changed to const without behavioral change. Build-generated Next environment imports were restored to baseline.
 The broad legacy live-model/PDF failures recorded above were not relabeled green; that whole unit suite is not claimed.
 
-### Resume: final live verification / operating approval
+### Phase 5 handoff state before owner supplied local setup
 
 All implementation phases are locally checkpointed, not deployed. Inspect `git log` and the runbooks before proceeding.
 No push or real-org ownership activation has occurred. Local test approvals exist only in disposable fixtures.
@@ -314,6 +314,32 @@ flows, including publication/archive mid-call and index recovery. Compare activa
 org migration on an explicitly approved production-data copy. Only after coverage and live approval may an operator
 activate managed ownership. Legacy index retirement, production migration, deployment and security dependency upgrades
 each remain separate explicit operations.
+
+### Latest: copied local setup and partial live verification
+
+Owner authorized copying the runnable local setup from `../application` and trying the remaining checks. Ignored
+credential files were copied without editing that checkout; isolated web/chat/Chroma ports, local databases, S3 prefix,
+synthetic orgs and unique voice worker were used. See `shared-skills-live-verification.md` for exact results and gates.
+
+**Important disclosed incident:** the first implicit Prisma command read the copied base `.env` and applied the eight
+additive shared-skill migrations to the original LOCAL `trainertwin` DB. No rollback/reset was attempted. Read-only checks
+found zero registry/version/pin/mapping/cutover rows, so no backfill or ownership activation occurred. Subsequent commands
+explicitly pinned the isolated DB. This is not described as “original local DB untouched.”
+
+Real results: **12/12** S3/embedding/self-hosted-Chroma checks; **10** chat turns across five session types; a real
+two-turn twin voice pipeline through LiveKit/Deepgram/model/VoxCPM2; persisted transcript and validated completed report,
+with v1 pin retained against current v3. Cloud quota blocks creating an isolated Cloud database; no existing org database
+was reused/deleted. Provisioning now preserves the actual quota/auth/network error rather than masking it with 404.
+
+Remaining gates are NOT green: latest broad web run **1160 pass / 2 intermittent document-grounding failures**; builder
+voice, calibration, substantive voice retrieval quality, business voice/credit activation, recording, real baseline
+latency comparison, and approved production-copy migration rehearsal. Agent suite **44/44**, controlled-provider DB
+regressions **974/974**, focused stale-contract suites **29/29**, new Chroma checks **21/21**, typecheck and build pass.
+The existing Next.js security advisory remains unresolved.
+
+Next resume here: review the live-verification report, resolve provider quota / model-grounding reliability, and finish
+the listed live gates. Raw reports have private synthetic session tokens; never commit them or reuse completed tokens.
+The detailed report records the initial broad-wrapper billing-config/MSW safety finding as well as the database incident.
 
 ## Goal
 

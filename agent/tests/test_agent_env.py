@@ -35,7 +35,9 @@ def test_validate_environment_passes_with_all_vars(monkeypatch):
 async def test_inactivity_nudge_only_runs_after_opening():
     class Session:
         callback = None
-        replies: list[str] = []
+
+        def __init__(self):
+            self.replies: list[str] = []
 
         def on(self, _event):
             def register(callback):
@@ -139,14 +141,19 @@ def test_latency_logging_emits_structured_turn_metrics(caplog):
     assert assistant["ttsProvider"] == "voxcpm2"
 
 
-def test_on_session_end_sends_transcript(monkeypatch):
+async def test_on_session_end_sends_transcript(monkeypatch):
     class Item:
         type = "message"
         role = "assistant"
         text_content = "Tell me about a project.  "
+        created_at = 1234.0
+
+        def __init__(self):
+            self.metrics = {"started_speaking_at": 1234.5}
 
     class History:
-        items = [Item()]
+        def __init__(self):
+            self.items = [Item()]
 
     class Session:
         history = History()
@@ -163,8 +170,5 @@ def test_on_session_end_sends_transcript(monkeypatch):
         sent.update(payload)
 
     monkeypatch.setattr(agent, "post_completion_webhook", fake_post)
-    # leave an event loop installed — closing it would break tests that use asyncio.get_event_loop
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    loop.run_until_complete(agent.on_session_end(Ctx()))
-    assert sent["transcript"] == [{"role": "trainer", "text": "Tell me about a project."}]
+    await agent.on_session_end(Ctx())
+    assert sent["transcript"] == [{"role": "trainer", "text": "Tell me about a project.", "spokenAt": 1234500}]
