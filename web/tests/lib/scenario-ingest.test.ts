@@ -5,6 +5,10 @@ type SkillRow = Row & { id: string; nextVersion: number; generation: number; cur
 type SkillVersionRow = Row & { id: string; skillId: string; version: number; contentHash: string; status: string };
 const skills: SkillRow[] = [];
 const skillVersions: SkillVersionRow[] = [];
+type MappingRow = { agentId: string; agentVersion: number; orgId: string; skillVersionId: string };
+type SourceRow = { skillVersionId: string; orgId: string; documentId: string; title: string; items: number };
+const mappings: MappingRow[] = [];
+const packageSources: SourceRow[] = [];
 const skillItems = new Map<string, unknown[]>();
 const log: string[] = [];
 let agents: Row[] = [];
@@ -74,6 +78,9 @@ const fakeDb = {
     },
   },
   skillVersion: {
+    findMany: async ({ where }: { where: { skillId: string; artifacts: string; status: string; skill: { orgId: string; ownerSlug: string } } }) =>
+      skillVersions.filter(version => version.skillId === where.skillId && version.artifacts === where.artifacts && version.status === where.status
+        && skills.some(skill => skill.id === version.skillId && skill.orgId === where.skill.orgId && skill.ownerSlug === where.skill.ownerSlug)).map(row => ({ ...row })),
     findUniqueOrThrow: async ({ where }: { where: { id: string } }) => {
       const row = skillVersions.find(version => version.id === where.id);
       if (!row) throw new Error(`Missing skill version ${where.id}`);
@@ -111,7 +118,59 @@ const fakeDb = {
     findMany: async ({ where }: { where: { id: { in: string[] }; kb: { orgId: string } } }) =>
       where.kb.orgId === "org1" ? [{ id: "abc", title: "Session 3 · Osama" }].filter((doc) => where.id.in.includes(doc.id)) : [],
   },
-  skillSource: { createMany: async ({ data }: { data: Row[] }) => void skillSources.push(...data) },
+  agentSkillVersion: {
+    findUnique: async ({ where }: { where: { agentId_agentVersion: { agentId: string; agentVersion: number } } }) =>
+      mappings.find(row => row.agentId === where.agentId_agentVersion.agentId && row.agentVersion === where.agentId_agentVersion.agentVersion) ?? null,
+    findUniqueOrThrow: async ({ where }: { where: { agentId_agentVersion: { agentId: string; agentVersion: number } } }) => {
+      const row = mappings.find(row => row.agentId === where.agentId_agentVersion.agentId && row.agentVersion === where.agentId_agentVersion.agentVersion);
+      if (!row) throw new Error("Missing mapping");
+      return { ...row };
+    },
+    createMany: async ({ data, skipDuplicates }: { data: MappingRow[]; skipDuplicates: boolean }) => {
+      let count = 0;
+      for (const row of data) {
+        const agent = agents.find(agent => agent.id === row.agentId);
+        const version = skillVersions.find(version => version.id === row.skillVersionId);
+        const skill = skills.find(skill => skill.id === version?.skillId);
+        if (!agent || agent.orgId !== row.orgId || skill?.orgId !== row.orgId || skill.ownerSlug !== agent.slug || version?.status !== "ready" || row.agentVersion <= 0) throw new Error("Invalid history mapping");
+        if (mappings.some(saved => saved.agentId === row.agentId && saved.agentVersion === row.agentVersion)) {
+          if (!skipDuplicates) throw new Error("Duplicate history mapping");
+          continue;
+        }
+        mappings.push({ ...row }); count++;
+      }
+      return { count };
+    },
+  },
+  skillVersionSource: {
+    findMany: async ({ where }: { where: { skillVersionId: string } }) =>
+      packageSources.filter(row => row.skillVersionId === where.skillVersionId).map(row => ({ ...row })),
+    createMany: async ({ data, skipDuplicates }: { data: SourceRow[]; skipDuplicates: boolean }) => {
+      let count = 0;
+      for (const row of data) {
+        const version = skillVersions.find(version => version.id === row.skillVersionId);
+        if (!skills.some(skill => skill.id === version?.skillId && skill.orgId === row.orgId) || row.items < 0) throw new Error("Invalid package source");
+        if (packageSources.some(saved => saved.skillVersionId === row.skillVersionId && saved.documentId === row.documentId)) {
+          if (!skipDuplicates) throw new Error("Duplicate package source");
+          continue;
+        }
+        packageSources.push({ ...row }); count++;
+      }
+      return { count };
+    },
+  },
+  skillSource: {
+    findMany: async ({ where }: { where: Row }) => skillSources.filter(row => Object.entries(where).every(([key, value]) => row[key] === value)),
+    createMany: async ({ data, skipDuplicates }: { data: Row[]; skipDuplicates: boolean }) => {
+      for (const row of data) {
+        if (skillSources.some(saved => saved.agentId === row.agentId && saved.version === row.version && saved.documentId === row.documentId)) {
+          if (!skipDuplicates) throw new Error("Duplicate legacy source");
+          continue;
+        }
+        skillSources.push({ ...row });
+      }
+    },
+  },
   $transaction: async (fn: (tx: unknown) => unknown) => fn(fakeDb),
 };
 mock.module("@/lib/db", () => ({
@@ -213,6 +272,8 @@ beforeEach(() => {
   agents = [];
   skills.length = 0;
   skillVersions.length = 0;
+  mappings.length = 0;
+  packageSources.length = 0;
   skillItems.clear();
   domains = [];
   specVersions = [];
@@ -279,6 +340,8 @@ test("first ingest creates the agent (no domain) after storing items (duplicate 
   expect(skills[0].currentVersionId).toBe(skillVersions[0].id);
   expect(skillVersions[0]).toMatchObject({ status: "ready", indexStatus: "ready", itemCount: 2 });
   expect(skillItems.get(`org1/${skillVersions[0].id}/${prefix}`)).toEqual([item("x#1"), item("x#1")]);
+  expect(mappings).toEqual([{ agentId: agents[0].id, agentVersion: 1, orgId: "org1", skillVersionId: skillVersions[0].id }]);
+  expect(packageSources).toEqual([{ skillVersionId: skillVersions[0].id, orgId: "org1", documentId: "abc", title: "Session 3 · Osama", items: 2 }]);
   expect("domainSlug" in agents[0]).toBe(false);
 });
 
@@ -301,6 +364,19 @@ test("re-ingest is a no-op when unchanged, and versions the spec when changed", 
   expect((agents[0].data as Row).artifacts).toBe(changed.artifacts);
   expect(specVersions).toEqual([expect.objectContaining({ entityType: "agents", entitySlug: "acme-fundamental-depth", version: 1 })]);
   expect((agents[0].data as Row).introVideo).toBe("intro.mp4");
+  expect(mappings.map(({ agentVersion, skillVersionId }) => [agentVersion, skillVersionId])).toEqual([
+    [1, skillVersions[0].id], [2, skillVersions[1].id],
+  ]);
+});
+
+test("ready no-op refuses a conflicting immutable history mapping", async () => {
+  await ingestScenario("org1", input());
+  mappings[0].skillVersionId = "another-package";
+  const originalFiles = new Map(s3);
+  await expect(ingestScenario("org1", input())).rejects.toMatchObject({ code: "skill_package_unavailable" });
+  expect(s3).toEqual(originalFiles);
+  expect(specVersions).toHaveLength(0);
+  expect(mappings[0].skillVersionId).toBe("another-package");
 });
 
 test("refuses unknown personas and another org's scenario without writing anything", async () => {

@@ -65,6 +65,8 @@ describe.skipIf(process.env.DATABASE_URL !== isolatedDatabase)("Phase 2 session 
       await db.contextDocument.deleteMany({ where: { orgId: fixture.org.id } });
       await db.agent.updateMany({ where: { orgId: fixture.org.id }, data: { primarySkillId: null } });
       await db.skill.updateMany({ where: { orgId: fixture.org.id }, data: { currentVersionId: null } });
+      await db.agentSkillVersion.deleteMany({ where: { orgId: fixture.org.id } });
+      await db.skillVersionSource.deleteMany({ where: { orgId: fixture.org.id } });
       await db.skillVersion.deleteMany({ where: { skill: { orgId: fixture.org.id } } });
       await db.skill.deleteMany({ where: { orgId: fixture.org.id } });
       await db.specVersion.deleteMany({ where: { orgId: fixture.org.id } });
@@ -139,15 +141,97 @@ describe.skipIf(process.env.DATABASE_URL !== isolatedDatabase)("Phase 2 session 
     expect(legacySearch).not.toHaveBeenCalled();
   });
 
-  test("snapshot resolution uses Agent artifacts, not the current pointer", async () => {
+  test("exact experience mappings override compatibility artifacts; only unmapped versions use saved artifacts", async () => {
     await publish();
     const original = await db.agent.findUniqueOrThrow({ where: { id: f.roleplay.id } });
     const first = await resolveRoleplaySnapshotSkill(f.org.id, original);
     await publish("builder", 2);
+    const current = await db.agent.findUniqueOrThrow({ where: { id: original.id } });
+    const second = await resolveRoleplaySnapshotSkill(f.org.id, current);
+    expect(second.id).not.toBe(first.id);
     expect((await resolveRoleplaySnapshotSkill(f.org.id, original)).id).toBe(first.id);
     await db.agent.update({ where: { id: original.id }, data: { data: original.data ?? {} } });
     const call = await start();
-    expect((await pinnedRow(call.id)).skillPins[0].skillVersionId).toBe(first.id);
+    expect((await pinnedRow(call.id)).skillPins[0].skillVersionId).toBe(second.id);
+    await db.interviewSession.update({ where: { id: call.id }, data: { status: "completed", endedAt: new Date() } });
+    const mapping = await db.agentSkillVersion.findUniqueOrThrow({
+      where: { agentId_agentVersion: { agentId: original.id, agentVersion: current.version } },
+    });
+    await db.agentSkillVersion.delete({
+      where: { agentId_agentVersion: { agentId: original.id, agentVersion: current.version } },
+    });
+    const fallback = await start();
+    expect((await pinnedRow(fallback.id)).skillPins[0].skillVersionId).toBe(first.id);
+    await db.agentSkillVersion.create({ data: mapping });
+    const restored = await db.agent.findUniqueOrThrow({ where: { id: original.id } });
+    expect((await resolveRoleplaySnapshotSkill(f.org.id, restored)).id).toBe(second.id);
+    expect((await pinnedRow(call.id)).skillPins[0].skillVersionId).toBe(second.id);
+    expect((await pinnedRow(fallback.id)).skillPins[0].skillVersionId).toBe(first.id);
+  });
+
+  test("import deduplicates settings versions without rewriting an active session's original package, persona or scoring", async () => {
+    const input = {
+      kind: "ROLEPLAY" as const, personaSlug: f.org.slug, skill: "# Imported authored practice\nAsk before advising.\n",
+      patterns: "# Evidence\nOriginal source wording.\n",
+      scenario: {
+        scenario: "imported-authored", name: "Imported authored", description: "Explore the concern",
+        trainer_role: "Client", learner_role: "Advisor",
+        steps: [{ id: "opening", name: "Opening", trainer_moves: ["answer"], learner_moves: ["ask"] }],
+      },
+      items: [{ id: "line-1", role: "trainer" as const, context: "Opening", text: "What concerns you?", metadata: { step: "opening" } }],
+    };
+    const saved = await ingestScenario(f.org.id, input);
+    const call = await start(saved.slug);
+    const before = await pinnedRow(call.id);
+    const originalContext = await buildSessionContext({ orgId: f.org.id, sessionId: call.id, agentSlug: saved.slug });
+    const snapshot = before.compiledSnapshot;
+    if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) throw new Error("Expected compiled snapshot");
+    const historical = await f.session({
+      agentId: before.agentId, agentSlug: saved.slug, agentVersion: saved.version,
+      personaSlug: before.personaSlug, personaVersion: before.personaVersion,
+      compiledSnapshot: snapshot, skillPinsVersion: null,
+    });
+    const historicalBefore = await pinnedRow(historical.id);
+    const historicalContext = await buildSessionContext({ orgId: f.org.id, sessionId: historical.id, agentSlug: saved.slug });
+    expect(historicalBefore.skillPinsVersion).toBeNull();
+    expect(historicalBefore.skillPins).toEqual([]);
+    const persona = await db.persona.create({ data: {
+      orgId: f.org.id, slug: `${f.org.slug}-changed`, name: "Changed client", data: { identity: "Changed client" }, version: 4,
+    } });
+    const changed = await ingestScenario(f.org.id, { ...input, personaSlug: persona.slug });
+    expect(changed.version).toBeGreaterThan(saved.version);
+    const owner = await db.agent.findUniqueOrThrow({ where: { slug: saved.slug } });
+    expect(await db.agentSkillVersion.findMany({
+      where: { agentId: owner.id }, orderBy: { agentVersion: "asc" },
+    })).toEqual([
+      expect.objectContaining({ agentVersion: saved.version, skillVersionId: before.skillPins[0].skillVersionId }),
+      expect.objectContaining({ agentVersion: changed.version, skillVersionId: before.skillPins[0].skillVersionId }),
+    ]);
+    spies.push(spyOn(MainCollectionService, "skillItemCount").mockResolvedValue(1));
+    const { migrateSkills } = await import("@/lib/skill-migration");
+    const versions = await db.skillVersion.findMany({ where: { skillId: before.skillPins[0].version.skillId } });
+    const preImportSession = await pinnedRow(call.id);
+    expect(preImportSession.compiledSnapshot).toEqual(before.compiledSnapshot);
+    expect(preImportSession.skillPins.map(({ version, ...pin }) => ({ ...pin, contentHash: version.contentHash }))).toEqual(
+      before.skillPins.map(({ version, ...pin }) => ({ ...pin, contentHash: version.contentHash })),
+    );
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const report = await migrateSkills(f.org.id, { apply: true });
+      expect(report).toMatchObject({ complete: true, currentGaps: [], requiredGaps: [], historicalGaps: [] });
+      expect(report.entries.filter((entry) => entry.slug === saved.slug)).toHaveLength(2);
+      expect(report.entries.every((entry) => entry.skillVersionId === before.skillPins[0].skillVersionId)).toBe(true);
+      expect(await pinnedRow(call.id)).toEqual(preImportSession);
+      expect(await pinnedRow(historical.id)).toEqual(historicalBefore);
+      expect(await buildSessionContext({ orgId: f.org.id, sessionId: historical.id, agentSlug: saved.slug })).toEqual(historicalContext);
+      expect(await buildSessionContext({ orgId: f.org.id, sessionId: call.id, agentSlug: saved.slug })).toEqual(originalContext);
+      expect(await db.skillVersion.findMany({ where: { skillId: before.skillPins[0].version.skillId } })).toEqual(versions);
+    }
+    expect((await search(call.id, saved.slug)).status).toBe(200);
+    expect(managedSearch).toHaveBeenCalledWith(f.org.id, [{
+      skillVersionId: before.skillPins[0].skillVersionId, indexScope: before.skillPins[0].version.artifacts,
+      itemCount: before.skillPins[0].version.itemCount,
+    }], "buyer concern", expect.objectContaining({ role: "trainer" }));
+    expect(legacySearch).not.toHaveBeenCalled();
   });
 
   test("publishing after the outer compile yields one coherent locked Agent/persona/package snapshot", async () => {
@@ -213,9 +297,10 @@ describe.skipIf(process.env.DATABASE_URL !== isolatedDatabase)("Phase 2 session 
     expect(legacySearch).not.toHaveBeenCalled();
   });
 
-  test("managed activation with missing package artifacts fails 503 rather than creating a legacy call", async () => {
+  test("unmapped managed activation with missing package artifacts fails 503 rather than creating a legacy call", async () => {
     await publish();
     await db.agent.update({ where: { id: f.roleplay.id }, data: { data: { skill: "# Compatibility text is not a package" } } });
+    await db.agentSkillVersion.deleteMany({ where: { orgId: f.org.id, agentId: f.roleplay.id } });
     await expect(start()).rejects.toMatchObject({ code: "skill_package_unavailable", status: 503 });
     expect(await db.interviewSession.count({ where: { orgId: f.org.id } })).toBe(0);
     expect(legacySearch).not.toHaveBeenCalled();

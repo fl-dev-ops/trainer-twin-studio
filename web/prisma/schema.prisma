@@ -63,6 +63,7 @@ model Agent {
   updatedAt       DateTime           @updatedAt
   deployments     Deployment[]
   skillSources    SkillSource[]
+  skillVersions   AgentSkillVersion[]
   sessions        InterviewSession[]
   twinAssignments TwinAssignment[]
   twinShareLinks  TwinShareLink[]
@@ -118,9 +119,38 @@ model SkillVersion {
   skill                 Skill    @relation("SkillVersions", fields: [skillId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   currentForSkills      Skill[]  @relation("SkillCurrentVersion")
   sessionPins           SessionSkill[]
+  agentVersions         AgentSkillVersion[]
+  sources               SkillVersionSource[]
 
   @@unique([skillId, version])
   @@unique([id, skillId])
+}
+
+model AgentSkillVersion {
+  agentId        String
+  agentVersion   Int
+  orgId          String
+  skillVersionId String
+  createdAt      DateTime     @default(now())
+  agent          Agent        @relation(fields: [agentId], references: [id], onDelete: Cascade, onUpdate: Restrict)
+  version        SkillVersion @relation(fields: [skillVersionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@id([agentId, agentVersion])
+  @@index([skillVersionId])
+  @@index([orgId])
+}
+
+model SkillVersionSource {
+  skillVersionId String
+  orgId          String
+  documentId     String
+  title          String
+  items          Int
+  createdAt      DateTime     @default(now())
+  version        SkillVersion @relation(fields: [skillVersionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@id([skillVersionId, documentId])
+  @@index([orgId, documentId])
 }
 
 // Immutable snapshot taken on every changed save. entityData in {persona|agent}

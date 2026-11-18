@@ -2,7 +2,7 @@ import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { db, withLock } from "@/lib/db";
 import { stableJson } from "@/lib/stable-json";
-import { skillSourceRows } from "@/lib/skill-sources";
+import { preserveAgentSkillVersion, recordPublicationSkillLinks } from "@/lib/skill-version-links";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import { MainCollectionService } from "@/lib/main-collection";
 import { putObject, s3Configured, scenarioRunPrefix } from "@/lib/s3";
@@ -233,6 +233,9 @@ async function storeSkillAgent(input: {
       const skill = await tx.skill.findUniqueOrThrow({ where: { id: currentAgent.primarySkillId }, include: { currentVersion: true } });
       if (skill.currentVersion?.contentHash === skillPackageHash(format, files) && skill.currentVersion.artifacts === previous.artifacts) {
         if (skill.currentVersion.status !== "ready" || skill.currentVersion.indexStatus !== "ready") throw skillRefusals.unavailable();
+        await recordPublicationSkillLinks(tx, {
+          orgId: org.id, agentId: currentAgent.id, agentVersion: currentAgent.version, skillVersionId: skill.currentVersion.id,
+        }, input.items);
         return { noop: true as const, agentVersion: currentAgent.version, artifacts: skill.currentVersion.artifacts };
       }
     }
@@ -261,6 +264,9 @@ async function storeSkillAgent(input: {
       if (currentAgent?.primarySkillId === skillId && currentSkill.currentVersionId === packageVersion.id
         && currentAgent.personaId === input.personaId && !currentAgent.archivedAt
         && stableJson(Object.fromEntries(Object.entries(currentAgent.data as Record<string, unknown>).filter(([key]) => key !== "artifacts"))) === stableJson(reserved.content)) {
+        await recordPublicationSkillLinks(tx, {
+          orgId: org.id, agentId: currentAgent.id, agentVersion: currentAgent.version, skillVersionId: currentVersion.id,
+        }, input.items);
         return { version: currentAgent.version, created: false, items: input.items.length, artifacts: currentVersion.artifacts, pruneBelow: 0 };
       }
       if (stableJson(currentAgent) !== stableJson(reserved.currentAgent)
@@ -268,6 +274,7 @@ async function storeSkillAgent(input: {
         throw skillRefusals.superseded();
       }
       verifySkillEnvelope(currentVersion);
+      if (currentAgent && !reserved.unchanged) await preserveAgentSkillVersion(tx, currentAgent);
       if (currentVersion.status !== "ready") {
         currentVersion = await tx.skillVersion.update({
           where: { id: currentVersion.id }, data: { artifacts: `${packageVersion.artifacts}/attempt-${randomUUID()}` },
@@ -288,13 +295,13 @@ async function storeSkillAgent(input: {
         const created = await tx.agent.create({
           data: { slug, name: agentData.name, version, personaId: input.personaId, kind, data: json(data), orgId: org.id, primarySkillId: skillId },
         });
-        // Which knowledge base documents built this version (lib/skill-sources.ts), with the version itself.
-        await tx.skillSource.createMany({ data: await skillSourceRows(org.id, created.id, version, input.items, tx), skipDuplicates: true });
+        await recordPublicationSkillLinks(tx, { orgId: org.id, agentId: created.id, agentVersion: version, skillVersionId: currentVersion.id }, input.items);
         return done;
       }
       // Publishing onto an archived skill / role play brings it back (archive is a soft delete; the slug stays taken).
       if (reserved.unchanged) {
         await tx.agent.update({ where: { id: currentAgent.id }, data: { archivedAt: null, primarySkillId: skillId, data: json(data) } });
+        await recordPublicationSkillLinks(tx, { orgId: org.id, agentId: currentAgent.id, agentVersion: version, skillVersionId: currentVersion.id }, input.items);
         return done;
       }
       // Same versioning as a dashboard publish: snapshot the old spec, bump the version.
@@ -305,7 +312,7 @@ async function storeSkillAgent(input: {
         where: { id: currentAgent.id },
         data: { name: agentData.name, version, personaId: input.personaId, data: json(data), archivedAt: null, primarySkillId: skillId },
       });
-      await tx.skillSource.createMany({ data: await skillSourceRows(org.id, currentAgent.id, version, input.items, tx), skipDuplicates: true });
+      await recordPublicationSkillLinks(tx, { orgId: org.id, agentId: currentAgent.id, agentVersion: version, skillVersionId: currentVersion.id }, input.items);
       return done;
     }, { timeout: 120_000, maxWait: 120_000 });
 

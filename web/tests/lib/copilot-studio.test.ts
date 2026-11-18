@@ -2,6 +2,7 @@ import { beforeEach, expect, test } from "bun:test";
 import * as people from "@/lib/org-people";
 import { type CopilotStudioDeps, runCopilotStudio } from "@/lib/copilot-studio";
 import { skillPackageHash, type SkillFormat } from "@/lib/skills";
+import { renderRoleplay } from "@/lib/roleplay/skill";
 
 type Row = Record<string, unknown>;
 let agents: Row[] = [];
@@ -9,6 +10,7 @@ const invited: { kind: string; emails: string[] }[] = [];
 let delivery = { emailFailures: 0 } as { emailFailures: number; emailsQueued?: number; emailProgress?: string };
 const s3 = new Map<string, string>();
 let packages: Row[] = [];
+let mappings: { orgId: string; agentId: string; agentVersion: number; skillVersionId: string; createdAt: Date }[] = [];
 
 const matches = (agent: Row, where: Row) => Object.entries(where).every(([key, value]) => {
   if (key === "archivedAt") return value === null ? agent.archivedAt == null : agent.archivedAt != null;
@@ -33,9 +35,22 @@ const fakeDb = {
     findMany: async () => [{ version: 1, createdAt: new Date("2026-10-28") }],
   },
   skillVersion: {
+    findFirst: async ({ where }: { where: Row }) => packages.find((row) =>
+      row.id === where.id && row.status === where.status && matches(row.skill as Row, where.skill as Row)) ?? null,
     findMany: async ({ where }: { where: Row }) => packages.filter((row) =>
       row.skillId === where.skillId && row.artifacts === where.artifacts && row.status === where.status &&
       matches(row.skill as Row, where.skill as Row)),
+  },
+  agentSkillVersion: {
+    findFirst: async ({ where }: { where: { orgId: string; agentId: string; agentVersion: number } }) => {
+      const mapping = mappings.find((row) => row.orgId === where.orgId && row.agentId === where.agentId && row.agentVersion === where.agentVersion);
+      const agent = agents.find((row) => row.id === where.agentId && row.orgId === where.orgId);
+      if (!mapping || !agent) return null;
+      return { ...mapping, agent, version: packages.find((row) => row.id === mapping.skillVersionId) };
+    },
+    findMany: async ({ where }: { where: { orgId: string; agentId: string; version: { skill: Row } } }) => mappings.filter((row) =>
+      row.orgId === where.orgId && row.agentId === where.agentId &&
+      packages.some((pkg) => pkg.id === row.skillVersionId && matches(pkg.skill as Row, where.version.skill))),
   },
   rolePlayAssignment: { findMany: async () => [] },
   knowledgeDocument: { findMany: async () => [] },
@@ -73,6 +88,7 @@ beforeEach(() => {
   invited.length = 0;
   s3.clear();
   packages = [];
+  mappings = [];
   agents = [
     { id: "a1", orgId: "org1", slug: "olga-olga-twin", name: "Olga's twin", kind: "TWIN", version: 5, data: { source: "twin" }, archivedAt: null, updatedAt: new Date() },
     { id: "a2", orgId: "org1", slug: "olga-objection-handling", name: "Objection Handling", kind: "TWIN", version: 2, data: { source: "twin-creator", skill: "# v2", artifacts: "art/v2", scenario: { skill: "objection-handling" } }, archivedAt: null, updatedAt: new Date() },
@@ -131,10 +147,17 @@ const managedPackage = (format: SkillFormat = "twin", artifacts = "art/v2") => {
     "patterns.md": "Managed patterns",
   };
   return {
+    id: `managed-${artifacts}`,
     skillId: "managed-skill", artifacts, status: "ready", indexStatus: "failed",
     skill: { orgId: "org1", ownerSlug: "olga-objection-handling" },
     format, files, manifest, skillText: files["SKILL.md"], itemCount: 1, contentHash: skillPackageHash(format, files),
   };
+};
+
+const mapPackage = (version: number, pkg: ReturnType<typeof managedPackage>) => {
+  packages.push(pkg);
+  mappings.push({ orgId: "org1", agentId: "a2", agentVersion: version, skillVersionId: pkg.id, createdAt: new Date("2026-10-29") });
+  agents[1].primarySkillId = pkg.skillId;
 };
 
 test.each(["twin", "legacy-twin"] as const)("getSkill uses verified %s package bytes without S3 or a ready index", async (format) => {
@@ -164,6 +187,66 @@ test("ambiguous managed package identity refuses rather than choosing a version"
   agents[1].primarySkillId = "managed-skill";
   packages.push(managedPackage(), managedPackage());
   await expect(run({ action: "getSkill", slug: "olga-objection-handling" })).rejects.toMatchObject({ code: "skill_package_unavailable" });
+});
+
+test.each(["twin", "legacy-twin", "builder-roleplay", "authored-roleplay"] as const)("mapped %s reads survive stripped package fields with the correct public kind", async (format) => {
+  mapPackage(2, managedPackage(format));
+  agents[1].data = { source: "obsolete", objective: "Keep experience" };
+  agents[1].kind = format.includes("roleplay") ? "ROLEPLAY" : "TWIN";
+  expect(await run({ action: "getSkill", slug: "olga-objection-handling" })).toMatchObject({
+    version: 2, currentVersion: 2, skill: "# Managed instructions", items: [{ id: "managed" }],
+    kind: format === "twin" ? "twin-skill" : format === "legacy-twin" ? "twin-skill-legacy" : format === "builder-roleplay" ? "roleplay-builder" : "roleplay-recordings",
+  });
+});
+
+test("mapped history remains discoverable and readable without a SpecVersion snapshot", async () => {
+  agents[1].version = 5;
+  agents[1].data = { source: "twin-creator" };
+  mapPackage(4, managedPackage("legacy-twin", "art/historical"));
+  mapPackage(5, managedPackage("twin", "art/current"));
+  const result = await run({ action: "getSkill", slug: "olga-objection-handling", version: 4 });
+  expect(result).toMatchObject({
+    version: 4, currentVersion: 5, kind: "twin-skill-legacy",
+    versions: [{ version: 5, current: true }, { version: 4, savedAt: "2026-10-29T00:00:00.000Z" }, { version: 1, savedAt: "2026-10-28T00:00:00.000Z" }],
+  });
+});
+
+test("mapped corruption and foreign ownership never fall back to otherwise valid saved artifacts", async () => {
+  mapPackage(2, { ...managedPackage("twin", "art/mapped"), contentHash: "corrupted" });
+  packages.push(managedPackage());
+  await expect(run({ action: "getSkill", slug: "olga-objection-handling" })).rejects.toMatchObject({ code: "skill_package_unavailable" });
+  packages[0] = { ...managedPackage("twin", "art/mapped"), skill: { orgId: "foreign", ownerSlug: "olga-objection-handling" } };
+  await expect(run({ action: "getSkill", slug: "olga-objection-handling" })).rejects.toMatchObject({ code: "skill_package_unavailable" });
+});
+
+test("list hydrates package identity but preserves experience description and public shape", async () => {
+  mapPackage(2, managedPackage());
+  agents[1].data = { source: "twin-creator", objective: "Experience description" };
+  const result = await run({ action: "list", kind: "twin" }) as { items: Row[] };
+  expect(result.items[1]).toMatchObject({ skillId: "objection-handling", description: "Experience description", version: 2, kind: "twin-skill" });
+  expect(result.items[1]).not.toHaveProperty("primarySkillId");
+  expect(result.items[1]).not.toHaveProperty("data");
+});
+
+test("get hydrates a stripped roleplay builder while retaining After and Before experience settings", async () => {
+  const rendered = renderRoleplay("objection-handling", {
+    name: "Practice", persona: "olga", situation: { scenario: "Ask for a meeting", learnerRole: "Advisor" },
+    difficulty: "medium", opening: "Why meet?", exampleLines: [], guardedIf: [], opensUpIf: [],
+    learnerGoals: ["Published goal"], rubric: [{ name: "Published rubric", points: 100 }],
+  });
+  const pkg = managedPackage("builder-roleplay");
+  const files = { ...pkg.files, "scenario.json": JSON.stringify(rendered.scenario) };
+  mapPackage(2, { ...pkg, manifest: rendered.scenario, files, contentHash: skillPackageHash("builder-roleplay", files) });
+  agents[1].kind = "ROLEPLAY";
+  agents[1].data = {
+    source: "roleplay-skill", objective: "Experience description",
+    before: { preUpload: true }, after: { goals: ["Edited goal"], rubric: [{ name: "Edited rubric", points: 70 }] },
+  };
+  expect(await run({ action: "get", slug: "olga-objection-handling", kind: "roleplay" })).toMatchObject({
+    kind: "roleplay-builder", version: 2, description: "Experience description",
+    settings: { preUpload: true },
+    builder: { name: "Practice", opening: "Why meet?", learnerGoals: ["Edited goal"], rubric: [{ name: "Edited rubric", points: 70 }] },
+  });
 });
 
 test("each module reads only its own kind", async () => {

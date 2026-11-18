@@ -50,6 +50,8 @@ describe.skipIf(!localMinutesDb)("Phase 1 shared skill publishing (real Postgres
     for (const fixture of [other, f]) {
       await db.agent.updateMany({ where: { orgId: fixture.org.id }, data: { primarySkillId: null } });
       await db.skill.updateMany({ where: { orgId: fixture.org.id }, data: { currentVersionId: null } });
+      await db.agentSkillVersion.deleteMany({ where: { orgId: fixture.org.id } });
+      await db.skillVersionSource.deleteMany({ where: { orgId: fixture.org.id } });
       await db.skillVersion.deleteMany({ where: { skill: { orgId: fixture.org.id } } });
       await db.skill.deleteMany({ where: { orgId: fixture.org.id } });
       await db.specVersion.deleteMany({ where: { orgId: fixture.org.id } });
@@ -120,6 +122,9 @@ describe.skipIf(!localMinutesDb)("Phase 1 shared skill publishing (real Postgres
       skillId: skill.id, version: 1, format: kind === "builder" ? "builder-roleplay" : kind === "authored" ? "authored-roleplay" : kind,
       status: "ready", indexStatus: "ready", artifacts: saved.artifacts,
     });
+    expect(await db.agentSkillVersion.findMany({ where: { agentId: row.id } })).toEqual([
+      expect.objectContaining({ orgId: f.org.id, agentVersion: saved.version, skillVersionId: version.id }),
+    ]);
     const packageFiles = skillFiles(version.files);
     expect(Object.keys(packageFiles).sort()).toEqual(kind === "twin"
       ? ["SKILL.md", "items.json", "skill.json"] : kind === "builder"
@@ -189,6 +194,14 @@ describe.skipIf(!localMinutesDb)("Phase 1 shared skill publishing (real Postgres
     expect((await agent(saved.slug)).data).toMatchObject({ after: { goals: ["Uncover the real concern"], rubric: [{ name: "Listens carefully", points: 80 }] } });
     expect(putObject.mock.calls.length).toBe(writes);
     expect(writeSkill).toHaveBeenCalledTimes(1);
+    const changed = await agent(saved.slug);
+    expect(changed.version).toBeGreaterThan(saved.version);
+    expect(await db.agentSkillVersion.findMany({
+      where: { agentId: changed.id }, orderBy: { agentVersion: "asc" },
+    })).toEqual([
+      expect.objectContaining({ orgId: f.org.id, agentVersion: saved.version, skillVersionId: original.id }),
+      expect.objectContaining({ orgId: f.org.id, agentVersion: changed.version, skillVersionId: original.id }),
+    ]);
   });
 
   test("changing the assigned persona does not advance SkillVersion or rewrite package files", async () => {
@@ -202,6 +215,14 @@ describe.skipIf(!localMinutesDb)("Phase 1 shared skill publishing (real Postgres
     expect(await agent(saved.slug)).toMatchObject({ personaId: persona.id });
     expect(putObject.mock.calls.length).toBe(writes);
     expect(writeSkill).toHaveBeenCalledTimes(1);
+    const changed = await agent(saved.slug);
+    expect(changed.version).toBeGreaterThan(saved.version);
+    expect(await db.agentSkillVersion.findMany({
+      where: { agentId: changed.id }, orderBy: { agentVersion: "asc" },
+    })).toEqual([
+      expect.objectContaining({ orgId: f.org.id, agentVersion: saved.version, skillVersionId: original.id }),
+      expect.objectContaining({ orgId: f.org.id, agentVersion: changed.version, skillVersionId: original.id }),
+    ]);
   });
 
   test.each(["first publication", "update"] as const)("concurrent identical %s converges on one package, pointer and Agent version", async (mode) => {

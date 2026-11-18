@@ -7,6 +7,11 @@ type SkillRow = Row & { id: string; nextVersion: number; generation: number; cur
 type SkillVersionRow = Row & { id: string; skillId: string; version: number; contentHash: string; status: string };
 const skills: SkillRow[] = [];
 const skillVersions: SkillVersionRow[] = [];
+type MappingRow = { agentId: string; agentVersion: number; orgId: string; skillVersionId: string };
+type SourceRow = { skillVersionId: string; orgId: string; documentId: string; title: string; items: number };
+const mappings: MappingRow[] = [];
+const packageSources: SourceRow[] = [];
+const legacySources: Row[] = [];
 const skillItems = new Map<string, unknown[]>();
 const agents: Row[] = [];
 const s3 = new Map<string, string>();
@@ -15,6 +20,7 @@ let knowledgeWhere: Row | null = null;
 let personaWhere: Row | null = null;
 let savedSession: Row | null = null;
 const searches: { orgId: string; scope: { slug: string; version: number }[]; options: { role?: string; steps?: unknown[] } }[] = [];
+const managedSearches: { orgId: string; scope: { skillVersionId: string; indexScope: string; itemCount: number }[]; options: { role?: string; steps?: unknown[] } }[] = [];
 const vectors: { orgId: string; slug: string; version: number; items: unknown[] }[] = [];
 const knowledgeDocs: { id: string; title: string; s3MarkdownKey: string; updatedAt: Date }[] = [];
 
@@ -72,6 +78,9 @@ const fakeDb = {
     },
   },
   skillVersion: {
+    findMany: async ({ where }: { where: { skillId: string; artifacts: string; status: string; skill: { orgId: string; ownerSlug: string } } }) =>
+      skillVersions.filter(version => version.skillId === where.skillId && version.artifacts === where.artifacts && version.status === where.status
+        && skills.some(skill => skill.id === version.skillId && skill.orgId === where.skill.orgId && skill.ownerSlug === where.skill.ownerSlug)).map(row => ({ ...row })),
     findUniqueOrThrow: async ({ where }: { where: { id: string } }) => {
       const row = skillVersions.find(version => version.id === where.id);
       if (!row) throw new Error(`Missing skill version ${where.id}`);
@@ -99,7 +108,59 @@ const fakeDb = {
   },
   domain: { findUnique: async () => null, create: async () => {} },
   specVersion: { create: async () => {} },
-  skillSource: { createMany: async () => ({ count: 0 }) },
+  agentSkillVersion: {
+    findUnique: async ({ where }: { where: { agentId_agentVersion: { agentId: string; agentVersion: number } } }) =>
+      mappings.find(row => row.agentId === where.agentId_agentVersion.agentId && row.agentVersion === where.agentId_agentVersion.agentVersion) ?? null,
+    findUniqueOrThrow: async ({ where }: { where: { agentId_agentVersion: { agentId: string; agentVersion: number } } }) => {
+      const row = mappings.find(row => row.agentId === where.agentId_agentVersion.agentId && row.agentVersion === where.agentId_agentVersion.agentVersion);
+      if (!row) throw new Error("Missing mapping");
+      return { ...row };
+    },
+    createMany: async ({ data, skipDuplicates }: { data: MappingRow[]; skipDuplicates: boolean }) => {
+      let count = 0;
+      for (const row of data) {
+        const agent = agents.find(agent => agent.id === row.agentId);
+        const version = skillVersions.find(version => version.id === row.skillVersionId);
+        const skill = skills.find(skill => skill.id === version?.skillId);
+        if (!agent || agent.orgId !== row.orgId || skill?.orgId !== row.orgId || skill.ownerSlug !== agent.slug || version?.status !== "ready" || row.agentVersion <= 0) throw new Error("Invalid history mapping");
+        if (mappings.some(saved => saved.agentId === row.agentId && saved.agentVersion === row.agentVersion)) {
+          if (!skipDuplicates) throw new Error("Duplicate history mapping");
+          continue;
+        }
+        mappings.push({ ...row }); count++;
+      }
+      return { count };
+    },
+  },
+  skillVersionSource: {
+    findMany: async ({ where }: { where: { skillVersionId: string } }) =>
+      packageSources.filter(row => row.skillVersionId === where.skillVersionId).map(row => ({ ...row })),
+    createMany: async ({ data, skipDuplicates }: { data: SourceRow[]; skipDuplicates: boolean }) => {
+      let count = 0;
+      for (const row of data) {
+        const version = skillVersions.find(version => version.id === row.skillVersionId);
+        if (!skills.some(skill => skill.id === version?.skillId && skill.orgId === row.orgId) || row.items < 0) throw new Error("Invalid package source");
+        if (packageSources.some(saved => saved.skillVersionId === row.skillVersionId && saved.documentId === row.documentId)) {
+          if (!skipDuplicates) throw new Error("Duplicate package source");
+          continue;
+        }
+        packageSources.push({ ...row }); count++;
+      }
+      return { count };
+    },
+  },
+  skillSource: {
+    findMany: async ({ where }: { where: Row }) => legacySources.filter(row => Object.entries(where).every(([key, value]) => row[key] === value)),
+    createMany: async ({ data, skipDuplicates }: { data: Row[]; skipDuplicates: boolean }) => {
+      for (const row of data) {
+        if (legacySources.some(saved => saved.agentId === row.agentId && saved.version === row.version && saved.documentId === row.documentId)) {
+          if (!skipDuplicates) throw new Error("Duplicate legacy source");
+          continue;
+        }
+        legacySources.push({ ...row });
+      }
+    },
+  },
   knowledgeDocument: {
     findMany: async (args: { where: Row }) => {
       knowledgeWhere = args.where;
@@ -147,7 +208,15 @@ mock.module("@/lib/main-collection", () => ({
     searchScenarioItems: async (orgId: string, scope: { slug: string; version: number }[], _query: string, options: { role?: string; steps?: unknown[] }) => {
       searches.push({ orgId, scope, options });
       return vectors.filter(vector => vector.orgId === orgId && scope.some(entry => entry.slug === vector.slug && entry.version === vector.version))
-        .flatMap(vector => vector.items as { role: string; text: string }[]).filter(item => item.role === options.role);
+         .flatMap(vector => vector.items as { role: string; text: string }[]).filter(item => item.role === options.role);
+    },
+    searchSkillItems: async (orgId: string, scope: { skillVersionId: string; indexScope: string; itemCount: number }[], _query: string, options: { role?: string; steps?: unknown[] }) => {
+      managedSearches.push({ orgId, scope, options });
+      return scope.flatMap(entry => {
+        const items = skillItems.get(`${orgId}/${entry.skillVersionId}/${entry.indexScope}`);
+        if (!items || items.length !== entry.itemCount) throw new Error("Unavailable managed index");
+        return items as { role: string; text: string }[];
+      }).filter(item => item.role === options.role);
     },
     pruneScenarioItems: async () => {},
   },
@@ -227,6 +296,7 @@ test("an ingest publication lands in S3, Chroma and Postgres, files byte for byt
   expect(skills[0].currentVersionId).toBe(skillVersions[0].id);
   expect(skillVersions[0]).toMatchObject({ status: "ready", indexStatus: "ready", itemCount: 1 });
   expect(skillItems.get(`org1/${skillVersions[0].id}/${v1}`)).toEqual(items);
+  expect(mappings).toEqual([{ agentId: agents[0].id, agentVersion: 1, orgId: "org1", skillVersionId: skillVersions[0].id }]);
   const published = agents[0].data as Row;
   expect(published.skill).toBe(skill);
   expect(isRunnableAgentData("ROLEPLAY", published)).toBe(true);
@@ -256,7 +326,10 @@ test("an ingest publication lands in S3, Chroma and Postgres, files byte for byt
   expect(wrongOrg.status).toBe(404);
   expect(await wrongOrg.json()).toMatchObject({ code: "not_found" });
   await request({ ...search, sessionId: undefined });
-  expect(searches.at(-1)).toMatchObject({ scope: [{ slug: "acme-fundamental-depth", version: 2 }], options: { role: "client" } });
+  expect(managedSearches.at(-1)).toMatchObject({
+    orgId: "org1", scope: [{ skillVersionId: skillVersions[0].id, indexScope: v1, itemCount: 1 }],
+    options: { role: "trainer", steps: scenarioJson.steps },
+  });
   await request({ ...search, role: "learner" });
   expect(searches.at(-1)?.options.role).toBe("learner");
   savedSession = null;

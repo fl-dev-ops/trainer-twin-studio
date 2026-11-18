@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { db, withLock } from "@/lib/db";
+import { carryAgentSkillVersion } from "@/lib/skill-history";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import { avatarPrefix, deleteObject, deletePrefix, getObjectBytes, presignedGetUrl, presignedPutUrl, putObject, voicePrefix } from "@/lib/s3";
 import { professionalHeadshot } from "@/lib/headshot";
@@ -177,6 +178,7 @@ export async function savePersonaVoice(orgId: string, input: { voiceId: string; 
       void _dropped;
       await tx.specVersion.create({ data: { entityType: "agents", entitySlug: twin.slug, version: twin.version, data: json(twin.data), orgId } });
       await tx.agent.update({ where: { id: twin.id }, data: { version: twin.version + 1, data: json(data) } });
+      if (twin.primarySkillId) await carryAgentSkillVersion(orgId, twin.id, twin.version, twin.version + 1, tx);
     }
     return copied;
   });

@@ -186,6 +186,26 @@ the runtime contract: the session creation and runtime readers must ship togethe
 
 Phase 3 extends the same pin mechanism to twins; the role-play contracts below remain applicable.
 
+### Phase 4 history mapping and import
+
+- `AgentSkillVersion` maps `(agentId, agentVersion)` to a ready same-org/owner package. Mapping updates are forbidden;
+  several experience versions may share content identity. Index availability is operational, not mapping identity.
+- `SkillVersionSource` owns package provenance, including saved titles for deleted documents. Legacy source rows remain
+  for unmapped history. Settings-only versions use the same package provenance.
+- Publication records exact mappings and source links atomically. Current/history readers prefer explicit mappings,
+  never a mutable current pointer. Runtime hydration excludes package files; explicit history verification can load them.
+- Org-scoped import is dry-run by default, bounded/resumable, with explicit apply/check and complete coverage reports.
+  Import verifies original S3 bytes, format, projections, canonical/recognized legacy hashes, example counts and source
+  consistency before readiness. Optional missing evidence is distinguished from storage permission/service failure.
+- Deduplication is owner-local. Every differing original artifact prefix is independently verified byte-identical
+  before mapping it to an existing package. Conflicting provenance or duplicate ready identities refuse explicitly.
+- Current, archived, historical, session-only and mapping-only references remain inventoried. Package-free mapped
+  records verify through immutable envelopes plus original S3 objects, not invented compatibility fields.
+- Publication/index-generation checks prevent import taking over a newer publication. Interrupted claims are visible and
+  retryable. Missing/corrupt current or required history blocks cutover; legacy historical gaps remain explicitly reported.
+- Import does not rewrite sessions or identity/access/billing/report records. Production-copy rehearsal, production
+  execution, destructive cleanup and live-provider approval are separate, uncompleted operational gates.
+
 ### Phase 3 twin adoption
 
 - `loadSessionSkills` is the generalized authorized resolver. Single managed twins have one position-zero owner pin.

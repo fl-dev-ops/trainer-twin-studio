@@ -14,8 +14,8 @@ The durable plan is this file; do not delete it as a temporary planning artifact
 | 1 — Registry + publisher | Complete implementation/local verification | Live comparison deferred until all phases; not deployed |
 | 2 — Role-play runtime | Complete implementation/local verification | Exact pins, strict retrieval and recovery verified; live checks deferred |
 | 3 — Twin runtime | Complete implementation/local verification | Single/main/mixed/empty catalogs verified; live checks deferred |
-| 4 — Existing-data migration | In progress | Tooling and isolated rehearsal; production execution unapproved |
-| 5 — Sole package ownership | Not started | Blocked on verified migration coverage and canary |
+| 4 — Existing-data migration | Complete tooling/local verification | Production-copy rehearsal and production execution unapproved |
+| 5 — Sole package ownership | In progress | Default compatibility; explicit verified approval required for cutover |
 
 Current checkpoint: registry/publisher and managed role-play runtime adoption are implemented. New managed role-play
 sessions pin exact packages; twins and null-marker sessions retain compatibility readers. No production credentials,
@@ -202,6 +202,50 @@ Only additive `20261119150000_twin_skill_pins` was applied at this gate, to the 
 See `shared-skills-phase-3-release.md` for the behavior matrix and deferred live/performance comparison.
 Next: complete verified history import/mapping/provenance tooling and its isolated migration rehearsals (Phase 4), then
 implement the explicitly gated ownership switch (Phase 5). No production-copy rehearsal or live canary is claimed.
+
+### Phase 4 checkpoint — 19 Nov 2026
+
+Phase 3 commit: `4cc3a09`. Phase 4 commit subject: `feat(skills): import verified package history and provenance`.
+
+Added immutable Agent-version mappings and package-owned source links. Publications/no-ops record exact mappings;
+settings/avatar version changes carry the existing mapping. Managed runtime and copilot/spec/history readers resolve
+the exact mapping first, with lightweight projections (no per-turn package files or hashing). Legacy unmapped history
+retains its explicit artifact decoder.
+
+The org-scoped migration defaults to dry-run and supports apply/check, bounded resumable cursors and a full coverage
+hash. It inventories current/archived/history/session-only references, verifies original format-specific S3 bytes and
+hashes, preserves deleted-document source titles and maps identical settings versions without merging owners.
+Missing/corrupt/conflicting data is actionable, not fabricated. Managed indexes are verified/rebuilt with fenced claims.
+No session snapshots, assignments, balances, personas or reports are rewritten.
+
+Review caught two additional cases, now tested: package-free mapped history must remain verifiable; and deduplicated
+original prefixes plus a subsequently hydrated session snapshot must be accepted only after independent byte-identical
+S3 verification. The migration suite has **27 tests / 138 assertions**, including actual activation after import.
+History mappings require ready content, not a currently ready index; new session pins still require both.
+
+| Check | Result |
+| --- | --- |
+| Completed-phase DB suite | **891 pass, 0 fail**, 51 files / 4552 assertions |
+| Publisher/copilot/source/twin/runnable focused suites | **82 pass, 0 fail**, 7 files |
+| Web flows | **150 pass, 0 fail**, 9 files |
+| Chat tests | **125 pass, 0 fail**, 19 files |
+| TypeScript / touched-file ESLint | Pass; 3 existing `specs.ts` warnings |
+| Local build | Pass after security-advisory retry; advisory unresolved |
+
+DB command excludes only future-phase files: `bun test --parallel
+--path-ignore-patterns='**/skill-ownership*.db.test.ts'
+--path-ignore-patterns='**/package-free-readers.db.test.ts' .db.test`.
+New restrictive references required dependency-correct fixture cleanup; assertions and production constraints remain.
+An intermediate run hit an existing assignment/role-change race returning not_found instead of its expected conflict;
+it was not counted green or weakened. Standalone rerun passed all tests.
+
+Only isolated local DB migrations were used. The Phase 5 ownership table was also prepared there, default compatibility;
+its initial uncommitted FK named `Organization` instead of mapped `organization`, caught on apply and corrected.
+The failed local statement created no table; it was marked rolled back and reapplied successfully. No real org was
+activated and no production migration ran.
+
+See `shared-skills-migration.md` for commands/safety/rollback. Next automatically finish Phase 5 package-free
+publication and reader/approval/rollback tests; leave real-org activation disabled pending final live verification.
 
 ## Goal
 

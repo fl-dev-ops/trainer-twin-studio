@@ -12,6 +12,7 @@ import { accessUntilSchema, listTwinAssignments } from "@/lib/twin-access";
 import { updateTwin } from "@/lib/twin/manage";
 import { TWIN_SOURCE } from "@/lib/twins";
 import { readSkillPackage, skillRefusals } from "@/lib/skills";
+import { getMappedSkillPackage, hydrateAgentSkill } from "@/lib/skill-history";
 
 /**
  * What the copilot may read and change in the studio, for one org (plans/copilot-v2.md). Twins, twin skills and role
@@ -114,10 +115,11 @@ export async function runCopilotStudio(actor: Actor, input: CopilotStudioInput, 
           ...(input.includeArchived ? {} : { archivedAt: null }),
         },
         orderBy: [{ kind: "asc" }, { name: "asc" }],
-        select: { slug: true, name: true, kind: true, version: true, data: true, archivedAt: true, updatedAt: true },
+        select: { id: true, primarySkillId: true, slug: true, name: true, kind: true, version: true, data: true, archivedAt: true, updatedAt: true },
       });
+      const hydrated = await Promise.all(agents.map((agent) => hydrateAgentSkill(orgId, agent, d.db)));
       return {
-        items: agents.map((agent) => ({
+        items: hydrated.map((agent) => ({
           slug: agent.slug,
           name: agent.name,
           kind: kindOf(agent),
@@ -132,10 +134,11 @@ export async function runCopilotStudio(actor: Actor, input: CopilotStudioInput, 
     }
 
     case "get": {
-      const agent = await findAgent(d, orgId, input.slug);
-      if (input.kind && (agent.kind === "TWIN") !== (input.kind === "twin")) {
-        throw new ScenarioIngestError(`"${input.slug}" is a ${agent.kind === "TWIN" ? "twin" : "role play"}, not a ${input.kind === "twin" ? "twin" : "role play"}`, 400);
+      const stored = await findAgent(d, orgId, input.slug);
+      if (input.kind && (stored.kind === "TWIN") !== (input.kind === "twin")) {
+        throw new ScenarioIngestError(`"${input.slug}" is a ${stored.kind === "TWIN" ? "twin" : "role play"}, not a ${input.kind === "twin" ? "twin" : "role play"}`, 400);
       }
+      const agent = await hydrateAgentSkill(orgId, stored, d.db);
       const kind = kindOf(agent);
       const base = {
         slug: agent.slug, name: agent.name, kind, version: agent.version, archived: agent.archivedAt !== null,
@@ -164,32 +167,46 @@ export async function runCopilotStudio(actor: Actor, input: CopilotStudioInput, 
       // A published skill package (twin skill or role play): the baseline for an update, or an older version to restore.
       const agent = await findAgent(d, orgId, input.slug);
       const version = input.version ?? agent.version;
-      const data = version === agent.version
+      const mapped = await getMappedSkillPackage(orgId, agent.id, version, d.db, { verifyFiles: true });
+      const data = mapped ? {} : version === agent.version
         ? asRecord(agent.data)
         : asRecord((await d.db.specVersion.findFirst({ where: { orgId, entityType: "agents", entitySlug: agent.slug, version }, select: { data: true } }))?.data);
-      const artifacts = text(data.artifacts);
-      if (!artifacts || typeof data.skill !== "string") throw new ScenarioIngestError(`"${agent.slug}" v${version} has no published skill files`, 404);
-      const managed = agent.primarySkillId
+      const artifacts = mapped?.version.artifacts ?? text(data.artifacts);
+      const managed = mapped ?? (agent.primarySkillId && artifacts
         ? await readSkillPackage(orgId, agent.slug, agent.primarySkillId, artifacts, d.db)
-        : null;
+        : null);
       if (agent.primarySkillId && version === agent.version && !managed) throw skillRefusals.unavailable();
+      if (!managed && (!artifacts || typeof data.skill !== "string")) throw new ScenarioIngestError(`"${agent.slug}" v${version} has no published skill files`, 404);
+      const packageFiles = managed?.files;
+      if (managed && !packageFiles) throw skillRefusals.unavailable();
       const manifestFile = agent.kind === "TWIN" ? "skill.json" : "scenario.json";
       const read = (file: string) => d.getObjectText(`${artifacts}/${file}`).catch(() => null);
-      const [manifest, items, patterns] = managed
-        ? [managed.files[managed.version.format === "twin" ? "skill.json" : "scenario.json"], managed.files["items.json"], managed.files["patterns.md"] ?? null]
+      const [manifest, items, patterns] = packageFiles && managed
+        ? [packageFiles[managed.version.format === "twin" ? "skill.json" : "scenario.json"], packageFiles["items.json"], packageFiles["patterns.md"] ?? null]
         : await Promise.all([read(manifestFile), read("items.json"), read("patterns.md")]);
-      const versions = await d.db.specVersion.findMany({
-        where: { orgId, entityType: "agents", entitySlug: agent.slug },
-        orderBy: { version: "desc" },
-        select: { version: true, createdAt: true },
-      });
+      const [versions, mappings] = await Promise.all([
+        d.db.specVersion.findMany({
+          where: { orgId, entityType: "agents", entitySlug: agent.slug },
+          orderBy: { version: "desc" },
+          select: { version: true, createdAt: true },
+        }),
+        d.db.agentSkillVersion.findMany({
+          where: { orgId, agentId: agent.id, agent: { orgId }, version: { skill: { orgId, ownerSlug: agent.slug } } },
+          select: { agentVersion: true, createdAt: true },
+        }),
+      ]);
+      const history = new Map(mappings.map((row) => [row.agentVersion, row.createdAt]));
+      for (const row of versions) history.set(row.version, row.createdAt);
+      history.delete(agent.version);
       return {
         slug: agent.slug,
-        kind: kindOf(agent),
+        kind: managed ? managed.version.format === "twin" ? "twin-skill"
+          : managed.version.format === "legacy-twin" ? "twin-skill-legacy"
+            : managed.version.format === "builder-roleplay" ? "roleplay-builder" : "roleplay-recordings" : kindOf(agent),
         name: agent.name,
         version,
         currentVersion: agent.version,
-        versions: [{ version: agent.version, current: true }, ...versions.map((row) => ({ version: row.version, savedAt: row.createdAt.toISOString() }))],
+        versions: [{ version: agent.version, current: true }, ...[...history].sort(([a], [b]) => b - a).map(([version, createdAt]) => ({ version, savedAt: createdAt.toISOString() }))],
         skill: managed?.version.skillText ?? data.skill,
         manifest: manifest ? JSON.parse(manifest) : asRecord(data.scenario),
         items: items ? JSON.parse(items) : [],

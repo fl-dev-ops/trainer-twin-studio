@@ -7,6 +7,9 @@ import * as jev from "@/lib/jev";
 import { activateSession, authorizeRuntimeSession, finalizeInterviewSession } from "@/lib/interview-sessions";
 import { buildSessionContext } from "@/lib/session-context";
 import { twinRouter } from "@/lib/twin/trpc";
+import { updateTwin } from "@/lib/twin/manage";
+import { builtFrom } from "@/lib/skill-sources";
+import { readAgentSkillVersion } from "@/lib/skill-history";
 import { scoreCalibrationOnce } from "@/lib/twin/calibration-score";
 import { endTwinSession } from "@/workflows/end-twin-session";
 import { skillRefusals } from "@/lib/skills";
@@ -72,6 +75,8 @@ describe.skipIf(process.env.DATABASE_URL !== isolatedDatabase)("Phase 3 twin ski
       await db.contextDocument.deleteMany({ where: { orgId: fixture.org.id } });
       await db.agent.updateMany({ where: { orgId: fixture.org.id }, data: { primarySkillId: null } });
       await db.skill.updateMany({ where: { orgId: fixture.org.id }, data: { currentVersionId: null } });
+      await db.agentSkillVersion.deleteMany({ where: { orgId: fixture.org.id } });
+      await db.skillVersionSource.deleteMany({ where: { orgId: fixture.org.id } });
       await db.skillVersion.deleteMany({ where: { skill: { orgId: fixture.org.id } } });
       await db.skill.deleteMany({ where: { orgId: fixture.org.id } });
       await db.specVersion.deleteMany({ where: { orgId: fixture.org.id } });
@@ -338,11 +343,22 @@ describe.skipIf(process.env.DATABASE_URL !== isolatedDatabase)("Phase 3 twin ski
     expect((await row(call.id)).skillPins).toEqual(before.skillPins);
   });
 
-  test("managed activation refuses broken artifacts instead of trusting compatibility text", async () => {
+  test("unmapped managed activation refuses broken artifacts instead of trusting compatibility text", async () => {
     const saved = await publish();
+    const owner = await db.agent.findUniqueOrThrow({ where: { slug: saved.slug } });
+    const mapping = await db.agentSkillVersion.findUniqueOrThrow({
+      where: { agentId_agentVersion: { agentId: owner.id, agentVersion: owner.version } },
+    });
     await db.agent.update({ where: { slug: saved.slug }, data: { data: { skill: "# Not a published package" } } });
+    await db.agentSkillVersion.delete({
+      where: { agentId_agentVersion: { agentId: owner.id, agentVersion: owner.version } },
+    });
     await expect(start(saved.slug)).rejects.toMatchObject({ code: "skill_package_unavailable", status: 503 });
     expect(await db.interviewSession.count({ where: { orgId: f.org.id } })).toBe(0);
+    await db.agentSkillVersion.create({ data: mapping });
+    const call = await start(saved.slug);
+    expect((await row(call.id)).skillPins[0].skillVersionId).toBe(mapping.skillVersionId);
+    expect((await context(call.id, saved.slug)).agent?.data).toMatchObject({ skill: "# follow-up instructions v1\nAsk before advising.\n" });
   });
 
   test("mixed catalogs retain managed pin positions across intervening legacy entries", async () => {
@@ -507,5 +523,71 @@ describe.skipIf(process.env.DATABASE_URL !== isolatedDatabase)("Phase 3 twin ski
     expect((await row(first.id)).skillPins[0].version.version).toBe(1);
     expect((await row(second.id)).skillPins[0].version.version).toBe(2);
     expect((await row(first.id)).status).toBe("abandoned");
+  });
+
+  test.each(["ready", "failed"] as const)("twin settings edits retain package mappings and saved sources with a %s index", async (indexStatus) => {
+    const kb = await db.knowledgeBase.create({ data: { orgId: f.org.id, slug: "source", name: "Source" } });
+    const document = await db.knowledgeDocument.create({ data: {
+      kbId: kb.id, slug: "follow-up", title: "Original follow-up source", ext: "md", size: 80, s3SourceKey: "fixture/source.md",
+    } });
+    const saved = await ingestTwinSkill(f.org.id, {
+      personaSlug: f.org.slug, skill: "# Sourced follow-up\nAsk before advising.\n",
+      manifest: {
+        skill: "sourced-follow-up", name: "Sourced follow-up", description: "Original description",
+        situations: [{ id: "opening", name: "Opening" }],
+      },
+      items: [{ id: "line-1", role: "trainer", context: "Opening", text: "When would help?",
+        metadata: { step: "opening", source: document.id } }],
+    });
+    const call = await start(saved.slug);
+    const before = await row(call.id);
+    const originalContext = await context(call.id, saved.slug);
+    const owner = await db.agent.findUniqueOrThrow({ where: { slug: saved.slug } });
+    const versionId = before.skillPins[0].skillVersionId;
+    const originalSources = await db.skillVersionSource.findMany({ where: { skillVersionId: versionId } });
+    expect(originalSources).toEqual([expect.objectContaining({
+      orgId: f.org.id, documentId: document.id, title: document.title, items: 1,
+    })]);
+    if (indexStatus === "failed") {
+      await db.skillVersion.update({ where: { id: versionId }, data: { indexStatus } });
+    }
+    const beforeSettings = await row(call.id);
+    expect(beforeSettings.skillPins[0].version).toMatchObject({
+      id: versionId, indexStatus, contentHash: before.skillPins[0].version.contentHash,
+    });
+    const writes = files.size;
+    const changed = await updateTwin(f.org.id, saved.slug, {
+      name: "Updated follow-up", description: "Updated coaching description", settings: { preUpload: true },
+    });
+    expect(changed).toEqual({ version: owner.version + 1, changed: true });
+    expect(await db.agentSkillVersion.findMany({
+      where: { agentId: owner.id }, orderBy: { agentVersion: "asc" },
+    })).toEqual([
+      expect.objectContaining({ orgId: f.org.id, agentVersion: owner.version, skillVersionId: versionId }),
+      expect.objectContaining({ orgId: f.org.id, agentVersion: changed.version, skillVersionId: versionId }),
+    ]);
+    expect(await db.skillVersion.count({ where: { skillId: before.skillPins[0].version.skillId } })).toBe(1);
+    expect(await db.skillVersionSource.findMany({ where: { skillVersionId: versionId } })).toEqual(originalSources);
+    expect(await readAgentSkillVersion(f.org.id, owner.id, changed.version)).toMatchObject({ id: versionId, indexStatus });
+    await db.knowledgeDocument.delete({ where: { id: document.id } });
+    expect(await builtFrom(f.org.id, [{ agentId: owner.id, version: changed.version }])).toEqual([
+      { documentId: document.id, title: document.title, items: 1, exists: false },
+    ]);
+    expect((await row(call.id)).compiledSnapshot).toEqual(before.compiledSnapshot);
+    expect((await row(call.id)).skillPins).toEqual(beforeSettings.skillPins);
+    expect(files.size).toBe(writes);
+    if (indexStatus === "failed") {
+      await expect(start(saved.slug)).rejects.toMatchObject({ code: "skill_package_unavailable", status: 503 });
+      expect(await db.interviewSession.count({ where: { orgId: f.org.id } })).toBe(1);
+    } else {
+      expect(await context(call.id, saved.slug)).toEqual(originalContext);
+      const next = await start(saved.slug);
+      expect((await context(next.id, saved.slug)).agent).toMatchObject({
+        version: changed.version,
+        data: { name: "Updated follow-up", objective: "Updated coaching description", before: { preUpload: true },
+          skill: before.skillPins[0].version.skillText },
+      });
+      expect((await row(next.id)).skillPins[0].skillVersionId).toBe(versionId);
+    }
   });
 });

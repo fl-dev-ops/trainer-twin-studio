@@ -36,7 +36,7 @@ function validateVersion(version: ManagedRoleplayRuntimeVersion, kind: string) {
 
 export async function resolveRoleplaySnapshotSkill(
   orgId: string,
-  agent: { slug: string; primarySkillId: string | null; data: unknown },
+  agent: { id?: string; version?: number; slug: string; primarySkillId: string | null; data: unknown },
   client: Prisma.TransactionClient = db,
 ) {
   return resolveSnapshotSkill(orgId, agent, "ROLEPLAY", client);
@@ -44,10 +44,22 @@ export async function resolveRoleplaySnapshotSkill(
 
 export async function resolveSnapshotSkill(
   orgId: string,
-  agent: { slug: string; primarySkillId: string | null; data: unknown },
+  agent: { id?: string; version?: number; slug: string; primarySkillId: string | null; data: unknown },
   kind: "ROLEPLAY" | "TWIN",
   client: Prisma.TransactionClient = db,
 ) {
+  if (agent.id && agent.version !== undefined) {
+    const mapping = await client.agentSkillVersion.findUnique({
+      where: { agentId_agentVersion: { agentId: agent.id, agentVersion: agent.version } },
+      select: { orgId: true, version: { select: runtimeVersionSelect } },
+    });
+    if (mapping) {
+      const version = mapping.version;
+      if (mapping.orgId !== orgId || version.skill.orgId !== orgId || version.skill.ownerSlug !== agent.slug
+        || (agent.primarySkillId && version.skillId !== agent.primarySkillId)) throw skillRefusals.unavailable();
+      return validateVersion(version, kind);
+    }
+  }
   const artifacts = record(agent.data).artifacts;
   if (!agent.primarySkillId || typeof artifacts !== "string" || !artifacts) throw skillRefusals.unavailable();
   const versions = await client.skillVersion.findMany({

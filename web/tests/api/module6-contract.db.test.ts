@@ -48,6 +48,8 @@ describe.skipIf(!localMinutesDb)("Module 6 REST retries, account ownership and c
     for (const fixture of [other, f]) {
       await db.agent.updateMany({ where: { orgId: fixture.org.id }, data: { primarySkillId: null } });
       await db.skill.updateMany({ where: { orgId: fixture.org.id }, data: { currentVersionId: null } });
+      await db.agentSkillVersion.deleteMany({ where: { orgId: fixture.org.id } });
+      await db.skillVersionSource.deleteMany({ where: { orgId: fixture.org.id } });
       await db.skillVersion.deleteMany({ where: { skill: { orgId: fixture.org.id } } });
       await db.skill.deleteMany({ where: { orgId: fixture.org.id } });
       await db.apikey.deleteMany({ where: { referenceId: fixture.org.id } });

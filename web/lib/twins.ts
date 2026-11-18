@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import { validSlug } from "@/lib/specs";
 import { resolveSnapshotSkill, type SessionSkillCatalogEntry, type loadSessionSkills } from "@/lib/session-skills";
+import { hydrateAgentSkill } from "@/lib/skill-history";
 
 /**
  * A twin ("Ask Olga") is an open conversation with a trainer's persona that can draw on every
@@ -52,12 +53,14 @@ function toPlaybook(slug: string, name: string, agentData: unknown, version: num
 /** The skill twins (and their versions) an all-skills twin session is pinned to, saved when it starts. */
 export type PinnedTwinSkill = SessionSkillCatalogEntry;
 
-const liveSkillTwins = (orgId: string, personaId: string) =>
-  db.agent.findMany({
+const liveSkillTwins = async (orgId: string, personaId: string) => {
+  const rows = await db.agent.findMany({
     where: { orgId, personaId, kind: "TWIN", archivedAt: null },
     orderBy: [{ order: "asc" }, { name: "asc" }],
-    select: { slug: true, name: true, version: true, data: true },
+    select: { id: true, slug: true, name: true, primarySkillId: true, version: true, data: true },
   });
+  return Promise.all(rows.map((row) => row.primarySkillId ? hydrateAgentSkill(orgId, row) : row));
+};
 
 /** The persona's skill twins right now, to pin into a new session's snapshot. */
 export async function pinTwinSkills(orgId: string, personaId: string): Promise<PinnedTwinSkill[]> {
@@ -70,7 +73,7 @@ export async function resolveTwinCatalog(orgId: string, personaId: string, clien
   const rows = await client.agent.findMany({
     where: { orgId, personaId, kind: "TWIN", archivedAt: null },
     orderBy: [{ order: "asc" }, { name: "asc" }],
-    select: { slug: true, name: true, version: true, data: true, primarySkillId: true },
+    select: { id: true, slug: true, name: true, version: true, data: true, primarySkillId: true },
   });
   const catalog: PinnedTwinSkill[] = [];
   const pins: { skillVersionId: string; alias: string; position: number }[] = [];
@@ -106,7 +109,7 @@ export async function twinPlaybooks(orgId: string, personaId: string, pinned?: P
   const rows = pinned
     ? await db.agent.findMany({
         where: { orgId, personaId, kind: "TWIN", slug: { in: pinned.map((entry) => entry.slug) } },
-        select: { slug: true, name: true, version: true, data: true },
+        select: { id: true, slug: true, name: true, primarySkillId: true, version: true, data: true },
       })
     : await liveSkillTwins(orgId, personaId);
   if (!pinned) return rows.flatMap((row) => toPlaybook(row.slug, row.name, row.data, row.version) ?? []);
@@ -120,11 +123,15 @@ export async function twinPlaybooks(orgId: string, personaId: string, pinned?: P
       })
     : [];
   const snapshotOf = new Map(versions.map((row) => [`${row.entitySlug}@${row.version}`, row.data]));
-  return pinned.flatMap(({ slug, version }) => {
+  const playbooks = await Promise.all(pinned.map(async ({ slug, version }) => {
     const row = live.get(slug);
     const data = row?.version === version ? row.data : snapshotOf.get(`${slug}@${version}`);
-    return toPlaybook(slug, row?.name ?? slug, data, version) ?? [];
-  });
+    const hydrated = row?.primarySkillId
+      ? await hydrateAgentSkill(orgId, { ...row, version, data })
+      : { data };
+    return toPlaybook(slug, row?.name ?? slug, hydrated.data, version);
+  }));
+  return playbooks.flatMap((playbook) => playbook ?? []);
 }
 
 /** Creates the persona's twin if it does not exist yet. Safe to call again. */

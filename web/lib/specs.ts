@@ -20,6 +20,7 @@ import { enqueueIngestionWork } from "@/lib/ingestion-queue";
 import { type DocumentManifest } from "@/lib/context-document-service";
 import { saveUploadToS3 } from "@/lib/uploads";
 import { contextUploadFromAgentData, type AgentContextUpload } from "@/lib/context-upload";
+import { hydrateAgentSkill } from "@/lib/skill-history";
 
 export type SpecType = "personas" | "agents";
 
@@ -179,7 +180,8 @@ export async function listRunnableSpecs(type: "personas" | "agents", orgId: stri
       .filter(({ data }) => isRecord(data) && isRecord(data.style) && isRecord(data.decision_preferences))
       .map(({ slug }) => slug);
   }
-  const agents = await db.agent.findMany({ where: { orgId }, orderBy: [{ order: "asc" }, { name: "asc" }], select: { slug: true, data: true, personaId: true, kind: true } });
+  const rows = await db.agent.findMany({ where: { orgId }, orderBy: [{ order: "asc" }, { name: "asc" }], select: { id: true, slug: true, version: true, primarySkillId: true, data: true, personaId: true, kind: true } });
+  const agents = await Promise.all(rows.map((agent) => agent.primarySkillId ? hydrateAgentSkill(orgId, agent) : agent));
   return agents
     .filter((agent) => isRecord(agent.data) && Boolean(agent.personaId) && isRunnableAgentData(agent.kind, agent.data))
     .map(({ slug }) => slug);
@@ -274,12 +276,15 @@ export async function listScenarioIntroVideos(orgId: string, slugs: string[]) {
 
 export async function readSpec(type: SpecType, slug: string, orgId: string) {
   if (!validSlug(slug)) throw new Error(`Invalid id: ${slug}`);
-  const row: SpecRow | null = type === "personas"
+  const row: (SpecRow & { primarySkillId?: string | null }) | null = type === "personas"
     ? await db.persona.findUnique({ where: { orgId_slug: { orgId, slug } } })
     : await modelFor(type).findUnique({ where: { slug } });
   if (!row || row.orgId !== orgId) return null;
-  const doc = { schema_version: 1, kind: ENTITY_KEY[type], [ENTITY_KEY[type]]: row.data };
-  return { text: yaml.dump(doc, { lineWidth: -1 }), doc: row.data as Record<string, unknown>, version: row.version };
+  const resolved = type === "agents" && row.primarySkillId && row.id
+    ? await hydrateAgentSkill(orgId, { ...row, id: row.id })
+    : row;
+  const doc = { schema_version: 1, kind: ENTITY_KEY[type], [ENTITY_KEY[type]]: resolved.data };
+  return { text: yaml.dump(doc, { lineWidth: -1 }), doc: resolved.data as Record<string, unknown>, version: row.version };
 }
 
 export type SaveResult = {
@@ -296,9 +301,9 @@ export type SaveResult = {
  * Spec uploads and draft publishes rewrite an agent's whole data and bump its version with no files or examples: only
  * for older spec-built role plays. Builder role plays and twins are refused (specs/practice.md rule 20).
  */
-export function assertSpecBuilt(agent: { kind?: AgentKind; data: unknown }) {
+export function assertSpecBuilt(agent: { kind?: AgentKind; primarySkillId?: string | null; data: unknown }) {
   const data = (agent.data && typeof agent.data === "object" ? agent.data : {}) as Record<string, unknown>;
-  if (agent.kind === "TWIN" || data.source === ROLEPLAY_SOURCE || typeof data.skill === "string") {
+  if (agent.kind === "TWIN" || agent.primarySkillId || data.source === ROLEPLAY_SOURCE || data.source === "scenario-ingest" || typeof data.skill === "string") {
     throw refusals.invalidInput("Edit this one in its builder: spec uploads only change older spec-built role plays.");
   }
 }
@@ -415,8 +420,14 @@ export async function readVersion(type: SpecType, slug: string, version: number,
     where: { orgId_entityType_entitySlug_version: { orgId, entityType: type, entitySlug: slug, version } },
   });
   if (!row) return null;
-  const doc = { schema_version: 1, kind: ENTITY_KEY[type], [ENTITY_KEY[type]]: row.data };
-  return { text: yaml.dump(doc, { lineWidth: -1 }), data: row.data };
+  const agent = type === "agents"
+    ? await db.agent.findFirst({ where: { slug, orgId }, select: { id: true, slug: true, primarySkillId: true } })
+    : null;
+  const resolved = agent?.primarySkillId
+    ? await hydrateAgentSkill(orgId, { ...agent, version, data: row.data })
+    : row;
+  const doc = { schema_version: 1, kind: ENTITY_KEY[type], [ENTITY_KEY[type]]: resolved.data };
+  return { text: yaml.dump(doc, { lineWidth: -1 }), data: resolved.data };
 }
 
 // ---- Knowledge bases (S3 + ChromaDB) ----
@@ -650,14 +661,15 @@ export function documentManifestOf(doc: { id: string; name: string; kind: string
 }
 
 export async function getAgentConfigForAgent(agentId: string, orgId: string, contextId?: string, contextIds?: string[], client: Prisma.TransactionClient = db) {
-  const agent = await client.agent.findFirst({
+  const savedAgent = await client.agent.findFirst({
     where: {
       OR: [{ id: agentId }, { slug: agentId }],
       orgId,
     },
     include: { persona: true },
   });
-  if (!agent) return null;
+  if (!savedAgent) return null;
+  const agent = savedAgent.primarySkillId ? await hydrateAgentSkill(orgId, savedAgent, client) : savedAgent;
 
   const docIds = Array.from(new Set([...(contextIds ?? []), ...(contextId ? [contextId] : [])])).filter(Boolean);
   const contextDocs = docIds.length

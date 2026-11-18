@@ -54,6 +54,8 @@ describe.skipIf(!localMinutesDb)("Module 4 role-play saves (real Postgres locks)
     for (const fixture of [other, f]) {
       await db.agent.updateMany({ where: { orgId: fixture.org.id }, data: { primarySkillId: null } });
       await db.skill.updateMany({ where: { orgId: fixture.org.id }, data: { currentVersionId: null } });
+      await db.agentSkillVersion.deleteMany({ where: { orgId: fixture.org.id } });
+      await db.skillVersionSource.deleteMany({ where: { orgId: fixture.org.id } });
       await db.skillVersion.deleteMany({ where: { skill: { orgId: fixture.org.id } } });
       await db.skill.deleteMany({ where: { orgId: fixture.org.id } });
       await db.specDraft.deleteMany({ where: { orgId: fixture.org.id } });

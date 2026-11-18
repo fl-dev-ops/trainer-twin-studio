@@ -43,6 +43,8 @@ describe.skipIf(!localMinutesDb)("managed skill index recovery", () => {
     for (const spy of spies.splice(0).reverse()) spy.mockRestore();
     await db.agent.updateMany({ where: { orgId: f.org.id }, data: { primarySkillId: null } });
     await db.skill.updateMany({ where: { orgId: f.org.id }, data: { currentVersionId: null } });
+    await db.agentSkillVersion.deleteMany({ where: { orgId: f.org.id } });
+    await db.skillVersionSource.deleteMany({ where: { orgId: f.org.id } });
     await db.skillVersion.deleteMany({ where: { skill: { orgId: f.org.id } } });
     await db.skill.deleteMany({ where: { orgId: f.org.id } });
     await db.specVersion.deleteMany({ where: { orgId: f.org.id } });
