@@ -27,12 +27,13 @@ export function TwinUsersPage({ learners }: { learners: TwinOutputs["users"]["li
       </div>
 
       {/* Reference lr-table */}
-      <div className="mt-4 overflow-hidden rounded-tt-lg border border-(--card-border) bg-card shadow-card">
+      <div className="mt-4 overflow-x-auto rounded-tt-lg border border-(--card-border) bg-card shadow-card">
         {/* Header row */}
-        <div className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,1.5fr)_110px_120px_130px_minmax(0,1.3fr)] items-center gap-3 bg-(--sidebar) px-5 py-2.5 text-overline font-medium tracking-overline uppercase text-(--text-secondary)">
+        <div className="grid min-w-[960px] grid-cols-[minmax(0,1.2fr)_minmax(0,1.5fr)_110px_80px_120px_130px_minmax(0,1.3fr)] items-center gap-3 bg-(--sidebar) px-5 py-2.5 text-overline font-medium tracking-overline uppercase text-(--text-secondary)">
           <span>Learner</span>
           <span>Email</span>
           <span>Assigned agents</span>
+          <span>Sessions</span>
           <span>Credits given</span>
           <span>Until</span>
           <span>Credits used</span>
@@ -53,7 +54,7 @@ export function TwinUsersPage({ learners }: { learners: TwinOutputs["users"]["li
               key={l.userId}
               href={`/users/${encodeURIComponent(l.userId)}`}
               aria-label={`Open profile for ${l.name}`}
-              className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,1.5fr)_110px_120px_130px_minmax(0,1.3fr)] items-center gap-3 border-t border-(--border) px-5 py-3.5 text-sm outline-none transition-colors hover:bg-sidebar focus-visible:bg-sidebar focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+              className="grid min-w-[960px] grid-cols-[minmax(0,1.2fr)_minmax(0,1.5fr)_110px_80px_120px_130px_minmax(0,1.3fr)] items-center gap-3 border-t border-(--border) px-5 py-3.5 text-sm outline-none transition-colors hover:bg-sidebar focus-visible:bg-sidebar focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
             >
               <span className="flex items-center gap-3 min-w-0 font-medium">
                 <UserAvatar user={l} size="sm" />
@@ -65,6 +66,8 @@ export function TwinUsersPage({ learners }: { learners: TwinOutputs["users"]["li
               <span className="tabular-nums">
                 {l.agents} <span className="text-muted-foreground font-normal">agents</span>
               </span>
+
+              <span className="tabular-nums">{l.sessions}</span>
 
               <span className="tabular-nums">
                 {l.minutes} <span className="text-muted-foreground font-normal">min</span>

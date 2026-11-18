@@ -467,15 +467,17 @@ async function sessionReportState(orgId: string, id: string) {
 const laterEnd = (a: Date | null, b: Date | null) => (a && b ? (a > b ? a : b) : null);
 
 const usersRouter = t.router({
-  /** The org's learners with twin access: how many twins, and their minutes (given and used, shared by twins and role plays). */
+  /** The org's learners with twin access: twin and session counts, and their shared minutes (given and used). */
   list: studioProcedure.query(async ({ ctx }) => {
-    const [learners, rows] = await Promise.all([
+    const [learners, rows, sessions] = await Promise.all([
       orgPeople(ctx.user.orgId, { roles: [LEARNER] }),
       db.twinAssignment.findMany({ where: { orgId: ctx.user.orgId, status: "active" }, select: { userId: true, accessUntil: true } }),
+      db.interviewSession.groupBy({ by: ["userId"], where: learnerSessions(ctx.user.orgId), _count: true }),
     ]);
+    const sessionsByUser = new Map(sessions.map((row) => [row.userId, row._count]));
     const minutes = await learnerMinutes(ctx.user.orgId, learners.map((person) => person.email));
     // until: when this person's access ends; the latest of their twins, null when any twin has no end date.
-    const people = new Map<string, { email: string; name: string; image: string | null; agents: number; minutes: number; used: number; until: Date | null }>();
+    const people = new Map<string, { email: string; name: string; image: string | null; agents: number; sessions: number; minutes: number; used: number; until: Date | null }>();
     const learnerById = new Map(learners.map((person) => [person.userId, person]));
     for (const row of rows) {
       const learner = learnerById.get(row.userId);
@@ -484,7 +486,7 @@ const usersRouter = t.router({
       const own = minutes.get(learner.email);
       const person = known
         ?? {
-          email: learner.email, name: learner.name, image: learner.image, agents: 0,
+          email: learner.email, name: learner.name, image: learner.image, agents: 0, sessions: sessionsByUser.get(row.userId) ?? 0,
           minutes: Math.floor((own?.grantedSeconds ?? 0) / 60), used: Math.round((own?.usedSeconds ?? 0) / 60), until: row.accessUntil,
         };
       if (known) person.until = laterEnd(person.until, row.accessUntil);
