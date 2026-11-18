@@ -135,7 +135,36 @@ test.describe.serial("twin settings layout", () => {
     await page.reload();
     await page.getByRole("tab", { name: "Public access", exact: true }).click();
     await expect(duration).toHaveValue(next);
+    const publicUrl = panel.getByRole("region", { name: "Public URL", exact: true });
+    const link = publicUrl.getByRole("link");
+    await expect(link).toHaveAttribute("href", /^https:\/\/[^/]+\/t\/.+/);
+    expect(await link.textContent()).toBe(await link.getAttribute("href"));
+    await page.evaluate(() => {
+      Object.defineProperty(navigator.clipboard, "writeText", {
+        configurable: true,
+        value: async (text: string) => { sessionStorage.setItem("copied-public-url", text); },
+      });
+    });
+    await publicUrl.getByRole("button", { name: "Copy link", exact: true }).click();
+    await expect(publicUrl.getByRole("button", { name: "Copied", exact: true })).toBeVisible();
+    expect(await page.evaluate(() => sessionStorage.getItem("copied-public-url"))).toBe(await link.getAttribute("href"));
     await page.screenshot({ path: testInfo.outputPath("public-access-desktop.png"), animations: "disabled" });
+  });
+
+  test("public URL loading failure offers retry without changing access", async ({ page }) => {
+    const endpoint = "**/api/twin/agents.shareLink*";
+    await page.route(endpoint, (route) => route.abort());
+    await page.getByRole("tab", { name: "Public access", exact: true }).click();
+    const panel = page.getByRole("tabpanel", { name: "Public access", exact: true });
+    const toggle = panel.getByRole("switch", { name: "Allow anonymous visitors", exact: true });
+    const enabled = await toggle.getAttribute("aria-checked");
+    const publicUrl = panel.getByRole("region", { name: "Public URL", exact: true });
+    await expect(publicUrl.getByRole("alert")).toHaveText("Could not load the public URL.");
+    await page.unroute(endpoint);
+    await publicUrl.getByRole("button", { name: "Retry", exact: true }).click();
+    await expect(publicUrl.getByRole("link")).toHaveAttribute("href", /^https:\/\/[^/]+\/t\/.+/);
+    await expect(publicUrl.getByRole("alert")).toHaveCount(0);
+    await expect(toggle).toHaveAttribute("aria-checked", enabled!);
   });
 
   test("embed drafts cancel, validate and persist without starting a call", async ({ page }, testInfo) => {

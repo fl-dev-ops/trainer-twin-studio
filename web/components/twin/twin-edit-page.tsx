@@ -3,7 +3,7 @@
 import { followEmailProgress } from "@/lib/follow-email-progress";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Check, Copy, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { twinClient } from "@/lib/twin/client";
@@ -351,6 +351,12 @@ export function TwinEditPage({
 
 function PublicAccessSettings({ twin }: { twin: Pick<TwinOutputs["agents"]["get"], "slug" | "name" | "description" | "settings" | "publicAccess"> }) {
   const refresh = useRefresh();
+  const shareLink = useQuery({
+    queryKey: ["twin-share-link", twin.slug],
+    queryFn: () => twinClient.agents.shareLink.mutate({ slug: twin.slug }),
+    staleTime: Infinity,
+    retry: 2,
+  });
   const [saved, setSaved] = useState(twin.publicAccess);
   const [duration, setDuration] = useState(twin.publicAccess.maxSeconds);
   const [saving, setSaving] = useState(false);
@@ -392,7 +398,15 @@ function PublicAccessSettings({ twin }: { twin: Pick<TwinOutputs["agents"]["get"
       </PageSection>
       <PageSection title="Public URL" description="Share your existing twin link. Visitors enter their name before starting a voice call.">
         <div className={cn(SECTION_CARD, "flex flex-col items-start gap-4 p-5")}>
-          <p className="m-0 text-sm text-muted-foreground">The link stays the same when you change public access.</p>
+          {shareLink.data ? (
+            <a href={shareLink.data.url} target="_blank" rel="noopener noreferrer"
+              className="break-all text-sm underline underline-offset-4">{shareLink.data.url}</a>
+          ) : shareLink.isError ? (
+            <div className="flex flex-wrap items-center gap-3">
+              <p role="alert" className="m-0 text-sm text-muted-foreground">Could not load the public URL.</p>
+              <Button variant="outline" size="sm" onClick={() => void shareLink.refetch()}>Retry</Button>
+            </div>
+          ) : <p role="status" className="m-0 text-sm text-muted-foreground">Loading public URL…</p>}
           <CopyShareLinkButton slug={twin.slug} publicEnabled={saved.enabled} />
         </div>
       </PageSection>
