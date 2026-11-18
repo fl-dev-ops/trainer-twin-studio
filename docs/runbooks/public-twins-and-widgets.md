@@ -7,7 +7,7 @@ The local, uncommitted `plan.md` records implementation progress; this file is t
 ## Verification checkpoint (2026-11-18)
 
 Automated verification passed: 888 PostgreSQL tests, 1,172 self-contained web tests, 13 widget unit/artifact tests,
-19 integrated Chromium checks (including seed setup), and 20 loader/playground checks across Chromium/Firefox.
+27 integrated Chromium public/settings/widget checks (including seed setup), and 20 loader/playground checks across Chromium/Firefox.
 The hosted-widget Firefox suite passed 12 checks with 1 explicit native-policy introspection skip (counts include setup).
 Web, widget and browser-test typechecks, changed web-file lint and the Next.js 16.4.5 production build passed.
 The web unit run excludes database tests, seeded/live flow suites, legacy e2e tests, runtime-stream and persona-analysis-queue.
@@ -54,6 +54,17 @@ For a manual, controlled release, the equivalent command from `web/` is:
 ```sh
 DATABASE_URL="$DATABASE_URL_UNPOOLED" bunx prisma migrate deploy
 ```
+
+Run a manual migration only with explicit production approval and no concurrent production build. Prisma applies
+**all pending checked-in migrations**, not just the three listed above: inspect the target database's migration
+history first. `DATABASE_URL="$DATABASE_URL_UNPOOLED" bunx prisma migrate status` is the status check from `web/`.
+If migrations were applied manually, the later production build's `migrate deploy` should find none pending;
+do not remove the pipeline's schema gate.
+
+The production build also runs the existing `backfill-scenario-item-versions.ts` and `backfill-skill-sources.ts`
+after migrations. These are idempotent, non-fatal legacy backfills, not new anonymous/widget backfills. Review their
+logs and resolve failures through the normal maintenance process. No bulk enablement, anonymous-account creation,
+learner assignment, credit grant or widget-ID backfill is needed.
 
 This runbook does not execute that command. Previews must use an isolated database if database verification is required;
 the production build script intentionally does not migrate preview databases.
@@ -112,13 +123,40 @@ Never paste secrets into snippets, customer websites, public configuration, scre
 
 ## 2. Deployment order
 
-1. Keep public/widget settings disabled for customer twins.
-2. Apply migrations once through the normal production release pipeline.
-3. Deploy the compatible chat brain and voice agent; confirm service health and agent registration.
-4. Deploy web, including compiled deadline workflow and static widget artifacts.
-5. Verify existing signed-in practice still works before enabling any anonymous access.
-6. Enable a funded **internal canary** twin: Public access, short duration, Embed settings and exact canary origins.
-7. Complete the post-deployment checks below. Only then enable customer installations gradually.
+Use this order for the existing automatic production pipeline:
+
+1. Clear the release gates, obtain production approval and choose one release SHA for web/chat/agent. Record the
+   current service versions and database restore point. Keep customer Public access and Embed disabled. If any test
+   installations are already active, disable new anonymous starts and drain their calls before switching versions.
+   Check whether merging `v2` auto-deploys web; coordinate the existing release/promotion controls before merging
+   so web publication cannot race ahead of the compatible chat/agent deployment.
+2. Finish the environment, credential, DNS/HTTPS, build-root and provider-quota checks above. Stop if a shared secret,
+   service URL or agent dispatch name disagrees. Do not rotate secrets as part of this release.
+3. Deploy the compatible **chat brain**, then the **voice agent**, from that SHA through their existing deployment
+   processes. Verify chat is reachable, the agent registers with the expected LiveKit project/name, and signed-in
+   traffic remains healthy. Leave anonymous access disabled while web is still on the old version.
+4. Release **web** through its normal production pipeline. `web/vercel.json` runs
+   `sh scripts/vercel-build.sh` from `web/`, in this order:
+   1. With `VERCEL_ENV=production`, apply pending Prisma migrations using `DATABASE_URL_UNPOOLED`. The three new
+      migrations run in the timestamp order listed above. A failure must stop the release; do not promote web.
+   2. Run the two existing idempotent backfills described above; inspect their warnings separately.
+   3. Run `bun run build`: install locked widget dependencies and build widget assets, generate Prisma client, then
+      build Next.js and the durable deadline workflow. Include sibling `widgets/` and `shared/` in the build context.
+   4. Let the normal release process serve the successful build. Verify production migration status and deployment SHA.
+   Do not start a separate manual migration job alongside this build. Production builds touch the production schema
+   even if a later build step fails; retain the backup and inspect migration status before retrying.
+5. Before enabling anonymous access, smoke-test existing signed-in Twin and role-play practice, assignments and credits.
+   Verify org-host widget assets, CSP/Permissions Policy, Workflow runtime, and the authenticated
+   `/api/internal/sessions/sweep` cron scheduled every five minutes in `web/vercel.json`.
+6. Enable only a funded, approved **internal canary** twin: Public access with a 60-second limit, exact canary website
+   origins and Embed enabled/saved. Use its real settings-generated URL/snippets; do not copy local development URLs.
+7. Complete every post-deployment canary check below, including real browser audio, automatic deadline/room teardown,
+   released reservations, transcript/recording and exactly one capped billing charge. A failure blocks customer rollout.
+8. Enable customer twins/origins gradually and monitor. Record release evidence and owners; stop new starts on anomalies.
+
+For an explicitly approved **manual migration-first** release, apply and verify migrations after steps 1–2 and
+before deploying chat/agent. Then continue steps 3–8. The normal web build still performs its schema check, which
+should be a no-op for migrations already applied. Do not run manual and pipeline migration jobs concurrently.
 
 Do not automatically merge, deploy, enable all twins or grant credits as part of a code review.
 
