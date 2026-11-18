@@ -16,6 +16,8 @@ import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/user-avatar";
 import { useRefresh } from "@/lib/use-refresh";
 import { PageContainer } from "@/components/page-container";
+import { PageSection, SECTION_CARD, SectionRow } from "@/components/page-section";
+import { NativeSelect } from "@/components/ui/native-select";
 import { AccessUntil } from "@/components/twin/access-until";
 import { TWIN_UPLOAD_TITLE_DEFAULT } from "@/lib/context-upload";
 import { SettingCard, SettingsPanel, SettingsSection } from "@/components/settings-cards";
@@ -200,8 +202,8 @@ export function TwinEditPage({
       </div>
 
       <div className="mt-6 flex flex-col gap-4">
-      <Tabs defaultValue={defaultTab} className="gap-4">
-        <TabsList>
+      <Tabs defaultValue={defaultTab} className="min-w-0 gap-4">
+        <TabsList className="max-w-full overflow-x-auto">
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="conversation">Conversation</TabsTrigger>
           <TabsTrigger value="public">Public access</TabsTrigger>
@@ -438,25 +440,33 @@ function PublicAccessSettings({ twin }: { twin: Pick<TwinOutputs["agents"]["get"
   }
 
   return (
-    <SettingsPanel>
-      <SettingsSection title="Public voice calls" description="Anyone signed out with this link can talk without an account. Signed-in learner access stays unchanged.">
-        <SettingCard title="Allow anonymous visitors" description="This exposes the twin’s current available skills. Short visitor calls are funded by your organization’s balance, not learner credits."
-          control={<SwitchToggle checked={saved.enabled} onChange={(enabled) => { if (!saving) void save({ enabled }); }} label="Allow anonymous visitors" />} />
-        <SettingCard title="Maximum call duration" description="The server ends each public voice call at this limit." control={null}>
-          <form className="flex flex-wrap items-center gap-3" onSubmit={(event) => { event.preventDefault(); void save({ maxSeconds: duration }); }}>
-            <label htmlFor="public-call-duration" className="sr-only">Maximum call duration</label>
-            <select id="public-call-duration" value={duration} disabled={saving} className="h-9 rounded-lg border bg-card px-3 text-sm"
-              onChange={(event) => { const seconds = PUBLIC_CALL_DURATIONS.find((value) => String(value) === event.target.value); if (seconds) setDuration(seconds); }}>
-              {PUBLIC_CALL_DURATIONS.map((seconds) => <option key={seconds} value={seconds}>{seconds / 60} min</option>)}
-            </select>
+    <div className="flex flex-col gap-10 pt-8">
+      <PageSection title="Public voice calls" description="Let signed-out visitors talk without an account. Signed-in learner access stays unchanged.">
+        <form className="flex flex-col gap-3" onSubmit={(event) => { event.preventDefault(); void save({ maxSeconds: duration }); }}>
+          <fieldset disabled={saving} className={cn(SECTION_CARD, "min-w-0")}>
+            <SectionRow title="Allow anonymous visitors" detail="Expose the twin’s current available skills. Calls are funded by your organization’s balance, not learner credits.">
+              <SwitchToggle checked={saved.enabled} onChange={(enabled) => { if (!saving) void save({ enabled }); }} label="Allow anonymous visitors" />
+            </SectionRow>
+            <SectionRow title={<label htmlFor="public-call-duration">Maximum call duration</label>} detail="Each public voice call ends automatically at this limit.">
+              <NativeSelect id="public-call-duration" value={duration}
+                onChange={(event) => { const seconds = PUBLIC_CALL_DURATIONS.find((value) => String(value) === event.target.value); if (seconds) setDuration(seconds); }}>
+                {PUBLIC_CALL_DURATIONS.map((seconds) => <option key={seconds} value={seconds}>{seconds / 60} min</option>)}
+              </NativeSelect>
+            </SectionRow>
+          </fieldset>
+          <div className="flex items-center justify-end gap-3">
             <Button variant="ghost" type="button" disabled={saving || duration === saved.maxSeconds} onClick={() => setDuration(saved.maxSeconds)}>Cancel</Button>
-            <Button type="submit" disabled={saving || duration === saved.maxSeconds}>Save</Button>
-          </form>
-        </SettingCard>
-        <SettingCard title="Public URL" description="Share your existing twin link. Visitors enter a self-reported name before starting a voice-only call." control={null}>
-          <CopyShareLinkButton slug={twin.slug} publicEnabled={saved.enabled} />
-        </SettingCard>
-      </SettingsSection>
-    </SettingsPanel>
+            <Button type="submit" disabled={saving || duration === saved.maxSeconds}>{saving ? "Saving…" : "Save"}</Button>
+          </div>
+        </form>
+      </PageSection>
+      <PageSection title="Public URL" description="Share your existing twin link. Visitors enter their name before starting a voice call.">
+        <div className={SECTION_CARD}>
+          <SectionRow title="Share this twin" detail="The link stays the same when you change public access.">
+            <CopyShareLinkButton slug={twin.slug} publicEnabled={saved.enabled} />
+          </SectionRow>
+        </div>
+      </PageSection>
+    </div>
   );
 }
