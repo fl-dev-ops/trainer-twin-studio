@@ -1,7 +1,7 @@
 # Public twin voice calls
 
 An org's admin/team can enable short, anonymous voice calls in a twin's existing settings. This is separate from
-signed-in learner practice. Embedding widgets is not implemented yet.
+signed-in learner practice. [Website widgets](widgets.md) reuse this session/runtime boundary.
 
 ## Settings and access
 

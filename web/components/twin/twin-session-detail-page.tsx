@@ -38,6 +38,7 @@ export function TwinSessionDetailPage({ session }: { session: SessionDetail }) {
             <div className="flex flex-col min-w-0">
               <h1 className="m-0 text-xl font-semibold leading-7">{session.learner}</h1>
               {session.anonymous ? <p className="text-sm text-muted-foreground">Anonymous visitor · self-reported name</p> : null}
+              {session.embedOrigin ? <p className="break-all text-sm text-muted-foreground">Website widget · {session.embedOrigin}</p> : null}
               <p className="mt-0.5 text-sm font-medium text-(--foreground)">{session.agentName}</p>
               <p className="mt-0.5 text-xs text-muted-foreground">
                 <SessionTime iso={session.at} />

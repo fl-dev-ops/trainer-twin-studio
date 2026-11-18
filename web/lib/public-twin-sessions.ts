@@ -14,6 +14,8 @@ import { connectVoice } from "@/lib/session-activation";
 import { closeInterviewSession } from "@/lib/session-lifecycle";
 import { closeLiveKitSession } from "@/lib/livekit";
 import { publicCallDeadline } from "@/workflows/public-call-deadline";
+import { assertWidgetAccess } from "@/lib/widget-access";
+import { widgetCredentialInvalid } from "@/lib/widget-tokens";
 
 export const PUBLIC_STARTS_PER_HOUR = 3;
 export const PUBLIC_ORG_STARTS_PER_HOUR = 30;
@@ -31,6 +33,8 @@ export async function startPublicTwinSession(input: {
   visitorId: string;
   ipHash: string;
   name: string;
+  embedOrigin?: string;
+  grantExpiresAt?: number;
 }) {
   const parsed = publicVisitorNameSchema.safeParse(input.name);
   if (!parsed.success) throw refusals.invalidInput(parsed.error.issues[0].message);
@@ -39,6 +43,7 @@ export async function startPublicTwinSession(input: {
   });
   if (!agent) throw refusals.notFound();
   if (!publicTwinSettings(agent.data).enabled) throw publicCallRefusals.unavailable();
+  if (input.embedOrigin) assertWidgetAccess(agent.data, input.embedOrigin);
 
   const config = await getAgentConfigForAgent(agent.id, input.orgId);
   if (!config || config.agent.version !== agent.version) throw new AppError("public_twin_changed", "This twin was updated. Please start again.", 409);
@@ -47,6 +52,7 @@ export async function startPublicTwinSession(input: {
   await orgCredits(input.orgId, { fresh: true });
 
   const session = await withLock([minutesLock(input.orgId)], async (tx) => {
+    if (input.grantExpiresAt !== undefined && input.grantExpiresAt * 1000 <= Date.now()) throw widgetCredentialInvalid();
     // The same row lock is taken by settings/version writes, so disabling cannot race a new start.
     await tx.$queryRaw`SELECT 1 FROM "Agent" WHERE id = ${agent.id} FOR UPDATE`;
     const current = await tx.agent.findFirst({
@@ -54,6 +60,7 @@ export async function startPublicTwinSession(input: {
       select: { data: true, version: true },
     });
     if (!current || !publicTwinSettings(current.data).enabled) throw publicCallRefusals.unavailable();
+    if (input.embedOrigin) assertWidgetAccess(current.data, input.embedOrigin);
     if (current.version !== agent.version) throw new AppError("public_twin_changed", "This twin was updated. Please start again.", 409);
     if (await pausedReason(input.orgId, "studio", tx)) throw publicCallRefusals.unavailable();
     const settings = publicTwinSettings(current.data);
@@ -79,6 +86,7 @@ export async function startPublicTwinSession(input: {
       data: {
         orgId: input.orgId, agentId: agent.id,
         anonymousId: input.visitorId, anonymousIpHash: input.ipHash, anonymousName: parsed.data,
+        embedOrigin: input.embedOrigin ?? null,
         shareCode: randomBytes(18).toString("base64url"),
         activationKey: `public:${randomBytes(18).toString("base64url")}`,
         mode: "voice", status: "activating", startedAt: new Date(),
@@ -108,6 +116,8 @@ export async function startPublicTwinSession(input: {
       id: session.id, agentSlug: session.agentSlug, status: "active", mode: "voice" as const,
       runtimeToken: browserToken(session.id), agentToken: token, secondsLeft: remaining,
       calibrationId: null,
+      endsAt: session.startedAt!.getTime() + session.allowedSeconds! * 1000,
+      serverTime: Date.now(),
     };
     connectingVoice = true;
     const voice = await connectVoice({
@@ -116,6 +126,7 @@ export async function startPublicTwinSession(input: {
     const { agentToken: _agentToken, ...browserSession } = opened;
     void _agentToken;
     browserSession.secondsLeft = Math.max(0, session.allowedSeconds! - Math.ceil((Date.now() - session.startedAt!.getTime()) / 1000));
+    browserSession.serverTime = Date.now();
     if (!browserSession.secondsLeft) throw publicCallRefusals.unavailable();
     return { session: browserSession, participantToken: voice.participantToken, room: voice.room };
   } catch (error) {

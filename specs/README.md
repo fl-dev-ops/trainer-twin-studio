@@ -82,7 +82,7 @@ browser `web/e2e`, Python `agent/tests`, `chat/tests`), and the most important u
 
 ## Modules
 
-Public anonymous twin access is documented in [public-twins.md](public-twins.md); embedding widgets is deferred.
+Public anonymous twin access is documented in [public-twins.md](public-twins.md); website embedding in [widgets.md](widgets.md).
 
 | # | Spec | Scope | Start reading |
 | --- | --- | --- | --- |

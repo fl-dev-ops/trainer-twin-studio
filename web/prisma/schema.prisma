@@ -335,6 +335,7 @@ model InterviewSession {
   anonymousId         String?
   anonymousName       String?
   anonymousIpHash     String?
+  embedOrigin         String?
   agentId             String
   shareCode           String    @unique
   runtimeTokenHash    String?   @unique

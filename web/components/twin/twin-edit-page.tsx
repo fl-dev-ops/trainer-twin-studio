@@ -20,6 +20,7 @@ import { AccessUntil } from "@/components/twin/access-until";
 import { TWIN_UPLOAD_TITLE_DEFAULT } from "@/lib/context-upload";
 import { SettingCard, SettingsPanel, SettingsSection } from "@/components/settings-cards";
 import { PUBLIC_CALL_DURATIONS, type PublicTwinSettings } from "@/lib/public-twin-settings";
+import { WidgetSettingsPanel } from "@/components/twin/widget-settings";
 
 type LearnerAssign = TwinOutputs["assignments"]["list"][number];
 
@@ -60,7 +61,7 @@ export function TwinEditPage({
   learners,
   defaultTab = "general",
 }: {
-  twin: Pick<TwinOutputs["agents"]["get"], "slug" | "name" | "description" | "settings" | "publicAccess">;
+  twin: Pick<TwinOutputs["agents"]["get"], "slug" | "name" | "description" | "settings" | "publicAccess" | "widget">;
   learners: LearnerAssign[];
   /** /edit opens on General, /assign on Learners. General saves with its button; the other tabs save as you go. */
   defaultTab?: "general" | "conversation" | "learners";
@@ -204,6 +205,7 @@ export function TwinEditPage({
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="conversation">Conversation</TabsTrigger>
           <TabsTrigger value="public">Public access</TabsTrigger>
+          <TabsTrigger value="embed">Embed</TabsTrigger>
           <TabsTrigger value="learners">
             Learners
             <span className="text-muted-foreground tabular-nums">· {assigned.length}</span>
@@ -357,6 +359,9 @@ export function TwinEditPage({
       {/* Card 3: learners assigned to this twin; Assign opens the shared dialog */}
       <TabsContent value="public">
         <PublicAccessSettings twin={twin} />
+      </TabsContent>
+      <TabsContent value="embed">
+        <WidgetSettingsPanel twin={twin} />
       </TabsContent>
       <TabsContent value="learners">
       <article id="assign" className="flex flex-col gap-4 rounded-tt-lg border border-(--card-border) bg-card p-6 shadow-card">

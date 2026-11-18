@@ -5,6 +5,7 @@ import { builtFrom } from "@/lib/skill-sources";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import { beforeSettings } from "@/lib/context-upload";
 import { publicTwinSettings, publicTwinSettingsSchema } from "@/lib/public-twin-settings";
+import { widgetSettings, widgetSettingsSchema } from "@/lib/widget-settings";
 import { assignablePeople } from "@/lib/learners";
 import { LEARNER_ROLE } from "@/lib/org";
 import { LEARNER, orgPeople, orgPerson } from "@/lib/org-people";
@@ -78,6 +79,7 @@ const sessionRowSelect = {
   feedbackRating: true,
   transcript: true,
   anonymousName: true,
+  embedOrigin: true,
   agent: { select: { slug: true, name: true } },
   user: { select: { id: true, name: true, email: true, image: true } },
   report: true,
@@ -93,6 +95,7 @@ function sessionItem(row: SessionRow) {
     learner: row.user ? row.user.name || row.user.email : row.anonymousName || "Anonymous visitor",
     learnerEmail: row.user?.email ?? null,
     anonymous: row.user === null,
+    embedOrigin: row.embedOrigin ?? null,
     agentSlug: row.agent.slug,
     agentName: row.agent.name,
     at: (row.startedAt ?? row.createdAt).toISOString(),
@@ -281,6 +284,7 @@ const agentsRouter = t.router({
         : [{ agentId: found.id, version: agent.version }]),
       settings: beforeSettings(data),
       publicAccess: publicTwinSettings(data),
+      widget: { id: found.id, config: widgetSettings(data), origin: new URL(twinShareUrl(ctx.user.orgSlug, "")).origin },
       credit: {
         // Minutes of this twin's learners (each learner's own, shared with their other twins and role plays).
         minutes: active.reduce((sum, row) => sum + row.minutesGiven, 0),
@@ -330,9 +334,10 @@ const agentsRouter = t.router({
         uploadInstruction: z.string().trim().max(300),
       }).strict().optional(),
       publicAccess: publicTwinSettingsSchema.partial().optional(),
+      widget: z.object(widgetSettingsSchema.shape).strict().partial().optional(),
     }))
     .mutation(({ ctx, input }) => twinCall(async () => {
-      const { version } = await updateTwin(ctx.user.orgId, input.slug, { name: input.name, description: input.description, settings: input.settings, publicAccess: input.publicAccess });
+      const { version } = await updateTwin(ctx.user.orgId, input.slug, { name: input.name, description: input.description, settings: input.settings, publicAccess: input.publicAccess, widget: input.widget });
       return { version };
     })),
 

@@ -11,7 +11,7 @@ import { publicVisitorNameSchema } from "@/lib/public-twin-settings";
 import type { Trainer, Twin } from "@/components/twin/twin-learner-flow";
 
 const launchSchema = z.object({
-  session: z.object({ id: z.string(), runtimeToken: z.string(), secondsLeft: z.number() }),
+  session: z.object({ id: z.string(), runtimeToken: z.string(), secondsLeft: z.number(), endsAt: z.number().optional(), serverTime: z.number().optional() }),
   participantToken: z.string(),
 });
 type Connection = z.infer<typeof launchSchema>["session"];
@@ -100,7 +100,7 @@ function VisitorCall({ room, twin, trainer, onBack }: { room: Room; twin: Twin; 
   useEffect(() => {
     if (phase !== "live") return;
     const tick = () => {
-      const left = Math.max(0, Math.ceil((deadline.current - Date.now()) / 1000));
+      const left = Math.max(0, Math.ceil((deadline.current - performance.now()) / 1000));
       setRemaining(left);
       if (!left) void end();
     };
@@ -130,7 +130,9 @@ function VisitorCall({ room, twin, trainer, onBack }: { room: Room; twin: Twin; 
       if (!response.ok) throw new Error(payload && typeof payload === "object" && "error" in payload && typeof payload.error === "string" ? payload.error : "Could not start the call.");
       const launch = launchSchema.parse(payload);
       active.current = launch.session;
-      deadline.current = Date.now() + launch.session.secondsLeft * 1000;
+      const allowance = launch.session.secondsLeft * 1000;
+      deadline.current = performance.now() + Math.max(0, Math.min(allowance,
+        launch.session.endsAt !== undefined && launch.session.serverTime !== undefined ? launch.session.endsAt - launch.session.serverTime : allowance));
       if (!mounted.current || ending.current) {
         ending.current = false;
         await end(true);

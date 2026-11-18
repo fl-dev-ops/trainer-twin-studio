@@ -11,18 +11,29 @@ const digest = (value: string) => {
   return createHmac("sha256", secret).update(value).digest("hex");
 };
 
-export function publicRequestHost(request: Request) {
-  const host = request.headers.get("host") ?? new URL(request.url).host;
+export function publicHostSlug(host: string) {
   const hostname = host.split(":")[0].toLowerCase();
   const suffix = `.${BASE_DOMAIN}`;
   if (!hostname.endsWith(suffix)) throw refusals.notFound();
   const slug = hostname.slice(0, -suffix.length);
   if (!slug || slug.includes(".") || ["auth", "dash"].includes(slug)) throw refusals.notFound();
+  return slug;
+}
+
+export function publicRequestHost(request: Request) {
+  const host = request.headers.get("host") ?? new URL(request.url).host;
+  const slug = publicHostSlug(host);
   const origin = request.headers.get("origin");
   if (!origin || !URL.canParse(origin) || new URL(origin).host !== host || !["http:", "https:"].includes(new URL(origin).protocol)) {
     throw new AppError("public_origin_invalid", "Start this call from the twin's public page.", 403);
   }
   return slug;
+}
+
+export function publicIpHash(orgId: string, requestHeaders: Headers) {
+  // Only Vercel's overwritten proxy header is trusted. Other deployments share a conservative bucket.
+  const ip = process.env.VERCEL ? requestHeaders.get("x-forwarded-for")?.split(",")[0]?.trim() : "shared";
+  return digest(`public-ip:${orgId}:${ip || "shared"}`);
 }
 
 export async function publicRequestIdentity(request: Request, create: boolean) {
@@ -37,17 +48,15 @@ export async function publicRequestIdentity(request: Request, create: boolean) {
       httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "strict", path: "/api/public", maxAge: 60 * 60 * 24 * 30,
     });
   }
-  // Vercel overwrites this header. Other deployments use a conservative shared bucket rather than trust spoofable IP headers.
-  const ip = process.env.VERCEL ? request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() : "shared";
   return {
     orgId: org.id,
     visitorId: digest(`visitor:${org.id}:${visitor}`),
-    ipHash: digest(`public-ip:${org.id}:${ip || "shared"}`),
+    ipHash: publicIpHash(org.id, request.headers),
   };
 }
 
-export async function publicRequestBody(request: Request) {
-  if (Number(request.headers.get("content-length") ?? 0) > 1024) throw refusals.invalidInput("Request is too large.");
+export async function publicRequestBody(request: Request, maxBytes = 1024) {
+  if (Number(request.headers.get("content-length") ?? 0) > maxBytes) throw refusals.invalidInput("Request is too large.");
   if (!request.body) throw refusals.invalidInput("Invalid request.");
   const reader = request.body.getReader();
   const decoder = new TextDecoder();
@@ -58,7 +67,7 @@ export async function publicRequestBody(request: Request) {
       const { done, value } = await reader.read();
       if (done) break;
       bytes += value.byteLength;
-      if (bytes > 1024) {
+      if (bytes > maxBytes) {
         await reader.cancel();
         throw refusals.invalidInput("Request is too large.");
       }
