@@ -177,6 +177,34 @@ repeats warmup. `/healthz` must be used for routing; `/livez` is only liveness.
 For more than one configured voice, warmup time increases. A single GPU/container
 is not high availability; retain AWS rollback until the full acceptance report passes.
 
+### JarvisLabs container startup
+
+The A30 deployment runs directly in a JL container (not Docker Compose).
+`deploy/jl-start.sh` is the source for `/home/tts-start.sh` and JL startup script
+**8117** (`trainertwin-tts-start`). It starts missing backend/proxy/log-shipper
+processes without restarting healthy ones. Logs are timestamped under
+`/home/tts-prod/logs/`; `backend.log` and `proxy.log` point to the latest run.
+
+When changing the script, upload it and update the registered copy:
+
+```bash
+jl upload <machine-id> deploy/jl-start.sh /home/tts-start.sh
+jl scripts update 8117 deploy/jl-start.sh --json
+```
+
+**Select the startup script on resume** (or choose `trainertwin-tts-start` in the
+JL dashboard's resume form). Registration alone does not attach it to a running
+instance; do not rely on an unconfigured resume to start TTS:
+
+```bash
+jl resume <paused-machine-id> --script-id 8117 --http-ports 8000 --yes --json
+```
+
+Use the returned machine ID and endpoint; they can change on resume. Check the
+JL endpoint's `/healthz` directly after model warmup before relying on the public
+domain (which can still be healthy via AWS fallback). This boot script is not a
+process supervisor; rerun `sh /home/tts-start.sh` to recover a crashed process.
+
 ### Verification
 
 ```bash
