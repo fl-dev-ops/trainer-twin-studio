@@ -11,6 +11,7 @@ import { runRoleplayAssign, runTwinAssign } from "@/lib/workflow-runs";
 import { accessUntilSchema, listTwinAssignments } from "@/lib/twin-access";
 import { updateTwin } from "@/lib/twin/manage";
 import { TWIN_SOURCE } from "@/lib/twins";
+import { readSkillPackage, skillRefusals } from "@/lib/skills";
 
 /**
  * What the copilot may read and change in the studio, for one org (plans/copilot-v2.md). Twins, twin skills and role
@@ -89,7 +90,7 @@ function kindOf(agent: { kind: string; data: unknown }) {
 async function findAgent(d: CopilotStudioDeps, orgId: string, agentSlug: string, opts: { archived?: boolean } = {}) {
   const agent = await d.db.agent.findFirst({
     where: { orgId, slug: agentSlug, ...(opts.archived === undefined ? {} : { archivedAt: opts.archived ? { not: null } : null }) },
-    select: { id: true, slug: true, name: true, kind: true, version: true, data: true, archivedAt: true, updatedAt: true },
+    select: { id: true, slug: true, name: true, kind: true, version: true, primarySkillId: true, data: true, archivedAt: true, updatedAt: true },
   });
   if (!agent) throw new ScenarioIngestError(`"${agentSlug}" was not found${opts.archived ? " among archived items" : ""}`, 404);
   return agent;
@@ -168,9 +169,15 @@ export async function runCopilotStudio(actor: Actor, input: CopilotStudioInput, 
         : asRecord((await d.db.specVersion.findFirst({ where: { orgId, entityType: "agents", entitySlug: agent.slug, version }, select: { data: true } }))?.data);
       const artifacts = text(data.artifacts);
       if (!artifacts || typeof data.skill !== "string") throw new ScenarioIngestError(`"${agent.slug}" v${version} has no published skill files`, 404);
+      const managed = agent.primarySkillId
+        ? await readSkillPackage(orgId, agent.slug, agent.primarySkillId, artifacts, d.db)
+        : null;
+      if (agent.primarySkillId && version === agent.version && !managed) throw skillRefusals.unavailable();
       const manifestFile = agent.kind === "TWIN" ? "skill.json" : "scenario.json";
       const read = (file: string) => d.getObjectText(`${artifacts}/${file}`).catch(() => null);
-      const [manifest, items, patterns] = await Promise.all([read(manifestFile), read("items.json"), read("patterns.md")]);
+      const [manifest, items, patterns] = managed
+        ? [managed.files[managed.version.format === "twin" ? "skill.json" : "scenario.json"], managed.files["items.json"], managed.files["patterns.md"] ?? null]
+        : await Promise.all([read(manifestFile), read("items.json"), read("patterns.md")]);
       const versions = await d.db.specVersion.findMany({
         where: { orgId, entityType: "agents", entitySlug: agent.slug },
         orderBy: { version: "desc" },
@@ -183,7 +190,7 @@ export async function runCopilotStudio(actor: Actor, input: CopilotStudioInput, 
         version,
         currentVersion: agent.version,
         versions: [{ version: agent.version, current: true }, ...versions.map((row) => ({ version: row.version, savedAt: row.createdAt.toISOString() }))],
-        skill: data.skill,
+        skill: managed?.version.skillText ?? data.skill,
         manifest: manifest ? JSON.parse(manifest) : asRecord(data.scenario),
         items: items ? JSON.parse(items) : [],
         patterns,

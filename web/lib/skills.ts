@@ -135,3 +135,12 @@ export async function readSkillRegistry(orgId: string, agentSlug: string) {
   if (!skill) throw refusals.notFound();
   return skill;
 }
+
+export async function readSkillPackage(orgId: string, ownerSlug: string, skillId: string, artifacts: string, client: Pick<Tx, "skillVersion"> = db) {
+  const versions = await client.skillVersion.findMany({
+    where: { skillId, artifacts, status: "ready", skill: { orgId, ownerSlug } },
+  });
+  if (versions.length > 1) throw skillRefusals.unavailable();
+  const version = versions[0];
+  return version ? { version, files: verifySkillEnvelope(version) } : null;
+}

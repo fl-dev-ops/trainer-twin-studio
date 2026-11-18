@@ -1,12 +1,14 @@
 import { beforeEach, expect, test } from "bun:test";
 import * as people from "@/lib/org-people";
 import { type CopilotStudioDeps, runCopilotStudio } from "@/lib/copilot-studio";
+import { skillPackageHash, type SkillFormat } from "@/lib/skills";
 
 type Row = Record<string, unknown>;
 let agents: Row[] = [];
 const invited: { kind: string; emails: string[] }[] = [];
 let delivery = { emailFailures: 0 } as { emailFailures: number; emailsQueued?: number; emailProgress?: string };
 const s3 = new Map<string, string>();
+let packages: Row[] = [];
 
 const matches = (agent: Row, where: Row) => Object.entries(where).every(([key, value]) => {
   if (key === "archivedAt") return value === null ? agent.archivedAt == null : agent.archivedAt != null;
@@ -29,6 +31,11 @@ const fakeDb = {
   specVersion: {
     findFirst: async ({ where }: { where: { version: number } }) => (where.version === 1 ? { data: { skill: "# v1", artifacts: "art/v1" } } : null),
     findMany: async () => [{ version: 1, createdAt: new Date("2026-10-28") }],
+  },
+  skillVersion: {
+    findMany: async ({ where }: { where: Row }) => packages.filter((row) =>
+      row.skillId === where.skillId && row.artifacts === where.artifacts && row.status === where.status &&
+      matches(row.skill as Row, where.skill as Row)),
   },
   rolePlayAssignment: { findMany: async () => [] },
   knowledgeDocument: { findMany: async () => [] },
@@ -65,6 +72,7 @@ beforeEach(() => {
   delivery = { emailFailures: 0 };
   invited.length = 0;
   s3.clear();
+  packages = [];
   agents = [
     { id: "a1", orgId: "org1", slug: "olga-olga-twin", name: "Olga's twin", kind: "TWIN", version: 5, data: { source: "twin" }, archivedAt: null, updatedAt: new Date() },
     { id: "a2", orgId: "org1", slug: "olga-objection-handling", name: "Objection Handling", kind: "TWIN", version: 2, data: { source: "twin-creator", skill: "# v2", artifacts: "art/v2", scenario: { skill: "objection-handling" } }, archivedAt: null, updatedAt: new Date() },
@@ -112,6 +120,50 @@ test("getSkill reads the version's own S3 copy (current or older)", async () => 
   s3.set("art/v1/items.json", JSON.stringify([{ id: "old" }]));
   const older = await run({ action: "getSkill", slug: "olga-objection-handling", version: 1 }) as Row;
   expect(older).toMatchObject({ version: 1, skill: "# v1", items: [{ id: "old" }] });
+});
+
+const managedPackage = (format: SkillFormat = "twin", artifacts = "art/v2") => {
+  const manifest = format === "twin" ? { skill: "objection-handling" } : { scenario: "objection-handling" };
+  const files = {
+    "SKILL.md": "# Managed instructions",
+    [format === "twin" ? "skill.json" : "scenario.json"]: JSON.stringify(manifest),
+    "items.json": JSON.stringify([{ id: "managed" }]),
+    "patterns.md": "Managed patterns",
+  };
+  return {
+    skillId: "managed-skill", artifacts, status: "ready", indexStatus: "failed",
+    skill: { orgId: "org1", ownerSlug: "olga-objection-handling" },
+    format, files, manifest, skillText: files["SKILL.md"], itemCount: 1, contentHash: skillPackageHash(format, files),
+  };
+};
+
+test.each(["twin", "legacy-twin"] as const)("getSkill uses verified %s package bytes without S3 or a ready index", async (format) => {
+  agents[1].primarySkillId = "managed-skill";
+  packages.push(managedPackage(format));
+  expect(await run({ action: "getSkill", slug: "olga-objection-handling" })).toMatchObject({
+    version: 2, skill: "# Managed instructions", items: [{ id: "managed" }], patterns: "Managed patterns",
+    manifest: format === "twin" ? { skill: "objection-handling" } : { scenario: "objection-handling" },
+  });
+});
+
+test("managed history resolves the requested Agent version, not the latest package", async () => {
+  agents[1].primarySkillId = "managed-skill";
+  packages.push(managedPackage(), { ...managedPackage("legacy-twin", "art/v1"), skillText: "# Corrupt projection" });
+  await expect(run({ action: "getSkill", slug: "olga-objection-handling", version: 1 })).rejects.toMatchObject({ code: "skill_package_unavailable" });
+  packages[1] = managedPackage("legacy-twin", "art/v1");
+  expect(await run({ action: "getSkill", slug: "olga-objection-handling", version: 1 })).toMatchObject({ version: 1, skill: "# Managed instructions" });
+});
+
+test("broken or cross-org current managed references cannot fall back to compatibility data", async () => {
+  agents[1].primarySkillId = "managed-skill";
+  packages.push({ ...managedPackage(), skill: { orgId: "other", ownerSlug: "olga-objection-handling" } });
+  await expect(run({ action: "getSkill", slug: "olga-objection-handling" })).rejects.toMatchObject({ code: "skill_package_unavailable" });
+});
+
+test("ambiguous managed package identity refuses rather than choosing a version", async () => {
+  agents[1].primarySkillId = "managed-skill";
+  packages.push(managedPackage(), managedPackage());
+  await expect(run({ action: "getSkill", slug: "olga-objection-handling" })).rejects.toMatchObject({ code: "skill_package_unavailable" });
 });
 
 test("each module reads only its own kind", async () => {

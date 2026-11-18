@@ -2,8 +2,8 @@ import { unstable_cache } from "next/cache";
 import { db } from "@/lib/db";
 import { personaBrief } from "@/lib/persona";
 import { findOrgOrGlobalPersona } from "@/lib/specs";
-import { type PinnedTwinSkill, TWIN_SOURCE, twinPlaybooks } from "@/lib/twins";
-import { loadRoleplaySessionSkill } from "@/lib/session-skills";
+import { type PinnedTwinSkill, TWIN_SOURCE, twinPlaybooks, sessionTwinPlaybooks } from "@/lib/twins";
+import { loadSessionSkills } from "@/lib/session-skills";
 
 const SHARED_KNOWLEDGE_BASE_SLUG = "acme-knowledge";
 
@@ -21,7 +21,7 @@ export async function buildSessionContext(input: {
   personaSlug?: string;
 }) {
   const managedSkill = input.sessionId
-    ? await loadRoleplaySessionSkill(input.orgId, input.sessionId, input.agentSlug)
+    ? await loadSessionSkills(input.orgId, input.sessionId, input.agentSlug)
     : null;
   const session = input.sessionId
     ? await db.interviewSession.findFirst({
@@ -135,14 +135,16 @@ export async function buildSessionContext(input: {
 
   // The all-skills twin draws on its persona's skill twins: the ones pinned when the session started (older
   // sessions without a pin get the live list). kind is immutable, so the live row's kind is the session's module.
-  const isAllSkillsTwin = liveAgent?.kind === "TWIN" && (agent?.data as Record<string, unknown> | undefined)?.source === TWIN_SOURCE;
-  const playbooks = isAllSkillsTwin && liveAgent?.personaId
+  const isAllSkillsTwin = managedSkill ? managedSkill.isMainTwin : liveAgent?.kind === "TWIN" && (agent?.data as Record<string, unknown> | undefined)?.source === TWIN_SOURCE;
+  const playbooks = managedSkill?.isMainTwin
+    ? await sessionTwinPlaybooks(input.orgId, managedSkill)
+    : isAllSkillsTwin && liveAgent?.personaId
     ? await twinPlaybooks(input.orgId, liveAgent.personaId, Array.isArray(snapshot?.twinSkills) ? snapshot.twinSkills : undefined)
     : undefined;
 
   return {
     sessionId: session?.id ?? input.sessionId ?? null,
-    agent: agent ? { slug: agent.slug, version: agent.version, kind: managedSkill ? "ROLEPLAY" : liveAgent?.kind ?? null, data: agent.data } : null,
+    agent: agent ? { slug: agent.slug, version: agent.version, kind: managedSkill?.kind ?? liveAgent?.kind ?? null, data: agent.data } : null,
     ...(playbooks ? { twinPlaybooks: playbooks } : {}),
     persona: persona ?? null,
     // The trainer's own persona speaks as herself (identity only); any other persona is a character to play.
@@ -159,11 +161,11 @@ export async function buildSessionContext(input: {
 /** Session context is immutable after activation; prime this during the intro. */
 const cachedSessionContext = unstable_cache(
   (orgId: string, sessionId: string) => buildSessionContext({ orgId, sessionId }),
-  ["session-context-v2"],
+  ["session-context-v3"],
   { revalidate: 86_400 },
 );
 
 export async function getCachedSessionContext(orgId: string, sessionId: string) {
-  await loadRoleplaySessionSkill(orgId, sessionId);
+  await loadSessionSkills(orgId, sessionId);
   return cachedSessionContext(orgId, sessionId);
 }

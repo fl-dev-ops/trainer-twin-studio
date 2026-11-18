@@ -4,7 +4,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { embedTexts, searchKnowledge } from "@/lib/knowledge";
 import { MainCollectionService, type ScenarioScope, type ScenarioStep } from "@/lib/main-collection";
-import { type PinnedTwinSkill, TWIN_SOURCE, twinPlaybooks } from "@/lib/twins";
+import { type PinnedTwinSkill, TWIN_SOURCE, twinPlaybooks, sessionTwinPlaybooks } from "@/lib/twins";
 import { redactLearnerNames } from "@/lib/persona-voice";
 import { enqueueWorkspaceCommand } from "@/lib/workspace-commands";
 import { buildSessionContext, getCachedSessionContext } from "@/lib/session-context";
@@ -15,7 +15,7 @@ import { uploadBytes } from "@/lib/upload-bytes";
 import { resolveUpload, UploadError } from "@/lib/uploads";
 import { getObjectText } from "@/lib/s3";
 import { errorResponse } from "@/lib/errors";
-import { loadRoleplaySessionSkill } from "@/lib/session-skills";
+import { loadSessionSkills } from "@/lib/session-skills";
 
 /** How much of a knowledge document one read_knowledge_document call returns (about 3k tokens). */
 const KNOWLEDGE_PAGE_CHARS = 12_000;
@@ -304,22 +304,46 @@ export async function POST(request: Request) {
   if (input.action === "searchScenarioItems") {
     try {
     const managedSkill = input.sessionId
-      ? await loadRoleplaySessionSkill(orgId, input.sessionId, input.agentSlug)
+      ? await loadSessionSkills(orgId, input.sessionId, input.agentSlug, true)
       : null;
     if (managedSkill) {
-      const { version } = managedSkill;
-      const manifest = version.manifest as { steps?: unknown; situations?: unknown } | null;
-      const steps = manifest?.steps ?? manifest?.situations;
-      const examples = await MainCollectionService.searchSkillItems(orgId, [{
-        skillVersionId: version.id,
-        indexScope: version.artifacts,
-        itemCount: version.itemCount,
-      }], input.query, {
-        step: input.step,
-        role: input.role ?? (version.format === "builder-roleplay" ? "client" : "trainer"),
-        limit: input.limit,
-        steps: Array.isArray(steps) ? steps as ScenarioStep[] : [],
+      const all = managedSkill.isMainTwin ? await sessionTwinPlaybooks(orgId, managedSkill) : [];
+      const named = input.playbook ? all.filter((p) => p.id === input.playbook || p.slug === input.playbook) : [];
+      const chosen = input.agentSlug !== managedSkill.agentSlug
+        ? all.filter((p) => p.slug === input.agentSlug)
+        : named.length ? named : all;
+      const aliases = new Set(chosen.map((p) => p.slug));
+      const pins = managedSkill.pins.filter((pin) => !managedSkill.isMainTwin || aliases.has(pin.alias));
+      const steps = managedSkill.isMainTwin ? chosen.flatMap((p) => p.steps as ScenarioStep[]) : pins.flatMap(({ version }) => {
+        const manifest = version.manifest as { steps?: unknown; situations?: unknown };
+        const steps = manifest.steps ?? manifest.situations;
+        return Array.isArray(steps) ? steps as ScenarioStep[] : [];
       });
+      const options = {
+        step: input.step,
+        role: input.role ?? (pins[0]?.version.format === "builder-roleplay" ? "client" : "trainer"),
+        limit: input.limit,
+        steps,
+      };
+      const legacyScope = managedSkill.isMainTwin
+        ? managedSkill.catalog.filter((entry) => !entry.skillVersionId && aliases.has(entry.slug)).map(({ slug, version }) => ({ slug, version }))
+        : [];
+      const [managedExamples, legacyExamples] = await Promise.all([
+        pins.length ? MainCollectionService.searchSkillItems(orgId, pins.map(({ version }) => ({
+          skillVersionId: version.id,
+          indexScope: version.artifacts,
+          itemCount: version.itemCount,
+        })), input.query, options) : [],
+        legacyScope.length ? MainCollectionService.searchScenarioItems(orgId, legacyScope, input.query, options) : [],
+      ]);
+      const examples = [...managedExamples, ...legacyExamples].sort((a, b) => b.score - a.score).slice(0, input.limit ?? 3);
+      const turnLines = input.recordTurnLines;
+      if (turnLines && input.sessionId) {
+        const sessionId = input.sessionId;
+        after(() => recordTurnLines(orgId, sessionId, { ...turnLines, examples }).catch((error) => {
+          console.error("[twin-evidence] turn lines failed", error);
+        }));
+      }
       return Response.json({ query: input.query, examples });
     }
     // The embedding needs only the query: start it now so it runs alongside the DB lookups below.

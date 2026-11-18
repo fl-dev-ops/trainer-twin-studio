@@ -184,6 +184,27 @@ managed role-play packages only; twin multi-skill selection, no-skill conversion
 retention tooling and public skill-management APIs remain deferred. Schema alone does not implement
 the runtime contract: the session creation and runtime readers must ship together.
 
+Phase 3 extends the same pin mechanism to twins; the role-play contracts below remain applicable.
+
+### Phase 3 twin adoption
+
+- `loadSessionSkills` is the generalized authorized resolver. Single managed twins have one position-zero owner pin.
+  Main twins have marker 1 and an explicit `compiledSnapshot.twinSkills` catalog, including an empty array.
+- Catalog entries preserve Agent aliases/versions and ordering. A `skillVersionId` identifies a managed entry;
+  entries without it remain explicit legacy references. Managed pin positions match full catalog positions.
+- Selection remains same-org/same-persona/nonarchived at activation. Existing managed packages survive subsequent
+  archive/publication. Newly added skills never appear in an existing catalog.
+- SQL freezes the catalog and validates completeness, managed twin formats and insertion-time persona ownership.
+  Persona/settings changes after creation do not repin historical calls. Other managed identity guards remain.
+- Context cache v3 validates all pins first. Single skills project their pinned text/manifest; main twins derive
+  playbooks from the frozen mixed catalog, not the live skill list.
+- Search authorizes the owner alias or a recorded main-twin catalog alias. Managed example lookup always uses exact
+  version/artifact scopes; only explicitly recorded legacy entries use the compatibility lookup.
+- Managed copilot package-history reads verify the immutable original-file envelope, selecting manifest filename by
+  format (including scenario-shaped legacy twins). Missing/corrupt current managed packages refuse, not legacy fallback.
+- Coaching rules, inline/Eve behavior, calibration, feedback/evidence, tools, after-call reports and new-start semantics
+  remain unchanged. Local provider-boundary tests are not live-provider or latency-comparison evidence.
+
 ### Schema API and database guards
 
 Source: `web/prisma/schema.prisma`; additive migration:

@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import { validSlug } from "@/lib/specs";
+import { resolveSnapshotSkill, type SessionSkillCatalogEntry, type loadSessionSkills } from "@/lib/session-skills";
 
 /**
  * A twin ("Ask Olga") is an open conversation with a trainer's persona that can draw on every
@@ -49,7 +50,7 @@ function toPlaybook(slug: string, name: string, agentData: unknown, version: num
 }
 
 /** The skill twins (and their versions) an all-skills twin session is pinned to, saved when it starts. */
-export type PinnedTwinSkill = { slug: string; version: number };
+export type PinnedTwinSkill = SessionSkillCatalogEntry;
 
 const liveSkillTwins = (orgId: string, personaId: string) =>
   db.agent.findMany({
@@ -64,13 +65,50 @@ export async function pinTwinSkills(orgId: string, personaId: string): Promise<P
   return rows.filter((row) => toPlaybook(row.slug, row.name, row.data, row.version)).map(({ slug, version }) => ({ slug, version }));
 }
 
+export async function resolveTwinCatalog(orgId: string, personaId: string, client: Prisma.TransactionClient) {
+  await client.$queryRaw`SELECT 1 FROM "Agent" WHERE "orgId" = ${orgId} AND "personaId" = ${personaId} AND "kind" = 'TWIN' AND "archivedAt" IS NULL FOR KEY SHARE`;
+  const rows = await client.agent.findMany({
+    where: { orgId, personaId, kind: "TWIN", archivedAt: null },
+    orderBy: [{ order: "asc" }, { name: "asc" }],
+    select: { slug: true, name: true, version: true, data: true, primarySkillId: true },
+  });
+  const catalog: PinnedTwinSkill[] = [];
+  const pins: { skillVersionId: string; alias: string; position: number }[] = [];
+  for (const row of rows) {
+    if (asRecord(row.data)?.source === TWIN_SOURCE) continue;
+    if (!row.primarySkillId && !toPlaybook(row.slug, row.name, row.data, row.version)) continue;
+    const version = row.primarySkillId ? await resolveSnapshotSkill(orgId, row, "TWIN", client) : null;
+    if (version) pins.push({ skillVersionId: version.id, alias: row.slug, position: catalog.length });
+    catalog.push({ slug: row.slug, version: row.version, ...(version ? { skillVersionId: version.id } : {}) });
+  }
+  return { catalog, pins };
+}
+
+export async function sessionTwinPlaybooks(orgId: string, runtime: NonNullable<Awaited<ReturnType<typeof loadSessionSkills>>>) {
+  const legacyEntries = runtime.catalog.filter((entry) => !entry.skillVersionId);
+  const legacy = legacyEntries.length ? await twinPlaybooks(orgId, runtime.personaId, legacyEntries) : [];
+  const legacyBySlug = new Map(legacy.map((playbook) => [playbook.slug, playbook]));
+  const managedBySlug = new Map(runtime.pins.map((pin) => [pin.alias, pin.version]));
+  return runtime.catalog.flatMap((entry) => {
+    const version = managedBySlug.get(entry.slug);
+    return (version
+      ? toPlaybook(entry.slug, entry.slug, { skill: version.skillText, scenario: version.manifest }, entry.version)
+      : legacyBySlug.get(entry.slug)) ?? [];
+  });
+}
+
 /**
  * The all-skills twin's playbooks. With `pinned` (a session's snapshot) the session keeps exactly the skills and
  * versions it started with: a skill re-ingested since then is read from its SpecVersion, one ingested since then
  * is left out, one deleted since then is dropped. Without `pinned`, every skill twin of the persona right now.
  */
 export async function twinPlaybooks(orgId: string, personaId: string, pinned?: PinnedTwinSkill[]): Promise<TwinPlaybook[]> {
-  const rows = await liveSkillTwins(orgId, personaId);
+  const rows = pinned
+    ? await db.agent.findMany({
+        where: { orgId, personaId, kind: "TWIN", slug: { in: pinned.map((entry) => entry.slug) } },
+        select: { slug: true, name: true, version: true, data: true },
+      })
+    : await liveSkillTwins(orgId, personaId);
   if (!pinned) return rows.flatMap((row) => toPlaybook(row.slug, row.name, row.data, row.version) ?? []);
 
   const live = new Map(rows.map((row) => [row.slug, row]));

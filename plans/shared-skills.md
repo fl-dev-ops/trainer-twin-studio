@@ -13,8 +13,8 @@ The durable plan is this file; do not delete it as a temporary planning artifact
 | --- | --- | --- |
 | 1 — Registry + publisher | Complete implementation/local verification | Live comparison deferred until all phases; not deployed |
 | 2 — Role-play runtime | Complete implementation/local verification | Exact pins, strict retrieval and recovery verified; live checks deferred |
-| 3 — Twin runtime | Not started | Next implementation phase |
-| 4 — Existing-data migration | Not started | Production execution needs explicit approval |
+| 3 — Twin runtime | Complete implementation/local verification | Single/main/mixed/empty catalogs verified; live checks deferred |
+| 4 — Existing-data migration | In progress | Tooling and isolated rehearsal; production execution unapproved |
 | 5 — Sole package ownership | Not started | Blocked on verified migration coverage and canary |
 
 Current checkpoint: registry/publisher and managed role-play runtime adoption are implemented. New managed role-play
@@ -54,6 +54,12 @@ Implementation decisions:
 
 Before leaving any checkpoint: update phase statuses, exact commands/results, commit IDs, known failures and next action
 here. Do not mark live voice/external-service checks passed based on boundary-mocked tests.
+
+Owner follow-up: extensively test each phase, then continue automatically to the next phase without waiting for approval.
+The phase gate includes targeted success/refusal/concurrency/recovery cases, legacy regressions, the full local DB and
+flow suites, chat tests, typecheck, touched-file lint and build. Keep per-phase commits. Production operations remain
+unapproved; live-provider comparison remains deferred until all implementation phases. Phase 5 cutover must therefore
+be implemented with a compatibility default and explicit operator approval, not automatically activated.
 
 ### Phase 1 verification — 19 Nov 2026
 
@@ -161,6 +167,41 @@ Verification gotchas:
 Resume: inspect `git log` for `feat(skills): pin managed roleplay session packages` (Phase 2 local checkpoint), then
 implement Phase 3 from the detailed phase section below. Phases 3–5 and final real-provider/voice comparison remain
 unimplemented/unrun. No push, production migration, data backfill or deployment is authorized by this checkpoint.
+
+### Phase 3 checkpoint — 19 Nov 2026
+
+Phase 2 commit: `93173f8`. Phase 3 commit subject: `feat(skills): adopt managed twin session catalogs`.
+
+Single-skill twins now use exact package pins. Main twins capture an ordered, same-persona catalog with managed package
+IDs distinguished from legacy slug/version entries. Empty catalogs stay empty for the call; republish, new skills and
+archive do not change an existing managed catalog. The generalized session resolver validates all managed pins before
+cache v3 reads. Search accepts only the session owner or a recorded catalog alias; managed and legacy lookup paths are
+partitioned. History reads use verified format-specific managed package files and do not require a ready example index.
+No per-turn S3 fetch or package-file hashing was introduced.
+
+The new PostgreSQL twin suite has **23 tests / 146 assertions**, covering single/current and legacy formats, mixed and
+empty catalogs, ordering/persona isolation, successive publication/new skill/archive, calibration, reconnect, invalid
+aliases, unavailable indexes and immutable SQL catalog checks. It found a mixed-search issue, fixed before checkpoint.
+Twin new-start semantics remain unchanged (a new start is not a role-play-style idempotent resume).
+
+| Check | Result |
+| --- | --- |
+| Completed-phase DB suite | **827 pass, 0 fail**, 47 files |
+| Twin/history/search/activation focused suites | **53 pass, 0 fail**, 6 existing matching files |
+| `bun test --parallel tests/flows` | **150 pass, 0 fail**, 9 files |
+| `bun test tests` from `chat/` | **125 pass, 0 fail**, 19 files |
+| TypeScript and Phase 3 touched-file ESLint | Pass |
+| Local build | Pass after advisory retry; existing Next.js security warning unresolved |
+
+DB command: `bun test --parallel --path-ignore-patterns='**/skill-history*.db.test.ts'
+--path-ignore-patterns='**/skill-migration*.db.test.ts' .db.test`. Future Phase 4 test files were excluded until that
+phase's schema was applied; no completed-phase tests were excluded. Run suites sequentially against this database:
+concurrent DB/flow runs can hit the previously recorded billing mock teardown race. Standalone full DB rerun passed.
+Only additive `20261119150000_twin_skill_pins` was applied at this gate, to the isolated test DB.
+
+See `shared-skills-phase-3-release.md` for the behavior matrix and deferred live/performance comparison.
+Next: complete verified history import/mapping/provenance tooling and its isolated migration rehearsals (Phase 4), then
+implement the explicitly gated ownership switch (Phase 5). No production-copy rehearsal or live canary is claimed.
 
 ## Goal
 
@@ -457,10 +498,11 @@ a separately rehearsed recovery operation.
 - Rewriting all manifests to one schema, changing conversation prompts, or converting no-skill interviews to skills.
 - Changing twin selection/access policy, report semantics, copilot approval/authority or user-visible conversation design.
 
-## Before implementation
+## Authorization and implementation order
 
-Approve the ownership/phase boundaries and write the rule spec with exact publication concurrency, retry/refusal and
-retention contracts. Then implement Phase 1 only; later phases depend on its measured results.
+Ownership/phase boundaries are approved. Keep the rule spec current with exact publication concurrency, retry/refusal
+and retention contracts. Implement and extensively verify each phase before checkpointing it, then continue to the next
+phase automatically. Final live comparison follows all implementation phases; it is not an intermediate code gate.
 
 The active worktree/session is `application-v3`; implementation branch is `feat/shared-skills` from `origin/v3`.
 The previous checkout's AGENTS instructions ceased applying when the session moved here. No remote branch or PR has
