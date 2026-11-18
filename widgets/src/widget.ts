@@ -236,13 +236,13 @@ function mount(root: HTMLElement, config: Config) {
   name.placeholder = "What should I call you?";
   name.required = true;
   name.setAttribute("aria-describedby", "tt-error");
-  const consent = element("p", "tt-consent", "AI voice call · Transcribed · May be recorded");
-  const start = button("tt-primary", "Start voice call");
-  start.prepend(icon(PHONE));
+  const start = button("tt-start", "");
+  start.append(icon(PHONE));
+  start.setAttribute("aria-label", "Start voice call");
+  start.title = "Start voice call";
   start.type = "submit";
   start.disabled = true;
-  const allowance = element("p", "tt-allowance", `Up to ${clock(config.maxSeconds)}`);
-  form.append(label, name, consent, start, allowance);
+  form.append(label, name, start);
 
   const call = element("section", "tt-call");
   call.hidden = true;

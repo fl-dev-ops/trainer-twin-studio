@@ -58,7 +58,11 @@ dialog has an accessible name, and closing returns focus to the launcher.
 The welcome card fits its content without a bottom spacer; trusted, integer-only size updates are bounded to
 280–580px and the viewport's safe areas. Active calls retain a bounded caption area rather than resizing every turn.
 The hosted UI uses a dark portrait-led card, the trainer's existing photo (initials if unavailable), and explicit
-name/microphone consent. Photos remain in colour; initials appear only when no photo is available. Call-state indicators follow
+name entry and browser microphone permission. The ready card uses a full-width square portrait on black, a simple
+title, and one row with a black pill-shaped name input and circular phone-only call button. The name label remains
+accessible but is visually hidden. Input/focus shadows are external, never inset. The prior AI/transcription/recording
+and “Up to” duration text lines are removed from this card; the required name and enforced call allowance remain.
+Photos remain in colour; initials appear only when no photo is available. Call-state indicators follow
 LiveKit audio tracks drive the exact shared Twin-session green/orange glow renderer, including noise gates,
 attack/release smoothing and muted-track silence. A square portrait replaces the landscape crop in every phase.
 The call has no header; only connecting/reconnecting shows “Connecting…”, not speaking/listening text.

@@ -232,7 +232,7 @@ test.describe.serial("cross-origin hosted voice widget", () => {
     const microphoneAllowed = await microphonePolicy(hosted);
     if (microphoneAllowed !== undefined) expect(microphoneAllowed).toBe(true);
     await expect(hosted.getByLabel("Your name", { exact: true })).toHaveAttribute("maxlength", "80");
-    await expect(hosted.getByText("AI voice call · Transcribed · May be recorded", { exact: true })).toBeVisible();
+    await expect(hosted.locator(".tt-consent, .tt-allowance")).toHaveCount(0);
     await expect(hosted.locator("details")).toHaveCount(0);
     const inlineResponse = await page.request.get(`${widgetOrigin()}/embed/${agentId}?parentOrigin=${encodeURIComponent(CUSTOMER_ORIGIN)}&mode=inline`);
     expect(inlineResponse.status()).toBe(400);
@@ -294,7 +294,7 @@ test.describe.serial("cross-origin hosted voice widget", () => {
     await expectOnlySafeMessages(page);
   });
 
-  test("portrait-led design keeps consent, captions and controls usable across call states", async ({ page, context }, testInfo) => {
+  test("portrait-led design keeps name entry, captions and controls usable across call states", async ({ page, context }, testInfo) => {
     await page.setViewportSize({ width: 1280, height: 1000 });
     await environment(context);
     const calls = await simulatedCalls(page, { pendingStart: true });
@@ -326,11 +326,22 @@ test.describe.serial("cross-origin hosted voice widget", () => {
       .not.toBe(await hosted.locator(".tt-card").evaluate((node) => getComputedStyle(node).backgroundColor));
     expect(await hosted.getByLabel("Your name", { exact: true }).evaluate((node) => getComputedStyle(node).borderTopWidth)).toBe("0px");
     expect(await hosted.getByLabel("Your name", { exact: true }).evaluate((node) => getComputedStyle(node).boxShadow)).not.toBe("none");
+    expect(await hosted.getByLabel("Your name", { exact: true }).evaluate((node) => getComputedStyle(node).boxShadow)).not.toContain("inset");
     await expect(hosted.getByText("Ask a question. Think out loud. See where it takes you.", { exact: true })).toHaveCount(0);
-    await expect(hosted.getByText("AI voice call · Transcribed · May be recorded", { exact: true })).toBeVisible();
+    await expect(hosted.getByText("AI voice call · Transcribed · May be recorded", { exact: true })).toHaveCount(0);
+    await expect(hosted.getByText("Up to 2:00", { exact: true })).toHaveCount(0);
+    const inputBounds = await hosted.getByLabel("Your name", { exact: true }).boundingBox();
+    const callBounds = await hosted.getByRole("button", { name: "Start voice call", exact: true }).boundingBox();
+    if (!inputBounds || !callBounds) throw new Error("Expected name and call controls");
+    expect(Math.abs(inputBounds.y - callBounds.y)).toBeLessThanOrEqual(1);
+    expect(callBounds.x).toBeGreaterThan(inputBounds.x + inputBounds.width);
+    expect(Math.round(callBounds.width)).toBe(Math.round(callBounds.height));
+    await expect(hosted.getByRole("button", { name: "Start voice call", exact: true })).toHaveText("");
+    expect(await hosted.locator(".tt-portrait-stage").evaluate((node) => getComputedStyle(node).backgroundColor)).toBe("rgb(9, 10, 8)");
+    expect(await hosted.locator(".tt-card").evaluate((node) => getComputedStyle(node).backgroundColor)).toBe("rgb(27, 28, 25)");
     expect(await hosted.getByRole("button", { name: "Start voice call", exact: true }).evaluate((node) => node.getBoundingClientRect().bottom <= innerHeight)).toBe(true);
     await expect.poll(() => hosted.locator(".tt-card").evaluate((node) => Math.abs(innerHeight - node.getBoundingClientRect().height))).toBeLessThanOrEqual(2);
-    await page.screenshot({ path: testInfo.outputPath("widget-desktop-portrait.png"), animations: "disabled" });
+    await page.locator("[data-trainertwin-widget] .floating").screenshot({ path: testInfo.outputPath("widget-desktop-portrait.png"), animations: "disabled" });
     await expect(hosted.getByRole("button", { name: "Minimise voice widget", exact: true })).toHaveCount(0);
     await begin(hosted, "Design review");
     await expect.poll(() => calls.starts.length).toBe(1);
@@ -397,7 +408,7 @@ test.describe.serial("cross-origin hosted voice widget", () => {
       return body !== null && node.getBoundingClientRect().bottom <= body.getBoundingClientRect().bottom;
     })).toBe(true);
     expect(await hosted.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    await page.screenshot({ path: testInfo.outputPath("widget-small-portrait.png"), animations: "disabled" });
+    await page.locator("[data-trainertwin-widget] .floating").screenshot({ path: testInfo.outputPath("widget-small-portrait.png"), animations: "disabled" });
     await photo.evaluate((node) => node.dispatchEvent(new Event("error")));
     await expect(photo).toHaveCount(0);
     await expect(hosted.locator(".tt-hero-portrait")).toHaveText("ET");
