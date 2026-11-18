@@ -52,8 +52,10 @@ async function frame(page: Page) {
 
 async function open(page: Page, path = "/") {
   await page.goto(`${CUSTOMER_ORIGIN}${path}`);
-  if (path !== "/manual" && !path.includes("inline")) {
-    await page.getByRole("button", { name: "Talk to AI twin", exact: true }).click();
+  if (path !== "/manual") {
+    const launcher = page.getByRole("button", { name: "Talk to AI twin", exact: true });
+    await launcher.focus();
+    await launcher.press("Enter");
   }
   const hosted = await frame(page);
   await expect(hosted.getByRole("button", { name: "Start voice call", exact: true })).toBeEnabled();
@@ -167,9 +169,10 @@ async function expectOnlySafeMessages(page: Page) {
   for (const value of messages) {
     const parsed = z.object({
       source: z.literal("trainertwin-widget"), version: z.literal(1),
-      type: z.enum(["ready", "close", "status"]), active: z.boolean().optional(),
+      type: z.enum(["ready", "close", "status", "interaction"]), active: z.boolean().optional(), editing: z.boolean().optional(),
     }).strict().parse(value);
     if (parsed.type === "status") expect(typeof parsed.active).toBe("boolean");
+    if (parsed.type === "interaction") expect(typeof parsed.editing).toBe("boolean");
   }
   expect(JSON.stringify(messages)).not.toMatch(/secret|Bearer|grant|visitorToken|participantToken|embedToken|runtimeToken/);
 }
@@ -227,6 +230,9 @@ test.describe.serial("cross-origin hosted voice widget", () => {
     if (microphoneAllowed !== undefined) expect(microphoneAllowed).toBe(true);
     await expect(hosted.getByLabel("Your name", { exact: true })).toHaveAttribute("maxlength", "80");
     await expect(hosted.getByText("AI voice call · Transcribed · May be recorded", { exact: true })).toBeVisible();
+    await expect(hosted.locator("details")).toHaveCount(0);
+    const inlineResponse = await page.request.get(`${widgetOrigin()}/embed/${agentId}?parentOrigin=${encodeURIComponent(CUSTOMER_ORIGIN)}&mode=inline`);
+    expect(inlineResponse.status()).toBe(400);
     await expect(hosted.locator('textarea, input[type="file"], input[type="email"], video')).toHaveCount(0);
     await expect(hosted.getByRole("button", { name: /camera|screen|upload|send message/i })).toHaveCount(0);
     await page.screenshot({ path: testInfo.outputPath("widget-mobile-prejoin.png"), fullPage: true, animations: "disabled" });
@@ -250,6 +256,39 @@ test.describe.serial("cross-origin hosted voice widget", () => {
     await expect(hosted.getByRole("button", { name: "Start a new call", exact: true })).toBeEnabled();
   });
 
+  test("hover keeps the whole surface open, protects name entry and shrinks without starting a call", async ({ page, context }, testInfo) => {
+    await environment(context);
+    await page.clock.install();
+    const calls = await simulatedCalls(page);
+    await page.goto(CUSTOMER_ORIGIN);
+    const launcher = page.locator("[data-trainertwin-widget] button");
+    await expect(launcher).toBeVisible();
+    const box = await launcher.boundingBox();
+    if (!box) throw new Error("Expected launcher bounds");
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    const hosted = await frame(page);
+    const dialog = page.getByRole("dialog", { name: "AI twin conversation", exact: true });
+    await expect(dialog).toBeVisible();
+    await hosted.getByLabel("Your name", { exact: true }).fill("Hover visitor");
+    await expect.poll(() => page.evaluate(() => (window.__widgetMessages ?? []).some((value) =>
+      typeof value === "object" && value !== null && "type" in value && value.type === "interaction"
+      && "editing" in value && value.editing === true))).toBe(true);
+    await page.getByRole("heading", { name: "Independent customer website" }).hover();
+    await page.clock.runFor(1000);
+    await expect(dialog).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath("widget-hover-card.png"), animations: "disabled" });
+    await page.getByRole("heading", { name: "Independent customer website" }).click();
+    await expect.poll(() => page.evaluate(() => (window.__widgetMessages ?? []).filter((value) =>
+      typeof value === "object" && value !== null && "type" in value && value.type === "interaction").at(-1)))
+      .toMatchObject({ editing: false });
+    await page.clock.runFor(1000);
+    await expect(dialog).toBeHidden();
+    await expect(launcher).toBeVisible();
+    expect(calls.starts).toHaveLength(0);
+    expect(await hosted.evaluate(() => window.__widgetMicrophoneRequests)).toBe(0);
+    await expectOnlySafeMessages(page);
+  });
+
   test("portrait-led design keeps consent, captions and controls usable across call states", async ({ page, context }, testInfo) => {
     await page.setViewportSize({ width: 1280, height: 1000 });
     await environment(context);
@@ -270,6 +309,8 @@ test.describe.serial("cross-origin hosted voice widget", () => {
     expect(await photo.evaluate((node) => getComputedStyle(node).filter)).toBe("none");
     expect(await hosted.getByLabel("Your name", { exact: true }).evaluate((node) => getComputedStyle(node).backgroundColor))
       .not.toBe(await hosted.locator(".tt-card").evaluate((node) => getComputedStyle(node).backgroundColor));
+    expect(await hosted.getByLabel("Your name", { exact: true }).evaluate((node) => getComputedStyle(node).borderTopWidth)).toBe("0px");
+    expect(await hosted.getByLabel("Your name", { exact: true }).evaluate((node) => getComputedStyle(node).boxShadow)).not.toBe("none");
     await expect(hosted.getByText("Ask a question. Think out loud. See where it takes you.", { exact: true })).toHaveCount(0);
     await expect(hosted.getByText("AI voice call · Transcribed · May be recorded", { exact: true })).toBeVisible();
     expect(await hosted.getByRole("button", { name: "Start voice call", exact: true }).evaluate((node) => node.getBoundingClientRect().bottom <= innerHeight)).toBe(true);
@@ -310,12 +351,6 @@ test.describe.serial("cross-origin hosted voice widget", () => {
     await expect(photo).toHaveCount(0);
     await expect(hosted.locator(".tt-hero-portrait")).toHaveText("ET");
     await expectOnlySafeMessages(page);
-    const inline = await open(page, "/?mode=inline");
-    await expect(inline.getByRole("button", { name: "Minimise voice widget", exact: true })).toHaveCount(0);
-    await expect(inline.getByRole("button", { name: "Start voice call", exact: true })).toBeEnabled();
-    expect(await inline.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    await page.screenshot({ path: testInfo.outputPath("widget-inline-mobile.png"), animations: "disabled", fullPage: true });
-    expect(calls.starts).toHaveLength(1);
   });
 
   test("an ancestor microphone policy blocks the real browser API before any session request", async ({ page }) => {
@@ -379,7 +414,9 @@ test.describe.serial("cross-origin hosted voice widget", () => {
     await hosted.getByRole("button", { name: "Minimise voice widget", exact: true }).click();
     await expect(page.getByRole("dialog", { name: "AI twin conversation", exact: true })).toBeHidden();
     expect(calls.ends).toHaveLength(0);
-    await page.getByRole("button", { name: "AI twin call in progress — reopen", exact: true }).click();
+    const reopen = page.getByRole("button", { name: "AI twin call in progress — reopen", exact: true });
+    await reopen.focus();
+    await reopen.press("Enter");
     await expect(hosted.getByRole("log")).toContainText("My follow-up question");
     await hosted.evaluate(() => window.__widgetRoom?.detachAudio());
     await expect(hosted.locator("audio")).toHaveCount(0);
@@ -485,13 +522,8 @@ test.describe.serial("cross-origin hosted voice widget", () => {
     page.on("request", (request) => {
       if (new URL(request.url()).pathname === bootstrapPath()) bootstraps.push(request.postDataJSON());
     });
-    const hosted = await open(page, "/?mode=inline");
-    expect(new URL(hosted.url()).searchParams.get("mode")).toBe("inline");
-    await expect(hosted.getByRole("button", { name: "Minimise voice widget", exact: true })).toHaveCount(0);
-    await hosted.getByLabel("Your name", { exact: true }).press("Escape");
-    await expect(page.getByRole("region", { name: "AI twin conversation", exact: true })).toBeVisible();
-    expect(await page.evaluate(() => (window.__widgetMessages ?? []).some((value) =>
-      typeof value === "object" && value !== null && "type" in value && value.type === "close"))).toBe(false);
+    const hosted = await open(page);
+    expect(new URL(hosted.url()).searchParams.get("mode")).toBe("floating");
     await begin(hosted);
     await expect(hosted.getByRole("alert")).toHaveText("The call service returned an unreadable response. Please try again.");
     expect(calls.starts).toHaveLength(1);

@@ -20,15 +20,18 @@ declare global {
 const styles = `
 :host { all: initial; color-scheme: dark; font: 14px/1.4 system-ui, sans-serif; }
 * { box-sizing: border-box; }
-.floating { position: fixed; right: max(16px, env(safe-area-inset-right)); bottom: max(16px, env(safe-area-inset-bottom)); z-index: 2147483000; display: flex; flex-direction: column; align-items: flex-end; }
+.floating { --panel-width: min(400px, calc(100vw - max(16px, env(safe-area-inset-left)) - max(16px, env(safe-area-inset-right)))); --panel-height: min(580px, calc(100dvh - max(16px, env(safe-area-inset-top)) - max(16px, env(safe-area-inset-bottom)))); position: fixed; right: max(16px, env(safe-area-inset-right)); bottom: max(16px, env(safe-area-inset-bottom)); z-index: 2147483000; width: var(--launcher-width, 180px); height: 52px; overflow: hidden; border-radius: 999px; background: #1b1c19; box-shadow: 0 8px 24px #0003; transition: width .6s cubic-bezier(.22,1,.36,1), height .6s cubic-bezier(.22,1,.36,1), border-radius .6s; }
+.floating[data-open="true"] { width: var(--panel-width); height: var(--panel-height); border-radius: 28px; box-shadow: 0 24px 64px -12px #0006; transition-duration: .35s; }
+.floating:has(> button:focus-visible) { outline: 2px solid #8ca575; outline-offset: 4px; }
 button { display: flex; align-items: center; justify-content: center; gap: 12px; min-height: 52px; font: inherit; font-weight: 500; color: #f2eee5; background: #1b1c19; border: 1px solid #ffffff30; border-radius: 999px; padding: 12px 20px; cursor: pointer; box-shadow: 0 8px 24px #0003; transition: background .2s, transform .2s; }
-button:hover { background: #2a2c26; transform: translateY(-2px); }
+button { position: absolute; bottom: 0; right: 0; white-space: nowrap; height: 52px; }
+button:hover { background: #2a2c26; }
+.floating[data-open="true"] > button { opacity: 0; visibility: hidden; pointer-events: none; }
 button:focus-visible { outline: 2px solid #8ca575; outline-offset: 4px; }
 button svg { width: 20px; height: 20px; flex-shrink: 0; }
 button[data-active="true"]::after { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #b5cf98; animation: pulse 2s ease-in-out infinite; }
-.panel { width: min(400px, calc(100vw - 32px)); height: min(700px, calc(100dvh - 112px)); margin-bottom: 12px; border-radius: 28px; overflow: hidden; background: #1b1c19; box-shadow: 0 24px 64px -12px #0006; }
-.mobile .panel { width: calc(100vw - 32px); height: calc(100dvh - 112px); }
-.inline { display: block; width: 100%; height: 700px; max-height: 100dvh; min-height: 280px; border-radius: 28px; overflow: hidden; background: #1b1c19; }
+.panel { position: absolute; bottom: 0; right: 0; width: var(--panel-width); height: var(--panel-height); border-radius: 28px; overflow: hidden; background: #1b1c19; visibility: hidden; opacity: 0; transition: opacity .2s, visibility 0s .6s; }
+.floating[data-open="true"] .panel { visibility: visible; opacity: 1; transition-delay: 0s; }
 iframe { display: block; width: 100%; height: 100%; border: 0; }
 [hidden] { display: none !important; }
 .status { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
@@ -47,21 +50,13 @@ function createAPI(): WidgetsAPI {
         throw new Error("TrainerTwin mount requires a script in the current document.");
       }
       const mode = script.dataset.mode ?? "floating";
-      if (mode !== "floating" && mode !== "inline") {
-        throw new Error("TrainerTwin data-mode must be floating or inline.");
+      if (mode !== "floating") {
+        throw new Error("TrainerTwin supports floating widgets only.");
       }
       const url = embedUrl(script.src, script.dataset.twinId ?? "", window.location.origin);
       url.searchParams.set("mode", mode);
       const widgetOrigin = url.origin;
-      const targetId = script.dataset.target;
-      let target: HTMLElement | null = null;
-      if (targetId !== undefined) {
-        if (mode !== "inline" || !/^[a-zA-Z][a-zA-Z0-9_-]{0,127}$/.test(targetId)) {
-          throw new Error("TrainerTwin data-target must be a simple element ID in inline mode.");
-        }
-        target = document.getElementById(targetId);
-        if (!target) throw new Error(`TrainerTwin target "${targetId}" was not found.`);
-      }
+      if (script.dataset.target !== undefined) throw new Error("Floating widgets do not support data-target.");
       const root = document.createElement("div");
       root.setAttribute("data-trainertwin-widget", "");
       const shadow = root.attachShadow({ mode: "open" });
@@ -69,10 +64,10 @@ function createAPI(): WidgetsAPI {
       style.textContent = styles;
       if (script.nonce) style.nonce = script.nonce;
       const container = document.createElement("div");
-      container.className = mode;
+      container.className = "floating";
       const panel = document.createElement("div");
-      panel.className = mode === "floating" ? "panel" : "inline";
-      panel.setAttribute("role", mode === "floating" ? "dialog" : "region");
+      panel.className = "panel";
+      panel.setAttribute("role", "dialog");
       panel.setAttribute("aria-label", "AI twin conversation");
       const iframe = document.createElement("iframe");
       iframe.title = "Talk to AI twin";
@@ -105,42 +100,82 @@ function createAPI(): WidgetsAPI {
       status.setAttribute("role", "status");
       status.setAttribute("aria-live", "polite");
       container.append(panel);
-      if (mode === "floating") container.append(launcher, status);
+      container.append(launcher, status);
       shadow.append(style, container);
       let destroyed = false;
       let ready = false;
-      let opened = mode === "inline";
-      panel.hidden = !opened;
-      const mobile = window.matchMedia("(max-width: 480px)");
-      const resize = () => container.classList.toggle("mobile", mobile.matches);
-      resize();
-      mobile.addEventListener("change", resize);
+      let opened = false;
+      let hovered = false;
+      let editing = false;
+      let pinned = false;
+      let exitTimer: ReturnType<typeof setTimeout> | undefined;
+      const hover = window.matchMedia("(hover: hover) and (pointer: fine)");
+      panel.inert = true;
+      panel.setAttribute("aria-hidden", "true");
+      iframe.tabIndex = -1;
       const send = (type: HostMessage["type"]) => {
         const message: HostMessage = { source: "trainertwin-host", version: 1, type };
         iframe.contentWindow?.postMessage(message, widgetOrigin);
       };
-      const handle: WidgetHandle = {
-        open() {
-          if (destroyed || mode === "inline") return;
+      const cancelExit = () => {
+        if (exitTimer !== undefined) clearTimeout(exitTimer);
+        exitTimer = undefined;
+      };
+      const expand = (focus: boolean) => {
+          if (destroyed) return;
+          cancelExit();
           opened = true;
-          panel.hidden = false;
+          container.dataset.open = "true";
+          panel.inert = false;
+          panel.setAttribute("aria-hidden", "false");
+          iframe.tabIndex = 0;
+          launcher.inert = true;
           launcher.setAttribute("aria-expanded", "true");
-          if (ready) iframe.focus();
-        },
-        minimise() {
-          if (destroyed || mode === "inline") return;
+          if (focus && ready) iframe.focus();
+      };
+      const collapse = (focus: boolean) => {
+          if (destroyed) return;
+          cancelExit();
           opened = false;
-          panel.hidden = true;
+          pinned = false;
+          editing = false;
+          container.dataset.open = "false";
+          panel.inert = true;
+          panel.setAttribute("aria-hidden", "true");
+          iframe.tabIndex = -1;
+          launcher.inert = false;
           launcher.setAttribute("aria-expanded", "false");
-          launcher.focus();
-        },
+          if (focus) launcher.focus();
+      };
+      const scheduleExit = () => {
+        cancelExit();
+        if (!opened || hovered || editing || pinned) return;
+        exitTimer = setTimeout(() => {
+          if (!hovered && !editing && !pinned) collapse(false);
+        }, 350);
+      };
+      const onEnter = (event: PointerEvent) => {
+        if (!hover.matches || event.pointerType !== "mouse") return;
+        hovered = true;
+        expand(false);
+      };
+      const onLeave = (event: PointerEvent) => {
+        if (event.pointerType !== "mouse") return;
+        hovered = false;
+        scheduleExit();
+      };
+      const handle: WidgetHandle = {
+        open() { pinned = true; expand(true); },
+        minimise() { collapse(true); },
         destroy() {
           if (destroyed) return;
+          cancelExit();
           send("destroy");
           destroyed = true;
           window.removeEventListener("message", onMessage);
           window.removeEventListener("keydown", onKey);
-          mobile.removeEventListener("change", resize);
+          container.removeEventListener("pointerenter", onEnter);
+          container.removeEventListener("pointerleave", onLeave);
           launcher.removeEventListener("click", toggle);
           root.remove();
           mounts.delete(script);
@@ -151,33 +186,35 @@ function createAPI(): WidgetsAPI {
         if (event.data.type === "ready") {
           ready = true;
           send("init");
-          if (opened && mode === "floating") iframe.focus();
+          if (opened && pinned) iframe.focus();
         } else if (event.data.type === "close") {
           handle.minimise();
+        } else if (event.data.type === "interaction") {
+          editing = event.data.editing;
+          if (editing) cancelExit();
+          else scheduleExit();
         } else {
           status.textContent = event.data.active ? "AI twin call in progress" : "AI twin call ended";
           launcherLabel.textContent = event.data.active ? "Call in progress" : "Talk to AI twin";
           launcher.dataset.active = String(event.data.active);
           launcher.setAttribute("aria-label", event.data.active ? "AI twin call in progress — reopen" : "Talk to AI twin");
+          container.style.setProperty("--launcher-width", `${Math.ceil(launcher.getBoundingClientRect().width)}px`);
         }
       };
       const onKey = (event: KeyboardEvent) => {
-        if (event.key === "Escape" && opened && mode === "floating") {
+        if (event.key === "Escape" && opened) {
           event.preventDefault();
           handle.minimise();
         }
       };
       const toggle = () => opened ? handle.minimise() : handle.open();
       launcher.addEventListener("click", toggle);
+      container.addEventListener("pointerenter", onEnter);
+      container.addEventListener("pointerleave", onLeave);
       window.addEventListener("message", onMessage);
       window.addEventListener("keydown", onKey);
-      if (mode === "floating") {
-        (document.body ?? document.documentElement).append(root);
-      } else if (target) {
-        target.append(root);
-      } else {
-        script.after(root);
-      }
+      (document.body ?? document.documentElement).append(root);
+      container.style.setProperty("--launcher-width", `${Math.ceil(launcher.getBoundingClientRect().width)}px`);
       mounts.set(script, handle);
       return handle;
     },

@@ -17,10 +17,10 @@ Bun.serve({
         source:"trainertwin-widget",version:1,type:"close",marker:"origin-check"
       },${JSON.stringify(hostOrigin)});</script>`, { headers: { "content-type": "text/html; charset=utf-8" } });
     }
-    const mode = url.searchParams.get("mode") === "inline" ? "inline" : "floating";
+    const mode = url.searchParams.get("mode") ?? "floating";
     const target = url.searchParams.has("target") ? 'data-target="twin-slot"' : "";
     const second = url.searchParams.has("multiple")
-      ? `<script async src="${widgetOrigin}/widgets/v1.js" data-twin-id="second" data-mode="inline"></script>` : "";
+      ? `<script async src="${widgetOrigin}/widgets/v1.js" data-twin-id="second" data-mode="floating"></script>` : "";
     return new Response(`<!doctype html><html><head><title>Customer website</title>
       <style>button,iframe { display:none !important; } body { margin:0; }</style></head>
       <body><h1>Customer website</h1><div id="twin-slot"></div>

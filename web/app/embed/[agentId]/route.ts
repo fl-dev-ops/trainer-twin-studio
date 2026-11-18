@@ -13,7 +13,7 @@ export async function GET(request: Request, context: { params: Promise<{ agentId
     const { agentId } = await context.params;
     const parentOrigin = new URL(request.url).searchParams.get("parentOrigin") ?? "";
     const mode = new URL(request.url).searchParams.get("mode") ?? "floating";
-    if (mode !== "floating" && mode !== "inline") throw refusals.invalidInput("Invalid widget mode.");
+    if (mode !== "floating") throw refusals.invalidInput("Only floating widgets are supported.");
     const { agent, settings } = await widgetAgent(org.id, agentId, parentOrigin);
     const trainer = await trainerProfile(agent.personaId);
     const config = {

@@ -203,7 +203,7 @@ test.describe.serial("twin settings layout", () => {
     await page.screenshot({ path: testInfo.outputPath("embed-desktop.png"), animations: "disabled" });
   });
 
-  test("install actions copy the unchanged ID and both snippets", async ({ page }) => {
+  test("install actions copy the unchanged ID and floating snippet only", async ({ page }) => {
     await page.getByRole("tab", { name: "Embed", exact: true }).click();
     await page.evaluate(() => {
       Object.defineProperty(navigator.clipboard, "writeText", {
@@ -214,7 +214,8 @@ test.describe.serial("twin settings layout", () => {
     const install = page.getByRole("region", { name: "Install", exact: true });
     await install.getByRole("button", { name: "Copy ID", exact: true }).click();
     expect(await page.evaluate(() => sessionStorage.getItem("copied-widget-value"))).toBe(original.widget.id);
-    for (const [name, mode] of [["Floating launcher", "floating"], ["Inline panel", "inline"]]) {
+    await expect(install.getByRole("region", { name: "Inline panel", exact: true })).toHaveCount(0);
+    for (const [name, mode] of [["Floating launcher", "floating"]]) {
       await install.getByRole("region", { name, exact: true }).getByRole("button", { name: "Copy snippet", exact: true }).click();
       const copied = await page.evaluate(() => sessionStorage.getItem("copied-widget-value"));
       expect(copied).toContain(`data-twin-id="${original.widget.id}"`);

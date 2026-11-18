@@ -23,23 +23,8 @@ Floating:
 ></script>
 ```
 
-Inline, in a container that already exists when the async script executes:
-
-```html
-<div id="twin-slot"></div>
-<script
-  async
-  src="https://acme.example.com/widgets/v1.js"
-  data-twin-id="AGENT_ID"
-  data-mode="inline"
-  data-target="twin-slot"
-  referrerpolicy="no-referrer"
-></script>
-```
-
-Omit `data-target` to insert an inline widget immediately after the script.
-Put this script in the body. `data-target` is an element ID, **not a selector**;
-use a letter followed by up to 127 letters, digits, underscores or hyphens.
+Floating is the only supported mode. Put this script in the body. Old `data-mode="inline"` snippets,
+inline embed URLs and `data-target` are rejected; copy the current floating snippet from settings.
 Invalid configuration throws without creating a widget. No user-controlled HTML
 is interpolated. Multiple scripts produce independent mounts; mounting the same
 script again returns its existing handle. Multiple floating installations should
@@ -61,23 +46,24 @@ outer mount element from deliberate customer CSS.
 
 ## Behaviour and teardown
 
-Floating mounts start minimised. “Talk to AI twin” toggles a non-modal dialog.
+Floating mounts start minimised. On a fine mouse pointer, hovering “Talk to AI twin” expands the same surface
+into a non-modal dialog, anchored at the bottom-right. Moving between the button and iframe keeps it open.
+After leaving the entire widget, a 350ms grace period precedes a 600ms shrink transition; re-entry cancels closure.
+Name-field focus keeps a hover-opened widget open while typing. Click/tap, Enter/Space or the `open()` API pins it
+until explicit minimise/Escape, so keyboard and touch users never need hover. Hover alone never requests a microphone.
 Minimising hides but **does not unload** the iframe or end the call. Reopening
 preserves the hosted conversation. The launcher reports expanded state, the
 dialog has an accessible name, and closing returns focus to the launcher.
-The panel is bounded to the viewport, with mobile sizing below 480px.
+The panel is capped at 580px high and bounded to the viewport.
 The hosted UI uses a dark portrait-led card, the trainer's existing photo (initials if unavailable), and explicit
 name/microphone consent. Photos remain in colour; initials appear only when no photo is available. Call-state indicators follow
 LiveKit listening/thinking/speaking events; captions can expand within the same frame without reconnecting.
 Mute, hang-up and minimise are distinct controls. Reduced-motion preferences disable decorative animation.
-The loader stays credential-free: its phone launcher exposes only open/active status, not trainer or visitor data.
+The loader stays credential-free: it receives only open/active status and an editing-focus boolean, not trainer or visitor data.
 
 Escape in the parent minimises an open floating panel. The hosted page must
 handle its own Escape key and close button by sending `close`, because keyboard
-events do not cross iframe boundaries. Inline `close` has no loader effect;
-the hosted conversation remains visible in inline installations.
-The loader supplies `parentOrigin` and `mode` in the iframe URL. Inline UI has no
-minimise button; a stray inline `close` notification never unloads the call.
+events do not cross iframe boundaries. The loader supplies `parentOrigin` and `mode=floating` in the iframe URL.
 
 After the async loader executes, the deliberately small API is available:
 
@@ -93,7 +79,7 @@ window.TrainerTwinWidgets.destroy(script);
 
 `mount({ script })` reads the installation attributes; it requires an actual
 `HTMLScriptElement` from the current document. It can remount after destruction.
-`open`/`minimise` are no-ops for inline instances. A destroyed handle is inert.
+A destroyed handle is inert.
 
 SPAs must call `destroy` before removing the widget's container. Destroy sends
 the credential-free `destroy` notification, removes the iframe and all loader
@@ -112,6 +98,7 @@ Every message is an object using **`version: 1`**, never `v: 1`.
 | iframe → parent | `trainertwin-widget` | `ready` | none |
 | iframe → parent | `trainertwin-widget` | `close` | none |
 | iframe → parent | `trainertwin-widget` | `status` | `active: boolean` |
+| iframe → parent | `trainertwin-widget` | `interaction` | `editing: boolean`, name field focused; no field contents |
 | parent → iframe | `trainertwin-host` | `init` | none |
 | parent → iframe | `trainertwin-host` | `destroy` | none |
 
@@ -135,7 +122,7 @@ messages. `src/protocol.ts` is a dependency-free shared schema/URL helper.
 
 Run `bun run playground` from `widgets/`. It serves a standalone page on loopback port 43190, separate from Studio.
 Paste a full installation snippet or `/embed/<id>` URL and click **Load widget**. The page displays the exact origin
-to add in the Twin's Embed allowlist. You can switch floating/inline or remove a mount; it never starts voice automatically.
+to add in the Twin's Embed allowlist. You can remove and reload the floating mount; it never starts voice automatically.
 It extracts only the loader URL, Twin ID and display mode, rather than executing pasted HTML or inline handlers.
 Only load snippets from a widget server you trust.
 

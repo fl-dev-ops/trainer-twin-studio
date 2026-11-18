@@ -1,6 +1,6 @@
 # Website voice widgets
 
-A twin can be embedded as a floating launcher or inline voice panel. Configure it in the existing twin's **Embed**
+A twin can be embedded as a floating launcher. Inline mode is not currently supported. Configure it in the existing twin's **Embed**
 settings; no separate bot entity/page is created. Public twin sessions, funding, limits and runtime isolation are
 owned by [Public twins](public-twins.md).
 
@@ -14,7 +14,7 @@ owned by [Public twins](public-twins.md).
 - `welcome`: nonempty text up to 120 characters.
 - `accentColor`: six-digit hex colour.
 
-The existing `Agent.id` is the public embed ID. Settings provide floating/inline snippets; they contain no secret.
+The existing `Agent.id` is the public embed ID. Settings provide a floating snippet; it contains no secret.
 Only enabled org studio members may change these settings.
 Code: `web/lib/widget-settings.ts`, `web/lib/twin/manage.ts`, `web/lib/twin/trpc.ts`,
 `web/components/twin/widget-settings.tsx`.
@@ -23,7 +23,7 @@ Code: `web/lib/widget-settings.ts`, `web/lib/twin/manage.ts`, `web/lib/twin/trpc
 
 `widgets/` builds three static files served by the existing web deployment:
 
-- `/widgets/v1.js`: small loader, Shadow DOM styles, floating/inline mounting and lifecycle protocol.
+- `/widgets/v1.js`: small loader, Shadow DOM styles, floating mounting and lifecycle protocol.
 - `/widgets/voice-v1.js`: standalone voice client using the native LiveKit SDK.
 - `/widgets/voice-v1.css`: hosted UI stylesheet.
 
@@ -33,9 +33,12 @@ Public profile imagery uses the same signed image URLs as the existing public tw
 
 The loader derives the widget origin from its own script URL, delegates microphone access to that origin and
 validates message origin **and** source window. The widget waits for trusted parent initialization before allowing
-Start. Messages contain only versioned initialization, minimise/destroy and active-call state—never visitor data,
+Start. Messages contain only versioned initialization, minimise/destroy, editing-focus boolean and active-call state—never visitor data,
 transcripts or credentials. Minimising preserves the iframe/call and visibly marks the launcher as in progress.
 SPA owners must explicitly destroy mounts before removing containers; tab unload and durable deadlines are additional cleanup.
+Fine-pointer hover expands the launcher into the card; leaving the whole surface shrinks it after a short grace
+period, unless the name field is focused. Click/tap and keyboard opening remain available and pinned.
+The card is viewport-bounded and 580px high at most. Hover/minimising never starts or ends a call.
 
 Browser framing restrictions do not prove a human or make public IDs secret. A non-browser client can claim an
 allowed origin; server-side rate, concurrency and spend limits remain mandatory.

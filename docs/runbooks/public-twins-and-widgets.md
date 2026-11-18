@@ -26,7 +26,7 @@ See [Phase 4 evidence and remaining gates](../validation/public-twins-phase4.md)
 | Component | Change | Deployment |
 | --- | --- | --- |
 | `web/` | Public/embedded session APIs, scoped credentials, settings, anonymous history, hosted `/embed/<id>` HTML, static widget files, deadline workflow | Existing Studio deployment |
-| `widgets/` | Floating/inline loader and voice-only client; outputs into `web/public/widgets/` | Built into web; **no separate service** |
+| `widgets/` | Floating loader and voice-only client; outputs into `web/public/widgets/` | Built into web; **no separate service** |
 | `chat/` | Anonymous visitor context, session authorization and restricted tools | Existing chat brain deployment |
 | `agent/` | Voice-only anonymous input, runtime-token forwarding and absolute deadlines | Existing LiveKit agent deployment |
 
@@ -167,7 +167,7 @@ In the twin's settings:
 1. Enable Public access and select the maximum call duration.
 2. In Embed, allow exact origins such as `https://example.com` and `https://www.example.com`.
    They are separate origins. Include a non-default port when used. No paths, trailing slash, wildcard or credentials.
-3. Enable the widget, save, and copy its floating or inline snippet.
+3. Enable the widget, save, and copy its floating snippet. Inline mode is not currently supported.
 
 Customer requirements:
 
@@ -186,7 +186,9 @@ transcripts or credentials. Public/domain identifiers are not secrets and domain
 ## 4. After deployment: canary checks
 
 - [ ] `/widgets/v1.js`, `/widgets/voice-v1.js` and `/widgets/voice-v1.css` return successfully from the org host.
-- [ ] Allowed website loads floating and inline widgets; an unlisted origin is blocked by CSP and backend policy.
+- [ ] Allowed website loads the floating widget; an unlisted origin is blocked by CSP and backend policy.
+- [ ] Hover expands the launcher; crossing into the frame keeps it open; leaving shrinks it without ending calls.
+      Name entry, keyboard/touch opening, explicit minimise/Escape and reduced motion work. Old inline snippets are rejected.
 - [ ] Opening/minimising alone creates no billable session or microphone prompt.
 - [ ] Name is required; microphone denial creates no call. No text/upload/camera/screen-share controls appear.
 - [ ] Third-party cookies blocked: name → voice call still works.

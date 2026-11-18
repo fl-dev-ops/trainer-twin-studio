@@ -3,6 +3,7 @@ export const PROTOCOL_VERSION = 1;
 export type WidgetMessage =
   | { source: "trainertwin-widget"; version: 1; type: "ready" }
   | { source: "trainertwin-widget"; version: 1; type: "close" }
+  | { source: "trainertwin-widget"; version: 1; type: "interaction"; editing: boolean }
   | { source: "trainertwin-widget"; version: 1; type: "status"; active: boolean };
 
 export type HostMessage = {
@@ -17,6 +18,7 @@ export function isWidgetMessage(value: unknown): value is WidgetMessage {
   if (!("version" in value) || value.version !== PROTOCOL_VERSION) return false;
   if (!("type" in value)) return false;
   if (value.type === "ready" || value.type === "close") return true;
+  if (value.type === "interaction") return "editing" in value && typeof value.editing === "boolean";
   return value.type === "status" && "active" in value && typeof value.active === "boolean";
 }
 

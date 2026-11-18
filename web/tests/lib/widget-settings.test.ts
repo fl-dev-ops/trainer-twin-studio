@@ -52,9 +52,8 @@ describe("widget settings", () => {
       expect(widgetSettingsSchema.safeParse({ ...defaults, accentColor }).success).toBe(false);
     }
   });
-  test("snippets use org-host assets, both modes and escaped attributes only", () => {
-    expect(widgetInstallSnippet("https://acme.example.com", "cm123", "floating")).toBe('<script src="https://acme.example.com/widgets/v1.js" data-twin-id="cm123" data-mode="floating" referrerpolicy="no-referrer" defer></script>');
-    expect(widgetInstallSnippet("https://acme.example.com", "cm123", "inline")).toContain('data-mode="inline"');
-    expect(widgetInstallSnippet("https://acme.example.com", '"><script>&\'', "inline")).toContain('data-twin-id="&quot;&gt;&lt;script&gt;&amp;&#39;"');
+  test("snippets use org-host assets, floating mode and escaped attributes only", () => {
+    expect(widgetInstallSnippet("https://acme.example.com", "cm123")).toBe('<script src="https://acme.example.com/widgets/v1.js" data-twin-id="cm123" data-mode="floating" referrerpolicy="no-referrer" defer></script>');
+    expect(widgetInstallSnippet("https://acme.example.com", '"><script>&\'')).toContain('data-twin-id="&quot;&gt;&lt;script&gt;&amp;&#39;"');
   });
 });

@@ -11,7 +11,7 @@ describe("hosted widget input boundaries", () => {
   test("accepts the hosted JSON contract without requiring a portrait", () => {
     expect(parseConfig(config).photoUrl).toBeNull();
     expect(parseConfig(config).parentOrigin).toBe(config.parentOrigin);
-    expect(parseConfig({ ...config, mode: "inline" }).mode).toBe("inline");
+    expect(() => parseConfig({ ...config, mode: "inline" })).toThrow();
     expect(parseConfig(config).mode).toBe("floating");
   });
 

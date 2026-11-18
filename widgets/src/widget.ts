@@ -2,7 +2,7 @@ import { Room, RoomEvent, Track, type Participant, type RemoteTrack, type Transc
 import "./widget.css";
 
 type Config = {
-  mode: "floating" | "inline";
+  mode: "floating";
   agentId: string;
   parentOrigin: string;
   name: string;
@@ -38,7 +38,7 @@ function urlWithProtocol(value: unknown, protocols: string[]): string | null {
 
 export function parseConfig(value: unknown): Config {
   if (!record(value) || !bounded(value.agentId, 128) || !/^[a-zA-Z0-9_-]+$/.test(value.agentId)
-    || (value.mode !== undefined && value.mode !== "floating" && value.mode !== "inline")
+    || (value.mode !== undefined && value.mode !== "floating")
     || !bounded(value.name, 160) || !bounded(value.trainerName, 160) || !bounded(value.welcome, 120)
     || typeof value.accentColor !== "string" || !/^#[a-f0-9]{6}$/i.test(value.accentColor)
     || typeof value.maxSeconds !== "number" || !Number.isInteger(value.maxSeconds) || value.maxSeconds < 1 || value.maxSeconds > 3600) {
@@ -50,7 +50,7 @@ export function parseConfig(value: unknown): Config {
     throw new Error("This voice widget has an invalid connection configuration.");
   }
   return {
-    mode: value.mode === "inline" ? "inline" : "floating",
+    mode: "floating",
     agentId: value.agentId, parentOrigin: new URL(origin).origin, name: value.name,
     trainerName: value.trainerName, welcome: value.welcome, accentColor: value.accentColor,
     photoUrl: urlWithProtocol(value.photoUrl, ["https:", "http:"]), maxSeconds: value.maxSeconds, livekitUrl,
@@ -166,11 +166,12 @@ function mount(root: HTMLElement, config: Config) {
   const captions = new Map<string, HTMLElement>();
   const attachedTracks = new Set<RemoteTrack>();
 
-  const post = (type: "ready" | "close" | "status", active?: boolean) => {
+  const post = (type: "ready" | "close" | "status" | "interaction", active?: boolean) => {
     if (window.parent !== window) {
       window.parent.postMessage({
         source: "trainertwin-widget", version: 1, type,
         ...(type === "status" ? { active: active === true } : {}),
+        ...(type === "interaction" ? { editing: active === true } : {}),
       }, config.parentOrigin);
     }
   };
@@ -244,17 +245,13 @@ function mount(root: HTMLElement, config: Config) {
   name.placeholder = "What should I call you?";
   name.required = true;
   name.setAttribute("aria-describedby", "tt-error");
-  const disclosure = element("details", "tt-disclosure");
-  const summary = element("summary", "", "Privacy & call details");
-  const disclosureText = element("p", "", `You’ll speak with an AI twin, not ${config.trainerName}. No account is needed. This call is transcribed and may be recorded. The organization funds the call and can review your self-reported name, transcript, any recording and call usage. The twin can use its currently published skills. No camera or screen sharing.`);
-  disclosure.append(summary, disclosureText);
   const consent = element("p", "tt-consent", "AI voice call · Transcribed · May be recorded");
   const start = button("tt-primary", "Start voice call");
   start.prepend(icon(PHONE));
   start.type = "submit";
   start.disabled = true;
   const allowance = element("p", "tt-allowance", `Up to ${clock(config.maxSeconds)}`);
-  form.append(label, name, consent, start, allowance, disclosure);
+  form.append(label, name, consent, start, allowance);
 
   const call = element("section", "tt-call");
   call.hidden = true;
@@ -713,6 +710,10 @@ function mount(root: HTMLElement, config: Config) {
     window.removeEventListener("pageshow", ready);
     window.removeEventListener("pagehide", destroy);
     document.removeEventListener("visibilitychange", visibility);
+    document.removeEventListener("focusin", interaction);
+    document.removeEventListener("focusout", interaction);
+    window.removeEventListener("focus", interaction);
+    window.removeEventListener("blur", interaction);
     void finish(true).finally(() => { if (ownsAudioContainer) audioContainer.remove(); });
     root.replaceChildren();
   }
@@ -733,6 +734,15 @@ function mount(root: HTMLElement, config: Config) {
   function visibility() {
     if (session) tick();
   }
+  function interaction() {
+    queueMicrotask(() => {
+      if (!destroyed) post("interaction", document.hasFocus() && document.activeElement === name);
+    });
+  }
+  document.addEventListener("focusin", interaction);
+  document.addEventListener("focusout", interaction);
+  window.addEventListener("focus", interaction);
+  window.addEventListener("blur", interaction);
   window.addEventListener("message", receive);
   window.addEventListener("pageshow", ready);
   window.addEventListener("pagehide", destroy);

@@ -1,8 +1,19 @@
 import { expect, test, type Page } from "../../web/node_modules/@playwright/test";
 
 const widgetOrigin = "http://127.0.0.1:43182";
-const launcher = (page: Page) => page.getByRole("button", { name: /^(Talk to AI twin|AI twin call in progress — reopen)$/ });
+const launcher = (page: Page) => page.locator("[data-trainertwin-widget] button");
 const frame = (page: Page) => page.frameLocator('iframe[title="Talk to AI twin"]');
+async function open(page: Page) {
+  await launcher(page).focus();
+  await launcher(page).press("Enter");
+  await expect(page.locator("iframe")).toBeVisible();
+}
+async function hoverOpen(page: Page) {
+  await expect(launcher(page)).toBeVisible();
+  const box = await launcher(page).boundingBox();
+  if (!box) throw new Error("Expected launcher bounds");
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+}
 
 test("floating handshake, microphone delegation, active minimise/reopen and focus return", async ({ page }) => {
   await page.goto("/");
@@ -12,10 +23,10 @@ test("floating handshake, microphone delegation, active minimise/reopen and focu
   await expect(page.locator("iframe")).toHaveAttribute("referrerpolicy", "no-referrer");
   await expect(page.locator("iframe")).toBeHidden();
   const closedLauncher = await launcher(page).boundingBox();
-  await launcher(page).click();
+  await open(page);
   await expect.poll(async () => {
-    const openedLauncher = await launcher(page).boundingBox();
-    return Math.round((openedLauncher!.x + openedLauncher!.width) - (closedLauncher!.x + closedLauncher!.width));
+    const panel = await page.locator("iframe").boundingBox();
+    return Math.round((panel!.x + panel!.width) - (closedLauncher!.x + closedLauncher!.width));
   }).toBe(0);
   await expect(frame(page).locator("#state")).toHaveText("Ready");
   await frame(page).getByRole("button", { name: "Start fixture call" }).click();
@@ -26,7 +37,7 @@ test("floating handshake, microphone delegation, active minimise/reopen and focu
   await frame(page).getByRole("button", { name: "Minimise" }).click();
   await expect(page.locator("iframe")).toBeHidden();
   await expect(launcher(page)).toBeFocused();
-  await launcher(page).click();
+  await open(page);
   expect(await originalFrame?.evaluate("window.active")).toBe(true);
   expect(await originalFrame?.evaluate("window.received")).toEqual([
     { source: "trainertwin-host", version: 1, type: "init" },
@@ -36,14 +47,51 @@ test("floating handshake, microphone delegation, active minimise/reopen and focu
   await expect(launcher(page)).toBeFocused();
 });
 
-test("inline targets and script-adjacent multiple mounts remain independent", async ({ page }) => {
-  await page.goto("/?mode=inline&target=1&multiple=1");
+test("floating mounts remain independent and inline mode is rejected", async ({ page }) => {
+  await page.goto("/");
+  await expect(launcher(page)).toBeVisible();
+  await page.evaluate(() => {
+    const script = document.createElement("script");
+    script.id = "second";
+    script.src = "http://127.0.0.1:43182/widgets/v1.js";
+    script.dataset.twinId = "second";
+    document.body.append(script);
+    window.TrainerTwinWidgets!.mount({ script });
+  });
   await expect(page.locator("[data-trainertwin-widget]")).toHaveCount(2);
-  await expect(page.locator("#twin-slot iframe")).toBeVisible();
-  await expect(launcher(page)).toHaveCount(0);
-  const sources = await page.locator("iframe").evaluateAll((elements) => elements.map((element) => element.getAttribute("src")));
-    expect(sources[0]).toBe(`${widgetOrigin}/embed/demo?parentOrigin=http%3A%2F%2F127.0.0.1%3A43181&mode=inline`);
-    expect(sources[1]).toBe(`${widgetOrigin}/embed/second?parentOrigin=http%3A%2F%2F127.0.0.1%3A43181&mode=inline`);
+  await page.evaluate(() => window.TrainerTwinWidgets!.destroy(document.querySelector<HTMLScriptElement>("#second")!));
+  await expect(page.locator("[data-trainertwin-widget]")).toHaveCount(1);
+});
+
+test("hover expands one surface, crosses into the iframe, and shrinks only after leaving", async ({ page }) => {
+  await page.goto("/");
+  await hoverOpen(page);
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await expect(launcher(page)).toBeHidden();
+  await frame(page).getByRole("button", { name: "Start fixture call" }).hover();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await frame(page).getByRole("button", { name: "Start fixture call" }).click();
+  const child = page.frames().find((item) => item.url().startsWith(`${widgetOrigin}/embed/`));
+  if (!child) throw new Error("Expected hosted frame");
+  await page.getByRole("heading", { name: "Customer website" }).hover();
+  await expect(page.getByRole("dialog")).toBeHidden();
+  await expect(launcher(page)).toBeVisible();
+  expect(await child.evaluate("window.active")).toBe(true);
+  await hoverOpen(page);
+  await expect(page.getByRole("dialog")).toBeVisible();
+  expect(await child.evaluate("window.active")).toBe(true);
+});
+
+test("touch uses tap rather than hover", async ({ browser }) => {
+  const context = await browser.newContext({ hasTouch: true, viewport: { width: 390, height: 844 } });
+  const page = await context.newPage();
+  await page.goto("http://127.0.0.1:43181/");
+  await launcher(page).tap();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await frame(page).getByRole("button", { name: "Minimise" }).tap();
+  await expect(page.getByRole("dialog")).toBeHidden();
+  await expect(launcher(page)).toBeVisible();
+  await context.close();
 });
 
 test("duplicate execution per script is idempotent and destroy permits clean remount", async ({ page }) => {
@@ -70,7 +118,7 @@ test("duplicate execution per script is idempotent and destroy permits clean rem
 
 test("ignores wrong source, wrong origin, version and arbitrary sizing messages", async ({ page }) => {
   await page.goto("/");
-  await launcher(page).click();
+  await open(page);
   await expect(frame(page).locator("#state")).toHaveText("Ready");
   await page.evaluate(() => {
     window.postMessage({ source: "trainertwin-widget", version: 1, type: "close" }, window.location.origin);
@@ -114,15 +162,14 @@ test("ignores wrong source, wrong origin, version and arbitrary sizing messages"
 test("mobile panel stays within viewport and parent Escape returns focus", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 568 });
   await page.goto("/");
-  await launcher(page).click();
+  await open(page);
   const box = await page.locator("iframe").boundingBox();
   expect(box).not.toBeNull();
   expect(box!.x).toBeGreaterThanOrEqual(0);
   expect(box!.y).toBeGreaterThanOrEqual(0);
   expect(box!.x + box!.width).toBeLessThanOrEqual(320);
   expect(box!.y + box!.height).toBeLessThanOrEqual(568);
-  await launcher(page).focus();
-  await page.keyboard.press("Escape");
+  await frame(page).locator("body").press("Escape");
   await expect(launcher(page)).toBeFocused();
   await expect(page.locator("iframe")).toBeHidden();
 });
@@ -136,6 +183,7 @@ test("invalid modes, targets and script protocols fail without creating a mount"
       { src: "https://org.example/widgets/v1.js", mode: "popup" },
       { src: "https://org.example/widgets/v1.js", mode: "inline", target: "#bad selector" },
       { src: "https://org.example/widgets/v1.js", mode: "inline", target: "missing" },
+      { src: "https://org.example/widgets/v1.js", mode: "inline" },
     ].map((options) => {
       const script = document.createElement("script");
       script.src = options.src;
@@ -150,6 +198,6 @@ test("invalid modes, targets and script protocols fail without creating a mount"
       }
     });
   });
-  expect(errors).toEqual([true, true, true, true]);
+  expect(errors).toEqual([true, true, true, true, true]);
   await expect(page.locator("[data-trainertwin-widget]")).toHaveCount(1);
 });

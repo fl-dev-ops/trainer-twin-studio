@@ -47,12 +47,6 @@
       <label for="override">Widget server override (optional)</label>
       <input id="override" type="url" placeholder="https://your-org.trainertwin.localhost:8443" spellcheck="false">
       <p class="help muted">For your SSH setup, use this if the copied snippet omits :8443. Use the org host, not the dash host.</p>
-      <label for="mode">Display</label>
-      <select id="mode">
-        <option value="">Use snippet's display mode</option>
-        <option value="floating">Floating</option>
-        <option value="inline">Inline</option>
-      </select>
       <div class="row">
         <button class="primary" id="load" type="submit">Load widget</button>
         <button id="remove" type="button" disabled>Remove widget</button>
@@ -62,7 +56,7 @@
     </form>
     <section class="card" aria-labelledby="preview-title">
       <h2 id="preview-title">Website preview</h2>
-      <p class="muted">Inline widgets appear below. Floating widgets appear in the bottom-right corner. Loading does not start a call.</p>
+      <p class="muted">Hover over the button in the bottom-right corner, or tap it to open. Loading does not start a call.</p>
       <div id="preview"></div>
     </section>
   </main>
@@ -70,7 +64,6 @@
     const form = document.getElementById("form");
     const input = document.getElementById("embed");
     const override = document.getElementById("override");
-    const display = document.getElementById("mode");
     const load = document.getElementById("load");
     const remove = document.getElementById("remove");
     const status = document.getElementById("status");
@@ -110,8 +103,7 @@
         mode = url.searchParams.get("mode") || "floating";
       }
       if (!id || !/^[a-zA-Z0-9_-]{1,128}$/.test(id)) throw new Error("The embed ID is missing or invalid.");
-      mode = display.value || mode;
-      if (mode !== "floating" && mode !== "inline") throw new Error("Display mode must be floating or inline.");
+      if (mode !== "floating") throw new Error("Only floating widgets are supported. Copy a new snippet from Embed settings.");
       if (override.value.trim()) {
         url = safeURL(override.value.trim());
         if (url.pathname !== "/" || url.search || url.hash) throw new Error("The server override must be an origin only, without a path or query.");
@@ -149,7 +141,6 @@
       script.src = config.src;
       script.dataset.twinId = config.id;
       script.dataset.mode = config.mode;
-      if (config.mode === "inline") script.dataset.target = "preview";
       script.referrerPolicy = "no-referrer";
       installed = script;
       status.textContent = `Loading ${config.src}…`;

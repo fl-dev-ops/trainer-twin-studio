@@ -24,6 +24,13 @@ export function WidgetSettingsPanel({ twin }: { twin: Twin }) {
   const [saving, setSaving] = useState(false);
   const [received, setReceived] = useState(twin.widget.config);
   const dirty = JSON.stringify(draft) !== JSON.stringify(saved) || origins !== saved.allowedOrigins.join("\n");
+  const snippet = widgetInstallSnippet(twin.widget.origin, twin.widget.id);
+  const displaySnippet = snippet
+    .replace(" src=", "\n  src=")
+    .replace(" data-twin-id=", "\n  data-twin-id=")
+    .replace(" data-mode=", "\n  data-mode=")
+    .replace(" referrerpolicy=", "\n  referrerpolicy=")
+    .replace(" defer>", "\n  defer\n>");
 
   if (JSON.stringify(received) !== JSON.stringify(twin.widget.config)) {
     setReceived(twin.widget.config);
@@ -127,25 +134,14 @@ export function WidgetSettingsPanel({ twin }: { twin: Twin }) {
             </div>
             <code className="block break-all rounded-lg border border-(--border) bg-muted/30 p-4 text-xs">{twin.widget.id}</code>
           </div>
-          {(["floating", "inline"] as const).map((mode) => {
-            const snippet = widgetInstallSnippet(twin.widget.origin, twin.widget.id, mode);
-            const displaySnippet = snippet
-              .replace(" src=", "\n  src=")
-              .replace(" data-twin-id=", "\n  data-twin-id=")
-              .replace(" data-mode=", "\n  data-mode=")
-              .replace(" referrerpolicy=", "\n  referrerpolicy=")
-              .replace(" defer>", "\n  defer\n>");
-            return (
-              <section key={mode} aria-label={mode === "floating" ? "Floating launcher" : "Inline panel"} className="flex min-w-0 flex-col gap-3 border-t border-(--border) p-5">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <h3 className="m-0 text-sm font-medium">{mode === "floating" ? "Floating launcher" : "Inline panel"}</h3>
-                  <Button variant="outline" size="sm" onClick={() => void copy(snippet)}><Copy data-icon="inline-start" />Copy snippet</Button>
-                </div>
-                <p className="m-0 text-sm text-muted-foreground">{mode === "floating" ? "Place once before your page’s closing body tag." : "Place the script where the panel should appear."}</p>
-                <pre className="m-0 whitespace-pre-wrap break-all rounded-lg border border-(--border) bg-muted/30 p-4 text-xs leading-6"><code>{displaySnippet}</code></pre>
-              </section>
-            );
-          })}
+          <section aria-label="Floating launcher" className="flex min-w-0 flex-col gap-3 border-t border-(--border) p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h3 className="m-0 text-sm font-medium">Floating launcher</h3>
+              <Button variant="outline" size="sm" onClick={() => void copy(snippet)}><Copy data-icon="inline-start" />Copy snippet</Button>
+            </div>
+            <p className="m-0 text-sm text-muted-foreground">Place once before your page’s closing body tag.</p>
+            <pre className="m-0 whitespace-pre-wrap break-all rounded-lg border border-(--border) bg-muted/30 p-4 text-xs leading-6"><code>{displaySnippet}</code></pre>
+          </section>
         </div>
         <p className="m-0 text-xs text-muted-foreground">Your website must allow the script and iframe, and delegate microphone access if it is itself embedded.</p>
       </PageSection>

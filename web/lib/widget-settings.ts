@@ -32,11 +32,11 @@ export const widgetSettingsSchema = z.object({
 
 export type WidgetSettings = z.infer<typeof widgetSettingsSchema>;
 
-export function widgetInstallSnippet(origin: string, id: string, mode: "floating" | "inline"): string {
+export function widgetInstallSnippet(origin: string, id: string): string {
   const attribute = (value: string) => value.replace(/[&<>"']/g, (character) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
   })[character]!);
-  return `<script src="${attribute(origin)}/widgets/v1.js" data-twin-id="${attribute(id)}" data-mode="${mode}" referrerpolicy="no-referrer" defer></script>`;
+  return `<script src="${attribute(origin)}/widgets/v1.js" data-twin-id="${attribute(id)}" data-mode="floating" referrerpolicy="no-referrer" defer></script>`;
 }
 
 export function widgetSettings(data: unknown): WidgetSettings {
