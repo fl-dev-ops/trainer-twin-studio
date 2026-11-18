@@ -649,8 +649,8 @@ export function documentManifestOf(doc: { id: string; name: string; kind: string
   };
 }
 
-export async function getAgentConfigForAgent(agentId: string, orgId: string, contextId?: string, contextIds?: string[]) {
-  const agent = await db.agent.findFirst({
+export async function getAgentConfigForAgent(agentId: string, orgId: string, contextId?: string, contextIds?: string[], client: Prisma.TransactionClient = db) {
+  const agent = await client.agent.findFirst({
     where: {
       OR: [{ id: agentId }, { slug: agentId }],
       orgId,
@@ -661,7 +661,7 @@ export async function getAgentConfigForAgent(agentId: string, orgId: string, con
 
   const docIds = Array.from(new Set([...(contextIds ?? []), ...(contextId ? [contextId] : [])])).filter(Boolean);
   const contextDocs = docIds.length
-    ? await db.contextDocument.findMany({
+    ? await client.contextDocument.findMany({
         where: { id: { in: docIds }, orgId },
         select: { id: true, name: true, mimeType: true, kind: true, size: true, manifest: true },
       })
@@ -677,7 +677,7 @@ export async function getAgentConfigForAgent(agentId: string, orgId: string, con
     ? agent.data.knowledge_bases.filter((value): value is string => typeof value === "string")
     : [];
   const configuredKnowledge = attachedKnowledge.length ? attachedKnowledge : selectedKnowledge;
-  const indexed = await db.knowledgeDocument.findMany({
+  const indexed = await client.knowledgeDocument.findMany({
     where: {
       status: "indexed",
       kb: {
@@ -689,7 +689,7 @@ export async function getAgentConfigForAgent(agentId: string, orgId: string, con
     distinct: ["kbId"],
   });
   const knowledgeBases = indexed.map((row) => row.kb.slug);
-  const personaVoiceSources = await db.personaSource.findMany({
+  const personaVoiceSources = await client.personaSource.findMany({
     where: { personaId: persona.id, orgId, status: { in: ["analyzed", "compiling"] } },
     select: { metadata: true },
   });
@@ -707,7 +707,7 @@ export async function getAgentConfigForAgent(agentId: string, orgId: string, con
 
   return {
     persona: { id: persona.id, slug: persona.slug, version: persona.version, data: persona.data },
-    agent: { id: agent.id, slug: agent.slug, version: agent.version, data: agent.data },
+    agent: { id: agent.id, slug: agent.slug, version: agent.version, kind: agent.kind, primarySkillId: agent.primarySkillId, archivedAt: agent.archivedAt, data: agent.data },
     knowledgeBases,
     personaVoiceAvailable,
     personaVoiceCoverage,

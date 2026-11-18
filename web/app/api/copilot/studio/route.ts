@@ -14,6 +14,8 @@ import { modelImage } from "@/lib/model-image";
 import { uploadBytes } from "@/lib/upload-bytes";
 import { resolveUpload, UploadError } from "@/lib/uploads";
 import { getObjectText } from "@/lib/s3";
+import { errorResponse } from "@/lib/errors";
+import { loadRoleplaySessionSkill } from "@/lib/session-skills";
 
 /** How much of a knowledge document one read_knowledge_document call returns (about 3k tokens). */
 const KNOWLEDGE_PAGE_CHARS = 12_000;
@@ -200,19 +202,23 @@ export async function POST(request: Request) {
   }
 
   if (input.action === "getSessionContext") {
-    const startedAt = performance.now();
-    const context = input.sessionId
-      ? await getCachedSessionContext(orgId, input.sessionId)
-      : await buildSessionContext({
-          orgId,
-          agentSlug: input.agentSlug,
-          personaSlug: input.personaSlug,
-        });
-    console.info("[session-context]", {
-      sessionId: input.sessionId ?? null,
-      durationMs: Math.round(performance.now() - startedAt),
-    });
-    return Response.json(context);
+    try {
+      const startedAt = performance.now();
+      const context = input.sessionId
+        ? await getCachedSessionContext(orgId, input.sessionId)
+        : await buildSessionContext({
+            orgId,
+            agentSlug: input.agentSlug,
+            personaSlug: input.personaSlug,
+          });
+      console.info("[session-context]", {
+        sessionId: input.sessionId ?? null,
+        durationMs: Math.round(performance.now() - startedAt),
+      });
+      return Response.json(context);
+    } catch (error) {
+      return errorResponse(error);
+    }
   }
 
   if (input.action === "listResumeClaims") {
@@ -296,6 +302,26 @@ export async function POST(request: Request) {
 
   // Real lines from a scenario-ingest scenario (items.json), for the chat tool scenario_examples.
   if (input.action === "searchScenarioItems") {
+    try {
+    const managedSkill = input.sessionId
+      ? await loadRoleplaySessionSkill(orgId, input.sessionId, input.agentSlug)
+      : null;
+    if (managedSkill) {
+      const { version } = managedSkill;
+      const manifest = version.manifest as { steps?: unknown; situations?: unknown } | null;
+      const steps = manifest?.steps ?? manifest?.situations;
+      const examples = await MainCollectionService.searchSkillItems(orgId, [{
+        skillVersionId: version.id,
+        indexScope: version.artifacts,
+        itemCount: version.itemCount,
+      }], input.query, {
+        step: input.step,
+        role: input.role ?? (version.format === "builder-roleplay" ? "client" : "trainer"),
+        limit: input.limit,
+        steps: Array.isArray(steps) ? steps as ScenarioStep[] : [],
+      });
+      return Response.json({ query: input.query, examples });
+    }
     // The embedding needs only the query: start it now so it runs alongside the DB lookups below.
     const queryEmbedding = embedTexts([input.query]).then(([embedding]) => embedding);
     queryEmbedding.catch(() => {}); // awaited in searchScenarioItems; this only stops an early DB error leaving it unhandled
@@ -343,6 +369,9 @@ export async function POST(request: Request) {
       }));
     }
     return Response.json({ query: input.query, examples });
+    } catch (error) {
+      return errorResponse(error);
+    }
   }
 
   if (input.action === "searchStyleEpisodes") {

@@ -257,6 +257,7 @@ async function storeSkillAgent(input: {
       const currentSkill = await tx.skill.findUniqueOrThrow({ where: { id: skillId } });
       if (currentSkill.generation !== generation) throw skillRefusals.superseded();
       let currentVersion = await tx.skillVersion.findUniqueOrThrow({ where: { id: packageVersion.id } });
+      if (currentVersion.status === "ready" && currentVersion.indexStatus !== "ready") throw skillRefusals.unavailable();
       if (currentAgent?.primarySkillId === skillId && currentSkill.currentVersionId === packageVersion.id
         && currentAgent.personaId === input.personaId && !currentAgent.archivedAt
         && stableJson(Object.fromEntries(Object.entries(currentAgent.data as Record<string, unknown>).filter(([key]) => key !== "artifacts"))) === stableJson(reserved.content)) {

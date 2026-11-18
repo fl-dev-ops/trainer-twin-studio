@@ -232,8 +232,8 @@ test("an ingest publication lands in S3, Chroma and Postgres, files byte for byt
   expect(isRunnableAgentData("ROLEPLAY", published)).toBe(true);
   expect(personaWhere).not.toHaveProperty("isOwn");
 
-  // A real-shaped Start snapshot; mutate the live package afterwards to exercise the pinned read path.
-  savedSession = { id: "call1", orgId: "org1", agentSlug: "acme-fundamental-depth", personaSlug: "vasanth", agentVersion: 1, context: null, documents: [], compiledSnapshot: { agent: { slug: "acme-fundamental-depth", version: 1, data: published } } };
+  // A pre-managed session keeps its legacy snapshot/search scope after publication.
+  savedSession = { id: "call1", orgId: "org1", agentSlug: "acme-fundamental-depth", personaSlug: "vasanth", agentVersion: 1, skillPinsVersion: null, context: null, documents: [], compiledSnapshot: { agent: { slug: "acme-fundamental-depth", version: 1, data: published } } };
   agents[0] = { ...agents[0], version: 2, data: { ...published, source: "roleplay-skill", skill: "# Changed live skill", scenario: { roleplay: { clientName: "Changed client" }, steps: [] } } };
   process.env.COPILOT_SERVICE_SECRET = "studio-test-secret";
   const request = (body: Row, orgId = "org1") => studio(new Request("https://studio.test/api/copilot/studio", { method: "POST", headers: { authorization: "Bearer studio-test-secret", "content-type": "application/json", "x-trainertwin-org-id": orgId }, body: JSON.stringify(body) }));
@@ -252,7 +252,9 @@ test("an ingest publication lands in S3, Chroma and Postgres, files byte for byt
   const results = await (await request(search)).json();
   expect(results.examples.map((item: { text: string }) => item.text)).toEqual([items[0].text]);
   expect(searches.at(-1)).toMatchObject({ orgId: "org1", scope: [{ slug: "acme-fundamental-depth", version: 1 }], options: { role: "trainer", steps: scenarioJson.steps } });
-  expect((await (await request(search, "other-org")).json()).examples).toEqual([]);
+  const wrongOrg = await request(search, "other-org");
+  expect(wrongOrg.status).toBe(404);
+  expect(await wrongOrg.json()).toMatchObject({ code: "not_found" });
   await request({ ...search, sessionId: undefined });
   expect(searches.at(-1)).toMatchObject({ scope: [{ slug: "acme-fundamental-depth", version: 2 }], options: { role: "client" } });
   await request({ ...search, role: "learner" });

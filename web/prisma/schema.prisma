@@ -104,6 +104,7 @@ model SkillVersion {
   format                String
   status                String   @default("pending")
   indexStatus           String   @default("pending")
+  indexGeneration       Int      @default(0)
   publicationGeneration Int      @default(0)
   contentHash           String
   skillText             String
@@ -116,6 +117,7 @@ model SkillVersion {
   updatedAt             DateTime @updatedAt
   skill                 Skill    @relation("SkillVersions", fields: [skillId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   currentForSkills      Skill[]  @relation("SkillCurrentVersion")
+  sessionPins           SessionSkill[]
 
   @@unique([skillId, version])
   @@unique([id, skillId])
@@ -387,6 +389,7 @@ model InterviewSession {
   personaVersion      Int
   agentSlug           String
   agentVersion        Int
+  skillPinsVersion    Int?
   status              String    @default("assigned") // assigned | activating | active | closing | completed | abandoned | revoked | failed
   contextId           String?
   contextName         String?
@@ -418,6 +421,7 @@ model InterviewSession {
   agent             Agent                      @relation(fields: [agentId], references: [id], onDelete: Restrict)
   context           ContextDocument?           @relation(fields: [contextId], references: [id], onDelete: SetNull)
   documents         InterviewSessionDocument[]
+  skillPins         SessionSkill[]
   commands          WorkspaceCommand[]
   deploymentId      String?
   assignmentId      String?
@@ -443,11 +447,27 @@ model InterviewSession {
   twinCalibration  TwinCalibration?
   turnEvidence     TwinTurnEvidence[]
 
+  @@unique([id, orgId])
   @@index([orgId, userId])
   @@index([agentId])
   @@index([deploymentId])
   @@index([assignmentId])
   @@index([twinAssignmentId])
+}
+
+model SessionSkill {
+  sessionId      String
+  orgId          String
+  skillVersionId String
+  alias          String
+  position       Int              @default(0)
+  createdAt      DateTime         @default(now())
+  session        InterviewSession @relation(fields: [sessionId, orgId], references: [id, orgId], onDelete: Cascade, onUpdate: Restrict)
+  version        SkillVersion     @relation(fields: [skillVersionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@id([sessionId, alias])
+  @@unique([sessionId, position])
+  @@index([skillVersionId])
 }
 
 model User {

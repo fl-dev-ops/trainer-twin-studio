@@ -15,6 +15,7 @@ import { minutesLock, writeSessionUsage } from "@/lib/minutes";
 import { scheduleOrgUsage } from "@/lib/schedule-org-credits";
 import { orgCredits } from "@/lib/org-credits";
 import { BEFORE_UPLOAD_REFUSED, uploadAllowed } from "@/lib/context-upload";
+import { resolveRoleplaySnapshotSkill } from "@/lib/session-skills";
 
 const shareCode = () => randomBytes(18).toString("base64url");
 const tokenHash = (token: string) => createHash("sha256").update(token).digest("hex");
@@ -186,6 +187,7 @@ export async function createAssignedSession(input: {
         contextId: primary?.id,
         contextName: primary?.name,
         status: "assigned",
+        skillPinsVersion: null,
       },
       select: { id: true, shareCode: true, agentSlug: true, status: true },
     });
@@ -309,7 +311,7 @@ export async function activateSession(input: {
     if (document.ownerUserId && document.ownerUserId !== input.userId) throw new Error("Context not found");
   }
   // Documents at the start only when the agent's before settings turn pre-session uploads on (twins, new role plays).
-  if (snapshot.docIds.length && usesBeforeSettings(snapshot.agent.data, snapshot.agent.kind) && !beforeSettings(snapshot.agent.data).preUpload) {
+  if (!(snapshot.agent.kind === "ROLEPLAY" && snapshot.agent.primarySkillId) && snapshot.docIds.length && usesBeforeSettings(snapshot.agent.data, snapshot.agent.kind) && !beforeSettings(snapshot.agent.data).preUpload) {
     throw refusals.invalidInput(snapshot.agent.kind === "TWIN" ? "This twin does not take documents" : "This role play does not take documents");
   }
   const primaryId = snapshot.docIds[0];
@@ -336,7 +338,27 @@ export async function activateSession(input: {
       if (!link || link.status !== "active") throw twinRefusals.revoked();
       if (!withinAccess(link.accessUntil)) throw twinRefusals.ended();
     }
-    if (!(await tx.agent.findFirst({ where: { id: agentId, archivedAt: null }, select: { id: true } }))) throw refusals.notFound();
+    const eligibleAgent = await tx.agent.findFirst({
+      where: { id: agentId, orgId: input.orgId, archivedAt: null },
+      select: { id: true, kind: true, primarySkillId: true },
+    });
+    if (!eligibleAgent) throw refusals.notFound();
+    let coherentConfig = compiledConfig;
+    let pinnedSkill;
+    if (eligibleAgent.kind === "ROLEPLAY" && eligibleAgent.primarySkillId) {
+      // Non-key publication updates must proceed: pin insertion also locks Skill, which publishers update first.
+      await tx.$queryRaw`SELECT 1 FROM "Agent" WHERE "id" = ${agentId} AND "orgId" = ${input.orgId} FOR KEY SHARE`;
+      const reread = await getAgentConfigForAgent(agentId, input.orgId, primaryId, snapshot.docIds, tx);
+      if (!reread || reread.agent.archivedAt) throw refusals.notFound();
+      if (snapshot.docIds.length && usesBeforeSettings(reread.agent.data, reread.agent.kind) && !beforeSettings(reread.agent.data).preUpload) {
+        throw refusals.invalidInput("This role play does not take documents");
+      }
+      if (reread.agent.kind === "ROLEPLAY" && reread.agent.primarySkillId) {
+        coherentConfig = reread;
+        pinnedSkill = await resolveRoleplaySnapshotSkill(input.orgId, reread.agent, tx);
+      }
+    }
+    const storedSnapshot = pinnedSkill ? coherentConfig : sessionSnapshotData;
     // One live call per person (rule 5): their others end now, charged, before the balance is counted.
     const live = await tx.interviewSession.findMany({
       where: { orgId: input.orgId, userId: input.userId, status: { in: ["activating", "active"] } },
@@ -358,14 +380,20 @@ export async function activateSession(input: {
         shareCode: shareCode(),
         activationKey,
         mode,
-        personaSlug: snapshot.agent.persona.slug,
-        personaVersion: snapshot.agent.persona.version,
-        agentSlug: snapshot.agent.slug,
-        agentVersion: snapshot.agent.version,
+        personaSlug: pinnedSkill ? coherentConfig!.persona.slug : snapshot.agent.persona.slug,
+        personaVersion: pinnedSkill ? coherentConfig!.persona.version : snapshot.agent.persona.version,
+        agentSlug: pinnedSkill ? coherentConfig!.agent.slug : snapshot.agent.slug,
+        agentVersion: pinnedSkill ? coherentConfig!.agent.version : snapshot.agent.version,
         contextId: primary?.id,
         contextName: primary?.name,
         status: "activating",
-        compiledSnapshot: sessionSnapshotData ? JSON.parse(JSON.stringify(sessionSnapshotData)) : undefined,
+        compiledSnapshot: storedSnapshot ? JSON.parse(JSON.stringify(storedSnapshot)) : undefined,
+        skillPinsVersion: pinnedSkill ? 1 : null,
+        ...(pinnedSkill ? { skillPins: { create: {
+          skillVersionId: pinnedSkill.id,
+          alias: coherentConfig!.agent.slug,
+          position: 0,
+        } } } : {}),
         runtimeState: JSON.parse(JSON.stringify(initRuntimeState())),
         lastCompletion: Prisma.DbNull,
       },

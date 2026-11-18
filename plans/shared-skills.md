@@ -11,15 +11,15 @@ The durable plan is this file; do not delete it as a temporary planning artifact
 
 | Phase | Implementation | Verification / release |
 | --- | --- | --- |
-| 1 — Registry + publisher | Implemented; local checkpoint verified | Real-provider/voice canary pending; not deployed |
-| 2 — Role-play runtime | Not started | Blocked on Phase 1 gate |
-| 3 — Twin runtime | Not started | Blocked on Phase 2 gate |
+| 1 — Registry + publisher | Complete implementation/local verification | Live comparison deferred until all phases; not deployed |
+| 2 — Role-play runtime | Complete implementation/local verification | Exact pins, strict retrieval and recovery verified; live checks deferred |
+| 3 — Twin runtime | Not started | Next implementation phase |
 | 4 — Existing-data migration | Not started | Production execution needs explicit approval |
 | 5 — Sole package ownership | Not started | Blocked on verified migration coverage and canary |
 
-Current checkpoint: additive Skill/SkillVersion schema, shared publication state machine, authenticated registry
-inspection, operator verification and real-Postgres failure/concurrency/timeout tests are implemented.
-Existing readers stay on compatibility data. No production credentials, data, migrations or deployments were used.
+Current checkpoint: registry/publisher and managed role-play runtime adoption are implemented. New managed role-play
+sessions pin exact packages; twins and null-marker sessions retain compatibility readers. No production credentials,
+data, migrations or deployments were used.
 Broad legacy runtime tests attempted AI Gateway requests with test-placeholder credentials and received 401; those
 are not successful live-provider tests.
 
@@ -101,13 +101,66 @@ tested separately.
 
 1. Phase 1 code/local-test checkpoint: **`0d974e0`**, `feat(skills): add managed package registry and publisher`.
    Local branch only; not pushed, no PR opened. This ledger update follows in a documentation-only commit.
-2. Finish the real-provider/voice canary in [the Phase 1 runbook](shared-skills-phase-1-release.md) using explicitly
-   isolated resources. This is the outstanding Phase 1 completion gate, not a production-deploy request.
-3. Only after the gate is met, begin Phase 2: SessionSkill schema, coherent transactional activation snapshots,
-   authorized exact `(skillVersionId, skillIndexScope)` lookup and reindex tooling. Do not mark Phase 2 started just
-   because managed vectors are now written.
+2. Owner clarified the gates on 19 Nov: each phase must compile and pass local behavioral/integration checks. Real
+   provider/voice comparison is deferred until ALL phases are implemented; it does not block the next implementation
+   phase. Existing canary/release checklists remain deferred release evidence, not completed checks.
+3. Phase 2 is complete locally; see its checkpoint below. Next implement Phase 3 twin session pinning and runtime
+   adoption. Keep a separate commit and local verification record for each phase.
 4. Keep Phase 1's existing bounded publication lock until exact managed runtime adoption makes compatibility indexing
    safe to separate. Legacy fallback and failed compatibility-index orphan behavior are not fixed by this checkpoint.
+
+### Phase 2 checkpoint — 19 Nov 2026
+
+Implemented:
+
+- Additive `SessionSkill` pins and nullable `InterviewSession.skillPinsVersion` marker. Null explicitly means legacy;
+  existing sessions are not retroactively repinned. Managed role-play activation captures package, Agent settings,
+  persona and scoring together. Resume retains the existing session and pin.
+- PostgreSQL guards enforce org/format/readiness, pin completeness and immutable managed identity/snapshot sections.
+  Attachment metadata remains mutable. Cascading parent-session deletion still works.
+- Lightweight runtime projections exclude package files/transcript and avoid per-turn S3 reads or package hashing.
+  Cache v2 validates pins before using cached context. Unknown/wrong-org/wrong-agent sessions refuse explicitly.
+- Managed example retrieval uses both version ID and committed artifact scope, checks expected cardinality, and
+  broadens a step miss only within those pins. Missing/partial indexes return 503, never another package's examples.
+  Builder/authored formats and their client/trainer roles remain distinct.
+- Index recovery verifies original S3 bytes, rebuilds the same immutable package, and fences state updates with
+  `indexGeneration` CAS. A stale recovery cannot downgrade a newer recovery. CLI requires explicit `--apply`;
+  remote-database operation additionally requires `--production`. No remote operation was run.
+
+Concurrency decision: managed activation uses Agent `FOR KEY SHARE`, not `FOR SHARE`. Publisher non-key Agent updates
+must proceed to avoid the Skill→Agent / Agent→Skill lock cycle. The exact package is resolved from the captured
+`primarySkillId` and artifact pointer, not mutable `currentVersionId`.
+
+Local migration `20261119130000_session_skill_pins` was applied only to `trainertwin_shared_skills_test`.
+Use the same socket DATABASE_URL as Phase 1 for the following commands, from `web/`:
+
+| Check | Result |
+| --- | --- |
+| `bun test --parallel .db.test` | **804 pass, 0 fail**, 46 files |
+| Phase 1 focused command above plus `tests/lib/roleplay-report.test.ts tests/lib/interview-sessions.test.ts` | **113 pass, 0 fail**, 14 files |
+| `bun test --parallel tests/flows` | **150 pass, 0 fail**, 9 files |
+| `bun test tests` from `chat/` | **125 pass, 0 fail**, 19 files |
+| TypeScript / ESLint on touched files | Pass; same 3 existing unused-import warnings in `specs.ts` |
+| `bun run build` with disposable local Better Auth configuration | Pass on retry; existing Next.js security advisory remains unresolved |
+
+The new session-pin suite contributes 19 tests / 106 assertions, including publication during activation, successive
+publications preserving old context/search/scoring, resume, archive, unavailable indexes, immutable snapshots and
+permitted attachment updates. Recovery tests cover corrupted S3, provider retry and stale worker failure.
+
+Verification gotchas:
+
+- The SQL twin-access fixture now runs deferred constraints before disabling triggers. Without that, PostgreSQL
+  correctly refuses ALTER TABLE with pending trigger events; the fix preserves the new invariant checks.
+- One full run concurrent with the flow suite hit a billing mock's unexpected Meteroid subscription request. A fresh
+  standalone full DB run passed all 804 tests. Do not treat the transient run as green or weaken billing assertions.
+- Chroma `count()` cannot filter metadata in this SDK. Exact scope cardinality uses paginated ID-only reads (300/page).
+  Measure this overhead in final performance/live testing after all implementation phases.
+- The broad legacy unit failures recorded under Phase 1 remain outside this checkpoint; no claim that suite is green.
+- Build-generated `next-env.d.ts` imports were restored to baseline. No dependency/security upgrade was included.
+
+Resume: inspect `git log` for `feat(skills): pin managed roleplay session packages` (Phase 2 local checkpoint), then
+implement Phase 3 from the detailed phase section below. Phases 3–5 and final real-provider/voice comparison remain
+unimplemented/unrun. No push, production migration, data backfill or deployment is authorized by this checkpoint.
 
 ## Goal
 

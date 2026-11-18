@@ -12,6 +12,7 @@ type Tx = Prisma.TransactionClient;
 export const skillRefusals = {
   superseded: () => new AppError("skill_publication_superseded", "This publication was superseded. Retry with the latest saved settings.", 409),
   unavailable: () => new AppError("skill_package_unavailable", "This skill package is not available.", 503),
+  indexSuperseded: () => new AppError("skill_index_superseded", "This index rebuild was superseded by another rebuild.", 409),
 };
 
 export function skillPackageHash(format: SkillFormat, files: SkillFiles) {

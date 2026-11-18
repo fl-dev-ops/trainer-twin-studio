@@ -139,6 +139,7 @@ envelopes and permissions; schema constraints alone do not implement these HTTP 
 | --- | --- | --- |
 | `not_found` | 404 | Requested Agent/Skill/version does not exist in the authorized org, or the requested owner/version pairing is invalid. Do not disclose another org's records. |
 | `skill_publication_superseded` | 409 | Final activation lost its generation CAS to another accepted publication. Do not replace the winner; caller must re-read before retrying. |
+| `skill_index_superseded` | 409 | Index rebuild completion/failure lost its generation CAS to a newer rebuild. Do not overwrite the newer index state or failure details. |
 | `skill_package_unavailable` | 503 | A managed package or required index cannot be verified/read for an operation requiring it. Expose an operational failure, not fabricated content or another package version. Exact-pin runtime enforcement is deferred to runtime adoption. |
 
 Existing authentication, permission, validation and immutable Agent-kind refusals remain at their
@@ -175,3 +176,111 @@ current boundaries; this contract does not replace them or introduce a public sk
   and rollback preserving prior current/package projections.
 - Existing builder/copilot/history/settings/source flows and real multi-turn voice canaries remain
   Phase 1 release gates. Schema validation is not evidence that publisher/provider/runtime flows passed.
+
+## Phase 2: exact role-play session pins
+
+This section supersedes Phase 1's deferred role-play pin/runtime statements above. Phase 2 adopts
+managed role-play packages only; twin multi-skill selection, no-skill conversion, legacy backfill,
+retention tooling and public skill-management APIs remain deferred. Schema alone does not implement
+the runtime contract: the session creation and runtime readers must ship together.
+
+### Schema API and database guards
+
+Source: `web/prisma/schema.prisma`; additive migration:
+`web/prisma/migrations/20261119130000_session_skill_pins/migration.sql`.
+
+| Record | Fields and constraints |
+| --- | --- |
+| `InterviewSession` | Nullable `skillPinsVersion Int?`: null means legacy, 1 means managed; no default or backfill. Relation `skillPins SessionSkill[]`; unique `[id, orgId]` (`id_orgId`). |
+| `SessionSkill` | Required `sessionId`, `orgId`, `skillVersionId`, `alias`; `position Int` default 0, nonnegative; `createdAt` default now. Composite primary key `[sessionId, alias]` (`sessionId_alias`); unique `[sessionId, position]` (`sessionId_position`); index `[skillVersionId]`. |
+| Relations | `SessionSkill.session`: `[sessionId, orgId]` → `InterviewSession.[id, orgId]`, delete cascade/update restrict. `SessionSkill.version`: `skillVersionId` → `SkillVersion.id`, delete/update restrict. Reverse `SkillVersion.sessionPins SessionSkill[]`. |
+
+1. Insert-time guards require the managed marker, a same-org session and Skill, ready package
+   `status`, ready `indexStatus`, and `alias = Skill.ownerSlug`. Session/version/Skill reads take row
+   share locks; the Agent kind read takes key-share.
+   A ROLEPLAY session additionally requires `builder-roleplay` or `authored-roleplay` format,
+   `alias = session.agentSlug`, and position 0. Unique position makes a second role-play pin impossible.
+2. Deferred constraint triggers re-read final rows at transaction end: managed ROLEPLAY sessions
+   require exactly one pin; null-marker sessions require none. Create the session with marker 1 and
+   its pin in the same transaction. Marker updates, including null → 1, are forbidden.
+3. Pin UPDATE is forbidden. Deferred deletion checks reject deleting any managed pin while its
+   session survives, including delete-and-replace attempts. Deleting the parent session still cascades
+   successfully, allowing isolated-fixture cleanup. A pinned version cannot be deleted.
+4. Managed session identity (`id`, `orgId`, `agentId`, `agentSlug`, `agentVersion`, `personaSlug`,
+   `personaVersion`) and `compiledSnapshot.agent` / `compiledSnapshot.persona` cannot change, preserving
+   the pinned experience's skills, scoring and persona. The whole snapshot is not frozen: top-level
+   `sessionDocumentIds` and `documentManifests` remain mutable for mid-call attachments.
+   Null-marker legacy updates retain existing behavior. A pinned Skill's org
+   and owner alias cannot change. Existing tenant/Agent-kind guards remain in force. Session status
+   is not restricted to activating: historical and completed sessions must remain readable/updatable.
+5. Readiness is checked on pin INSERT, not subsequent session/package operational updates.
+   A ready package's index may later fail/rebuild without invalidating history; unavailable runtime
+   indexes must fail explicitly. SQL does not validate external artifacts or index contents.
+6. The table can represent future ordered twin pins. Phase 2 services do not create those pins or
+   mark existing twins/no-skill/legacy sessions as managed.
+
+### Creation, snapshot and runtime contract
+
+1. Resolve managed role-play packages from a coherent Agent snapshot's `primarySkillId` and
+   `data.artifacts`, not from the mutable `Skill.currentVersionId` pointer. Match the exact SkillVersion
+   belonging to that primary Skill and artifact prefix, and verify org, owner, role-play format and
+   readiness. Never assume Agent version equals package version.
+2. Inside the existing minutes/session creation transaction, take `SELECT ... FOR KEY SHARE` on the
+   Agent row, then fetch the complete Agent/persona metadata through a getter accepting that
+   transaction client. Build the session snapshot and pin from that coherent read. Do not wait on the
+   publisher's advisory Agent lock across external provider writes. Key-share permits non-key Agent
+   updates, avoiding the lock cycle between a publisher holding Skill then updating Agent and a start
+   holding Agent share then reading the pinned Skill under share lock. Resolve the captured package
+   by immutable artifacts, never the mutable current pointer; concurrent publication must not mix
+   package and experience metadata.
+3. Persist `skillPinsVersion = 1` and the single position-0 owner-alias pin atomically with session
+   creation. Creation refusal rolls back both the session and associated minutes transaction work.
+4. Managed runtime reads authorize the session/org and use only its pinned SkillVersion, immutable
+   files/manifest/instructions, and exact canonical index scope:
+   `skillVersionId = version.id` AND `skillIndexScope = version.artifacts`. Never substitute the current
+   pointer, Agent version metadata, another artifact attempt, or an unfiltered/previous-version fallback.
+5. Zero-item packages and valid no-match queries return clean empty examples. Missing, failed,
+   unverifiable or inaccessible required package/index data is not a no-match result.
+   Managed failures return existing `skill_package_unavailable` (503); unauthorized/missing records
+   or invalid owner/version pairings return existing `not_found` (404), without cross-org disclosure.
+6. Null-marker sessions keep existing legacy snapshot/retrieval behavior. Main twins and no-skill
+   legacy interviews remain unchanged; no eager backfill or mutable-current-pointer adoption.
+
+### Verification and rollout boundary
+
+- Per phase, validate/generate Prisma and compile local code; do not apply this migration implicitly.
+- Live database/provider and multi-turn testing is scheduled **after all phases**, not between phases.
+  Deferred checks must cover missing/extra pins, marker mutation, cross-org/owner/format/readiness
+  refusal, immutable pins/identity, deletion/replacement refusal, parent cascade cleanup and operational
+  index updates. Runtime tests must cover publication races, coherent snapshots, historical exact
+  retrieval, abandoned-attempt isolation, empty/no-match results and explicit index outages.
+- SQL identity tests must reject individual managed changes to `agentVersion`, `personaSlug`,
+  `personaVersion`, and either `compiledSnapshot.agent` or `compiledSnapshot.persona` (including
+  removal/null replacement), while allowing top-level `sessionDocumentIds`/`documentManifests`
+  attachment updates with both protected sections unchanged. Verify equivalent null-marker legacy
+  updates remain permitted and managed marker changes remain forbidden.
+- No production migration, backfill, commit/push, destructive retention or twin-reader cutover is
+  authorized by this contract. Retention must eventually preserve every live/historical referenced
+  version and exact index namespace; pinning alone does not change legacy pruning tooling.
+
+### Phase 2 index recovery generation
+
+`SkillVersion.indexGeneration Int` defaults to 0 and has a nonnegative database check in the Phase 2
+migration. It is operational metadata, excluded from package identity; the replaced ready-version
+immutability function permits changes to `indexGeneration` alongside `indexStatus`, `failure`,
+`publicationGeneration` and `updatedAt`, without permitting package/status mutation.
+
+1. An explicit operator reindex invocation claims the version under a short `agent:<ownerSlug>`
+   transaction advisory lock: increment `indexGeneration`, mark `indexStatus = pending`, and capture
+   the generation and immutable package identity. No UUID claim or lease table is introduced.
+2. Perform external index work outside that transaction, verifying the same immutable package and
+   exact canonical scope (`version.id`, `version.artifacts`). Reindexing does not allocate a package
+   version or change its artifacts/content identity.
+3. Both success and failure updates use a compare-and-swap on `id` AND the captured
+   `indexGeneration`. A stale rebuild must not mark a newer rebuild ready/failed or overwrite its
+   failure details. Only verified success marks the claimed generation ready.
+4. A crashed pending rebuild is recovered by another explicit operator reindex invocation, taking
+   the same lock and claiming a new generation. No implicit timeout-based readiness or downgrade.
+5. Publisher reuse of an already-ready package must freshly require `indexStatus = ready` under
+   its lock; reuse must not undo maintenance pending/failure state. Managed runtime retains explicit
+   `skill_package_unavailable` (503) behavior while the required index is unavailable.

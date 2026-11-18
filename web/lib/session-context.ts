@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { personaBrief } from "@/lib/persona";
 import { findOrgOrGlobalPersona } from "@/lib/specs";
 import { type PinnedTwinSkill, TWIN_SOURCE, twinPlaybooks } from "@/lib/twins";
+import { loadRoleplaySessionSkill } from "@/lib/session-skills";
 
 const SHARED_KNOWLEDGE_BASE_SLUG = "acme-knowledge";
 
@@ -19,6 +20,9 @@ export async function buildSessionContext(input: {
   agentSlug?: string;
   personaSlug?: string;
 }) {
+  const managedSkill = input.sessionId
+    ? await loadRoleplaySessionSkill(input.orgId, input.sessionId, input.agentSlug)
+    : null;
   const session = input.sessionId
     ? await db.interviewSession.findFirst({
         where: { id: input.sessionId, orgId: input.orgId },
@@ -120,7 +124,9 @@ export async function buildSessionContext(input: {
     }
   }
 
-  const agent = snapshot?.agent?.data
+  const agent = managedSkill
+    ? { slug: session!.agentSlug, version: session!.agentVersion, data: managedSkill.data }
+    : snapshot?.agent?.data
     ? { slug: snapshot.agent.slug ?? liveAgent?.slug ?? agentSlug, version: snapshot.agent.version ?? liveAgent?.version ?? 0, data: snapshot.agent.data }
     : liveAgent;
   const persona = snapshot?.persona?.data
@@ -136,7 +142,7 @@ export async function buildSessionContext(input: {
 
   return {
     sessionId: session?.id ?? input.sessionId ?? null,
-    agent: agent ? { slug: agent.slug, version: agent.version, kind: liveAgent?.kind ?? null, data: agent.data } : null,
+    agent: agent ? { slug: agent.slug, version: agent.version, kind: managedSkill ? "ROLEPLAY" : liveAgent?.kind ?? null, data: agent.data } : null,
     ...(playbooks ? { twinPlaybooks: playbooks } : {}),
     persona: persona ?? null,
     // The trainer's own persona speaks as herself (identity only); any other persona is a character to play.
@@ -151,8 +157,13 @@ export async function buildSessionContext(input: {
 }
 
 /** Session context is immutable after activation; prime this during the intro. */
-export const getCachedSessionContext = unstable_cache(
+const cachedSessionContext = unstable_cache(
   (orgId: string, sessionId: string) => buildSessionContext({ orgId, sessionId }),
-  ["session-context-v1"],
+  ["session-context-v2"],
   { revalidate: 86_400 },
 );
+
+export async function getCachedSessionContext(orgId: string, sessionId: string) {
+  await loadRoleplaySessionSkill(orgId, sessionId);
+  return cachedSessionContext(orgId, sessionId);
+}
