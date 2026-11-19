@@ -6,7 +6,8 @@ import { db } from "@/lib/db";
 import { updateRoleplay } from "@/lib/roleplay/manage";
 import { roleplayBuilderFrom } from "@/lib/roleplay/skill";
 import { getObjectText } from "@/lib/s3";
-import { ROLEPLAY_SOURCE, ScenarioIngestError, TWIN_SKILL_SOURCE } from "@/lib/scenario-ingest";
+import { publishRoleplayBrief, ROLEPLAY_SOURCE, ScenarioIngestError, TWIN_SKILL_SOURCE } from "@/lib/scenario-ingest";
+import { draftBrief } from "@/lib/roleplay/brief";
 import { runRoleplayAssign, runTwinAssign } from "@/lib/workflow-runs";
 import { accessUntilSchema, listTwinAssignments } from "@/lib/twin-access";
 import { updateTwin } from "@/lib/twin/manage";
@@ -56,6 +57,11 @@ export const copilotStudioInput = z.discriminatedUnion("action", [
     minutes: z.number().int().min(1).max(10_000).optional(),
     accessUntil: accessUntilSchema,
   }).strict(),
+  // Role plays written from requirements (lib/roleplay/brief.ts): personas to play them, a draft (check + render, nothing
+  // saved), and publishing on the trainer's approval.
+  z.object({ action: z.literal("listPersonas") }).strict(),
+  z.object({ action: z.literal("draftRoleplay"), brief: z.unknown() }).strict(),
+  z.object({ action: z.literal("publishRoleplay"), persona: slug, brief: z.unknown() }).strict(),
   z.object({ action: z.literal("archive"), slug }).strict(),
   z.object({ action: z.literal("restore"), slug }).strict(),
 ]);
@@ -75,7 +81,7 @@ function emailsStatus<T extends { emailFailures: number; emailsQueued?: number; 
 }
 
 // Assigning goes through the assign-twin / assign-roleplay workflows (lib/workflow-runs.ts), as on the Assign pages.
-const defaultDeps = { db, getObjectText, assignTwinAndInvite: runTwinAssign, listTwinAssignments, inviteToRoleplay: runRoleplayAssign, updateTwin, updateRoleplay, resolveUpload };
+const defaultDeps = { db, getObjectText, assignTwinAndInvite: runTwinAssign, listTwinAssignments, inviteToRoleplay: runRoleplayAssign, updateTwin, updateRoleplay, resolveUpload, publishRoleplayBrief };
 export type CopilotStudioDeps = typeof defaultDeps;
 
 const asRecord = (value: unknown) => (value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {});
@@ -85,6 +91,7 @@ const text = (value: unknown) => (typeof value === "string" && value.trim() ? va
 function kindOf(agent: { kind: string; data: unknown }) {
   const source = asRecord(agent.data).source;
   if (agent.kind === "TWIN") return source === TWIN_SOURCE ? "main-twin" : source === TWIN_SKILL_SOURCE ? "twin-skill" : "twin-skill-legacy";
+  if (asRecord(agent.data).roleplayBrief) return "roleplay-brief";
   return source === ROLEPLAY_SOURCE ? "roleplay-builder" : "roleplay-recordings";
 }
 
@@ -159,6 +166,8 @@ export async function runCopilotStudio(actor: Actor, input: CopilotStudioInput, 
         ...base,
         tools: toolSettings(agent.data),
         builder: kind === "roleplay-builder" ? roleplayBuilderFrom(agent.data) : null,
+        // A role play written from requirements: its brief, which an edit changes (then publishRoleplay again).
+        brief: kind === "roleplay-brief" ? asRecord(agent.data).roleplayBrief : null,
         learners: invites.map((row) => ({ email: row.member.user.email.toLowerCase(), status: row.status })),
       };
     }
@@ -251,6 +260,37 @@ export async function runCopilotStudio(actor: Actor, input: CopilotStudioInput, 
         }));
       }
       return emailsStatus(await d.inviteToRoleplay({ org: actor.org, by: actor.user, agent, emails: input.emails }));
+    }
+
+    case "listPersonas": {
+      // Who can play a role play: the org's personas (personality and voice). The skill never redefines them.
+      const personas = await d.db.persona.findMany({
+        where: { orgId }, orderBy: [{ isOwn: "desc" }, { name: "asc" }],
+        select: { slug: true, name: true, isOwn: true, data: true, voice: { select: { name: true } }, _count: { select: { agents: { where: { archivedAt: null } } } } },
+      });
+      return {
+        personas: personas.map((p) => ({
+          slug: p.slug, name: p.name, own: p.isOwn,
+          role: text(asRecord(p.data).role) ?? null, about: text(asRecord(p.data).background) ?? null,
+          voice: p.voice?.name ?? null, usedBy: p._count.agents,
+        })),
+      };
+    }
+
+    case "draftRoleplay": {
+      const draft = draftBrief(input.brief);
+      return draft.ok
+        ? { ok: true, skill: draft.skill, learnerBrief: draft.brief.learnerBrief, items: draft.items.length, slug: `${actor.org.slug}-${draft.brief.id}` }
+        : { ok: false, reasons: draft.reasons, ...("skill" in draft ? { skill: draft.skill } : {}) };
+    }
+
+    case "publishRoleplay": {
+      const existing = await d.db.agent.findFirst({ where: { orgId, slug: `${actor.org.slug}-${asRecord(input.brief).id}` }, select: { kind: true, data: true } });
+      if (existing && (existing.kind !== "ROLEPLAY" || (!asRecord(existing.data).roleplayBrief && asRecord(existing.data).skill))) {
+        throw new ScenarioIngestError("A different role play or twin already uses this id; choose another brief id.", 409);
+      }
+      const published = await d.publishRoleplayBrief(orgId, { personaSlug: input.persona, brief: input.brief });
+      return { ok: true, slug: published.slug, name: published.name, version: published.version, created: published.created, items: published.items };
     }
 
     case "archive": {

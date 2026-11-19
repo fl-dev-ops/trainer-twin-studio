@@ -7,6 +7,8 @@
  *   bun scripts/interview-skill-chat-check.ts --org careerwithvasanth --chat http://127.0.0.1:2100 [--only slug,...] [--turns 3] [--originals] --apply
  *
  * `--originals` instead runs the original no-skill interviews (legacy interview mode) to show they still work.
+ * `--slugs a,b` runs any managed role plays by full slug (e.g. ones the copilot wrote from requirements), with the
+ * learner lines from `--lines <file>` (one per line) instead of the interview candidate's.
  *
  * Local only (same guards as the port). Paid model calls: needs --apply and stays within --turns per session.
  */
@@ -88,7 +90,13 @@ async function main() {
     orderBy: { slug: "asc" },
   });
   const originals = argv.includes("--originals");
-  const targets = originals
+  const slugs = option("slugs")?.split(",").map((slug) => slug.trim()).filter(Boolean);
+  const targets = slugs
+    ? await db.agent.findMany({
+      where: { orgId: org.id, slug: { in: slugs }, primarySkillId: { not: null } },
+      select: { slug: true, data: true, primarySkill: { select: { currentVersion: { select: { id: true, version: true } } } } }, orderBy: { slug: "asc" },
+    })
+    : originals
     ? (await db.agent.findMany({
       where: { orgId: org.id, kind: "ROLEPLAY", archivedAt: null, primarySkillId: null, ...(option("only") ? { slug: { in: option("only")!.split(",") } } : {}) },
       select: { slug: true, data: true, primarySkill: { select: { currentVersion: { select: { id: true, version: true } } } } }, orderBy: { slug: "asc" },
@@ -114,7 +122,8 @@ async function main() {
       }
       const pinnedSkill = object((await buildSessionContext({ orgId: org.id, sessionId: session.id })).agent?.data).skill;
       const maxWords = Number(/At most (\d+) words per turn/.exec(String(pinnedSkill))?.[1] ?? 0);
-      const messages = ["[OPENING]", ...CANDIDATE].slice(0, turns + 1);
+      const learnerLines = option("lines") ? (await import("node:fs")).readFileSync(option("lines")!, "utf8").split("\n").filter(Boolean) : CANDIDATE;
+      const messages = ["[OPENING]", ...learnerLines].slice(0, turns + 1);
       for (const [index, message] of messages.entries()) {
         const started = performance.now();
         const reply = await turn(chat, org.id, secret, { id: session.id, agentSlug: agent.slug }, message);
@@ -122,10 +131,10 @@ async function main() {
         (result.turns as unknown[]).push({ heard: message, reply: reply.reply, words, ms: Math.round(performance.now() - started), model: reply.model, tools: reply.tools });
         assert(reply.reply.length >= 8, `Turn ${index}: empty reply`);
         assert(!/CLIENT ROLE-PLAY|guard level/i.test(reply.reply), `Turn ${index}: leaked operating instructions`);
-        if (index > 0) assert(/\?/.test(reply.reply), `Turn ${index}: the interviewer did not ask a question`);
+        if (index > 0 && !slugs) assert(/\?/.test(reply.reply), `Turn ${index}: the interviewer did not ask a question`);
         if (maxWords) assert(words <= Math.ceil(maxWords * 1.5), `Turn ${index}: ${words} words exceeds the ported limit of ${maxWords}`);
       }
-      if (originals) { result.status = "passed"; continue; }
+      if (originals || slugs) { result.status = "passed"; continue; }
       // A republish (same content) during the call is a no-op; the session's pin never changes.
       const original = await db.agent.findUniqueOrThrow({ where: { slug: String(object(object(agent.data).portedFrom).slug) } });
       const pkg = interviewSkillPackage(original);

@@ -11,6 +11,7 @@ import { putObject, s3Configured, scenarioRunPrefix } from "@/lib/s3";
 import { activateSkillVersion, failSkillVersion, reserveSkillVersion, skillPackageHash, skillRefusals, uploadSkillFiles, verifySkillEnvelope, type SkillFiles, type SkillFormat } from "@/lib/skills";
 import type { BeforeSettings } from "@/lib/context-upload";
 import { renderRoleplay, roleplayBuilderSchema, type RoleplayItem } from "@/lib/roleplay/skill";
+import { draftBrief } from "@/lib/roleplay/brief";
 import { validSlug } from "@/lib/specs";
 import type { ToolSettings } from "@/lib/agent-tools";
 
@@ -386,6 +387,25 @@ export async function publishInterviewSkill(orgId: string, input: {
   return storeSkillAgent({
     org, kind: "ROLEPLAY", personaId: persona.id, manifest: scenarioManifestSchema.parse(input.scenario), skill: input.skill, items: input.items,
     data: input.settings,
+  });
+}
+
+/**
+ * Publishes a role play written from requirements (lib/roleplay/brief.ts) through the shared publisher. The brief is
+ * kept with the role play (`data.roleplayBrief`) so the copilot edits it rather than rewriting the skill. Refuses an
+ * incomplete brief; the same brief republished is a no-op.
+ */
+export async function publishRoleplayBrief(orgId: string, input: { personaSlug: string; brief: unknown }) {
+  const draft = draftBrief(input.brief);
+  if (!draft.ok) throw new ScenarioIngestError(`The role play is not ready: ${draft.reasons.join(" ")}`, 400);
+  const [org, persona] = await Promise.all([
+    requireOrg(orgId),
+    db.persona.findFirst({ where: { orgId, slug: { equals: input.personaSlug, mode: "insensitive" } }, select: { id: true } }),
+  ]);
+  if (!persona) throw new ScenarioIngestError(`Persona "${input.personaSlug}" was not found in this organization`, 404);
+  return storeSkillAgent({
+    org, kind: "ROLEPLAY", personaId: persona.id, manifest: scenarioManifestSchema.parse(draft.scenario), skill: draft.skill, items: draft.items,
+    data: { roleplayBrief: draft.brief },
   });
 }
 
