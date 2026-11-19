@@ -38,6 +38,7 @@ test("reranking expands and reorders main-collection candidates", async () => {
   const originalFetch = globalThis.fetch;
   const originalEnabled = process.env.RERANK_ENABLED;
   const originalKey = process.env.OPENROUTER_API_KEY;
+  const originalGatewayKey = process.env.AI_GATEWAY_API_KEY;
   let requestedLimit = 0;
 
   MainCollectionService.searchKnowledge = (async (_orgId, _query, options) => {
@@ -60,6 +61,7 @@ test("reranking expands and reorders main-collection candidates", async () => {
   })) as typeof fetch;
   process.env.RERANK_ENABLED = "1";
   process.env.OPENROUTER_API_KEY = "test-key";
+  process.env.AI_GATEWAY_API_KEY = "test-key";
 
   try {
     const hits = await searchKnowledge("kb-id", "query", 3, "org-id");
@@ -70,5 +72,7 @@ test("reranking expands and reorders main-collection candidates", async () => {
     globalThis.fetch = originalFetch;
     process.env.RERANK_ENABLED = originalEnabled;
     process.env.OPENROUTER_API_KEY = originalKey;
+    if (originalGatewayKey === undefined) delete process.env.AI_GATEWAY_API_KEY;
+    else process.env.AI_GATEWAY_API_KEY = originalGatewayKey;
   }
 });

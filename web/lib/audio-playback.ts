@@ -4,6 +4,7 @@
 
 let sharedContext: AudioContext | null = null;
 const liveSources = new Set<AudioBufferSourceNode>();
+const liveStreams = new Set<() => void>();
 
 export function getSharedAudioContext(): AudioContext {
   sharedContext ??= new AudioContext();
@@ -11,11 +12,10 @@ export function getSharedAudioContext(): AudioContext {
   return sharedContext;
 }
 
-/** Stop every currently scheduled/playing TTS buffer. */
+/** Stop pending PCM reads and every currently scheduled/playing TTS buffer. */
 export function stopPlayback() {
-  for (const source of liveSources) {
-    try { source.stop(); } catch { /* already ended */ }
-  }
+  for (const cancel of liveStreams) cancel();
+  for (const source of liveSources) source.stop();
   liveSources.clear();
 }
 
@@ -45,7 +45,11 @@ export function splitPcm(carry: Uint8Array, chunk: Uint8Array, sliceSamples: num
 }
 
 /** Consume a /api/tts/speech response (raw 16-bit PCM) and play it live. */
-export async function playPcmStream(response: Response): Promise<void> {
+export async function playPcmStream(response: Response, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) {
+    await response.body?.cancel(signal.reason);
+    signal.throwIfAborted();
+  }
   if (!response.ok || !response.body) {
     const detail = await response.json().catch(() => null);
     throw new Error(detail?.error ?? `TTS failed (${response.status})`);
@@ -54,6 +58,7 @@ export async function playPcmStream(response: Response): Promise<void> {
   const sampleRate = Number(response.headers.get("X-Sample-Rate")) || 24000;
   const sliceSamples = Math.floor(sampleRate * 0.2);
   let nextTime = context.currentTime + 0.05;
+  const sources = new Set<AudioBufferSourceNode>();
 
   function schedule(samples: Int16Array) {
     const buffer = context.createBuffer(1, samples.length, sampleRate);
@@ -62,28 +67,64 @@ export async function playPcmStream(response: Response): Promise<void> {
     const source = context.createBufferSource();
     source.buffer = buffer;
     source.connect(context.destination);
-    source.onended = () => liveSources.delete(source);
-    liveSources.add(source);
+    source.onended = () => {
+      liveSources.delete(source);
+      sources.delete(source);
+    };
     nextTime = Math.max(nextTime, context.currentTime + 0.02);
     source.start(nextTime);
+    liveSources.add(source);
+    sources.add(source);
     nextTime += buffer.duration;
   }
 
   const reader = response.body.getReader();
+  let cancelled = false;
+  let cancellation: Promise<void> | undefined;
+  function cancel() {
+    if (cancelled) return;
+    cancelled = true;
+    cancellation = reader.cancel(signal?.reason);
+    for (const source of sources) {
+      source.stop();
+      liveSources.delete(source);
+    }
+    sources.clear();
+  }
+  liveStreams.add(cancel);
+  signal?.addEventListener("abort", cancel, { once: true });
   let carry: Uint8Array = new Uint8Array(0);
-  while (true) {
-    const { done, value } = await reader.read();
-    const next = splitPcm(carry, value ?? new Uint8Array(0), sliceSamples, done);
-    next.slices.forEach(schedule);
-    carry = next.carry;
-    if (done) break;
+  try {
+    while (!cancelled) {
+      const { done, value } = await reader.read();
+      if (cancelled) break;
+      const next = splitPcm(carry, value ?? new Uint8Array(0), sliceSamples, done);
+      next.slices.forEach(schedule);
+      carry = next.carry;
+      if (done) break;
+    }
+  } finally {
+    liveStreams.delete(cancel);
+    signal?.removeEventListener("abort", cancel);
+    try {
+      await cancellation;
+    } finally {
+      reader.releaseLock();
+    }
   }
 }
 
-export async function generateSpeech(voice: string, input: string, stream = true): Promise<Response> {
-  return fetch("/api/tts/speech", {
+export async function generateSpeech(voice: string, input: string, stream = true, signal?: AbortSignal): Promise<Response> {
+  signal?.throwIfAborted();
+  const response = await fetch("/api/tts/speech", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ voice, input, stream, response_format: stream ? "pcm" : "wav" }),
+    signal,
   });
+  if (signal?.aborted) {
+    await response.body?.cancel(signal.reason);
+    signal.throwIfAborted();
+  }
+  return response;
 }

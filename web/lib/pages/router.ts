@@ -28,6 +28,7 @@ import { refusals, toTRPCError } from "@/lib/errors";
 import { protectedProcedure, publicProcedure, studioProcedure, t } from "@/lib/trpc";
 import { startableAgentSlugs } from "@/lib/twin-access";
 import { avatarState, ownTwinPersona } from "@/lib/twin/avatar";
+import { listAvailableVoices } from "@/lib/voices";
 
 /**
  * Page loaders, mounted at /api/trpc under `page`: what each studio / learner page used to load while rendering on
@@ -128,8 +129,7 @@ export const pageRouter = t.router({
   personaEdit: studioProcedure.input(slugInput).query(async ({ ctx, input }) => {
     const item = await getPersona(ctx.user.orgId, input.slug);
     if (!item) return notFound();
-    // A role-play persona picks its voice from the voice library; the trainer's own uses their cloned voice.
-    return { item, voices: item.isOwn ? [] : await pickableVoices(ctx.user.orgId) };
+    return { item, voices: await pickableVoices(ctx.user.orgId) };
   }),
 
   // Sessions.
@@ -200,12 +200,13 @@ export const pageRouter = t.router({
   }),
 
   voices: studioProcedure.query(async ({ ctx }) => {
-    const voices = await db.voice.findMany({
-      where: { OR: [{ orgId: ctx.user.orgId }, { orgId: null }] },
-      orderBy: { createdAt: "desc" },
-      select: { id: true, name: true, kind: true, status: true, createdAt: true },
-    });
-    const rows = voices.map((voice) => ({ ...voice, createdAt: voice.createdAt.toISOString() }));
+    const [available, deleting] = await Promise.all([
+      listAvailableVoices(ctx.user.orgId),
+      db.voice.findMany({ where: { orgId: ctx.user.orgId, kind: "cloned", status: "deleting" } }),
+    ]);
+    const rows = [...available, ...deleting].map((voice) => ({
+      id: voice.id, name: voice.name, kind: voice.kind, status: voice.status, createdAt: voice.createdAt.toISOString(),
+    }));
     return { mine: rows.filter((voice) => voice.kind === "cloned"), samples: rows.filter((voice) => voice.kind === "sample") };
   }),
 

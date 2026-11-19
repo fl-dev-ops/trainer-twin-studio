@@ -53,7 +53,7 @@ describe.skipIf(process.env.DATABASE_URL !== isolatedDatabase)("managed skill ow
 
   beforeEach(async () => {
     f = minutesFixture(); other = minutesFixture();
-    await f.create(); await other.create();
+    await f.create({ voice: true }); await other.create();
     files.clear(); indexes.clear(); legacyIndexes.clear(); getObjectText.mockClear();
     secret = process.env.COPILOT_SERVICE_SECRET;
     process.env.COPILOT_SERVICE_SECRET = "managed-lifecycle-test-secret";

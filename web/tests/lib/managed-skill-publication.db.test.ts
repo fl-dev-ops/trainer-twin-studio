@@ -56,7 +56,7 @@ describe.skipIf(process.env.DATABASE_URL !== isolatedDatabase)("managed-only ski
   };
   beforeEach(async () => {
     f = minutesFixture();
-    await f.create();
+    await f.create({ voice: true });
     await mode("managed");
     files.clear(); corruptRead = false; failIndex = false;
     secret = process.env.COPILOT_SERVICE_SECRET;

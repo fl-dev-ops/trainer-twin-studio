@@ -42,7 +42,7 @@ describe.skipIf(process.env.DATABASE_URL !== isolatedDatabase)("Phase 3 twin ski
 
   beforeEach(async () => {
     f = minutesFixture(); other = minutesFixture();
-    await f.create(); await other.create();
+    await f.create({ voice: true }); await other.create();
     files.clear();
     readObject.mockClear();
     secret = process.env.COPILOT_SERVICE_SECRET;

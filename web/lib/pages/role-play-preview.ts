@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { LEARNER, orgPeople } from "@/lib/org-people";
 import { readSpecDraft } from "@/lib/spec-drafts";
 import { agentDisplayName, readSpec } from "@/lib/specs";
+import { availableVoiceWhere } from "@/lib/voices";
 
 /** /agents/<slug>: the role play (published or draft), the org's learners, and who it's assigned to. */
 export async function loadRolePlayPreview(orgId: string, slug: string) {
@@ -51,7 +52,7 @@ export async function loadRolePlayPreview(orgId: string, slug: string) {
     let voiceName: string | undefined;
     if (typeof doc.voiceId === "string" && doc.voiceId) {
       const voice = await db.voice.findFirst({
-        where: { id: doc.voiceId, OR: [{ orgId }, { orgId: null }] },
+        where: { id: doc.voiceId, AND: [availableVoiceWhere(orgId)] },
         select: { name: true },
       });
       voiceName = voice?.name;

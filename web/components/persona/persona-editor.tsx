@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ArrowLeft, Check, LoaderCircle, Play, Plus, Square, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 import { CARD, PersonaPhoto } from "@/components/persona/persona-parts";
@@ -20,8 +20,9 @@ import { generateSpeech, playPcmStream, stopPlayback } from "@/lib/audio-playbac
 import { cn } from "@/lib/utils";
 import { useRefresh } from "@/lib/use-refresh";
 import { PageContainer } from "@/components/page-container";
+import { AddVoiceDialog } from "@/components/voice-library";
 
-type Media = { photoUrl: string | null; hasVideo: boolean; voiceName: string | null };
+type Media = { photoUrl: string | null; hasVideo: boolean; voiceId: string | null; voiceName: string | null };
 type LibraryVoice = { id: string; name: string; kind: string };
 export type PersonaTab = "look" | "talk" | "media";
 
@@ -176,14 +177,17 @@ export function PersonaEditor({ slug, initial, media, voices = [], isOwn = false
         </TabsContent>
 
         <TabsContent value="media">
-          {isOwn ? (
-            <Section>
-              <p className="m-0 text-sm text-(--text-secondary)">
-                This is your own persona: your photo, reference video and cloned voice are set up on{" "}
-                <Link href="/twin/brain" className="font-medium text-foreground underline-offset-4 hover:underline">Twin’s brain</Link>.
-                {media?.voiceName ? ` Current voice: ${media.voiceName}.` : ""}
-              </p>
-            </Section>
+          {isOwn && slug && media ? (
+            <div className="flex flex-col gap-4">
+              <VoiceSection key={media.voiceId ?? "none"} slug={slug} media={media} voices={voices} />
+              <Section>
+                <p className="m-0 text-sm text-(--text-secondary)">
+                  Your photo and reference video are set up on{" "}
+                  <Link href="/twin/brain" className="font-medium text-foreground underline-offset-4 hover:underline">Twin’s brain</Link>.
+                  {" "}You can still record your voice there.
+                </p>
+              </Section>
+            </div>
           ) : slug && media ? <MediaSection slug={slug} name={form.name} media={media} voices={voices} /> : (
             <Section>
               <p className="m-0 text-sm text-muted-foreground">Save the persona first, then add its voice and avatar here.</p>
@@ -275,14 +279,7 @@ function MediaSection({ slug, name, media, voices }: { slug: string; name: strin
 
   return (
     <div className="flex flex-col gap-4">
-      <Section>
-        <div>
-          <h2 className="m-0 text-sm font-semibold uppercase tracking-wide">Voice</h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">Pick how this person sounds. Play a voice to hear it, then use it.</p>
-        </div>
-        <p className="m-0 text-sm">{media.voiceName ? <>Current voice: <b className="font-semibold capitalize">{media.voiceName}</b></> : <span className="text-muted-foreground">No voice yet.</span>}</p>
-        <VoicePicker voices={voices} current={media.voiceName} busy={busy === "voice"} onPick={(voiceId) => void upload("voice", { voiceId })} />
-      </Section>
+      <VoiceSection key={media.voiceId ?? "none"} slug={slug} media={media} voices={voices} />
 
       <Section>
         <div>
@@ -311,61 +308,130 @@ function MediaSection({ slug, name, media, voices }: { slug: string; name: strin
 
 const PREVIEW_SENTENCE = "Hi, thanks for calling. I've got a few minutes, so tell me what this is about.";
 
-/** The voice library as a list: play a short preview, then use a voice for this persona (its current one is marked). */
-function VoicePicker({ voices, current, busy, onPick }: { voices: LibraryVoice[]; current: string | null; busy: boolean; onPick: (voiceId: string) => void }) {
+function VoiceSection({ slug, media, voices }: { slug: string; media: Media; voices: LibraryVoice[] }) {
+  const refresh = useRefresh();
+  const [current, setCurrent] = useState({ id: media.voiceId, name: media.voiceName });
+  const [selected, setSelected] = useState(media.voiceId);
+  const [choosing, setChoosing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const unavailable = current.id !== null && !voices.some((voice) => voice.id === current.id);
+  const choice = voices.find((voice) => voice.id === selected);
+  const currentName = current.id === media.voiceId ? media.voiceName : current.name;
+
+  async function attach(voice: { id: string; name: string }) {
+    setSaving(true);
+    try {
+      const body = new FormData();
+      body.set("voiceId", voice.id);
+      const response = await fetch(`/api/personas/${encodeURIComponent(slug)}/media`, { method: "POST", body });
+      const result: { error?: string } = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "Could not save the voice");
+      setCurrent(voice);
+      setSelected(voice.id);
+      setChoosing(false);
+      refresh();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function save() {
+    if (!choice || choice.id === current.id) return;
+    try {
+      await attach(choice);
+      toast.success("Voice saved");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not save the voice");
+    }
+  }
+
+  return (
+    <Section>
+      <div>
+        <h2 className="m-0 text-sm font-semibold uppercase tracking-wide">Voice</h2>
+        <p className="mt-0.5 text-xs text-muted-foreground">Choose a voice or add a recording. Other personas using a voice keep their selection.</p>
+      </div>
+      <p className="m-0 text-sm">{current.id ? <>Current voice: <b className="font-semibold">{currentName ?? "Unnamed voice"}</b></> : <span className="text-muted-foreground">No voice yet. Choose or add one before starting a voice session.</span>}</p>
+      {unavailable ? <p className="m-0 text-sm text-muted-foreground">The current voice is unavailable for new voice sessions. It stays selected until you save another voice.</p> : null}
+      {choosing ? (
+        <>
+          <VoicePicker voices={voices} current={current.id} selected={selected} busy={saving} onSelect={setSelected} />
+          <div className="flex items-center gap-2">
+            <Button variant="outline" disabled={saving} onClick={() => { setSelected(current.id); setChoosing(false); }}>Cancel</Button>
+            <Button disabled={saving || !choice || selected === current.id} onClick={() => void save()}>{saving ? "Saving…" : "Save voice"}</Button>
+          </div>
+        </>
+      ) : (
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" size="sm" disabled={saving} onClick={() => { setSelected(current.id); setChoosing(true); }}>Choose a voice</Button>
+          <AddVoiceDialog onCreated={attach} />
+        </div>
+      )}
+    </Section>
+  );
+}
+
+function VoicePicker({ voices, current, selected, busy, onSelect }: { voices: LibraryVoice[]; current: string | null; selected: string | null; busy: boolean; onSelect: (voiceId: string) => void }) {
   const [playing, setPlaying] = useState<string | null>(null);
   const [loading, setLoading] = useState<string | null>(null);
+  const previewRef = useRef<AbortController | null>(null);
+
+  useEffect(() => () => {
+    previewRef.current?.abort();
+    previewRef.current = null;
+    stopPlayback();
+  }, []);
 
   async function preview(voice: LibraryVoice) {
+    previewRef.current?.abort();
     stopPlayback();
+    previewRef.current = null;
+    setLoading(null);
     if (playing === voice.id) return setPlaying(null);
+    const controller = new AbortController();
+    previewRef.current = controller;
+    setPlaying(voice.id);
     setLoading(voice.id);
     try {
-      const response = await generateSpeech(voice.id, PREVIEW_SENTENCE);
-      setPlaying(voice.id);
+      const response = await generateSpeech(voice.id, PREVIEW_SENTENCE, true, controller.signal);
+      controller.signal.throwIfAborted();
       setLoading(null);
-      await playPcmStream(response);
+      await playPcmStream(response, controller.signal);
     } catch (cause) {
-      toast.error(cause instanceof Error ? cause.message : "Preview failed. Is the voice service running?");
+      if (!(controller.signal.aborted && cause instanceof DOMException && cause.name === "AbortError")) {
+        toast.error(cause instanceof Error ? cause.message : "Preview failed. Is the voice service running?");
+      }
     } finally {
-      setLoading(null);
-      setPlaying((now) => (now === voice.id ? null : now));
+      if (previewRef.current === controller) {
+        previewRef.current = null;
+        setLoading(null);
+        setPlaying(null);
+      }
     }
   }
 
   if (!voices.length) {
     return (
       <p className="m-0 text-sm text-muted-foreground">
-        No voices yet. <Link href="/voice" className="text-foreground underline underline-offset-4">Add one in Voice</Link>.
+        No ready voices available. Cancel to add your voice.
       </p>
     );
   }
   return (
-    <ul className="m-0 flex list-none flex-col divide-y divide-(--border) rounded-tt-md border border-(--border) p-0">
+    <ul aria-label="Choose a voice" className="m-0 flex list-none flex-col divide-y divide-(--border) rounded-tt-md border border-(--border) p-0">
       {voices.map((voice) => {
-        const inUse = current === voice.name;
+        const inUse = current === voice.id;
         return (
           <li key={voice.id} className="flex items-center gap-3 px-3 py-2.5">
-            <button
-              type="button"
-              onClick={() => void preview(voice)}
-              disabled={loading !== null && loading !== voice.id}
-              aria-label={playing === voice.id ? `Stop ${voice.name}` : `Play ${voice.name}`}
-              className="grid size-9 shrink-0 place-items-center rounded-full bg-(--tone-control) transition-colors outline-none hover:bg-foreground hover:text-background focus-visible:ring-2 focus-visible:ring-(--brand) disabled:opacity-50"
-            >
-              {loading === voice.id ? <LoaderCircle className="size-4 animate-spin" /> : playing === voice.id ? <Square className="size-3.5" /> : <Play className="size-4" />}
-            </button>
-            <span className="flex min-w-0 flex-1 flex-col">
-              <span className="truncate text-sm font-medium capitalize">{voice.name}</span>
-              <span className="text-xs text-muted-foreground">{voice.kind === "sample" ? "Built-in voice" : "Cloned voice"}</span>
-            </span>
-            {inUse ? (
-              <span className="inline-flex items-center gap-1 text-xs font-medium text-(--brand)"><Check className="size-3.5" /> In use</span>
-            ) : (
-              <Button size="sm" variant="outline" disabled={busy} onClick={() => onPick(voice.id)}>
-                {busy ? "Saving…" : "Use"}
-              </Button>
-            )}
+            <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-3">
+              <input type="radio" name="persona-voice" value={voice.id} checked={selected === voice.id} disabled={busy} onChange={() => onSelect(voice.id)} />
+              <span className="truncate text-sm font-medium">{voice.name}</span>
+              {inUse ? <span className="text-xs text-muted-foreground">Current</span> : null}
+            </label>
+            <Button size="sm" variant="ghost" onClick={() => void preview(voice)} disabled={loading !== null && loading !== voice.id} aria-label={playing === voice.id ? `Stop ${voice.name}` : `Listen to ${voice.name}`}>
+              {loading === voice.id ? <LoaderCircle className="size-4 animate-spin" aria-hidden /> : playing === voice.id ? <Square aria-hidden /> : <Play aria-hidden />}
+              {playing === voice.id ? "Stop" : "Listen"}
+            </Button>
           </li>
         );
       })}

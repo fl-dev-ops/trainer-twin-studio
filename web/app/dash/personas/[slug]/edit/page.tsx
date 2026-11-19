@@ -16,7 +16,7 @@ export default function EditPersonaPage() {
       slug={slug}
       isOwn={item.isOwn}
       initial={item.persona}
-      media={{ photoUrl: item.photoUrl, hasVideo: item.hasVideo, voiceName: item.voice?.name ?? null }}
+      media={{ photoUrl: item.photoUrl, hasVideo: item.hasVideo, voiceId: item.voice?.id ?? null, voiceName: item.voice?.name ?? null }}
       voices={voices}
       defaultTab={TABS.find((t) => t === tab) ?? "look"}
     />

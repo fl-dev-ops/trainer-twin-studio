@@ -1,6 +1,6 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { db, withLock } from "@/lib/db";
-import { refusals } from "@/lib/errors";
+import { AppError, refusals } from "@/lib/errors";
 import { practicePerson, practiceRefusals, startAllowance } from "@/lib/practice";
 import { roleplayAccessByCode, roleplayRefusals } from "@/lib/roleplay-access";
 import { Prisma } from "@/lib/generated/prisma/client";
@@ -16,6 +16,7 @@ import { scheduleOrgUsage } from "@/lib/schedule-org-credits";
 import { orgCredits } from "@/lib/org-credits";
 import { BEFORE_UPLOAD_REFUSED, uploadAllowed } from "@/lib/context-upload";
 import { resolveSnapshotSkill } from "@/lib/session-skills";
+import { assertVoiceObjectKeys, availableVoiceWhere, listAvailableVoices } from "@/lib/voices";
 
 const shareCode = () => randomBytes(18).toString("base64url");
 const tokenHash = (token: string) => createHash("sha256").update(token).digest("hex");
@@ -145,6 +146,26 @@ async function sessionSnapshot(orgId: string, agentId: string, contextId?: strin
   // Before the call only a PDF or an image up to 10 MB, for every agent (the pickers say the same).
   if (documents.some((doc) => !uploadAllowed(doc, "before"))) throw new Error(BEFORE_UPLOAD_REFUSED);
   return { agent, documents, docIds };
+}
+
+/** Resolve under the same transaction/row lock that persists the session's native FK. */
+export async function resolveVoiceForSession(orgId: string, configuredVoiceId: string | null, tx: Prisma.TransactionClient) {
+  const unavailable = () => new AppError(
+    "voice_unavailable",
+    configuredVoiceId
+      ? "The selected voice is not available. Choose a ready voice before starting a voice session."
+      : "No ready sample voice is available. Choose a voice before starting a voice session.",
+    400,
+  );
+  const voiceId = configuredVoiceId ?? (await listAvailableVoices(null, tx)).find((voice) => voice.kind === "sample")?.id;
+  if (!voiceId) throw unavailable();
+  await tx.$queryRaw`SELECT id FROM "Voice" WHERE id = ${voiceId} FOR SHARE`;
+  const voice = await tx.voice.findFirst({
+    where: { id: voiceId, AND: [availableVoiceWhere(orgId)] },
+  });
+  if (!voice) throw unavailable();
+  assertVoiceObjectKeys(voice);
+  return voice.id;
 }
 
 async function initializeChatSession(input: { sessionId: string; orgId: string; mode: DeliveryMode }) {
@@ -284,11 +305,20 @@ export async function activateSession(input: {
   // All twin sessions go through LiveKit (also enforced by a DB trigger); the agent cuts metered calls at the deadline.
   if (twin && mode !== "voice") throw practiceRefusals.voiceOnly();
   let existing = await db.interviewSession.findUnique({ where: { activationKey } });
+  if (existing && (existing.orgId !== input.orgId || existing.userId !== input.userId || existing.agentId !== agentId)) {
+    throw refusals.notFound();
+  }
+  if (existing && existing.mode !== mode) {
+    throw new AppError("session_mode_mismatch", "Start a new session to change between chat and voice.", 409);
+  }
   if (existing && ["activating", "active"].includes(existing.status)) {
     // Resume (rule 18): under the credits lock, and only while it is still live (an ended call never comes back).
     const token = runtimeToken(existing.id);
     const { count } = await withLock([minutesLock(input.orgId)], (tx) =>
-      tx.interviewSession.updateMany({ where: { id: existing!.id, status: { in: ["activating", "active"] } }, data: { runtimeTokenHash: tokenHash(token) } }));
+      tx.interviewSession.updateMany({
+        where: { id: existing!.id, orgId: input.orgId, userId: input.userId, agentId, mode, status: { in: ["activating", "active"] } },
+        data: { runtimeTokenHash: tokenHash(token) },
+      }));
     if (count) {
       // A resumed call keeps its deadline: what's left of the minutes it started with.
       const secondsLeft = existing.allowedSeconds == null
@@ -335,7 +365,7 @@ export async function activateSession(input: {
     }
     const eligibleAgent = await tx.agent.findFirst({
       where: { id: agentId, orgId: input.orgId, archivedAt: null },
-      select: { id: true, kind: true, primarySkillId: true },
+      select: { id: true, kind: true, primarySkillId: true, data: true, personaId: true },
     });
     if (!eligibleAgent) throw refusals.notFound();
     let coherentConfig = compiledConfig;
@@ -362,6 +392,23 @@ export async function activateSession(input: {
         pins = [{ skillVersionId: version.id, alias: reread.agent.slug, position: 0 }];
       }
     }
+    let resolvedVoiceId: string | null = null;
+    if (mode === "voice") {
+      const agentVoiceId = jsonRecord(coherentConfig?.agent.data ?? eligibleAgent.data).voiceId;
+      if (agentVoiceId != null && agentVoiceId !== "" && typeof agentVoiceId !== "string") {
+        throw refusals.invalidInput("The selected voice is invalid. Choose a ready voice before starting a voice session.");
+      }
+      const persona = await tx.persona.findUnique({
+        where: { id: coherentConfig?.persona.id ?? eligibleAgent.personaId },
+        select: { voiceId: true },
+      });
+      if (!persona) throw refusals.notFound();
+      resolvedVoiceId = await resolveVoiceForSession(
+        input.orgId,
+        typeof agentVoiceId === "string" && agentVoiceId ? agentVoiceId : persona.voiceId,
+        tx,
+      );
+    }
     const storedSnapshot = coherentConfig ? { ...coherentConfig, ...(twinSkills ? { twinSkills } : {}) } : undefined;
     // One live call per person (rule 5): their others end now, charged, before the balance is counted.
     const live = await tx.interviewSession.findMany({
@@ -384,6 +431,7 @@ export async function activateSession(input: {
         shareCode: shareCode(),
         activationKey,
         mode,
+        resolvedVoiceId,
         personaSlug: coherentConfig?.persona.slug ?? snapshot.agent.persona.slug,
         personaVersion: coherentConfig?.persona.version ?? snapshot.agent.persona.version,
         agentSlug: coherentConfig?.agent.slug ?? snapshot.agent.slug,

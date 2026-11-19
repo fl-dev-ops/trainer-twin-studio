@@ -22,6 +22,7 @@ import { saveUploadToS3 } from "@/lib/uploads";
 import { contextUploadFromAgentData, type AgentContextUpload } from "@/lib/context-upload";
 import { hydrateAgentSkill, readAgentSkillVersion } from "@/lib/skill-history";
 import { skillRefusals } from "@/lib/skills";
+import { assertVoiceObjectKeys, availableVoiceWhere } from "@/lib/voices";
 
 export type SpecType = "personas" | "agents";
 
@@ -321,18 +322,9 @@ export async function saveSpec(type: SpecType, slug: string, text: string, orgId
   }
   const data = entity as Prisma.InputJsonValue & Record<string, unknown>;
   const name = typeof data.name === "string" ? data.name : slug;
+  const voiceId = type === "agents" && typeof data.voiceId === "string" && data.voiceId ? data.voiceId : null;
   if (type === "agents") {
-    if (typeof data.voiceId === "string" && data.voiceId) {
-      const voice = await db.voice.findFirst({
-        where: {
-          id: data.voiceId,
-          status: "ready",
-          OR: [{ orgId }, { orgId: null }],
-        },
-        select: { id: true },
-      });
-      if (!voice) throw new Error(`Voice "${data.voiceId}" is not available`);
-    }
+    if (data.voiceId != null && typeof data.voiceId !== "string") throw new Error("Voice must be selected by its ID");
     if (typeof data.knowledgeBase === "string" && data.knowledgeBase) {
       const knowledge = await db.knowledgeBase.findFirst({
         where: { slug: data.knowledgeBase, orgId },
@@ -364,6 +356,12 @@ export async function saveSpec(type: SpecType, slug: string, text: string, orgId
       : await tx.agent.findUnique({ where: { slug } });
     if (!current || current.orgId !== orgId) throw new Error("Not found");
     if (type === "agents") assertSpecBuilt(current as { kind?: AgentKind; data: unknown });
+    if (voiceId) {
+      await tx.$queryRaw`SELECT id FROM "Voice" WHERE id = ${voiceId} FOR SHARE`;
+      const voice = await tx.voice.findFirst({ where: { id: voiceId, AND: [availableVoiceWhere(orgId)] } });
+      if (!voice) throw new Error(`Voice "${voiceId}" is not available`);
+      assertVoiceObjectKeys(voice);
+    }
     if (stableJson(current.data) === stableJson(data)) return { created: false, versionBumped: false, version: current.version };
     const nextVersion = current.version + 1;
     await tx.specVersion.create({

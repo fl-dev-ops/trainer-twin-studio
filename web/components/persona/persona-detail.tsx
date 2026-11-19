@@ -81,7 +81,7 @@ export function PersonaDetail({ item }: { item: PersonaView }) {
         {persona.howTheyTalk ? <Row label="In their words"><p className="m-0">{persona.howTheyTalk}</p></Row> : null}
         <Row label="Pace"><Option options={PACE} value={persona.pace} /></Row>
         <Row label="Voice">
-          {item.voice ? <p className="m-0 font-medium">{item.voice.name}</p> : <MissingMedia href={item.isOwn ? null : editHref} text="No voice yet" />}
+          {item.voice ? <p className="m-0 font-medium">{item.voice.name}</p> : <MissingMedia href={editHref} text="No voice yet" />}
         </Row>
         <Row label="Avatar">
           {item.photoUrl || item.hasVideo ? (

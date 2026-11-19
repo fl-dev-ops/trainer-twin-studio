@@ -3,7 +3,8 @@ import { db, withLock } from "@/lib/db";
 import { carryAgentSkillVersion } from "@/lib/skill-history";
 import { ownershipLock, packageFieldsOmitted, skillOwnership } from "@/lib/skill-ownership";
 import type { Prisma } from "@/lib/generated/prisma/client";
-import { avatarPrefix, deleteObject, deletePrefix, getObjectBytes, presignedGetUrl, presignedPutUrl, putObject, voicePrefix } from "@/lib/s3";
+import { avatarPrefix, deleteObject, deletePrefix, getObjectBytes, presignedGetUrl, presignedPutUrl, putObject } from "@/lib/s3";
+import { attachPersonaVoice, VoiceError } from "@/lib/voices";
 import { professionalHeadshot } from "@/lib/headshot";
 import { TWIN_SOURCE } from "@/lib/twins";
 
@@ -143,9 +144,9 @@ export async function saveAvatar(orgId: string, input: { photo: string; headshot
 }
 
 /**
- * Saves the on-camera take from /twin/brain/voice: its cloned voice becomes the persona's own and its video is kept on
+ * Saves the on-camera take from /twin/brain/voice: its voice is selected by reference and its video is kept on
  * the persona's avatar as the AI avatar reference. Twins then speak with the voice: their old copied `voiceId` is
- * cleared (versioned), so the persona's voice applies. A previous voice / video nothing else uses is deleted.
+ * cleared (versioned), so the persona's voice applies. Previous voice resources remain in the library.
  */
 export async function savePersonaVoice(orgId: string, input: { voiceId: string; videoKey: string }) {
   const persona = await ownTwinPersona(orgId);
@@ -154,22 +155,23 @@ export async function savePersonaVoice(orgId: string, input: { voiceId: string; 
   const folder = avatar ? videoFolder(orgId, avatar.id) : null;
   const videoOk = folder && input.videoKey.startsWith(folder) && /^[0-9a-f-]{36}\.(webm|mp4)$/.test(input.videoKey.slice(folder.length));
   if (!avatar || !videoOk) throw new AvatarError("Unknown video");
-  // The voice must be this org's, ready, and not owned by another persona.
-  const voice = await db.voice.findFirst({
-    where: { id: input.voiceId, orgId, status: "ready", OR: [{ persona: null }, { persona: { id: persona.id } }] },
-    select: { id: true },
-  });
-  if (!voice) throw new AvatarError("Unknown voice");
+  const selected = await selectOwnPersonaVoice(orgId, persona.slug, input.voiceId, { id: avatar.id, videoKey: input.videoKey });
+  if (avatar.s3VideoKey && avatar.s3VideoKey !== input.videoKey) await deleteObject(avatar.s3VideoKey).catch(() => {});
+  return { twins: selected.twins };
+}
 
-  const previousVoiceId = persona.voiceId && persona.voiceId !== voice.id ? persona.voiceId : null;
+/** Own-persona voice changes retire copied twin overrides while preserving their spec and skill history. */
+export async function selectOwnPersonaVoice(orgId: string, slug: string, voiceId: string, avatar?: { id: string; videoKey: string }) {
+  const persona = await db.persona.findFirst({ where: { orgId, slug, isOwn: true }, select: { id: true, slug: true } });
+  if (!persona) throw new VoiceError("persona_not_found", "Persona not found", 404);
   const twins = await db.agent.findMany({
     where: { orgId, kind: "TWIN", personaId: persona.id },
     select: { id: true, slug: true, version: true, data: true },
   });
   // Twins that carry their own copy of a voice (written by the earlier setup) would override the persona's.
-  const copied = await withLock([ownershipLock(orgId), ...twins.map((twin) => `agent:${twin.slug}`).sort()], async (tx) => {
-    await tx.avatar.update({ where: { id: avatar.id }, data: { s3VideoKey: input.videoKey } });
-    await tx.persona.update({ where: { id: persona.id }, data: { voiceId: voice.id } });
+  return withLock([ownershipLock(orgId), ...twins.map((twin) => `agent:${twin.slug}`).sort()], async (tx) => {
+    const selected = await attachPersonaVoice(orgId, persona.slug, voiceId, tx);
+    if (avatar) await tx.avatar.update({ where: { id: avatar.id }, data: { s3VideoKey: avatar.videoKey } });
     const current = await tx.agent.findMany({
       where: { id: { in: twins.map((twin) => twin.id) }, orgId, kind: "TWIN", personaId: persona.id },
     });
@@ -182,22 +184,8 @@ export async function savePersonaVoice(orgId: string, input: { voiceId: string; 
       await tx.agent.update({ where: { id: twin.id }, data: { version: twin.version + 1, data: json(managed ? packageFieldsOmitted(data) : data) } });
       if (twin.primarySkillId) await carryAgentSkillVersion(orgId, twin.id, twin.version, twin.version + 1, tx);
     }
-    return copied;
+    return { ...selected, twins: copied.length };
   });
-  if (avatar.s3VideoKey && avatar.s3VideoKey !== input.videoKey) await deleteObject(avatar.s3VideoKey).catch(() => {});
-  if (previousVoiceId) await removeUnusedVoice(orgId, previousVoiceId);
-  return { twins: copied.length };
-}
-
-/** Deletes a voice no persona owns and no agent names (e.g. the one a re-recording replaced). */
-async function removeUnusedVoice(orgId: string, voiceId: string) {
-  const [owner, agents] = await Promise.all([
-    db.persona.findFirst({ where: { voiceId }, select: { id: true } }),
-    db.agent.count({ where: { orgId, data: { path: ["voiceId"], equals: voiceId } } }),
-  ]);
-  if (owner || agents) return;
-  await deletePrefix(`${voicePrefix(orgId, voiceId)}/`).catch(() => {});
-  await db.voice.deleteMany({ where: { id: voiceId, orgId } });
 }
 
 /** The S3 key of the persona's photo (for the same-site avatar route). */

@@ -16,10 +16,10 @@ export default function VoiceLibraryPage() {
       <PageHeader
         className="border-b pb-6"
         title="Voices"
-        description="Use a built-in sample voice or clone your own for speech generation."
+        description="Choose a sample voice or add a recording to reuse across personas."
         actions={
           <Button render={<Link href="/voice/cloning" />} nativeButton={false}>
-            <Mic data-icon="inline-start" /> Clone voice
+            <Mic data-icon="inline-start" /> Add my voice
           </Button>
         }
       />
