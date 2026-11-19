@@ -19,6 +19,7 @@ type EndCapability = { id: string; embedToken: string };
 type Session = EndCapability & { secondsLeft: number; endsAt?: number; serverTime?: number };
 type Phase = "ready" | "connecting" | "live" | "ended" | "failed";
 type AgentState = "listening" | "thinking" | "speaking";
+export type WidgetPreview = { phase: Phase; agentState?: AgentState; reconnecting?: boolean; muted?: boolean; urgent?: boolean };
 
 function record(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -152,7 +153,7 @@ export function callStartError(failure: unknown): string {
   return "Please try again in a little while.";
 }
 
-function mount(root: HTMLElement, config: Config) {
+export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview) {
   let phase: Phase = "ready";
   let agentState: AgentState = "listening";
   let initialized = false;
@@ -336,7 +337,7 @@ function mount(root: HTMLElement, config: Config) {
   card.dataset.visible = "false";
   let reportedHeight = 0;
   function reportSize() {
-    if (!initialized || destroyed || window.parent === window) return;
+    if (preview || !initialized || destroyed || window.parent === window) return;
     const portraitHeight = portraitStage.hidden || card.classList.contains("tt-captions-expanded") ? 0 : portraitStage.offsetHeight;
     const chromeHeight = card.offsetHeight - portraitHeight;
     const squareHeight = card.classList.contains("tt-captions-expanded") ? 0 : portraitStage.offsetWidth;
@@ -550,6 +551,18 @@ function mount(root: HTMLElement, config: Config) {
     if (remaining === 0) void finish(false, "This call reached its time limit.");
   }
 
+  function setCaption(key: string, value: string, final: boolean, visitor: boolean) {
+    let caption = captions.get(key);
+    if (!caption) {
+      caption = element("p", visitor ? "tt-caption tt-caption-you" : "tt-caption");
+      caption.append(element("span", "tt-caption-text"));
+      captions.set(key, caption);
+      transcript.append(caption);
+    }
+    if (caption.lastElementChild) caption.lastElementChild.textContent = value.slice(0, 8000);
+    caption.dataset.final = String(final);
+  }
+
   function bindRoom(current: Room) {
     current.on(RoomEvent.TrackSubscribed, (track) => {
       if (track.kind !== Track.Kind.Audio || current !== room || destroyed) return;
@@ -570,18 +583,8 @@ function mount(root: HTMLElement, config: Config) {
       const nearBottom = transcript.scrollHeight - transcript.scrollTop - transcript.clientHeight < 64;
       for (const segment of segments) {
         if (!segment.text.trim()) continue;
-        const key = `${participant?.identity ?? "agent"}:${segment.id}`;
-        let caption = captions.get(key);
-        if (!caption) {
-          caption = element("p", participant?.identity === current.localParticipant.identity ? "tt-caption tt-caption-you" : "tt-caption");
-          const text = element("span", "tt-caption-text");
-          caption.append(text);
-          captions.set(key, caption);
-          transcript.append(caption);
-        }
-        const text = caption.lastElementChild;
-        if (text) text.textContent = segment.text.slice(0, 8000);
-        caption.dataset.final = String(segment.final);
+        setCaption(`${participant?.identity ?? "agent"}:${segment.id}`, segment.text, segment.final,
+          participant?.identity === current.localParticipant.identity);
       }
       while (captions.size > 120) {
         const oldest = captions.entries().next().value;
@@ -610,7 +613,7 @@ function mount(root: HTMLElement, config: Config) {
       if (room === current) { reconnecting = false; render(); }
     });
     current.on(RoomEvent.Disconnected, () => {
-      if (room === current && !destroyed) void finish(false, "The voice connection closed. You can start a new call.");
+      if (room === current && !destroyed) void finish(false, connected ? undefined : callStartError(undefined));
     });
     current.on(RoomEvent.DataReceived, (payload) => {
       if (payload.byteLength > 4096) return;
@@ -735,6 +738,38 @@ function mount(root: HTMLElement, config: Config) {
       starting = false;
       render();
     }
+  }
+
+  if (preview) {
+    initialized = true;
+    card.dataset.visible = "true";
+    function showPreview(state: WidgetPreview) {
+      phase = state.phase;
+      agentState = state.agentState ?? "listening";
+      reconnecting = state.reconnecting ?? false;
+      muted = state.muted ?? false;
+      countdown.textContent = state.urgent ? "0:12 left" : `${clock(config.maxSeconds)} left`;
+      countdown.classList.toggle("tt-urgent", state.urgent === true);
+      expandCaptions(false);
+      render();
+      stopWaves?.();
+      stopWaves = phase === "live" ? drawCallWaves(waves, [
+        { color: "#85a75b", gate: 0, volume: () => agentState === "speaking" ? .26 + .12 * Math.sin(performance.now() / 180) : 0 },
+        { color: "#e5bf94", gate: MIC_NOISE_GATE, volume: () => agentState === "listening" && !muted ? .16 : 0 },
+      ]) : undefined;
+    }
+    setCaption("welcome", "What would you like to practice today?", true, false);
+    setCaption("visitor", "I want to get better at giving feedback.", true, true);
+    setCaption("response", "Let’s start with a conversation you’ve been putting off.", true, false);
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      showPreview({ phase: "live", agentState: "speaking" });
+    });
+    mute.addEventListener("click", () => { muted = !muted; render(); });
+    end.addEventListener("click", () => showPreview({ phase: "ended" }));
+    window.addEventListener("pagehide", () => { stopWaves?.(); sizeObserver.disconnect(); }, { once: true });
+    showPreview(preview);
+    return;
   }
 
   form.addEventListener("submit", (event) => {

@@ -1,3 +1,5 @@
+import { playgroundResponse } from "../playground/server";
+
 const hostOrigin = "http://127.0.0.1:43181";
 const widgetOrigin = "http://127.0.0.1:43182";
 const artifact = Bun.file(new URL("../../web/public/widgets/v1.js", import.meta.url));
@@ -5,12 +7,10 @@ const artifact = Bun.file(new URL("../../web/public/widgets/v1.js", import.meta.
 Bun.serve({
   hostname: "127.0.0.1",
   port: 43181,
-  fetch(request) {
+  async fetch(request) {
     const url = new URL(request.url);
-    if (url.pathname === "/playground") {
-      return new Response(Bun.file(new URL("../playground/index.html", import.meta.url)), {
-        headers: { "content-type": "text/html; charset=utf-8" },
-      });
+    if (url.pathname === "/playground" || url.pathname.startsWith("/preview/")) {
+      return await playgroundResponse(url.pathname === "/playground" ? "/" : url.pathname) ?? new Response(null, { status: 404 });
     }
     if (url.pathname === "/attacker") {
       return new Response(`<!doctype html><meta charset="utf-8"><script>parent.postMessage({

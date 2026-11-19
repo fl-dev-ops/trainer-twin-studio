@@ -1,5 +1,39 @@
 import { expect, test } from "../../web/node_modules/@playwright/test";
 
+const embedFrame = 'iframe[title="Talk to AI twin"]';
+
+test("design preview renders widget states and refreshes the selected state without a live call", async ({ page }) => {
+  let revision = "first";
+  await page.route("**/preview/version", (route) => route.fulfill({ json: revision }));
+  const publicRequests: string[] = [];
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname.startsWith("/api/public/")) publicRequests.push(request.url());
+  });
+  await page.goto("/playground");
+  const iframe = page.locator("#state-preview");
+  const widget = iframe.contentFrame();
+  await expect(widget.getByRole("heading", { name: "Talk to my AI twin" })).toBeVisible();
+  await page.getByRole("button", { name: "Connecting", exact: true }).click();
+  await expect(widget.getByRole("status")).toHaveText("Connecting…");
+  await page.getByRole("button", { name: "Speaking", exact: true }).click();
+  await expect(widget.locator(".tt-card")).toHaveAttribute("data-agent-state", "speaking");
+  await expect(widget.getByRole("log")).toContainText("giving feedback");
+  await widget.getByRole("button", { name: "Expand captions" }).click();
+  await expect(widget.getByText("What would you like to practice today?")).toBeVisible();
+  revision = "second";
+  await expect(iframe).toHaveAttribute("src", /state=speaking&revision=second/);
+  await widget.getByRole("button", { name: "End call" }).click();
+  await expect(widget.getByRole("heading", { name: "Thanks for the conversation." })).toBeVisible();
+  await expect(widget.getByRole("alert")).toBeHidden();
+  await widget.getByRole("button", { name: "Start a new call" }).click();
+  await widget.getByRole("textbox", { name: "Your name" }).fill("Jordan");
+  await widget.getByRole("button", { name: "Start voice call" }).click();
+  await expect(widget.getByRole("button", { name: "Mute microphone" })).toBeEnabled();
+  await page.getByRole("button", { name: "Couldn’t connect" }).click();
+  await expect(widget.getByRole("heading", { name: "We couldn’t start the conversation." })).toBeVisible();
+  expect(publicRequests).toEqual([]);
+});
+
 test("paste a floating snippet, remove and reload without executing pasted HTML", async ({ page }) => {
   await page.goto("/playground");
   await expect(page.locator("#origin")).toHaveText("http://127.0.0.1:43181");
@@ -7,12 +41,12 @@ test("paste a floating snippet, remove and reload without executing pasted HTML"
     '<script src="http://127.0.0.1:43182/widgets/v1.js" data-twin-id="demo" data-mode="floating" onload="window.injected=true"></script><img src=x onerror="window.injected=true">',
   );
   await page.getByRole("button", { name: "Load widget", exact: true }).click();
-  const frame = page.frameLocator('iframe[title="Talk to AI twin"]');
+  const frame = page.frameLocator(embedFrame);
   await expect(frame.locator("#state")).toHaveText("Ready");
-  await expect(page.locator("iframe")).toBeHidden();
+  await expect(page.locator(embedFrame)).toBeHidden();
   expect(await page.evaluate(() => "injected" in window)).toBe(false);
   await page.getByRole("button", { name: "Remove widget" }).click();
-  await expect(page.locator("iframe")).toHaveCount(0);
+  await expect(page.locator(embedFrame)).toHaveCount(0);
   await page.getByRole("button", { name: "Load widget", exact: true }).click();
   await expect(page.getByRole("button", { name: "Talk to AI twin", exact: true })).toBeVisible();
   const launcher = await page.getByRole("button", { name: "Talk to AI twin", exact: true }).boundingBox();
@@ -26,8 +60,8 @@ test("hosted URL supports an explicit local server override", async ({ page }) =
   await page.getByLabel("Embed snippet or hosted-widget URL").fill("https://example.com/embed/demo");
   await page.getByLabel("Widget server override (optional)").fill("http://127.0.0.1:43182");
   await page.getByRole("button", { name: "Load widget", exact: true }).click();
-  await expect(page.frameLocator("iframe").locator("#state")).toHaveText("Ready");
-  await expect(page.locator("iframe")).toHaveAttribute("src", /127\.0\.0\.1:43182\/embed\/demo/);
+  await expect(page.frameLocator(embedFrame).locator("#state")).toHaveText("Ready");
+  await expect(page.locator(embedFrame)).toHaveAttribute("src", /127\.0\.0\.1:43182\/embed\/demo/);
 });
 
 test("invalid input cannot execute script or replace an existing widget", async ({ page }) => {
@@ -35,7 +69,7 @@ test("invalid input cannot execute script or replace an existing widget", async 
   const input = page.getByLabel("Embed snippet or hosted-widget URL");
   await input.fill("http://127.0.0.1:43182/embed/demo");
   await page.getByRole("button", { name: "Load widget", exact: true }).click();
-  await expect(page.frameLocator("iframe").locator("#state")).toHaveText("Ready");
+  await expect(page.frameLocator(embedFrame).locator("#state")).toHaveText("Ready");
   for (const value of [
     '<script>window.injected=true</script>',
     "javascript:alert(1)",
@@ -47,7 +81,7 @@ test("invalid input cannot execute script or replace an existing widget", async 
     await input.fill(value);
     await page.getByRole("button", { name: "Load widget", exact: true }).click();
     await expect(page.getByRole("alert")).toBeVisible();
-    await expect(page.frameLocator("iframe").locator("#state")).toHaveText("Ready");
+    await expect(page.frameLocator(embedFrame).locator("#state")).toHaveText("Ready");
   }
   expect(await page.evaluate(() => "injected" in window)).toBe(false);
 });
@@ -62,6 +96,6 @@ test("a failed loader can be corrected and retried", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Remove widget" })).toBeDisabled();
   await page.unroute("http://127.0.0.1:43182/widgets/v1.js");
   await page.getByRole("button", { name: "Load widget", exact: true }).click();
-  await expect(page.frameLocator("iframe").locator("#state")).toHaveText("Ready");
+  await expect(page.frameLocator(embedFrame).locator("#state")).toHaveText("Ready");
   await expect(page.getByRole("alert")).toBeHidden();
 });

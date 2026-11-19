@@ -148,10 +148,14 @@ messages. `src/protocol.ts` is a dependency-free shared schema/URL helper.
 
 ## Build and verification
 
-### Manual embed test page
+### Widget playground
 
-Run `bun run playground` from `widgets/`. It serves a standalone page on loopback port 43190, separate from Studio.
-Paste a full installation snippet or `/embed/<id>` URL and click **Load widget**. The page displays the exact origin
+Run `pm2 start ecosystem.config.cjs --only widgets` from the repo root (or `bun run playground` from `widgets/`).
+Open [localhost:43190](http://localhost:43190). **Live design preview** renders the actual hosted card in simulated
+call states. Edits in `widgets/src/`, `widgets/playground/preview.ts`, and `shared/` refresh the selected state
+without using a microphone, creating a session, or spending credits.
+
+Under **Test a real embed**, paste a full installation snippet or `/embed/<id>` URL and click **Load widget**. The page displays the exact origin
 to add in the Twin's Embed allowlist. You can remove and reload the floating mount; it never starts voice automatically.
 It extracts only the loader URL, Twin ID and display mode, rather than executing pasted HTML or inline handlers.
 Only load snippets from a widget server you trust.
@@ -166,7 +170,8 @@ Open `https://widget-test.localhost:8443` on the computer with the SSH tunnel. A
 If the copied snippet omits the local proxy port, set **Widget server override** to
 `https://<org>.trainertwin.localhost:8443`. The override is an origin, not a full path.
 Use the same trusted development CA as the Studio. No extra SSH forwarding or production deployment is needed.
-Stop the playground with Ctrl+C and remove its route with `PORTLESS_PORT=8443 portless alias --remove widget-test`.
+Stop it with `pm2 stop widgets` (or Ctrl+C when run directly). Remove the optional route with
+`PORTLESS_PORT=8443 portless alias --remove widget-test`.
 
 From `widgets/`:
 

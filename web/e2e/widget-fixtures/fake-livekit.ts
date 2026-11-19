@@ -11,6 +11,7 @@ export type WidgetRoomDriver = {
   detachAudio: () => void;
   reconnecting: () => void;
   reconnected: () => void;
+  dropConnection: () => void;
   resolveConnect: () => void;
 };
 
@@ -108,6 +109,7 @@ export class Room {
     detachAudio: () => this.emit(RoomEvent.TrackUnsubscribed, this.remoteAudio),
     reconnecting: () => this.emit(RoomEvent.Reconnecting),
     reconnected: () => this.emit(RoomEvent.Reconnected),
+    dropConnection: () => this.emit(RoomEvent.Disconnected),
     resolveConnect: () => this.releaseConnect?.(),
   };
 

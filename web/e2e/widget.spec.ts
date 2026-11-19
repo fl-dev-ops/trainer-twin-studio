@@ -626,6 +626,19 @@ test.describe.serial("cross-origin hosted voice widget", () => {
     await expectOnlySafeMessages(page);
   });
 
+  test("a dropped connection ends the call without a redundant alert", async ({ page, context }) => {
+    await environment(context);
+    const calls = await simulatedCalls(page);
+    const hosted = await open(page);
+    await begin(hosted);
+    await expect(hosted.getByRole("button", { name: "Mute microphone", exact: true })).toBeEnabled();
+    await hosted.evaluate(() => window.__widgetRoom?.dropConnection());
+    await expect(hosted.getByRole("heading", { name: "Thanks for the conversation.", exact: true })).toBeVisible();
+    await expect(hosted.getByRole("button", { name: "Start a new call" })).toBeEnabled();
+    await expect(hosted.getByRole("alert")).toBeHidden();
+    await expect.poll(() => calls.ends).toEqual(["Bearer end-capability-secret"]);
+  });
+
   test("an absolute deadline stops a still-connecting call and ends it once", async ({ page, context }) => {
     await environment(context, { pendingConnect: true });
     const calls = await simulatedCalls(page, { durationMs: 1500 });

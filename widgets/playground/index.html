@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Twin embed test</title>
+  <title>Widget playground</title>
   <style>
     * { box-sizing: border-box; }
     body { margin: 0; background: #f5f5f3; color: #202321; font: 16px/1.5 system-ui, sans-serif; }
@@ -25,15 +25,59 @@
     :focus-visible { outline: 3px solid #547d65; outline-offset: 4px; }
     #status { margin-top: 16px; overflow-wrap: anywhere; }
     #error { margin-top: 16px; color: #a52c23; }
-    #preview { max-width: 400px; margin: 0 auto; }
+    .design-preview { padding: 0; overflow: hidden; }
+    .design-header { padding: 24px; border-bottom: 1px solid #dedfda; }
+    .design-header h2 { margin-bottom: 4px; }
+    .design-header p { margin: 0; font-size: 14px; }
+    .design-workspace { display: grid; grid-template-columns: 224px minmax(0, 1fr); }
+    .state-picker { padding: 20px; border-right: 1px solid #dedfda; }
+    .state-picker h3 { margin: 0 0 8px; font-size: 14px; }
+    .state-buttons { display: grid; gap: 4px; }
+    .state-buttons button { text-align: left; min-height: 40px; padding: 8px 12px; border-color: transparent; font-size: 14px; }
+    .state-buttons button:hover { background: #f2f4ef; }
+    .state-buttons button[aria-pressed="true"] { background: #e6eee6; border-color: #bfd0bf; color: #20452e; font-weight: 650; }
+    .preview-canvas { display: grid; justify-items: center; align-content: start; padding: 24px 16px 0; background: #edf0e9; }
+    #state-preview { display: block; width: min(100%, 340px); height: 620px; border: 0; color-scheme: dark; }
+    .embed-heading { margin-top: 48px; margin-bottom: 0; }
     .help { margin-top: 8px; font-size: 14px; }
-    @media (max-width: 600px) { main { margin-top: 24px; padding-inline: 16px; } .card { padding: 16px; } }
+    @media (max-width: 600px) {
+      main { margin-top: 24px; padding-inline: 16px; }
+      .card:not(.design-preview), .design-header, .state-picker { padding: 16px; }
+      .design-workspace { grid-template-columns: minmax(0, 1fr); }
+      .state-picker { border-right: 0; border-bottom: 1px solid #dedfda; }
+      .state-buttons { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
   </style>
 </head>
 <body>
   <main>
-    <h1>Twin embed test</h1>
-    <p class="muted">Try the same widget your visitors will use, on a separate website origin.</p>
+    <h1>Widget playground</h1>
+    <p class="muted">Preview the widget as you design it, or test a real embed on this website.</p>
+    <section class="card design-preview" aria-labelledby="design-title">
+      <header class="design-header">
+        <h2 id="design-title">Live design preview</h2>
+        <p class="muted">Simulated calls · Reloads on source changes · No mic or credits needed</p>
+      </header>
+      <div class="design-workspace">
+        <div class="state-picker" role="group" aria-labelledby="states-title">
+          <h3 id="states-title">Widget state</h3>
+          <div id="state-buttons" class="state-buttons">
+            <button type="button" data-state="ready" aria-pressed="true">Before the call</button>
+            <button type="button" data-state="connecting" aria-pressed="false">Connecting</button>
+            <button type="button" data-state="listening" aria-pressed="false">Listening</button>
+            <button type="button" data-state="thinking" aria-pressed="false">Thinking</button>
+            <button type="button" data-state="speaking" aria-pressed="false">Speaking</button>
+            <button type="button" data-state="muted" aria-pressed="false">Muted</button>
+            <button type="button" data-state="reconnecting" aria-pressed="false">Reconnecting</button>
+            <button type="button" data-state="time-low" aria-pressed="false">Almost out of time</button>
+            <button type="button" data-state="ended" aria-pressed="false">Call ended</button>
+            <button type="button" data-state="failed" aria-pressed="false">Couldn’t connect</button>
+          </div>
+        </div>
+        <div class="preview-canvas"><iframe id="state-preview" title="Widget state preview"></iframe></div>
+      </div>
+    </section>
+    <h2 class="embed-heading">Test a real embed</h2>
     <section class="card" aria-labelledby="setup">
       <h2 id="setup">1. Allow this website</h2>
       <p>In your Twin's settings, enable Public access and Embed, then add this exact allowed origin:</p>
@@ -57,10 +101,39 @@
     <section class="card" aria-labelledby="preview-title">
       <h2 id="preview-title">Website preview</h2>
       <p class="muted">Hover over the button in the bottom-right corner, or tap it to open. Loading does not start a call.</p>
-      <div id="preview"></div>
     </section>
   </main>
   <script>
+    const statePreview = document.getElementById("state-preview");
+    const states = document.getElementById("state-buttons");
+    let state = "ready";
+    let revision = "";
+    function openPreview() {
+      statePreview.src = `/preview/frame?${new URLSearchParams({ state, revision })}`;
+    }
+    states.addEventListener("click", (event) => {
+      const button = event.target.closest("button[data-state]");
+      if (!button) return;
+      state = button.dataset.state;
+      for (const item of states.querySelectorAll("button")) item.setAttribute("aria-pressed", String(item === button));
+      openPreview();
+    });
+    async function refreshPreview() {
+      try {
+        const response = await fetch("/preview/version", { cache: "no-store" });
+        const next = response.ok && await response.json();
+        if (typeof next === "string" && next !== revision) {
+          revision = next;
+          openPreview();
+        }
+      } catch {
+        // Keep the last preview when the local server is restarting.
+      } finally {
+        setTimeout(refreshPreview, 1000);
+      }
+    }
+    void refreshPreview();
+
     const form = document.getElementById("form");
     const input = document.getElementById("embed");
     const override = document.getElementById("override");
