@@ -17,10 +17,12 @@ export function WidgetName({ inputRef, initialName, enabled, invalid, onStart, o
         <ChevronDown size={18} aria-hidden="true" />
       </button>}
       <form className="tt-prejoin" onSubmit={(event) => { event.preventDefault(); onStart(); }}>
-        <input ref={inputRef} className="tt-input" id="tt-visitor-name" name="name" autoComplete="name"
-          aria-label="Your name" aria-describedby="tt-error" aria-invalid={invalid || undefined}
-          maxLength={80} placeholder="What’s your name?" defaultValue={initialName} required disabled={!enabled}
-          onInput={(event) => { setHasDraft(!!event.currentTarget.value); onInput(); }} />
+        <label className="tt-name-hit-area">
+          <input ref={inputRef} className="tt-input" id="tt-visitor-name" name="name" autoComplete="name"
+            aria-label="Your name" aria-describedby="tt-error" aria-invalid={invalid || undefined}
+            maxLength={80} placeholder="What’s your name?" defaultValue={initialName} required disabled={!enabled}
+            onInput={(event) => { setHasDraft(!!event.currentTarget.value); onInput(); }} />
+        </label>
         <button type="submit" className="tt-primary" disabled={!enabled}
           hidden={!hasDraft}>Continue</button>
       </form>

@@ -264,7 +264,7 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
     editingName = true;
     clearError();
     focusTarget = "name";
-    render();
+    flushSync(render);
   }
 
   function retry() {
@@ -283,7 +283,10 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
     intro = false;
     clearError();
     if (savedName && !editingName) void beginCall();
-    else { focusTarget = "name"; render(); }
+    else {
+      focusTarget = "name";
+      flushSync(render);
+    }
   }
 
   function render() {
@@ -751,6 +754,7 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
       window.addEventListener("message", receive);
       ready();
     }
+    if (!intro && preview.phase === "ready" && !savedName) focusTarget = "name";
     showPreview(preview);
     return;
   }

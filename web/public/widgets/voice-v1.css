@@ -116,20 +116,21 @@ p, h1, h2 { margin: 0; }
 .tt-call-screen { display: contents; }
 .tt-dismiss { position: absolute; z-index: 2; top: 8px; right: 8px; background: #1b1c19; }
 .tt-dismiss .tt-icon { width: 16px; height: 16px; }
-.tt-card[data-stage="name"] { background: #151517; border-radius: 18px; height: min(480px, 100svh); min-height: min(140px, 100svh); display: grid; place-items: center; padding: 20px 24px; }
+.tt-card[data-stage="name"] { background: #151517; border-radius: 18px; height: min(480px, 100svh); min-height: min(140px, 100svh); }
 .tt-card[data-stage="name"] .tt-dismiss { background: transparent; color: #eeeef0; }
-.tt-prejoin { position: relative; width: 100%; max-width: 248px; }
-.tt-prejoin .tt-primary { position: absolute; inset-inline: 0; top: calc(100% + 8px); }
-.tt-card[data-stage="name"] .tt-error { position: absolute; inset: auto 16px 12px; margin: 0; }
+.tt-prejoin { position: relative; flex: 1; min-height: 0; }
+.tt-name-hit-area { position: absolute; inset: 0; cursor: text; }
+.tt-prejoin .tt-primary { position: absolute; inset-inline: 24px; top: min(calc(50% + 32px), calc(100% - 52px)); width: auto; max-width: 248px; margin-inline: auto; }
+.tt-card[data-stage="name"] .tt-error { position: absolute; z-index: 1; inset: auto 16px 12px; margin: 0; pointer-events: none; }
 .tt-change-name { justify-self: center; min-height: 44px; border: 0; padding: 0 12px; border-radius: 999px; color: #c8cbbd; background: transparent; font-size: 13px; }
 .tt-change-name:hover { color: #f2eee5; background: #ffffff14; }
 .tt-input {
   width: 100%;
+  height: 100%;
   min-width: 0;
-  min-height: 46px;
   border: 0;
-  border-radius: 8px;
-  padding: 10px 8px;
+  border-radius: 0;
+  padding: 0 24px;
   background: transparent;
   text-align: center;
   color: #f2eee5;
@@ -137,8 +138,8 @@ p, h1, h2 { margin: 0; }
   line-height: 24px;
 }
 .tt-input::placeholder { color: #96959f; font-weight: 500; }
-.tt-input:focus-visible { outline: none; box-shadow: 0 1px 0 #a9a7b3; }
-.tt-input[aria-invalid="true"] { box-shadow: 0 0 0 2px #eea59a; }
+.tt-input:focus-visible { outline: none; background-color: #1a1a1d; }
+.tt-input:focus-visible::placeholder { color: #b2b1ba; }
 .tt-input:is(:autofill, :-webkit-autofill) { background-clip: text; -webkit-background-clip: text; -webkit-text-fill-color: #f2eee5; caret-color: #f2eee5; }
 .tt-primary {
   display: flex;
