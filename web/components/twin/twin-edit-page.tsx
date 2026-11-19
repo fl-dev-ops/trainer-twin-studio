@@ -3,7 +3,7 @@
 import { followEmailProgress } from "@/lib/follow-email-progress";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Check, Copy, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { twinClient } from "@/lib/twin/client";
@@ -16,17 +16,22 @@ import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/user-avatar";
 import { useRefresh } from "@/lib/use-refresh";
 import { PageContainer } from "@/components/page-container";
+import { PageSection, SECTION_CARD, SectionRow } from "@/components/page-section";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { AccessUntil } from "@/components/twin/access-until";
 import { TWIN_UPLOAD_TITLE_DEFAULT } from "@/lib/context-upload";
-import { SettingCard, SettingsPanel, SettingsSection } from "@/components/settings-cards";
+import { PUBLIC_CALL_DURATIONS, type PublicTwinSettings } from "@/lib/public-twin-settings";
+import { WidgetSettingsPanel } from "@/components/twin/widget-settings";
 
 type LearnerAssign = TwinOutputs["assignments"]["list"][number];
 
 /**
  * Copies the twin's /t/ share link. Same call and cache as the Share dialog; fetched on click, so viewing the page never
- * creates a link. The link opens only for learners assigned to the twin.
+ * creates a link.
  */
-function CopyShareLinkButton({ slug }: { slug: string }) {
+function CopyShareLinkButton({ slug, publicEnabled = false }: { slug: string; publicEnabled?: boolean }) {
   const queryClient = useQueryClient();
   const [state, setState] = useState<"idle" | "busy" | "copied">("idle");
   async function copy() {
@@ -39,7 +44,7 @@ function CopyShareLinkButton({ slug }: { slug: string }) {
       });
       await navigator.clipboard.writeText(url);
       setState("copied");
-      toast.success("Link copied. Only learners assigned to this twin can open it.");
+      toast.success(publicEnabled ? "Link copied. Signed-out visitors can start a short voice call." : "Link copied. Sign in with assigned learner access to talk.");
       setTimeout(() => setState("idle"), 2000);
     } catch {
       setState("idle");
@@ -59,9 +64,9 @@ export function TwinEditPage({
   learners,
   defaultTab = "general",
 }: {
-  twin: Pick<TwinOutputs["agents"]["get"], "slug" | "name" | "description" | "settings">;
+  twin: Pick<TwinOutputs["agents"]["get"], "slug" | "name" | "description" | "settings" | "publicAccess" | "widget">;
   learners: LearnerAssign[];
-  /** /edit opens on General, /assign on Learners. General saves with its button; the other tabs save as you go. */
+  /** /edit opens on General, /assign on Learners. */
   defaultTab?: "general" | "conversation" | "learners";
 }) {
   const id = twin.slug;
@@ -71,7 +76,7 @@ export function TwinEditPage({
   const [name, setName] = useState(twin.name);
   const [description, setDescription] = useState(twin.description ?? "");
 
-  // Conversation settings: saved on change (toggles) or on blur (text), one request at a time so the last one wins.
+  // Switch writes are serialized; upload text stays draft until Save.
   const [settings, setSettings] = useState(twin.settings);
   /** The upload card's text as typed; saved only with its Save button (switches save on their own). */
   const [card, setCard] = useState({ uploadTitle: settings.uploadTitle, uploadInstruction: settings.uploadInstruction });
@@ -194,183 +199,118 @@ export function TwinEditPage({
             Set conversation permissions and manage learner access for this twin.
           </p>
         </div>
-        <CopyShareLinkButton slug={id} />
+        <CopyShareLinkButton slug={id} publicEnabled={twin.publicAccess.enabled} />
       </div>
 
       <div className="mt-6 flex flex-col gap-4">
-      <Tabs defaultValue={defaultTab} className="gap-4">
-        <TabsList>
+      <Tabs defaultValue={defaultTab} className="min-w-0 gap-4">
+        <TabsList className="max-w-full overflow-x-auto">
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="conversation">Conversation</TabsTrigger>
+          <TabsTrigger value="public">Public access</TabsTrigger>
+          <TabsTrigger value="embed">Embed</TabsTrigger>
           <TabsTrigger value="learners">
             Learners
             <span className="text-muted-foreground tabular-nums">· {assigned.length}</span>
           </TabsTrigger>
         </TabsList>
 
-      {/* Card 1: name and description */}
       <TabsContent value="general">
-      <article className="flex flex-col gap-6 rounded-tt-lg border border-(--card-border) bg-card p-6 shadow-card">
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="bot-name" className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-              Bot name
-            </label>
-            <input
-              id="bot-name"
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="h-10 rounded-lg border border-(--border) bg-transparent px-3 text-sm text-(--foreground) outline-none focus:border-(--brand) focus:ring-1 focus:ring-(--brand)"
-            />
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="bot-desc" className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-              Description
-            </label>
-            <textarea
-              id="bot-desc"
-              rows={3}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              className="rounded-lg border border-(--border) bg-transparent p-3 text-sm text-(--foreground) outline-none focus:border-(--brand) focus:ring-1 focus:ring-(--brand)"
-            />
-          </div>
-        </div>
-
-      </article>
-        <div className="flex items-center justify-end gap-3 pt-4">
-          <Button variant="ghost" nativeButton={false} render={<Link href={`/twin/${id}`} />}>
-            Cancel
-          </Button>
-          <Button variant="brand" onClick={() => void handleSave()} disabled={saving || !name.trim()}>
-            {saved && <Check data-icon="inline-start" />}
-            {saved ? "Saved" : "Save changes"}
-          </Button>
-        </div>
+        <PageSection title="Twin details" description="The name and description shown across your workspace.">
+          <form className="flex flex-col gap-3" onSubmit={(event) => { event.preventDefault(); void handleSave(); }}>
+            <fieldset disabled={saving} className={cn(SECTION_CARD, "flex min-w-0 flex-col gap-6 p-5")}>
+              <div className="flex flex-col gap-2">
+                <label htmlFor="bot-name" className="text-sm font-medium">Bot name</label>
+                <Input id="bot-name" value={name} onChange={(event) => setName(event.target.value)} />
+              </div>
+              <div className="flex flex-col gap-2">
+                <label htmlFor="bot-desc" className="text-sm font-medium">Description</label>
+                <Textarea id="bot-desc" rows={6} value={description} onChange={(event) => setDescription(event.target.value)}
+                  aria-describedby="bot-desc-help" className="min-h-40" />
+                <p id="bot-desc-help" className="m-0 text-sm text-muted-foreground">A short introduction to this twin.</p>
+              </div>
+            </fieldset>
+            <div className="flex items-center justify-end gap-3">
+              <Button variant="ghost" nativeButton={false} render={<Link href={`/twin/${id}`} />}>Cancel</Button>
+              <Button variant="brand" type="submit" disabled={saving || !name.trim()}>
+                {saved && <Check data-icon="inline-start" />}
+                {saving ? "Saving…" : saved ? "Saved" : "Save changes"}
+              </Button>
+            </div>
+          </form>
+        </PageSection>
       </TabsContent>
 
-      {/* Card 2: before and during conversation settings, saved as they change */}
       <TabsContent value="conversation">
-      <SettingsPanel>
-        <SettingsSection title="Before the conversation" description="What the learner shares or uploads before the call begins. Changes save automatically.">
-          <SettingCard
-            title="Share screen"
-            description="Learners share their entire screen when the conversation starts, so the twin can follow along."
-            control={
-              <SwitchToggle
-                checked={preScreenshare}
-                onChange={(checked) => saveSettings({ ...settings, preScreenshare: checked }, `Screen share before the call turned ${checked ? "on" : "off"}`)}
-                label="Share screen before the conversation"
-              />
-            }
-          />
-          <SettingCard
-            title="Upload a file"
-            description="Learners may add a file before the session starts. A PDF or an image (PNG, JPEG or WebP), up to 10 MB."
-            control={
-              <SwitchToggle
-                checked={preUpload}
-                onChange={(checked) => saveSettings({ ...settings, preUpload: checked }, `File upload before the call turned ${checked ? "on" : "off"}`)}
-                label="Upload a file before the conversation"
-              />
-            }
-          >
-            {preUpload ? (
-              // The upload card's text: typed freely, saved together with Save (or Enter), Cancel puts the saved text back.
-              <form
-                className="flex flex-col gap-3"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  if (cardDirty) saveSettings({ ...settings, ...card }, "Upload card updated");
-                }}
-              >
-                <div className="flex flex-col gap-1.5">
-                  <label htmlFor="upload-title" className="text-xs font-medium text-muted-foreground">
-                    Upload title
-                  </label>
-                  <input
-                    id="upload-title"
-                    type="text"
-                    maxLength={80}
-                    value={card.uploadTitle}
-                    placeholder={TWIN_UPLOAD_TITLE_DEFAULT}
-                    onChange={(e) => setCard({ ...card, uploadTitle: e.target.value })}
-                    className="h-9 rounded-lg border border-(--border) bg-card px-3 text-sm text-(--foreground) outline-none focus:border-(--brand) focus:ring-1 focus:ring-(--brand)"
-                  />
-                  <span className="text-xs text-muted-foreground">The heading of the upload card before the conversation. Empty shows “{TWIN_UPLOAD_TITLE_DEFAULT}”.</span>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label htmlFor="upload-instruction" className="text-xs font-medium text-muted-foreground">
-                    What to upload
-                  </label>
-                  <input
-                    id="upload-instruction"
-                    type="text"
-                    maxLength={300}
-                    value={card.uploadInstruction}
-                    placeholder="e.g. Upload the property brochure you want to discuss."
-                    onChange={(e) => setCard({ ...card, uploadInstruction: e.target.value })}
-                    className="h-9 rounded-lg border border-(--border) bg-card px-3 text-sm text-(--foreground) outline-none focus:border-(--brand) focus:ring-1 focus:ring-(--brand)"
-                  />
-                  <span className="text-xs text-muted-foreground">Tells the learner which file to add. Leave empty to show no instruction. Uploading stays optional.</span>
-                </div>
+        <div className="flex flex-col gap-10">
+          <PageSection title="Before the conversation" description="What learners share before the call begins. Switches save automatically.">
+            <form className="flex flex-col gap-3" onSubmit={(event) => { event.preventDefault(); if (cardDirty) saveSettings({ ...settings, ...card }, "Upload card updated"); }}>
+              <div className={SECTION_CARD}>
+                <SectionRow title="Share screen" detail="Learners share their entire screen when the conversation starts, so the twin can follow along.">
+                  <SwitchToggle checked={preScreenshare}
+                    onChange={(checked) => saveSettings({ ...settings, preScreenshare: checked }, `Screen share before the call turned ${checked ? "on" : "off"}`)}
+                    label="Share screen before the conversation" />
+                </SectionRow>
+                <SectionRow title="Upload a file" detail="Learners may add a PDF or an image (PNG, JPEG or WebP), up to 10 MB. Uploading stays optional.">
+                  <SwitchToggle checked={preUpload}
+                    onChange={(checked) => saveSettings({ ...settings, preUpload: checked }, `File upload before the call turned ${checked ? "on" : "off"}`)}
+                    label="Upload a file before the conversation" />
+                </SectionRow>
+                {preUpload ? (
+                  <div className="flex flex-col gap-6 border-t border-(--border) p-5">
+                      <div className="flex flex-col gap-2">
+                        <label htmlFor="upload-title" className="text-sm font-medium">Upload title</label>
+                        <Input id="upload-title" maxLength={80} value={card.uploadTitle} placeholder={TWIN_UPLOAD_TITLE_DEFAULT}
+                          onChange={(event) => setCard({ ...card, uploadTitle: event.target.value })} />
+                        <p className="m-0 text-sm text-muted-foreground">The heading shown before the conversation. Empty shows “{TWIN_UPLOAD_TITLE_DEFAULT}”.</p>
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <label htmlFor="upload-instruction" className="text-sm font-medium">What to upload</label>
+                        <Input id="upload-instruction" maxLength={300} value={card.uploadInstruction}
+                          placeholder="e.g. Upload the property brochure."
+                          onChange={(event) => setCard({ ...card, uploadInstruction: event.target.value })} />
+                        <p className="m-0 text-sm text-muted-foreground">Tell learners which file to add. Leave empty for no instruction.</p>
+                      </div>
+                  </div>
+                ) : null}
+              </div>
+              {preUpload ? (
                 <div className="flex items-center justify-end gap-2">
-                  {cardDirty ? <span className="mr-auto text-xs text-muted-foreground">Unsaved changes</span> : null}
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    disabled={!cardDirty}
-                    onClick={() => setCard({ uploadTitle: settings.uploadTitle, uploadInstruction: settings.uploadInstruction })}
-                  >
-                    Cancel
-                  </Button>
-                  <Button type="submit" size="sm" disabled={!cardDirty}>
-                    Save
-                  </Button>
+                  {cardDirty ? <span className="mr-auto text-sm text-muted-foreground">Unsaved changes</span> : null}
+                  <Button type="button" variant="ghost" disabled={!cardDirty}
+                    onClick={() => setCard({ uploadTitle: settings.uploadTitle, uploadInstruction: settings.uploadInstruction })}>Cancel</Button>
+                  <Button type="submit" disabled={!cardDirty}>Save</Button>
                 </div>
-              </form>
-            ) : null}
-          </SettingCard>
-        </SettingsSection>
-
-        <SettingsSection title="During the conversation" description="What the learner can do while they talk to the twin.">
-          <SettingCard
-            title="Attach during the call"
-            description="Learners can share an image or a PDF during the conversation, like a screenshot or a brochure. An image (PNG, JPEG or WebP) up to 5 MB, or a PDF up to 10 MB."
-            control={
-              <SwitchToggle
-                checked={duringUpload}
-                onChange={(checked) => saveSettings({ ...settings, duringUpload: checked }, `Image upload during the call turned ${checked ? "on" : "off"}`)}
-                label="Attach a file during the conversation"
-              />
-            }
-          />
-        </SettingsSection>
-      </SettingsPanel>
+              ) : null}
+            </form>
+          </PageSection>
+          <PageSection title="During the conversation" description="What learners can do while they talk to the twin.">
+            <div className={SECTION_CARD}>
+              <SectionRow title="Attach during the call" detail="Share an image (PNG, JPEG or WebP) up to 5 MB, or a PDF up to 10 MB, during the conversation.">
+                <SwitchToggle checked={duringUpload}
+                  onChange={(checked) => saveSettings({ ...settings, duringUpload: checked }, `Image upload during the call turned ${checked ? "on" : "off"}`)}
+                  label="Attach a file during the conversation" />
+              </SectionRow>
+            </div>
+          </PageSection>
+        </div>
       </TabsContent>
 
-      {/* Card 3: learners assigned to this twin; Assign opens the shared dialog */}
+      <TabsContent value="public">
+        <PublicAccessSettings twin={twin} />
+      </TabsContent>
+      <TabsContent value="embed">
+        <WidgetSettingsPanel twin={twin} />
+      </TabsContent>
       <TabsContent value="learners">
-      <article id="assign" className="flex flex-col gap-4 rounded-tt-lg border border-(--card-border) bg-card p-6 shadow-card">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 className="m-0 text-sm font-semibold uppercase tracking-wide text-(--foreground)">Learners</h2>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              {assigned.length} assigned. Credits are each learner&apos;s own, shared across twins and role plays.
-            </p>
-          </div>
-          <Button variant="brand" onClick={() => setAssignOpen(true)} >
-            <UserPlus data-icon="inline-start" /> Assign learners
-          </Button>
-        </div>
+      <div id="assign">
+        <PageSection title="Learners" description={`${assigned.length} assigned. Credits are each learner’s own, shared across twins and role plays.`}
+          action={<Button variant="brand" onClick={() => setAssignOpen(true)}><UserPlus data-icon="inline-start" /> Assign learners</Button>}>
         {assigned.length ? (
-          <ul className="m-0 flex list-none flex-col overflow-hidden rounded-tt-md border border-(--border) p-0">
-            {assigned.map((u, i) => (
-              <li key={u.email} className={cn("flex items-center justify-between gap-3 px-4 py-3", i > 0 && "border-t border-(--border)")}>
-                <span className="flex min-w-0 items-center gap-3">
+          <ul className={cn(SECTION_CARD, "m-0 list-none overflow-hidden p-0")}>
+            {assigned.map((u) => (
+              <li key={u.email} className="border-t border-(--border) first:border-t-0">
+                <SectionRow title={<span className="flex min-w-0 items-center gap-3">
                   <UserAvatar user={u} size="md" />
                   <span className="flex min-w-0 flex-col">
                     <span className="truncate text-sm font-semibold">{u.name}</span>
@@ -378,17 +318,19 @@ export function TwinEditPage({
                       {u.name !== u.email ? <span className="truncate">{u.email}</span> : null}
                     </span>
                   </span>
-                </span>
-                <span className="flex shrink-0 flex-col items-end gap-0.5 text-xs text-muted-foreground tabular-nums">
-                  {u.minutesUsed} of {u.minutes} min used (all practice)
-                  <AccessUntil until={u.until} />
-                </span>
+                </span>}>
+                  <span className="flex shrink-0 flex-col items-end gap-0.5 text-xs text-muted-foreground tabular-nums">
+                    {u.minutesUsed} of {u.minutes} min used (all practice)
+                    <AccessUntil until={u.until} />
+                  </span>
+                </SectionRow>
               </li>
             ))}
           </ul>
         ) : (
-          <p className="m-0 rounded-tt-md border border-dashed border-(--border) p-6 text-center text-sm text-muted-foreground">Nobody is assigned yet.</p>
+          <div className={cn(SECTION_CARD, "px-5 py-6 text-center text-sm text-muted-foreground")}>Nobody is assigned yet.</div>
         )}
+        </PageSection>
         <AssignDialog
           variant="twin"
           open={assignOpen}
@@ -398,11 +340,76 @@ export function TwinEditPage({
           people={assignable}
           onAssign={assignLearners}
         />
-      </article>
+      </div>
       </TabsContent>
       </Tabs>
 
       </div>
     </PageContainer>
+  );
+}
+
+function PublicAccessSettings({ twin }: { twin: Pick<TwinOutputs["agents"]["get"], "slug" | "name" | "description" | "settings" | "publicAccess"> }) {
+  const refresh = useRefresh();
+  const shareLink = useQuery({
+    queryKey: ["twin-share-link", twin.slug],
+    queryFn: () => twinClient.agents.shareLink.mutate({ slug: twin.slug }),
+    staleTime: Infinity,
+    retry: 2,
+  });
+  const [saved, setSaved] = useState(twin.publicAccess);
+  const [duration, setDuration] = useState(twin.publicAccess.maxSeconds);
+  const [saving, setSaving] = useState(false);
+
+  async function save(patch: Partial<PublicTwinSettings>) {
+    setSaving(true);
+    try {
+      await twinClient.agents.update.mutate({ slug: twin.slug, publicAccess: patch });
+      setSaved((current) => ({ ...current, ...patch }));
+      toast.success("Public access updated");
+      refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not save public access");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-10">
+      <PageSection title="Public voice calls" description="Let signed-out visitors talk without an account. Signed-in learner access stays unchanged.">
+        <form className="flex flex-col gap-3" onSubmit={(event) => { event.preventDefault(); void save({ maxSeconds: duration }); }}>
+          <fieldset disabled={saving} className={cn(SECTION_CARD, "min-w-0")}>
+            <SectionRow title="Allow anonymous visitors" detail="Expose the twin’s current available skills. Calls are funded by your organization’s balance, not learner credits.">
+              <SwitchToggle checked={saved.enabled} onChange={(enabled) => { if (!saving) void save({ enabled }); }} label="Allow anonymous visitors" />
+            </SectionRow>
+            <SectionRow title={<label htmlFor="public-call-duration">Maximum call duration</label>} detail="Each public voice call ends automatically at this limit.">
+              <NativeSelect id="public-call-duration" value={duration}
+                onChange={(event) => { const seconds = PUBLIC_CALL_DURATIONS.find((value) => String(value) === event.target.value); if (seconds) setDuration(seconds); }}>
+                {PUBLIC_CALL_DURATIONS.map((seconds) => <option key={seconds} value={seconds}>{seconds / 60} min</option>)}
+              </NativeSelect>
+            </SectionRow>
+          </fieldset>
+          <div className="flex items-center justify-end gap-3">
+            <Button variant="ghost" type="button" disabled={saving || duration === saved.maxSeconds} onClick={() => setDuration(saved.maxSeconds)}>Cancel</Button>
+            <Button type="submit" disabled={saving || duration === saved.maxSeconds}>{saving ? "Saving…" : "Save"}</Button>
+          </div>
+        </form>
+      </PageSection>
+      <PageSection title="Public URL" description="Share your existing twin link. Visitors enter their name before starting a voice call.">
+        <div className={cn(SECTION_CARD, "flex flex-col items-start gap-4 p-5")}>
+          {shareLink.data ? (
+            <a href={shareLink.data.url} target="_blank" rel="noopener noreferrer"
+              className="break-all text-sm underline underline-offset-4">{shareLink.data.url}</a>
+          ) : shareLink.isError ? (
+            <div className="flex flex-wrap items-center gap-3">
+              <p role="alert" className="m-0 text-sm text-muted-foreground">Could not load the public URL.</p>
+              <Button variant="outline" size="sm" onClick={() => void shareLink.refetch()}>Retry</Button>
+            </div>
+          ) : <p role="status" className="m-0 text-sm text-muted-foreground">Loading public URL…</p>}
+          <CopyShareLinkButton slug={twin.slug} publicEnabled={saved.enabled} />
+        </div>
+      </PageSection>
+    </div>
   );
 }

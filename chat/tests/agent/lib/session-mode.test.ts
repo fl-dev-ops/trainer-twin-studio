@@ -105,6 +105,8 @@ describe("runtime events", () => {
       body: JSON.stringify({ messages: [{ role, content }] }),
     });
     const info = console.info;
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => Response.json({ valid: true, anonymous: false });
     console.info = () => {};
     try {
       const response: Response = await handler(request, {
@@ -117,6 +119,7 @@ describe("runtime events", () => {
       await response.text();
     } finally {
       console.info = info;
+      globalThis.fetch = originalFetch;
     }
     return message;
   }

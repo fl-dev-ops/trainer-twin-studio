@@ -3,6 +3,7 @@ import { defineAgent, defineDynamic } from "eve";
 import { hedgedStreamMiddleware, routeTo } from "./lib/hedge";
 import { SPEAKING_MODEL, SPEAKING_ROUTE } from "./lib/models";
 import { thinkingBudgetSchema } from "./lib/thinking-budget";
+import { authorizeRuntimeSession, runtimeFromContext } from "./lib/studio";
 
 /**
  * Backup route for stalled calls: the SAME backend (Vertex). Gemini 3 thought signatures are backend-bound, and a
@@ -41,6 +42,8 @@ export default defineAgent({
   // eve runs this before every model call.
   model: defineDynamic(async (ctx) => {
     const attributes = (ctx.session.auth.current?.attributes ?? {}) as Record<string, string | undefined>;
+    const runtime = runtimeFromContext(ctx);
+    if (runtime) await authorizeRuntimeSession(attributes.orgId!, runtime.sessionId, runtime.token);
     const rawBudget = attributes.thinkingBudget ?? process.env.GEMINI_THINKING_BUDGET;
     const baseBudget = rawBudget !== undefined ? thinkingBudgetSchema.parse(rawBudget) : undefined;
     const isAsymmetric = attributes.asymmetricThinking === "1" || process.env.ASYMMETRIC_THINKING === "1";

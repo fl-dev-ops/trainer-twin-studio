@@ -1,4 +1,4 @@
-import { defineTool } from "eve/tools";
+import { defineDynamic, defineTool } from "eve/tools";
 import { z } from "zod";
 import {
   advanceSessionPlan,
@@ -9,7 +9,7 @@ import {
 import { ensureStyleCache } from "../lib/ensure-style";
 import { planState, resumeCandidateState } from "../lib/plan-state";
 import { resumeClaimCandidates } from "../lib/resume-candidates";
-import { studioFetch } from "../lib/studio";
+import { runtimeFromContext, studioFetch } from "../lib/studio";
 import { scenarioPlaybook, twinSessionPlaybooks } from "../lib/brain";
 import { roleplayGuard } from "../lib/session-mode-lookup";
 
@@ -59,7 +59,7 @@ async function initialize(ctx: any): Promise<ReturnType<typeof compileSessionPla
   }
 }
 
-export default defineTool({
+const tool = defineTool({
   description: `Execute the interview TODO plan compiled from the published session spec.
 
 Call with no action to initialize or inspect the plan. On init the first question is auto-activated.
@@ -128,3 +128,5 @@ Never substitute a different question type, exceed a follow-up allowance, or ask
     return posesResumeQuestion && candidates.length ? { ...summary, resumeClaimCandidates: candidates } : summary;
   },
 });
+
+export default defineDynamic((ctx) => runtimeFromContext(ctx) ? null : tool);

@@ -14,6 +14,7 @@ import { modelImage } from "@/lib/model-image";
 import { uploadBytes } from "@/lib/upload-bytes";
 import { resolveUpload, UploadError } from "@/lib/uploads";
 import { getObjectText } from "@/lib/s3";
+import { authorizeRuntimeSession, publicSessionExpired } from "@/lib/interview-sessions";
 
 /** How much of a knowledge document one read_knowledge_document call returns (about 3k tokens). */
 const KNOWLEDGE_PAGE_CHARS = 12_000;
@@ -22,6 +23,11 @@ export const runtime = "nodejs";
 
 const slug = z.string().regex(/^[a-z0-9][a-z0-9._-]*$/i);
 const requestSchema = z.discriminatedUnion("action", [
+  z.object({
+    action: z.literal("authorizeRuntimeSession"),
+    sessionId: z.string().min(1).max(100),
+    token: z.string().max(200).optional(),
+  }).strict(),
   z.object({
     action: z.literal("searchKnowledge"),
     knowledgeBase: slug,
@@ -136,6 +142,44 @@ export async function POST(request: Request) {
   const parsed = requestSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: "Invalid Copilot request" }, { status: 400 });
   const input = parsed.data;
+
+  if (input.action === "authorizeRuntimeSession") {
+    const session = await db.interviewSession.findFirst({
+      where: { id: input.sessionId, orgId, status: { in: ["active", "closing"] }, deletedAt: null },
+      select: { anonymousId: true, allowedSeconds: true, startedAt: true, deletedAt: true },
+    });
+    const token = input.token || request.headers.get("x-trainertwin-runtime-token") || "";
+    const authorized = session && !publicSessionExpired(session)
+      && (!session.anonymousId || (token && (await authorizeRuntimeSession(input.sessionId, token))?.orgId === orgId));
+    return authorized
+      ? Response.json({ valid: true, anonymous: Boolean(session.anonymousId) }, { headers: { "Cache-Control": "no-store" } })
+      : Response.json({ error: "Session is no longer available", valid: false }, { status: 401 });
+  }
+
+  const sessionId = request.headers.get("x-trainertwin-session-id") || ("sessionId" in input ? input.sessionId : undefined);
+  if (sessionId) {
+    const session = await db.interviewSession.findFirst({
+      where: { id: sessionId, orgId },
+      select: { id: true, anonymousId: true, personaSlug: true, agentSlug: true },
+    });
+    if (!session) return Response.json({ error: "Session not found" }, { status: 404 });
+    if (session.anonymousId) {
+      const token = request.headers.get("x-trainertwin-runtime-token") || "";
+      if (!token || (await authorizeRuntimeSession(session.id, token))?.orgId !== orgId) {
+        return Response.json({ error: "Session is no longer available" }, { status: 401 });
+      }
+      const allowed = ["getSessionContext", "searchScenarioItems", "searchStyleEpisodes", "getPersonaStyleMoments",
+        "recordTurnEvidence", "isCalibrationSession", "finishSession"];
+      const finishCommand = input.action === "enqueueWorkspaceCommand" && input.tool === "finish_session";
+      if ((!allowed.includes(input.action) && !finishCommand)
+        || ("sessionId" in input && input.sessionId && input.sessionId !== session.id)
+        || ("agentSlug" in input && input.agentSlug && input.agentSlug !== session.agentSlug)
+        || ("personaSlug" in input && input.personaSlug && input.personaSlug !== session.personaSlug)) {
+        return Response.json({ error: "This action is not available in a public call" }, { status: 403 });
+      }
+      if (input.action === "searchScenarioItems" || input.action === "getSessionContext") input.sessionId = session.id;
+    }
+  }
 
   if (input.action === "readDocument") {
     const doc = await db.contextDocument.findFirst({

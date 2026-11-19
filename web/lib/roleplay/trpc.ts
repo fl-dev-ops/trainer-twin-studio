@@ -77,6 +77,7 @@ const sessionSelect = {
 type SessionRow = Prisma.InterviewSessionGetPayload<{ select: typeof sessionSelect }>;
 
 function sessionItem(row: SessionRow) {
+  if (!row.user) throw new Error("Role-play sessions require an account");
   const report = roleplayReport(row.report);
   return {
     id: row.id,
@@ -329,6 +330,7 @@ const usersRouter = t.router({
       if (member) person(member).roleplays.add(row.agentId);
     }
     for (const row of sessions) {
+      if (!row.userId) continue;
       const member = byUser.get(row.userId);
       if (!member) continue;
       const found = person(member);

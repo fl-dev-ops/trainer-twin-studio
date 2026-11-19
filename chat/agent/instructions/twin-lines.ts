@@ -7,7 +7,7 @@ import {
   formatTwinMomentLines,
   twinLinesQuery,
 } from "../lib/brain";
-import { studioFetch } from "../lib/studio";
+import { runtimeFromContext, studioFetch } from "../lib/studio";
 import { writeTwinQuery } from "../lib/twin-query";
 
 /** Inputs that are not the learner speaking: openings, tool results, nudges and calibration marks get no lines. */
@@ -34,16 +34,17 @@ export default defineDynamic(async (ctx) => {
   const orgId = ctx.session.auth.initiator?.principalId ?? ctx.session.auth.current?.principalId;
   const attributes = (ctx.session.auth.current?.attributes ?? {}) as Record<string, string | undefined>;
   if (!orgId) return null;
+  const runtime = runtimeFromContext(ctx);
 
   // Once per session: a small twin's playbooks (in its prompt), and a warm lookup path for its first turn.
   const twin = await ctx.memo(["twin-lines:twin", ctx.session.id], async () => {
     const mode = (attributes.mode === "chat" ? "chat" : "voice") as "voice" | "chat";
     const clientTools = (attributes.clientTools ?? "").split(",").filter(Boolean);
-    const specs = await loadSessionContext(orgId, attributes.sessionId, attributes.agentSlug, attributes.personaSlug, mode, clientTools)
+    const specs = await loadSessionContext(orgId, attributes.sessionId, attributes.agentSlug, attributes.personaSlug, mode, clientTools, runtime)
       .catch(() => null);
     if (!specs?.twin?.inline) return null;
     // Warm the vector store connection and embeddings during the countdown. Best effort.
-    void studioFetch(orgId, { action: "searchScenarioItems", agentSlug: specs.agentSlug, query: "warm up", role: "trainer", limit: 1, sessionId: attributes.sessionId })
+    void studioFetch(orgId, { action: "searchScenarioItems", agentSlug: specs.agentSlug, query: "warm up", role: "trainer", limit: 1, sessionId: attributes.sessionId }, undefined, runtime)
       .catch(() => {});
     return { agentSlug: specs.agentSlug, personaName: specs.personaName ?? specs.personaSlug ?? "the trainer", playbooks: specs.twin.inline };
   });
@@ -81,7 +82,7 @@ export default defineDynamic(async (ctx) => {
       ...(written ? { playbook: written.playbook, ...(written.step ? { step: written.step } : {}) } : {}),
       // Real sessions only: keep these lines for the turn's "Why this answer" (web/lib/twin/evidence.ts).
       ...(attributes.recordEvidence === "1" ? { recordTurnLines: { heard: heard.slice(0, 4000), situation: query } } : {}),
-    }, AbortSignal.timeout(LOOKUP_TIMEOUT_MS)).catch((error) => {
+    }, AbortSignal.timeout(LOOKUP_TIMEOUT_MS), runtime).catch((error) => {
       console.error("[twin-lines] lookup failed", error instanceof Error ? error.message : error);
       return null;
     });

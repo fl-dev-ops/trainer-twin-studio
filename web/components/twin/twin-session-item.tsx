@@ -63,11 +63,12 @@ export function TwinSessionItem({
           "w-full items-center p-4 px-5 text-left transition-colors hover:bg-(--sidebar) outline-none focus-visible:bg-(--sidebar)",
         )}
       >
-        <UserAvatar user={{ name: session.learner, email: session.learnerEmail }} size="xl" />
+        {session.learnerEmail ? <UserAvatar user={{ name: session.learner, email: session.learnerEmail }} size="xl" /> : <span className="grid size-10 place-items-center rounded-full bg-muted text-sm">{session.learner.charAt(0).toUpperCase()}</span>}
 
         {/* Learner */}
         <span className="flex flex-col gap-0.5 min-w-0">
           <span className="text-sm font-semibold leading-5 text-(--foreground)">{session.learner}</span>
+          {session.anonymous ? <span className="text-xs text-muted-foreground">Anonymous visitor · self-reported name</span> : null}
           <span className="text-body-s leading-body-s text-muted-foreground">
             <span className="sm:hidden">{session.agentName} · </span>
             <SessionTime iso={session.at} />
@@ -86,8 +87,8 @@ export function TwinSessionItem({
           {session.topics.length ? (
             <>
               {session.topics.slice(0, 2).map((topic) => (
-                <Badge key={topic} className="max-w-full truncate" variant="outline">
-                  {topic}
+                <Badge key={topic} className="max-w-full" variant="outline">
+                  <span className="truncate">{topic}</span>
                 </Badge>
               ))}
               {session.topics.length > 2 ? <Badge className="shrink-0" variant="outline">+{session.topics.length - 2}</Badge> : null}

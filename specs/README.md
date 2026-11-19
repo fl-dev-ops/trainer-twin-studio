@@ -82,6 +82,8 @@ browser `web/e2e`, Python `agent/tests`, `chat/tests`), and the most important u
 
 ## Modules
 
+Public anonymous twin access is documented in [public-twins.md](public-twins.md); website embedding in [widgets.md](widgets.md).
+
 | # | Spec | Scope | Start reading |
 | --- | --- | --- | --- |
 | 1 | [auth.md](auth.md) | Signing in and up (email/password, Google), sessions and cookies across subdomains, which host serves what (dash./auth./`<org>`.), onboarding, no-org | `web/proxy.ts`, `web/lib/auth.ts`, `auth-client.ts`, `auth-home.ts`, `session-user.ts`, `base-domain.ts`, `web/app/auth/*` |

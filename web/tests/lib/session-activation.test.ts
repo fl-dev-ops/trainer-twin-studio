@@ -10,7 +10,7 @@ import { connectVoice, openSession, startRefusal, startSessionNow, type OpenedSe
 
 const db = {
   interviewSession: {
-    findUniqueOrThrow: mock(async () => ({ id: "session", agentSlug: "agent", assignmentId: null, agent: { data: {}, kind: "ROLEPLAY", persona: { voiceId: null } }, livekitRoom: "old-room", livekitDispatchId: "old-dispatch", videoEgressId: null })),
+    findUniqueOrThrow: mock(async () => ({ id: "session", agentSlug: "agent", assignmentId: null, agent: { data: {}, kind: "ROLEPLAY", persona: { voiceId: null } }, livekitRoom: "old-room", livekitDispatchId: "old-dispatch", videoEgressId: null, startedAt: new Date("2026-11-18T10:00:00Z"), allowedSeconds: 300, anonymousId: null })),
     update: mock(async () => ({})),
     updateMany: mock(async (_args: unknown) => ({ count: 1 })),
   },
@@ -61,7 +61,7 @@ test("startSessionNow opens before connecting voice and returns credentials with
   expect(await startSessionNow(input)).toEqual({ ok: true, session, participantToken: "participant", room: "room" });
   expect(activate).toHaveBeenCalledWith(input);
   expect(activate.mock.invocationCallOrder[0]).toBeLessThan(connect.mock.invocationCallOrder[0]);
-  expect(connect).toHaveBeenCalledWith(expect.objectContaining({ sessionId: session.id, runtimeToken: session.agentToken, agentKind: "ROLEPLAY", endsAt: expect.any(Number) }));
+  expect(connect).toHaveBeenCalledWith(expect.objectContaining({ sessionId: session.id, runtimeToken: session.agentToken, agentKind: "ROLEPLAY", endsAt: Math.floor(new Date("2026-11-18T10:00:00Z").getTime() / 1000) + 300 }));
 });
 
 test("startSessionNow chat returns the conversation token without LiveKit", async () => {

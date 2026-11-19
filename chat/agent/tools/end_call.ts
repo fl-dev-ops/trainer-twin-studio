@@ -1,13 +1,13 @@
-import { defineTool } from "eve/tools";
+import { defineDynamic, defineTool } from "eve/tools";
 import { z } from "zod";
 import { isRoleplaySession } from "../lib/session-mode-lookup";
-import { studioFetch } from "../lib/studio";
+import { runtimeFromContext, studioFetch } from "../lib/studio";
 
 /**
  * Client role play only: the client hangs up. Twins and interviews end with finish_session instead, so this tool
  * refuses there. Ported from the client role-play branch.
  */
-export default defineTool({
+const tool = defineTool({
   description: `Client role play only: hang up the call. Never use it outside a client role play.
 
 Call it in the SAME reply as your short goodbye, after the goodbye words, when the call has reached its end: you agreed to a next step, you declined, or your guard reached 5.
@@ -28,3 +28,5 @@ After it returns, say nothing more.`,
     return { status: "ended", outcome: input.outcome, instruction: "The call has ended. Say nothing more." };
   },
 });
+
+export default defineDynamic((ctx) => runtimeFromContext(ctx) ? null : tool);

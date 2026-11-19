@@ -110,7 +110,7 @@ export async function sendOrgUsage(orgId: string): Promise<Date | null> {
     customerId: billing.meteroidCustomerId,
     minutes: Math.abs(row.seconds) / 60,
     at: row.createdAt,
-    properties: { kind: row.type === "grant" ? "given_to_learner" : "staff_call", email: row.email ?? "", ...(row.sessionId ? { session: row.sessionId } : {}) },
+    properties: { kind: row.type === "grant" ? "given_to_learner" : row.email ? "staff_call" : "public_call", email: row.email ?? "", ...(row.sessionId ? { session: row.sessionId } : {}) },
   })));
   const sentAt = new Date();
   await db.minuteLedger.updateMany({ where: { id: { in: rows.map((row) => row.id) }, meteroidSentAt: null }, data: { meteroidSentAt: sentAt } });

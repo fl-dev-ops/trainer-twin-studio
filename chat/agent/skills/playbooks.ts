@@ -1,6 +1,6 @@
 import { defineDynamic, defineSkill } from "eve/skills";
 import { type AgentKind, type TwinPlaybook, inlineTwinPlaybooks, playbookSkillNames, twinSessionPlaybooks } from "../lib/brain";
-import { studioFetch } from "../lib/studio";
+import { runtimeFromContext, studioFetch } from "../lib/studio";
 
 /**
  * Twin sessions get one skill per playbook: every skill of the persona for "Ask Olga", the skill itself for a single
@@ -25,7 +25,7 @@ export default defineDynamic(async (ctx) => {
       sessionId: attributes.sessionId,
       agentSlug: attributes.agentSlug,
       personaSlug: attributes.personaSlug,
-    });
+    }, undefined, runtimeFromContext(ctx));
     const playbooks = twinSessionPlaybooks(context.agent, context.twinPlaybooks) ?? [];
     // A small twin has every playbook in its prompt already (formatTwinSession); skills would only invite a load call.
     if (playbooks.length === 0 || inlineTwinPlaybooks(playbooks)) return [];
