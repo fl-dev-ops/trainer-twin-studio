@@ -159,7 +159,7 @@ async function begin(hosted: Frame, name = "  Visitor Name  ") {
   const field = hosted.getByLabel("Your name", { exact: true });
   if (!await field.isVisible()) await introButton(hosted).click();
   await field.fill(name);
-  await hosted.getByRole("button", { name: "Continue", exact: true }).click();
+  await field.press("Enter");
 }
 
 async function expectPortraitInsets(hosted: Frame) {
@@ -273,7 +273,7 @@ test.describe.serial("cross-origin hosted voice widget", () => {
     await expect(hosted.getByRole("button", { name: /camera|screen|upload|send message/i })).toHaveCount(0);
     await page.screenshot({ path: testInfo.outputPath("widget-mobile-prejoin.png"), fullPage: true, animations: "disabled" });
     await hosted.getByLabel("Your name", { exact: true }).fill("   ");
-    await hosted.getByRole("button", { name: "Continue", exact: true }).click();
+    await hosted.getByLabel("Your name", { exact: true }).press("Enter");
     await expect(hosted.getByRole("alert")).toContainText("1–80 characters");
     expect(await hosted.evaluate(() => window.__widgetMicrophoneRequests)).toBe(0);
     expect(await hosted.evaluate(() => window.__widgetFetches)).toEqual([]);

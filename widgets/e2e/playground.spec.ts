@@ -22,7 +22,12 @@ test("design preview renders widget states and refreshes the selected state with
   const mute = widget.getByRole("button", { name: "Mute microphone", exact: true });
   await expect(mute.locator("svg:first-child")).toBeVisible();
   await mute.click();
-  await expect(widget.getByRole("button", { name: "Unmute microphone" }).locator("svg:last-child")).toBeVisible();
+  const unmute = widget.getByRole("button", { name: "Unmute microphone" });
+  await expect(unmute.locator("svg:last-child")).toBeVisible();
+  await unmute.hover();
+  await expect(unmute).toHaveCSS("background-color", "rgb(229, 225, 217)");
+  await page.getByRole("button", { name: "Call", exact: true }).hover();
+  await expect(unmute).toHaveCSS("background-color", "rgb(242, 238, 229)");
   await expect(widget.getByRole("log")).toContainText("giving feedback");
   await expect(widget.getByRole("button", { name: "Expand captions" })).toHaveCount(0);
   await expect(widget.getByText("What would you like to practice today?")).toHaveCount(0);
@@ -45,7 +50,9 @@ test("launcher preview runs the real loader and opens a simulated widget", async
   const name = hosted.getByRole("textbox", { name: "Your name" });
   await expect(name).toBeFocused();
   await expect(hosted.locator(".tt-portrait-stage")).toBeHidden();
-  await expect(hosted.getByRole("button", { name: "Continue", exact: true })).toBeHidden();
+  await expect(hosted.getByText("What’s your name?", { exact: true })).toBeVisible();
+  await expect(hosted.getByText("Press Enter to continue", { exact: true })).toBeHidden();
+  await expect(hosted.getByRole("button", { name: "Continue", exact: true })).toHaveCount(0);
   await expect(name).toHaveCSS("border-bottom-width", "0px");
   const panel = await hosted.locator('.tt-card[data-stage="name"]').boundingBox();
   const hitArea = await hosted.locator(".tt-name-hit-area").boundingBox();
@@ -54,7 +61,9 @@ test("launcher preview runs the real loader and opens a simulated widget", async
   await name.click({ position: { x: 24, y: 24 } });
   await expect(name).toBeFocused();
   await name.fill("Jordan");
-  await hosted.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(name).toHaveValue("Jordan");
+  await expect(hosted.getByText("Press Enter to continue", { exact: true })).toBeVisible();
+  await name.press("Enter");
   await expect(hosted.locator(".tt-portrait-stage")).toBeVisible();
   await hosted.getByRole("button", { name: "End call" }).click();
   await expect(launcher).toBeFocused();

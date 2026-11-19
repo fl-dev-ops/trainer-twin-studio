@@ -18,13 +18,13 @@ export function WidgetName({ inputRef, initialName, enabled, invalid, onStart, o
       </button>}
       <form className="tt-prejoin" onSubmit={(event) => { event.preventDefault(); onStart(); }}>
         <label className="tt-name-hit-area">
-          <input ref={inputRef} className="tt-input" id="tt-visitor-name" name="name" autoComplete="name"
-            aria-label="Your name" aria-describedby="tt-error" aria-invalid={invalid || undefined}
-            maxLength={80} placeholder="What’s your name?" defaultValue={initialName} required disabled={!enabled}
-            onInput={(event) => { setHasDraft(!!event.currentTarget.value); onInput(); }} />
+          <span className="tt-name-prompt">What’s your name?</span>
+          <input ref={inputRef} className="tt-input" id="tt-visitor-name" name="name" autoComplete="name" enterKeyHint="enter"
+            aria-label="Your name" aria-describedby={hasDraft ? "tt-name-hint tt-error" : "tt-error"} aria-invalid={invalid || undefined}
+            maxLength={80} defaultValue={initialName} required disabled={!enabled}
+            onInput={(event) => { setHasDraft(!!event.currentTarget.value.trim()); onInput(); }} />
         </label>
-        <button type="submit" className="tt-primary" disabled={!enabled}
-          hidden={!hasDraft}>Continue</button>
+        <p className="tt-name-hint" id="tt-name-hint" hidden={!hasDraft}>Press Enter to continue</p>
       </form>
     </>
   );
