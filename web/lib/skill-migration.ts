@@ -12,7 +12,10 @@ import { ownershipLock } from "@/lib/skill-ownership";
 
 type Tx = Prisma.TransactionClient;
 type Candidate = { slug: string; version: number; projections: Prisma.JsonValue[]; current: boolean; required: boolean };
-export type SkillMigrationOptions = { batchSize?: number; after?: string; check?: boolean; apply?: boolean };
+export type SkillMigrationOptions = {
+  batchSize?: number; after?: string; check?: boolean; apply?: boolean;
+  importedEmbeddings?: (items: Package["items"]) => number[][];
+};
 export type SkillMigrationEntry = {
   slug: string; agentVersion: number; current: boolean; required: boolean;
   status: "verified" | "imported" | "unmapped" | "failed";
@@ -187,7 +190,7 @@ async function mappedVersion(tx: Tx, orgId: string, agentId: string, row: Candid
     if (version.skill.orgId !== orgId || version.skill.ownerSlug !== row.slug || version.contentHash !== pkg.contentHash) refuse("Existing Agent mapping conflicts with the verified package.");
     if (!orgOwnKey(orgId, `${version.artifacts}/SKILL.md`)) refuse("Mapped package artifact prefix is outside the organization.");
     verifySkillEnvelope(version);
-    if (mapping && !sources.length) {
+    if (!sources.length) {
       const counts = countSources(pkg.items);
       sources = version.sources.map(({ orgId: sourceOrg, documentId, title, items }) => {
         if (sourceOrg !== orgId || counts.get(documentId) !== items) refuse("Mapped package provenance disagrees with its original items or organization.");
@@ -199,14 +202,14 @@ async function mappedVersion(tx: Tx, orgId: string, agentId: string, row: Candid
         if (await getObjectText(`${version.artifacts}/${name}`) !== bytes) refuse(`Mapped package object ${version.artifacts}/${name} differs from verified original bytes.`);
       }
     }
-    if (stableJson(version.sources.map(({ documentId, title, items }) => ({ documentId, title, items })).sort((a, b) => a.documentId.localeCompare(b.documentId))) !== stableJson(sources)) {
+    if (version.sources.length && stableJson(version.sources.map(({ documentId, title, items }) => ({ documentId, title, items })).sort((a, b) => a.documentId.localeCompare(b.documentId))) !== stableJson(sources)) {
       refuse("Package provenance conflicts across Agent versions. Resolve saved source titles/counts explicitly; no provenance was overwritten.");
     }
   }
   return { version, mapping, sources };
 }
 
-async function importPackage(orgId: string, row: Candidate, pkg: Package, capturedAgent: { id: string; updatedAt: Date }) {
+async function importPackage(orgId: string, row: Candidate, pkg: Package, capturedAgent: { id: string; updatedAt: Date }, embeddings?: number[][]) {
   const claim = await withLock([ownershipLock(orgId), `agent:${row.slug}`], async (tx) => {
     const existing = await mappedVersion(tx, orgId, capturedAgent.id, row, pkg);
     if (existing.version) {
@@ -244,7 +247,9 @@ async function importPackage(orgId: string, row: Candidate, pkg: Package, captur
       verifySkillEnvelope(version);
       const { sources } = await mappedVersion(tx, orgId, capturedAgent.id, row, pkg);
       if (claim.rebuild) {
-        const count = await MainCollectionService.writeSkillItems(orgId, version.id, pkg.scenarioId, pkg.items, version.artifacts);
+        const count = embeddings === undefined
+          ? await MainCollectionService.writeSkillItems(orgId, version.id, pkg.scenarioId, pkg.items, version.artifacts)
+          : await MainCollectionService.writeSkillItems(orgId, version.id, pkg.scenarioId, pkg.items, version.artifacts, { embeddings });
         if (count !== version.itemCount) refuse("Rebuilt index count does not match the verified original package.");
         const done = await tx.skillVersion.updateMany({ where: { id: version.id, indexGeneration: version.indexGeneration },
           data: { status: "ready", indexStatus: "ready", failure: null } });
@@ -297,8 +302,10 @@ export async function migrateSkills(orgId: string, opts: SkillMigrationOptions =
       if (!agent) refuse("Owning Agent is missing; restore its original identity before importing history.");
       const pkg = await readPackage(orgId, row, agent.kind);
       Object.assign(entry, { contentHash: pkg.contentHash, artifacts: pkg.artifacts, items: pkg.items.length });
+      if (opts.importedEmbeddings) await mappedVersion(db, orgId, agent.id, row, pkg);
+      const embeddings = opts.importedEmbeddings?.(pkg.items);
       if (opts.apply) {
-        entry.skillVersionId = await importPackage(orgId, row, pkg, agent);
+        entry.skillVersionId = await importPackage(orgId, row, pkg, agent, embeddings);
         entry.status = "imported";
       } else {
         const found = await mappedVersion(db, orgId, agent.id, row, pkg);

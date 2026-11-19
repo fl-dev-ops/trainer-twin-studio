@@ -13,6 +13,7 @@ type Meta = Record<string, string | number | boolean>;
 let rows: { id: string; document: string; metadata: Meta }[] = [];
 let dropUpserts = false;
 const queries: Record<string, unknown>[] = [];
+const embeddingWrites: number[][][] = [];
 
 /** Just enough of Chroma's filter language for these searches: $and, $or, $in, $lt and equality. */
 function matches(meta: Meta, where: Record<string, unknown>): boolean {
@@ -28,7 +29,8 @@ function matches(meta: Meta, where: Record<string, unknown>): boolean {
   });
 }
 const fake = {
-  upsert: async ({ ids, documents, metadatas }: { ids: string[]; documents: string[]; metadatas: Meta[] }) => {
+  upsert: async ({ ids, documents, metadatas, embeddings }: { ids: string[]; documents: string[]; metadatas: Meta[]; embeddings: number[][] }) => {
+    embeddingWrites.push(embeddings);
     if (dropUpserts) return;
     ids.forEach((id, i) => {
       rows = rows.filter((row) => row.id !== id);
@@ -60,6 +62,7 @@ const line = (slug: string, version: number | undefined, text: string) => ({
 beforeEach(() => {
   embedded = 0;
   queries.length = 0;
+  embeddingWrites.length = 0;
   dropUpserts = false;
   rows = [line("olga-wait", 19, "v19 line"), line("olga-wait", 20, "v20 line"), line("olga-price", 4, "price v4 line")];
 });
@@ -103,6 +106,36 @@ const managedItem = {
   id: "example-1", role: "trainer" as const, context: "The buyer hesitates", text: "What is holding you back?",
   metadata: { step: "explore", skillVersionId: "forged-version", skillIndexScope: "forged-scope", orgId: "forged-org" },
 };
+
+test("verified imported vectors retain exact values and managed scope without re-embedding", async () => {
+  const vectors = [[0.25, -0.75]];
+  expect(await MainCollectionService.writeSkillItems("org", "imported-package", "hesitation", [managedItem], "local-original", { embeddings: vectors })).toBe(1);
+  expect(embedded).toBe(0);
+  expect(embeddingWrites).toEqual([vectors]);
+  expect(rows.find((row) => row.metadata.skillVersionId === "imported-package")?.metadata).toMatchObject({
+    orgId: "org", skillIndexScope: "local-original", itemId: managedItem.id, itemIndex: 0,
+  });
+});
+
+test.each([
+  [],
+  [[]],
+  [[Number.NaN, 0]],
+  [[Number.POSITIVE_INFINITY, 0]],
+  [[1, 0], [0, 1]],
+].map((embeddings) => ({ embeddings })))("invalid imported vectors refuse before provider or index writes: %j", async ({ embeddings }) => {
+  await expect(MainCollectionService.writeSkillItems("org", "imported-package", "hesitation", [managedItem], "local-original", { embeddings })).rejects.toThrow("Imported embeddings");
+  expect(embedded).toBe(0);
+  expect(embeddingWrites).toHaveLength(0);
+});
+
+test("imported vectors with different dimensions cannot create a partial index", async () => {
+  await expect(MainCollectionService.writeSkillItems("org", "imported-package", "hesitation", [managedItem, { ...managedItem, id: "second" }], "local-original", {
+    embeddings: [[1, 0], [1]],
+  })).rejects.toThrow("Imported embeddings");
+  expect(embedded).toBe(0);
+  expect(embeddingWrites).toHaveLength(0);
+});
 
 test("managed examples have an authoritative org/version scope and survive legacy pruning", async () => {
   await MainCollectionService.writeSkillItems("org", "package-1", "hesitation", [managedItem], "scope-1");

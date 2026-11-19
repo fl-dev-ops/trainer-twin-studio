@@ -507,11 +507,18 @@ export class MainCollectionService {
    * the Agent row points at the new version). Idempotent: re-sending the same version writes the same records. Embeds
    * the situation with the line, so retrieval can match "what just happened" to "what the trainer said next".
    */
-  static async writeScenarioItems(orgId: string, agentSlug: string, scenarioId: string, agentVersion: number, items: (ScenarioItem | RoleplayItem)[], skillVersionId?: string, skillIndexScope?: string): Promise<number> {
+  static async writeScenarioItems(orgId: string, agentSlug: string, scenarioId: string, agentVersion: number, items: (ScenarioItem | RoleplayItem)[], skillVersionId?: string, skillIndexScope?: string, importedEmbeddings?: number[][]): Promise<number> {
+    if (importedEmbeddings !== undefined) {
+      const dimension = importedEmbeddings[0]?.length;
+      if (importedEmbeddings.length !== items.length || importedEmbeddings.some((vector) =>
+        !vector.length || vector.length !== dimension || !vector.every(Number.isFinite))) {
+        throw new Error("Imported embeddings must match every item with finite, equal-dimension vectors");
+      }
+    }
     if (items.length === 0) return 0;
     const collection = await this.getCollection(orgId);
 
-    const embeddings = await embedTexts(items.map((item) => (item.context ? `${item.context}\n${item.text}` : item.text)));
+    const embeddings = importedEmbeddings ?? await embedTexts(items.map((item) => (item.context ? `${item.context}\n${item.text}` : item.text)));
     for (let i = 0; i < items.length; i += 5000) {
       const batch = items.slice(i, i + 5000);
       await collection.upsert({
@@ -543,8 +550,10 @@ export class MainCollectionService {
     return items.length;
   }
 
-  static async writeSkillItems(orgId: string, skillVersionId: string, scenarioId: string, items: (ScenarioItem | RoleplayItem)[], indexScope: string) {
-    const count = await this.writeScenarioItems(orgId, `skill:${indexScope}`, scenarioId, 1, items, skillVersionId, indexScope);
+  static async writeSkillItems(orgId: string, skillVersionId: string, scenarioId: string, items: (ScenarioItem | RoleplayItem)[], indexScope: string, imported?: { embeddings: number[][] }) {
+    const count = imported
+      ? await this.writeScenarioItems(orgId, `skill:${indexScope}`, scenarioId, 1, items, skillVersionId, indexScope, imported.embeddings)
+      : await this.writeScenarioItems(orgId, `skill:${indexScope}`, scenarioId, 1, items, skillVersionId, indexScope);
     const indexed = await this.skillItemCount(orgId, skillVersionId, indexScope);
     if (indexed !== count) throw new Error(`Skill index count mismatch: expected ${count}, found ${indexed}`);
     return count;

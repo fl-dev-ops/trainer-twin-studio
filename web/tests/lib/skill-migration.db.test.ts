@@ -136,6 +136,139 @@ describe.skipIf(process.env.DATABASE_URL !== isolatedDatabase)("skill migration 
     expect(report.entries.find((entry) => entry.agentVersion === 2)).toMatchObject({ status: "failed", error: expect.stringContaining("provenance conflicts") });
   });
 
+  test.each([
+    { order: "ascending", versions: 4, sharedPrefix: true },
+    { order: "descending", versions: 4, sharedPrefix: true },
+    { order: "ascending", versions: 5, sharedPrefix: false },
+    { order: "descending", versions: 5, sharedPrefix: false },
+  ] as const)("$order settings versions ($versions, shared prefix $sharedPrefix) retain verified provenance", async ({ order, versions, sharedPrefix }) => {
+    const saved = await legacy();
+    const projections = [];
+    for (let version = 1; version <= versions; version++) {
+      const next = sharedPrefix ? saved : await legacy(version);
+      projections.push({ ...next.data, before: { welcome: `Settings ${version}` } });
+    }
+    await db.agent.update({ where: { id: f.roleplay.id }, data: { version: versions, data: projections[versions - 1] } });
+    const originalSource = await db.skillSource.create({ data: {
+      agentId: f.roleplay.id, version: versions, orgId: f.org.id,
+      documentId: "deleted-document", title: "Deleted original title", items: 1,
+    } });
+    if (order === "ascending") {
+      for (let version = 1; version < versions; version++) await history(version, projections[version - 1]);
+    }
+    const first = await migrateSkills(f.org.id, { apply: true });
+    expect(first.entries.every((entry) => entry.status === "imported")).toBe(true);
+    const session = await f.session({ compiledSnapshot: { agent: { data: saved.data } } });
+    if (order === "descending") {
+      for (let version = 1; version < versions; version++) await history(version, projections[version - 1]);
+    }
+    const applied = await migrateSkills(f.org.id, { apply: true });
+    expect(applied.entries).toHaveLength(versions);
+    expect(applied.entries.map((entry) => entry.status)).toEqual(Array(versions).fill("imported"));
+    const versionId = applied.entries[0].skillVersionId;
+    expect(new Set(applied.entries.map((entry) => entry.skillVersionId))).toEqual(new Set([versionId]));
+    expect(await db.skillVersionSource.findMany({ where: { orgId: f.org.id } })).toEqual([
+      expect.objectContaining({ skillVersionId: versionId, documentId: "deleted-document", title: "Deleted original title", items: 1 }),
+    ]);
+    expect(await db.skillSource.findMany({ where: { orgId: f.org.id } })).toEqual([originalSource]);
+    expect((await db.interviewSession.findUniqueOrThrow({ where: { id: session.id } })).compiledSnapshot).toEqual(session.compiledSnapshot);
+    expect((await db.agent.findUniqueOrThrow({ where: { id: f.roleplay.id } })).data).toEqual(projections[versions - 1]);
+    expect((await checkSkillMigrationCoverage(f.org.id)).entries.map((entry) => entry.status)).toEqual(Array(versions).fill("verified"));
+    expect(await db.skillVersion.count({ where: { skill: { orgId: f.org.id } } })).toBe(1);
+    expect(writer).toHaveBeenCalledTimes(1);
+  });
+
+  test("an already mapped unknown package is enriched on retry without rebuilding or duplicating provenance", async () => {
+    await legacy();
+    const first = await migrateSkills(f.org.id, { apply: true });
+    const versionId = first.entries[0].skillVersionId;
+    expect(await db.skillVersionSource.count({ where: { orgId: f.org.id } })).toBe(0);
+    await db.skillSource.create({ data: { agentId: f.roleplay.id, version: 1, orgId: f.org.id,
+      documentId: "deleted-document", title: "Recovered deleted title", items: 1 } });
+    for (let retry = 0; retry < 2; retry++) {
+      expect((await migrateSkills(f.org.id, { apply: true })).entries[0]).toMatchObject({ status: "imported", skillVersionId: versionId });
+    }
+    expect(await db.skillVersionSource.findMany({ where: { orgId: f.org.id } })).toEqual([
+      expect.objectContaining({ title: "Recovered deleted title", items: 1 }),
+    ]);
+    expect(writer).toHaveBeenCalledTimes(1);
+  });
+
+  test.each([0, 2])("unknown package refuses legacy source count %i and remains retryable", async (items) => {
+    const saved = await legacy();
+    await migrateSkills(f.org.id, { apply: true });
+    await history(1, saved.data);
+    await legacy(2);
+    const source = await db.skillSource.create({ data: { agentId: f.roleplay.id, version: 2, orgId: f.org.id,
+      documentId: "deleted-document", title: "Recovered title", items } });
+    expect((await migrateSkills(f.org.id, { apply: true })).entries.find((entry) => entry.agentVersion === 2)).toMatchObject({
+      status: "failed", error: expect.stringContaining("count disagrees with items.json"),
+    });
+    expect(await db.skillVersionSource.count({ where: { orgId: f.org.id } })).toBe(0);
+    expect(await db.agentSkillVersion.count({ where: { orgId: f.org.id } })).toBe(1);
+    await db.skillSource.update({ where: { agentId_version_documentId: {
+      agentId: source.agentId, version: source.version, documentId: source.documentId,
+    } }, data: { items: 1 } });
+    expect((await migrateSkills(f.org.id, { apply: true })).entries.map((entry) => entry.status)).toEqual(["imported", "imported"]);
+  });
+
+  test("known provenance refuses invalid saved counts when an unmapped settings version has no sources", async () => {
+    const saved = await legacy();
+    await db.skillSource.create({ data: { agentId: f.roleplay.id, version: 1, orgId: f.org.id,
+      documentId: "deleted-document", title: "Saved title", items: 1 } });
+    await migrateSkills(f.org.id, { apply: true });
+    await history(1, saved.data);
+    await legacy(2);
+    await db.skillVersionSource.updateMany({ where: { orgId: f.org.id }, data: { items: 2 } });
+    expect((await migrateSkills(f.org.id, { apply: true })).entries.find((entry) => entry.agentVersion === 2)).toMatchObject({
+      status: "failed", error: expect.stringContaining("provenance disagrees"),
+    });
+    expect(await db.skillVersionSource.findFirst({ where: { orgId: f.org.id } })).toMatchObject({ title: "Saved title", items: 2 });
+  });
+
+  test("byte-identical packages from another owner never supply provenance", async () => {
+    const saved = await legacy();
+    await db.skillSource.create({ data: { agentId: f.roleplay.id, version: 1, orgId: f.org.id,
+      documentId: "deleted-document", title: "Other owner's title", items: 1 } });
+    await migrateSkills(f.org.id, { apply: true });
+    const agent = await db.agent.findUniqueOrThrow({ where: { id: f.roleplay.id } });
+    const secondOwner = await db.agent.create({ data: { orgId: f.org.id, slug: `${f.org.slug}-second`,
+      name: "Second owner", kind: "ROLEPLAY", personaId: agent.personaId, data: saved.data } });
+    const report = await migrateSkills(f.org.id, { apply: true });
+    const owner = report.entries.find((entry) => entry.slug === f.roleplay.slug);
+    const other = report.entries.find((entry) => entry.slug === secondOwner.slug);
+    expect(other).toMatchObject({ status: "imported", contentHash: saved.hash });
+    expect(other?.skillVersionId).not.toBe(owner?.skillVersionId);
+    expect(await db.skillVersionSource.count({ where: { skillVersionId: other?.skillVersionId } })).toBe(0);
+    expect(await db.skillVersionSource.findFirst({ where: { skillVersionId: owner?.skillVersionId } })).toMatchObject({ title: "Other owner's title" });
+  });
+
+  test("different package bytes never enrich an older unknown package from current sources", async () => {
+    const saved = await legacy();
+    await history(1, saved.data);
+    await legacy(2, { text: "# Different current package\n" });
+    await db.skillSource.create({ data: { agentId: f.roleplay.id, version: 2, orgId: f.org.id,
+      documentId: "deleted-document", title: "Current title", items: 1 } });
+    const report = await migrateSkills(f.org.id, { apply: true });
+    expect(report.entries.map((entry) => entry.status)).toEqual(["imported", "imported"]);
+    expect(await db.skillVersionSource.count({ where: { skillVersionId: report.entries[0].skillVersionId } })).toBe(0);
+    expect(await db.skillVersionSource.findFirst({ where: { skillVersionId: report.entries[1].skillVersionId } })).toMatchObject({ title: "Current title" });
+  });
+
+  test("different original prefix bytes refuse enrichment without changing unknown provenance", async () => {
+    const saved = await legacy();
+    await migrateSkills(f.org.id, { apply: true });
+    await history(1, saved.data);
+    await legacy(2);
+    await db.skillSource.create({ data: { agentId: f.roleplay.id, version: 2, orgId: f.org.id,
+      documentId: "deleted-document", title: "Verified only if original bytes agree", items: 1 } });
+    objects.set(`${saved.artifacts}/SKILL.md`, "# Tampered registered bytes\n");
+    expect((await migrateSkills(f.org.id, { apply: true })).entries.find((entry) => entry.agentVersion === 2)).toMatchObject({
+      status: "failed", error: expect.stringContaining("differs from verified original bytes"),
+    });
+    expect(await db.skillVersionSource.count({ where: { orgId: f.org.id } })).toBe(0);
+  });
+
   test("zero items is ready and reruns do not duplicate rows", async () => {
     await legacy(1, { empty: true });
     await migrateSkills(f.org.id, { apply: true });
@@ -181,6 +314,85 @@ describe.skipIf(process.env.DATABASE_URL !== isolatedDatabase)("skill migration 
     const retry = await migrateSkills(f.org.id, { apply: true });
     expect(retry.entries[0]).toMatchObject({ status: "imported", skillVersionId: failed.id });
     expect(await db.skillVersion.count({ where: { skill: { orgId: f.org.id } } })).toBe(1);
+  });
+
+  test("imported embeddings preflight reads verified items without registry or provider writes", async () => {
+    const saved = await legacy();
+    const importedEmbeddings = mock((items: { text: string }[]) => {
+      expect(items).toEqual(JSON.parse(saved.files["items.json"]));
+      return items.map(() => [0.25, 0.75]);
+    });
+    expect((await migrateSkills(f.org.id, { importedEmbeddings })).entries[0].status).toBe("unmapped");
+    expect(importedEmbeddings).toHaveBeenCalledTimes(1);
+    expect(writer).not.toHaveBeenCalled();
+    expect(await db.skill.count({ where: { orgId: f.org.id } })).toBe(0);
+    expect((await migrateSkills(f.org.id, { apply: true, importedEmbeddings })).entries[0].status).toBe("imported");
+    expect(writer.mock.calls[0][5]).toEqual({ embeddings: [[0.25, 0.75]] });
+    expect((await checkSkillMigrationCoverage(f.org.id)).entries[0].status).toBe("verified");
+    await migrateSkills(f.org.id, { apply: true, importedEmbeddings });
+    expect(writer).toHaveBeenCalledTimes(1);
+    counts.clear();
+    expect((await migrateSkills(f.org.id, { apply: true, importedEmbeddings })).entries[0].status).toBe("imported");
+    expect(writer.mock.calls[1][5]).toEqual({ embeddings: [[0.25, 0.75]] });
+  });
+
+  test.each([false, true])("missing imported embeddings refuse before package claims (apply %s)", async (apply) => {
+    await legacy();
+    const report = await migrateSkills(f.org.id, { apply, importedEmbeddings: () => { throw new Error("Missing exact imported embedding"); } });
+    expect(report.entries[0]).toMatchObject({ status: "failed", error: expect.stringContaining("Missing exact imported embedding") });
+    expect(await db.skill.count({ where: { orgId: f.org.id } })).toBe(0);
+    expect(await db.skillVersion.count({ where: { skill: { orgId: f.org.id } } })).toBe(0);
+    expect(writer).not.toHaveBeenCalled();
+  });
+
+  test("regular migration still calls the native writer without an embedding override", async () => {
+    await legacy();
+    expect((await migrateSkills(f.org.id, { apply: true })).entries[0].status).toBe("imported");
+    expect(writer.mock.calls[0]).toHaveLength(5);
+  });
+
+  test("cache coverage preflight fails across packages without partially claiming the covered package", async () => {
+    const first = await legacy();
+    await history(1, first.data);
+    const current = await legacy(2);
+    const items = JSON.parse(current.files["items.json"]);
+    items[0].text = "An input missing from the imported cache";
+    const files = { ...current.files, "items.json": JSON.stringify(items) };
+    objects.set(`${current.artifacts}/items.json`, files["items.json"]);
+    await db.agent.update({ where: { id: f.roleplay.id }, data: {
+      data: { ...current.data, filesHash: skillPackageHash("authored-roleplay", files) },
+    } });
+    const importedEmbeddings = (entries: { text: string }[]) => entries.map((item) => {
+      if (item.text !== "Saved concern") throw new Error("Missing exact imported embedding");
+      return [0.25, 0.75];
+    });
+    const preflight = await migrateSkills(f.org.id, { importedEmbeddings });
+    expect(preflight.entries.map((entry) => entry.status)).toEqual(["unmapped", "failed"]);
+    expect(await db.skill.count({ where: { orgId: f.org.id } })).toBe(0);
+    expect(writer).not.toHaveBeenCalled();
+  });
+
+  test("package byte validation precedes the imported embedding resolver", async () => {
+    const saved = await legacy();
+    objects.set(`${saved.artifacts}/SKILL.md`, "# Corrupt package\n");
+    const importedEmbeddings = mock(() => [[0.25, 0.75]]);
+    expect((await migrateSkills(f.org.id, { apply: true, importedEmbeddings })).entries[0].status).toBe("failed");
+    expect(importedEmbeddings).not.toHaveBeenCalled();
+    expect(writer).not.toHaveBeenCalled();
+    expect(await db.skill.count({ where: { orgId: f.org.id } })).toBe(0);
+  });
+
+  test.each([false, true])("missing vectors never mask invalid original provenance (apply %s)", async (apply) => {
+    await legacy();
+    await db.skillSource.create({ data: { agentId: f.roleplay.id, version: 1, orgId: f.org.id,
+      documentId: "deleted-document", title: "Invalid saved count", items: 2 } });
+    const importedEmbeddings = mock(() => { throw new Error("Missing exact imported embedding"); });
+    expect((await migrateSkills(f.org.id, { apply, importedEmbeddings })).entries[0]).toMatchObject({
+      status: "failed", error: expect.stringContaining("count disagrees with items.json"),
+    });
+    expect(importedEmbeddings).not.toHaveBeenCalled();
+    expect(writer).not.toHaveBeenCalled();
+    expect(await db.skill.count({ where: { orgId: f.org.id } })).toBe(0);
   });
 
   test("imports session-snapshot-only history without rewriting snapshots", async () => {
