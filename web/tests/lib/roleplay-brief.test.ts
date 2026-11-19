@@ -3,7 +3,7 @@ import { checkBrief, draftBrief, renderBrief, roleplayBriefSchema, STANDARD_RULE
 import { scenarioItemSchema, scenarioManifestSchema, skillBody, stepGoal } from "@/lib/scenario-ingest";
 import { briefFixtures } from "../fixtures/roleplay-briefs";
 
-const SECTIONS = ["## Your role", "## The learner", "## Situation", "## What you want and your concerns", "## How it starts", "## How the conversation goes", "## How you react", "## How it ends", "## Rules"];
+const SECTIONS = ["## Your role", "## The learner", "## Situation", "## What you want and your concerns", "## How it starts", "## How the conversation goes", "## How you react", "## How it ends", "## Rules", "## How real people talk"];
 const fixture = (name: keyof typeof briefFixtures) => structuredClone(briefFixtures[name].brief);
 const reasonsFor = (brief: RoleplayBriefInput) => checkBrief(roleplayBriefSchema.parse(brief));
 

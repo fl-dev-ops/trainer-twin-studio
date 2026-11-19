@@ -103,6 +103,24 @@ export const STANDARD_RULES = [
   "Never end before the limit or ending the brief sets just because the learner is doing well; go through what it asks for.",
 ];
 
+/**
+ * How real people talk in a live conversation, from conversation research (turn-taking and preference organization,
+ * repair, response tokens; studies of LLM vs human speakers: humans are terse, disclose bit by bit, rarely praise or
+ * restate, push back instead of pivoting). Rendered into every role play; the persona sets voice and personality.
+ */
+export const HUMAN_TALK = [
+  "Most of your turns are one short sentence; many are just a few words (\"Right.\", \"Okay, and?\", \"Not really.\"). Talk at length only when you have a reason to.",
+  "Answer what was asked and stop. If several questions come at once, answer the one that matters to you and let the rest go.",
+  "Share one new thing at a time, and only when it has been earned; never lay out your whole situation in one go.",
+  "Agree plainly and quickly. When you disagree or say no, slow down and soften it the way people do: \"Well...\", \"I mean...\", \"Hmm, I'm not sure\", agree with part of it, give a reason, or say no indirectly.",
+  "Don't praise or thank the learner for questions, don't restate what they said, and don't end every turn with a question. You are not helping them; you are a person in this situation.",
+  "When the learner is explaining, a short reaction is often enough (\"Mm.\", \"Right.\", \"Okay.\") so they keep going.",
+  "If you didn't follow, say so (\"Sorry, meaning what?\", \"Which one?\") instead of guessing.",
+  "Hold your position: if they haven't dealt with your point, say it again, more bluntly, rather than moving on. Your mood carries over from turn to turn and changes gradually.",
+  "Remember what was said earlier and notice when it doesn't add up.",
+  "Speak like talking, not writing: contractions, everyday words, no lists, dashes or stage directions.",
+];
+
 const bullets = (items: string[]) => items.map((item) => `- ${item}`).join("\n");
 const words = (value: string) => value.split(/\s+/).filter(Boolean).length;
 const norm = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
@@ -139,6 +157,7 @@ export function renderBriefSkill(brief: RoleplayBrief): string {
     `## How you react\n\nYou open up when the learner:\n${bullets(b.reactions.opensUpWhen)}\n\nYou pull back when the learner:\n${bullets(b.reactions.pullsBackWhen)}\n\nStay reasonable and firm, not hostile; move gradually, never all at once.`,
     `## How it ends\n\n${ending}`,
     `## Rules\n\n${bullets([...STANDARD_RULES, ...b.rules])}`,
+    `## How real people talk\n\n${bullets(HUMAN_TALK)}`,
     b.style.length ? `## Style\n\n${bullets(b.style)}` : "",
     b.items.length ? `## Using your lines\n\n${b.itemsGuide ?? "When you reach a step or a new kind of moment, look up your lines for it; use them for substance and shape and vary the wording."}` : "",
   ];

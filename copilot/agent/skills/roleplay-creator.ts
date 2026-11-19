@@ -37,6 +37,14 @@ persona from the Persona Library, which gives the voice and personality.
      comes from stakes, not rudeness.
    - A counterpart (client, colleague, stakeholder) never concedes on the learner's first good move: write at least one
      further pushback or test before the good ending, as a person in that situation would.
+   - Make it sound like this person in this situation (every role play also gets standard human-talk rules):
+     - \`situation\`: what they share at each level of trust ("at first only…; if asked about X…; once they trust
+       you…"), so details come out one at a time.
+     - \`reactions\`: how THIS person says no or pushes back (indirect, blunt, joking, going quiet), and how their mood
+       shifts.
+     - \`style\`: how much they talk relative to the learner (a busy buyer: short; an interviewer: short questions), and
+       anything in the requirements about pace or interruptions.
+     - \`items\`: when the requirements give sample lines, include some short reactions too (kind example), as given.
    - \`ending\`: a limit (time or count), what good looks like, and the exit line if the AI ends it.
    - \`learnerBrief\`: written to the learner: who they are, the situation, the outcome to aim for, the limit. Never the
      hidden concerns.
