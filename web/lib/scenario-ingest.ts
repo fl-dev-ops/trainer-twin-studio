@@ -367,6 +367,28 @@ export async function ingestScenario(orgId: string, input: ScenarioIngestInput) 
   });
 }
 
+/**
+ * Publishes a ported interview (lib/interview-skill.ts) as its own authored role play, through the same publisher as
+ * every package. The original no-skill agent is untouched; the port's slug is `<org>-<original slug>`.
+ */
+export async function publishInterviewSkill(orgId: string, input: {
+  personaSlug: string;
+  scenario: ScenarioManifest;
+  skill: string;
+  items: ScenarioItem[];
+  settings: Record<string, unknown>;
+}) {
+  const [org, persona] = await Promise.all([
+    requireOrg(orgId),
+    db.persona.findFirst({ where: { orgId, slug: { equals: input.personaSlug, mode: "insensitive" } }, select: { id: true } }),
+  ]);
+  if (!persona) throw new ScenarioIngestError(`Persona "${input.personaSlug}" was not found in this organization`, 404);
+  return storeSkillAgent({
+    org, kind: "ROLEPLAY", personaId: persona.id, manifest: scenarioManifestSchema.parse(input.scenario), skill: input.skill, items: input.items,
+    data: input.settings,
+  });
+}
+
 /** skill.json, as written by the copilot's twin-creator: one topic and the situations it answers. No roles, no moves. */
 export const twinSkillManifestSchema = z.looseObject({
   skill: kebab,

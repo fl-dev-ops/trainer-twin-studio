@@ -157,3 +157,28 @@ describe("client role play (kind ROLEPLAY with a SKILL.md)", () => {
     assert.equal(await isRoleplaySession({ session: { auth: { current: { principalId: "org1", attributes: {} } } } }), false);
   });
 });
+
+describe("ported interview (web/lib/interview-skill.ts): an authored skill where the AI is the interviewer", () => {
+  const INTERVIEW = "---\nname: \"Impact Check\"\n---\n\n# Impact Check\n\n## Your role\n\nYou are the interviewer. The learner is the candidate.\n\n## Steps\n\n### `impact-validation` — Impact Validation\n\n**Interviewer goal:** Validate claims.\n";
+  const ported = {
+    name: "Impact Check (skill)", source: "scenario-ingest", skill: INTERVIEW,
+    scenario: { scenario: "impact-check", trainer_role: "Interviewer", learner_role: "Candidate", steps: [{ id: "impact-validation", name: "Impact Validation", trainer_moves: [], learner_moves: [] }] },
+    tools: { preview: true, codeEditor: false, canvas: false, choice: false },
+  };
+
+  test("runs as an authored role play: the AI plays the interviewer and follows the ported procedure", () => {
+    const roleplay = roleplaySkill("ROLEPLAY", ported);
+    assert.deepEqual(roleplay?.authored, { actorRole: "Interviewer" });
+    assert.equal(roleplay?.learnerRole, "Candidate");
+    const prompt = formatSessionSpec({ ...base, agentName: ported.name, roleplay, personaBrief: undefined, personaName: "Vasanth" });
+    assert.match(prompt, /You play Interviewer\. The learner plays Candidate\./);
+    assert.match(prompt, /You are the interviewer\. The learner is the candidate\./);
+    assert.match(prompt, /Validate claims\./);
+    assert.doesNotMatch(prompt, /CLIENT ROLE-PLAY MODE/);
+    assert.doesNotMatch(prompt, /guard level/i);
+  });
+
+  test("the original no-skill interview keeps the interview mode", () => {
+    assert.equal(roleplaySkill("ROLEPLAY", { name: "Impact Check", stages: [] }), undefined);
+  });
+});
