@@ -152,8 +152,8 @@ p, h2 { margin: 0; }
   display: grid; place-items: center; flex: 0 0 44px; height: 44px; padding: 0; border-radius: 999px;
   animation: tt-pop-in .3s cubic-bezier(.22,1,.36,1) both;
 }
-.tt-intro-change { border: 1px solid #d4d4d8; background: transparent; color: #3f3f46; }
-.tt-intro-change:hover { background: #f4f4f5; }
+.tt-intro-change { border: 0; background: #f4f4f5; color: #52525b; transition: background-color .2s ease, color .2s ease; }
+.tt-intro-change:hover { background: #e4e4e7; color: #0a0a0a; }
 .tt-side-submit { border: 0; background: #0a0a0a; color: #fafafa; }
 .tt-side-submit:hover:not(:disabled) { background: #27272a; }
 

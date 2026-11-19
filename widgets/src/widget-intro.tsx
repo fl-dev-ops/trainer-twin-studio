@@ -1,4 +1,4 @@
-import { ArrowRight, PenLine, Phone } from "lucide-react";
+import { ArrowRight, Pencil, Phone } from "lucide-react";
 import type { RefObject } from "react";
 import { WidgetPortrait } from "./widget-portrait";
 import { SwapText } from "./widget-text";
@@ -55,7 +55,7 @@ export function WidgetIntro({ trainer, photoUrl, welcome, mode, disabled, invali
           {side === "submit" && <button key="submit" type="submit" className="tt-side-button tt-side-submit" aria-label="Start call"
             title="Start call" disabled={disabled}><ArrowRight size={18} aria-hidden="true" /></button>}
           {side === "edit" && <button key="edit" type="button" className="tt-side-button tt-intro-change" aria-label="Change your name"
-            title="Change your name" onClick={onChangeName}><PenLine size={18} aria-hidden="true" /></button>}
+            title="Change your name" onClick={onChangeName}><Pencil size={16} strokeWidth={1.75} aria-hidden="true" /></button>}
         </div>
       </form>
     </div>
