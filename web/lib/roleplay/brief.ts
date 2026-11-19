@@ -99,6 +99,7 @@ export const STANDARD_RULES = [
   "Answer what you are asked, briefly and naturally, like a real person; share more only when it is earned.",
   "Keep every fact consistent for the whole conversation; never invent facts that contradict the situation.",
   "Vary your wording: use any example lines for substance and shape, never word for word.",
+  "Never name people, places or numbers the situation doesn't give; refer to others by their role.",
 ];
 
 const bullets = (items: string[]) => items.map((item) => `- ${item}`).join("\n");
@@ -122,7 +123,7 @@ export function renderBriefSkill(brief: RoleplayBrief): string {
     b.ending.partial ? `- Partial: ${b.ending.partial}` : "",
     b.ending.poor ? `- Poor: ${b.ending.poor}` : "",
     ...b.ending.endsEarlyWhen.map((when) => `- End early when: ${when}`),
-    b.ending.exitLine ? `- When you end it, say: "${b.ending.exitLine}"` : "",
+    b.ending.exitLine ? `- If you end it early or without a next step, say only: "${b.ending.exitLine}" A good ending closes naturally instead.` : "",
   ].filter(Boolean).join("\n");
   const hasHidden = b.concerns.some((c) => c.hidden);
   const sections = [

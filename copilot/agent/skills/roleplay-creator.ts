@@ -11,7 +11,9 @@ persona from the Persona Library, which gives the voice and personality.
 
 0. **Check what exists.** Call \`list_roleplays\`. When a role play for this same practice and persona already exists,
    this is a change to it: \`get_roleplay\` it and keep its brief id, so publishing makes its next version. Never create
-   a second one for the same practice, and never archive anything unless the trainer asks.
+   a second one for the same practice, and never archive anything unless the trainer asks. When the trainer gives the
+   requirements again, rewrite the brief from them (same id): keep earlier content only where the requirements
+   support it, and drop details they don't.
 1. **Read everything first.** The trainer's message and every attachment. Find, for this one role play: who the AI
    plays, who the learner plays, the situation, what the learner should achieve, how it starts, how it goes, how the AI
    reacts, how it ends, and any lines the trainer gave (objections, questions, sample lines).
@@ -41,7 +43,8 @@ persona from the Persona Library, which gives the voice and personality.
    - In an interview, exam or assessment the AI asks and probes; it never teaches, hints or nudges toward the answer
      unless the requirements ask for coaching during the call.
    - Keep the trainer's own words for facts, lines and rules; don't embellish. Use only this persona's and this
-     scenario's details: never borrow another persona's backstory or another scenario's facts from the same document. Fictional names and numbers from the
+     scenario's details: never borrow another persona's backstory or another scenario's facts from the same document. Never add names,
+     people, dates or numbers the requirements don't give: refer to others by role ("a teammate who left"). Fictional names and numbers from the
      requirements stay as they are; never add real people's personal details.
    Fix every reason \`draft_roleplay\` returns in the next call, all at once; at most 3 drafts.
 6. **Show the trainer, in your reply,** once a draft passes: the learner brief and a short summary (the AI's role and

@@ -50,7 +50,7 @@ export const roleplayBrief = z.object({
     partial: text(400).optional(),
     poor: text(400).optional(),
     endsEarlyWhen: lines(5).default([]).describe("Moments that end it early, e.g. \"two pitches without a question\"."),
-    exitLine: text(300).optional().describe("What you say when you end it."),
+    exitLine: text(300).optional().describe("What you say when you end it early or without a next step (a good ending closes naturally)."),
   }).strict(),
   rules: lines(10).default([]).describe("Scenario-specific always/never rules only. Standard rules (stay in role, never coach, keep facts consistent, vary wording) are added automatically."),
   style: lines(5).default([]).describe("Scenario-specific speaking constraints only, e.g. \"At most 45 words per turn.\" Tone and personality come from the persona."),

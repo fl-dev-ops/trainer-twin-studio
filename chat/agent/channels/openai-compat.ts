@@ -64,6 +64,8 @@ const END_CALL_FALLBACK_GOODBYE: Record<string, string> = {
   agreed: "Okay, speak then. Bye for now.",
   declined: "Sorry, I have to go. Bye.",
   guard_ran_out: "Sorry, I have to go. Bye.",
+  // An authored practice that reached its ending: no verdict either way (the skill's own close follows when given).
+  completed: "Okay, thank you.",
 };
 
 type ChatMessage = {
@@ -346,6 +348,8 @@ export default defineChannel({
         let sawActivity = false;
         /** Leading blank lines (Qwen opens replies with "\n\n") are dropped so bubbles don't start with empty space. */
         let textStarted = false;
+        /** end_call came before any words: speak a fallback goodbye at the end of the step only if none follows. */
+        let pendingGoodbye: string | null = null;
         let sawTurnStarted = false;
         let ttftMs: number | null = null;
         let tFirstEvent = 0;
@@ -466,14 +470,10 @@ export default defineChannel({
                   allToolsCalled.push({ name: action.toolName, callId: action.callId, input: action.input });
                   toolExecutionTimes[action.callId] = { start: Date.now() };
                 }
-                // The browser disconnects ~5s after end_call, so a missing goodbye must go out now.
+                // The browser disconnects ~5s after end_call: when the model hung up before speaking, a goodbye is
+                // spoken at the end of this step unless the model's own words follow in the same step.
                 if (action.kind === "tool-call" && action.toolName === "end_call" && !textStarted) {
-                  const outcome = String((action.input as { outcome?: unknown } | null)?.outcome ?? "");
-                  console.warn("[openai-compat] end_call without goodbye; speaking fallback", { sessionId, mode, outcome });
-                  sawActivity = true;
-                  textStarted = true;
-                  markSpoken();
-                  await writeText(END_CALL_FALLBACK_GOODBYE[outcome] ?? END_CALL_FALLBACK_GOODBYE.declined);
+                  pendingGoodbye = String((action.input as { outcome?: unknown } | null)?.outcome ?? "");
                 }
               }
               const bridged = questionBridge.onToolCalls(ev.data.actions);
@@ -524,6 +524,14 @@ export default defineChannel({
             }
 
             if (ev.type === "step.completed") {
+              if (pendingGoodbye !== null && !textStarted) {
+                console.warn("[openai-compat] end_call without goodbye; speaking fallback", { sessionId, mode, outcome: pendingGoodbye });
+                sawActivity = true;
+                textStarted = true;
+                markSpoken();
+                await writeText(END_CALL_FALLBACK_GOODBYE[pendingGoodbye] ?? END_CALL_FALLBACK_GOODBYE.declined);
+              }
+              pendingGoodbye = null;
               if (currentStepStart !== null) {
                 const currentStep = llmSteps[llmSteps.length - 1];
                 if (currentStep) {

@@ -46,6 +46,7 @@ const cases: Case[] = [
   { id: "bevan-missed-deadlines", file: "coaches.md", persona: "Chloe Martin", ask: "Write Bevan's Scenario 2 (missed deadlines) as one role play, played by Chloe Martin." },
   { id: "flo-keynote", file: "coaches.md", persona: "Ingrid Larsen", ask: "Write Flo's Scenario 3 (keynote Q&A) as one role play, played by Ingrid Larsen." },
   { id: "jameel-technical", file: "coaches.md", persona: "Linda Chen", ask: "Write Jameel's Scenario 2 (round two, technical) as one role play, played by Linda Chen.", expectNotes: /mode|practice|mock/i },
+  { id: "daniele-design-review", file: "coaches.md", persona: "Martin Keller", ask: "Write Daniele's Scenario 2 (the design review) as one role play, played by Martin Keller." },
   { id: "vasanth-impact", file: "vasanth.md", persona: "Vasanth", ask: "Write Round 2 of Interview 1 (Impact & Quantification) as one mock-interview role play, played by Vasanth. The candidate attaches their résumé." },
 ];
 
@@ -79,11 +80,12 @@ const builds = cases.map((c) => defineEval({
 
     const publish = await session.send("This looks right. Publish it.", { headers: headers() });
     t.log(`${c.id}: publish turn ${publish.status}: ${publish.reply}; events: ${JSON.stringify(publish.events.filter((e) => /error|failed|interaction|approval/i.test(e.type)).slice(-5))}`);
-    const request = publish.session.requireInteraction({ toolName: "publish_roleplay" });
-    t.log(`${c.id}: approval requested: ${JSON.stringify(request.request.prompt ?? null)}`);
-    // respond (not respondAll) so the answer carries the studio organization's credentials.
-    const approved = await publish.session.respond([{ interactionId: request.interactionId, optionId: "approve" }], { headers: headers() });
-    t.log(`${c.id}: approved turn ${approved.status}: ${approved.reply}; events: ${JSON.stringify(approved.events.filter((e) => /error|fail/i.test(JSON.stringify(e))).slice(-4)).slice(0, 2000)}`);
+    // Approve every pending request (the publish, and any settings change it proposes, e.g. a résumé upload).
+    const pending = publish.interactions as readonly { interactionId: string; request: { prompt?: string } }[];
+    t.check(pending.some((i) => /Publish the role play/.test(i.request.prompt ?? "")), satisfies((v) => v === true, "asks to publish"));
+    t.log(`${c.id}: approvals: ${JSON.stringify(pending.map((i) => i.request.prompt))}`);
+    const approved = await publish.session.respond(pending.map((i) => ({ interactionId: i.interactionId, optionId: "approve" })), { headers: headers() });
+    t.log(`${c.id}: approved turn ${approved.status}: ${approved.reply}`);
     approved.expectOk();
     // The trainer sees what was drafted and what was published, in words.
     t.check(turns.at(-1)!.reply, satisfies((reply) => String(reply).trim().length > 40, "shows the trainer the draft"));

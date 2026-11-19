@@ -40,7 +40,7 @@ test("the brief is written to the AI as \"you\", with how it starts for each ope
   expect(learner.skill).toContain('Your first reply: "We\'ve heard ideas like this before. Why would this one work?"');
   expect(ai.skill).toContain("(hidden until earned) You don't really understand how a Dubai mortgage works");
   expect(ai.skill).toContain("Reveal a hidden concern only when the learner asks a genuine question about it and listens");
-  expect(ai.skill).toContain('When you end it, say: "I\'ve got to go, just send me something on WhatsApp."');
+  expect(ai.skill).toContain('If you end it early or without a next step, say only: "I\'ve got to go, just send me something on WhatsApp." A good ending closes naturally instead.');
   expect(ai.skill).toContain("## Using your lines");
   // Without items, the skill has no "Using your lines" section.
   expect(draftBrief(fixture("bevan-missed-deadlines"))).toMatchObject({ ok: true, skill: expect.not.stringContaining("## Using your lines") });
