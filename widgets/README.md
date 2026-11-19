@@ -85,7 +85,9 @@ button; if a browser later blocks playback, a short message asks the visitor to 
 Autofill retains the black pill surface and light text: the field wrapper supplies the background while
 `:autofill`/`:-webkit-autofill` clips browser autofill paint to text. No inset fill-shadow or long transition is used.
 Failed starts show “We couldn’t start the conversation.” and a retry action, not a completed-call thank-you.
-Network/provider details stay generic; microphone permission/device errors retain actionable guidance.
+Ready/result titles use 20px text. Failed/ended views show only their title and action, without a description
+paragraph. Safe failure guidance remains available to assistive technology through the title's `aria-description`.
+Network/provider details stay generic; microphone permission/device errors retain actionable guidance there.
 
 Escape in the parent minimises an inactive floating panel; active calls ignore collapse requests.
 Keyboard events do not cross iframe boundaries. The loader supplies `parentOrigin` and `mode=floating` in the iframe URL.

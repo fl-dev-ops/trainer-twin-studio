@@ -101,8 +101,7 @@ p, h1, h2 { margin: 0; }
   font-size: 12px;
   line-height: 16px;
 }
-.tt-introduction { font-size: 23px; line-height: 28px; letter-spacing: -.5px; font-weight: 500; overflow-wrap: anywhere; }
-.tt-description { max-width: 440px; color: #b7b8ad; font-size: 13px; line-height: 20px; overflow-wrap: anywhere; }
+.tt-introduction { font-size: 20px; line-height: 24px; letter-spacing: -.4px; font-weight: 500; overflow-wrap: anywhere; }
 .tt-prejoin { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 52px; align-items: center; gap: 12px; width: 100%; align-self: center; }
 .tt-name-field { min-width: 0; position: relative; background: #090a08; border-radius: 999px; }
 .tt-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
@@ -210,7 +209,7 @@ p, h1, h2 { margin: 0; }
 .tt-end:hover { background: #bd363e; }
 .tt-playback-hint { color: #e4dcbf; font-size: 12px; line-height: 20px; text-align: center; }
 .tt-finished { display: flex; flex-direction: column; gap: 16px; text-align: center; margin: auto 0; }
-.tt-finished-title { font-size: 22px; font-weight: 500; line-height: 28px; letter-spacing: -.4px; }
+.tt-finished-title { font-size: 20px; font-weight: 500; line-height: 24px; letter-spacing: -.4px; }
 .tt-error { border: 1px solid #eda59844; border-radius: 12px; padding: 12px; color: #ffc6ba; background: #512e2633; font-size: 12px; line-height: 20px; overflow-wrap: anywhere; }
 .tt-config-error { padding: 24px; color: #ffc6ba; background: #1b1c19; font-size: 14px; line-height: 24px; }
 .tt-waves { position: absolute; inset-inline: 0; bottom: -32px; width: 100%; height: 224px; filter: blur(24px); pointer-events: none; }
@@ -232,16 +231,10 @@ p, h1, h2 { margin: 0; }
 .tt-card[data-visible="false"] .tt-footer,
 .tt-card[data-visible="false"] .tt-error { opacity: 0; transform: translateY(12px); }
 .tt-card[data-phase="ready"] .tt-hero { gap: 16px; }
-.tt-card[data-phase="ready"] .tt-introduction { font-size: 22px; line-height: 28px; }
 @keyframes tt-caption-in { from { transform: translateY(12px); } to { transform: translateY(0); } }
 
-@media (max-width: 340px) {
-  .tt-introduction { font-size: 21px; line-height: 28px; }
-}
 @media (max-height: 560px) {
   .tt-body { gap: 16px; }
-  .tt-introduction { font-size: 20px; line-height: 24px; }
-  .tt-description { font-size: 12px; line-height: 16px; }
   .tt-card[data-phase="ready"] .tt-body, .tt-card[data-phase="ready"] .tt-hero { gap: 16px; }
 }
 @media (prefers-reduced-motion: reduce) {

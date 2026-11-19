@@ -44,6 +44,7 @@ Resize messages accept only integers 280–4096px as a protocol safety boundary;
 Portraits are full content width in every phase, with 16px top/side insets; the form has matching 16px side insets.
 On short screens, portrait height adapts so actions and the footer remain visible. The card body never scrolls;
 call controls sit outside it above the footer. Failed starts have a friendly failure/retry view, not a thank-you.
+Welcome/result titles use 20px type; failed/ended views have only their title and action, without a description.
 Image preload/eager fetching happens before opening. Independent fade/translate reveals do not scale the content.
 Connecting and active calls stay open regardless of pointer leave, Escape or minimise requests; no minus button is shown.
 Hover/minimising/visibility messages never start or end a call.

@@ -287,7 +287,8 @@ test.describe.serial("cross-origin hosted voice widget", () => {
     const calls = await simulatedCalls(page);
     const hosted = await open(page);
     await begin(hosted, "Noor");
-    await expect(hosted.getByRole("alert")).toContainText("Microphone access is blocked");
+    await expect(hosted.getByRole("heading", { name: "We couldn’t start the conversation.", exact: true }))
+      .toHaveAttribute("aria-description", /Microphone access is blocked/);
     expect(await hosted.evaluate(() => window.__widgetFetches)).toEqual([]);
     expect(calls.starts).toHaveLength(0);
     await expect(hosted.getByRole("heading", { name: "We couldn’t start the conversation.", exact: true })).toBeVisible();
@@ -376,6 +377,7 @@ test.describe.serial("cross-origin hosted voice widget", () => {
     await expect(hosted.getByRole("button", { name: "Start voice call", exact: true })).toHaveText("");
     expect(await hosted.locator(".tt-portrait-stage").evaluate((node) => getComputedStyle(node).backgroundColor)).toBe("rgb(9, 10, 8)");
     expect(await hosted.locator(".tt-card").evaluate((node) => getComputedStyle(node).backgroundColor)).toBe("rgb(27, 28, 25)");
+    expect(await hosted.locator(".tt-introduction").evaluate((node) => getComputedStyle(node).fontSize)).toBe("20px");
     expect(await hosted.getByRole("button", { name: "Start voice call", exact: true }).evaluate((node) => node.getBoundingClientRect().bottom <= innerHeight)).toBe(true);
     await expect.poll(() => hosted.locator(".tt-card").evaluate((node) => Math.abs(innerHeight - node.getBoundingClientRect().height))).toBeLessThanOrEqual(2);
     await expect.poll(() => page.locator("[data-trainertwin-widget] .floating").evaluate((node) => Math.round(node.getBoundingClientRect().width))).toBe(340);
@@ -476,6 +478,8 @@ test.describe.serial("cross-origin hosted voice widget", () => {
     await hosted.getByRole("button", { name: "End call", exact: true }).click();
     await expect.poll(() => calls.ends.length).toBe(1);
     await expect(hosted.getByRole("heading", { name: "Thanks for the conversation.", exact: true })).toBeVisible();
+    await expect(hosted.locator(".tt-finished p")).toHaveCount(0);
+    expect(await hosted.locator(".tt-finished-title").evaluate((node) => getComputedStyle(node).fontSize)).toBe("20px");
     await expect(hosted.getByRole("button", { name: "Start a new call", exact: true })).toBeEnabled();
     await expect.poll(() => hosted.locator(".tt-card").evaluate((node) => Math.abs(innerHeight - node.getBoundingClientRect().height))).toBeLessThanOrEqual(2);
     await expectPortraitInsets(hosted);
@@ -513,7 +517,9 @@ test.describe.serial("cross-origin hosted voice widget", () => {
     const hosted = await open(page);
     await begin(hosted, "Retry visitor");
     await expect(hosted.getByRole("heading", { name: "We couldn’t start the conversation.", exact: true })).toBeVisible();
-    await expect(hosted.getByRole("alert")).toHaveText("Please try again in a little while.");
+    await expect(hosted.getByRole("heading", { name: "We couldn’t start the conversation.", exact: true }))
+      .toHaveAttribute("aria-description", "Please try again in a little while.");
+    await expect(hosted.locator(".tt-finished p")).toHaveCount(0);
     await expect(hosted.getByRole("heading", { name: "Thanks for the conversation.", exact: true })).toHaveCount(0);
     await expect(hosted.locator(".tt-error")).toBeHidden();
     await expect(hosted.getByRole("button", { name: "Try again", exact: true })).toBeEnabled();
@@ -626,7 +632,8 @@ test.describe.serial("cross-origin hosted voice widget", () => {
     const hosted = await open(page);
     await begin(hosted);
     await expect(hosted.getByRole("status")).toContainText("Connecting");
-    await expect(hosted.getByRole("alert")).toContainText("time limit");
+    await expect(hosted.getByRole("heading", { name: "We couldn’t start the conversation.", exact: true }))
+      .toHaveAttribute("aria-description", /time limit/);
     await expect.poll(() => calls.ends).toEqual(["Bearer end-capability-secret"]);
     expect(await hosted.evaluate(() => window.__widgetRoom?.disconnects)).toBeGreaterThanOrEqual(1);
     expect(await hosted.evaluate(() => window.__widgetRoom?.microphone)).toEqual([]);
@@ -713,13 +720,14 @@ test.describe.serial("cross-origin hosted voice widget", () => {
     const hosted = await open(page);
     expect(new URL(hosted.url()).searchParams.get("mode")).toBe("floating");
     await begin(hosted);
-    await expect(hosted.getByRole("alert")).toHaveText("Please try again in a little while.");
+    await expect(hosted.getByRole("heading", { name: "We couldn’t start the conversation.", exact: true }))
+      .toHaveAttribute("aria-description", "Please try again in a little while.");
     expect(calls.starts).toHaveLength(1);
     await expect(hosted.getByRole("button", { name: "Try again", exact: true })).toBeEnabled();
     await hosted.getByRole("button", { name: "Try again", exact: true }).click();
     await begin(hosted, "Second attempt");
     await expect.poll(() => calls.starts.length).toBe(2);
-    await expect(hosted.getByRole("alert")).not.toContainText("private credential");
+    expect(await hosted.locator(".tt-finished-title").getAttribute("aria-description")).not.toContain("private credential");
     expect(bootstraps).toEqual([
       { parentOrigin: CUSTOMER_ORIGIN },
       { parentOrigin: CUSTOMER_ORIGIN, visitorToken: expect.any(String) },
@@ -792,7 +800,8 @@ test.describe.serial("cross-origin hosted voice widget", () => {
       const denied = page.waitForResponse((response) => new URL(response.url()).pathname === bootstrapPath());
       await begin(hosted);
       expect((await denied).status()).toBe(403);
-      await expect(hosted.getByRole("alert")).toContainText("not available on this website");
+      await expect(hosted.getByRole("heading", { name: "We couldn’t start the conversation.", exact: true }))
+        .toHaveAttribute("aria-description", /not available on this website/);
       expect(calls.starts).toHaveLength(0);
     } finally {
       await update(admin.request, { widget: { allowedOrigins: [CUSTOMER_ORIGIN] } });

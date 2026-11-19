@@ -312,8 +312,8 @@ function mount(root: HTMLElement, config: Config) {
 
   const finished = element("section", "tt-finished");
   finished.hidden = true;
+  finished.setAttribute("aria-live", "polite");
   const finishedTitle = element("h2", "tt-finished-title", "Thanks for the conversation.");
-  const finishedText = element("p", "tt-description", "Your call has ended. You can start a new conversation whenever you’re ready.");
   const retry = button("tt-primary", "Start a new call");
   retry.addEventListener("click", () => {
     if (starting || finishing || destroyed) return;
@@ -323,7 +323,7 @@ function mount(root: HTMLElement, config: Config) {
     render();
     name.focus();
   });
-  finished.append(finishedTitle, finishedText, retry);
+  finished.append(finishedTitle, retry);
   const error = element("p", "tt-error");
   error.id = "tt-error";
   error.hidden = true;
@@ -414,10 +414,8 @@ function mount(root: HTMLElement, config: Config) {
     controls.hidden = call.hidden;
     finished.hidden = phase !== "ended" && phase !== "failed";
     finishedTitle.textContent = phase === "failed" ? "We couldn’t start the conversation." : "Thanks for the conversation.";
-    finishedText.textContent = phase === "failed" ? finishMessage ?? "Please try again in a little while."
-      : "Your call has ended. You can start a new conversation whenever you’re ready.";
-    if (phase === "failed") finishedText.setAttribute("role", "alert");
-    else finishedText.removeAttribute("role");
+    if (phase === "failed") finishedTitle.setAttribute("aria-description", finishMessage ?? "Please try again in a little while.");
+    else finishedTitle.removeAttribute("aria-description");
     retry.textContent = phase === "failed" ? "Try again" : "Start a new call";
     introduction.hidden = phase !== "ready";
     const connecting = phase === "connecting" || (phase === "live" && reconnecting);
