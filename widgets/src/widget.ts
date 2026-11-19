@@ -749,7 +749,7 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
     visible = !preview.embedded;
     setCaption("welcome", "What would you like to practice today?", true, false);
     setCaption("visitor", "I want to get better at giving feedback.", true, true);
-    setCaption("response", "Let’s start with a conversation you’ve been putting off.", true, false);
+    setCaption("response", "Let’s start with a conversation you’ve been putting off. Think of a recent moment when you wanted to give someone feedback but held back. What did you want them to understand, and what made it difficult to say?", true, false);
     if (preview.embedded) {
       window.addEventListener("message", receive);
       ready();

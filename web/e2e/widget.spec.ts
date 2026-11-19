@@ -354,6 +354,7 @@ test.describe.serial("cross-origin hosted voice widget", () => {
     await begin(hosted, "Design review");
     await expect.poll(() => calls.starts.length).toBe(1);
     await expect(hosted.getByRole("status")).toHaveText("Connecting…");
+    await expect(hosted.locator(".tt-transcript")).toBeHidden();
     await expect(hosted.locator("header")).toHaveCount(0);
     expect(await photo.evaluate((node) => getComputedStyle(node).objectFit)).toBe("cover");
     expect(await hosted.locator(".tt-portrait-stage").evaluate((node) => Math.abs(node.clientWidth - node.clientHeight))).toBeLessThanOrEqual(1);

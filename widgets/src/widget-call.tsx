@@ -1,4 +1,5 @@
 import { Mic, MicOff, PhoneOff, X } from "lucide-react";
+import { useLayoutEffect, useRef } from "react";
 import { WidgetPortrait } from "./widget-portrait";
 import type { WidgetRefs } from "./widget-view";
 
@@ -38,6 +39,14 @@ export function WidgetCall(props: WidgetCallProps) {
   const failed = phase === "failed";
   const muteAction = muted ? "Unmute microphone" : "Mute microphone";
   const timeRemaining = `${Math.floor(props.seconds / 60)}:${String(props.seconds % 60).padStart(2, "0")} left`;
+  const transcript = useRef<HTMLDivElement>(null);
+  const followCaptions = useRef(true);
+  const latest = props.captions.at(-1);
+  useLayoutEffect(() => {
+    if (phase === "connecting") followCaptions.current = true;
+    if (transcript.current && followCaptions.current) transcript.current.scrollTop = transcript.current.scrollHeight;
+  }, [phase, latest]);
+
   return (
     <div className="tt-call-screen" hidden={!props.visible}>
       <canvas ref={elements.waves} className="tt-waves" hidden={phase !== "live"} aria-hidden="true" />
@@ -53,8 +62,11 @@ export function WidgetCall(props: WidgetCallProps) {
           </div>
           <p className="tt-status" role="status" aria-live="polite" hidden={!connecting}>{connecting ? "Connecting…" : ""}</p>
         </div>
-        <section className="tt-call" aria-label="Voice call" hidden={!inCall}>
-          <div className="tt-transcript" role="log" aria-label="Conversation captions" aria-live="polite" aria-relevant="additions text">
+        <section className="tt-call" aria-label="Voice call" hidden={phase !== "live" || (!latest && !props.playbackBlocked)}>
+          <div ref={transcript} className="tt-transcript" role="log" aria-label="Conversation captions" aria-live="polite" aria-relevant="additions text"
+            hidden={!latest} tabIndex={0} onScroll={({ currentTarget }) => {
+              followCaptions.current = currentTarget.scrollHeight - currentTarget.scrollTop - currentTarget.clientHeight < 4;
+            }}>
             {props.captions.slice(-2).map(({ id, text, final, visitor }) => (
               <p key={id} className={`tt-caption${visitor ? " tt-caption-you" : ""}`} data-final={final}>
                 <span className="tt-caption-text">{text}</span>

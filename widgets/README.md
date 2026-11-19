@@ -55,7 +55,7 @@ If storage is blocked, the name is remembered until the widget reloads.
 The loader keeps connecting and active calls open. The name panel's chevron returns to the intro card. Escape
 on the intro minimises it to a round phone button without unloading the iframe. Successful teardown returns focus
 to the intro button, while failures remain retryable in the call panel. The panel is at most 340px wide and is
-bounded by viewport safe areas. The call shows the two latest captions without an expand control. Trusted resize
+bounded by viewport safe areas. Connecting and silent calls leave no blank caption area. The two latest captions wrap in full and scroll if needed. Trusted resize
 messages accept integers 140–4096px.
 LiveKit audio tracks drive the shared Twin-session green/orange glow renderer. Photos remain in colour; initials
 appear when no photo is available.

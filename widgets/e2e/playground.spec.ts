@@ -28,7 +28,11 @@ test("design preview renders widget states and refreshes the selected state with
   await expect(unmute).toHaveCSS("background-color", "rgb(229, 225, 217)");
   await page.getByRole("button", { name: "Call", exact: true }).hover();
   await expect(unmute).toHaveCSS("background-color", "rgb(242, 238, 229)");
-  await expect(widget.getByRole("log")).toContainText("giving feedback");
+  const captions = widget.getByRole("log");
+  await expect(captions).toContainText("giving feedback");
+  await expect(captions).toContainText("what made it difficult to say?");
+  expect(await captions.locator(".tt-caption").last().evaluate((caption) =>
+    caption.clientHeight > 2 * Number.parseFloat(getComputedStyle(caption).lineHeight))).toBe(true);
   await expect(widget.getByRole("button", { name: "Expand captions" })).toHaveCount(0);
   await expect(widget.getByText("What would you like to practice today?")).toHaveCount(0);
   revision = "second";
@@ -73,7 +77,11 @@ test("launcher preview runs the real loader and opens a simulated widget", async
   await expect(hosted.getByRole("textbox", { name: "Your name" })).toBeHidden();
   await expect(hosted.getByRole("button", { name: "Mute microphone" })).toBeEnabled();
   await hosted.getByRole("button", { name: "End call" }).click();
-  await hosted.getByRole("button", { name: "Change your name" }).click();
+  const changeName = hosted.getByRole("button", { name: "Change your name" });
+  const callBounds = await launcher.boundingBox();
+  const changeBounds = await changeName.boundingBox();
+  expect(callBounds && changeBounds && changeBounds.x >= callBounds.x + callBounds.width).toBe(true);
+  await changeName.click();
   await expect(hosted.getByRole("textbox", { name: "Your name" })).toHaveValue("Jordan");
 });
 
