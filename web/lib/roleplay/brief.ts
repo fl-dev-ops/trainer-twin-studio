@@ -100,6 +100,7 @@ export const STANDARD_RULES = [
   "Keep every fact consistent for the whole conversation; never invent facts that contradict the situation.",
   "Vary your wording: use any example lines for substance and shape, never word for word.",
   "Never name people, places or numbers the situation doesn't give; refer to others by their role.",
+  "Never end before the limit or ending the brief sets just because the learner is doing well; go through what it asks for.",
 ];
 
 const bullets = (items: string[]) => items.map((item) => `- ${item}`).join("\n");

@@ -471,7 +471,7 @@ export default defineChannel({
                   toolExecutionTimes[action.callId] = { start: Date.now() };
                 }
                 // The browser disconnects ~5s after end_call: when the model hung up before speaking, a goodbye is
-                // spoken at the end of this step unless the model's own words follow in the same step.
+                // spoken when the turn ends unless the model's own words follow first.
                 if (action.kind === "tool-call" && action.toolName === "end_call" && !textStarted) {
                   pendingGoodbye = String((action.input as { outcome?: unknown } | null)?.outcome ?? "");
                 }
@@ -524,14 +524,6 @@ export default defineChannel({
             }
 
             if (ev.type === "step.completed") {
-              if (pendingGoodbye !== null && !textStarted) {
-                console.warn("[openai-compat] end_call without goodbye; speaking fallback", { sessionId, mode, outcome: pendingGoodbye });
-                sawActivity = true;
-                textStarted = true;
-                markSpoken();
-                await writeText(END_CALL_FALLBACK_GOODBYE[pendingGoodbye] ?? END_CALL_FALLBACK_GOODBYE.declined);
-              }
-              pendingGoodbye = null;
               if (currentStepStart !== null) {
                 const currentStep = llmSteps[llmSteps.length - 1];
                 if (currentStep) {
@@ -561,6 +553,14 @@ export default defineChannel({
             }
 
             const terminal = ev.type === "terminal";
+            // The model hung up and never spoke in this turn (its goodbye may come in a later step): goodbye now.
+            if (terminal && pendingGoodbye !== null && !textStarted) {
+              console.warn("[openai-compat] end_call without goodbye; speaking fallback", { sessionId, mode, outcome: pendingGoodbye });
+              sawActivity = true;
+              textStarted = true;
+              markSpoken();
+              await writeText(END_CALL_FALLBACK_GOODBYE[pendingGoodbye] ?? END_CALL_FALLBACK_GOODBYE.declined);
+            }
 
             if (terminal && (sawActivity || sawTurnStarted)) {
               const wallMs = Date.now() - t_start;

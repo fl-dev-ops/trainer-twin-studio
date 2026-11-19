@@ -35,6 +35,8 @@ persona from the Persona Library, which gives the voice and personality.
    - \`steps\`: 2 to 6, a real conversation, not a checklist; include moments the AI brings in on purpose.
    - \`reactions\`: observable things the learner does. Resistance is reasonable and firm, not hostile; difficulty
      comes from stakes, not rudeness.
+   - A counterpart (client, colleague, stakeholder) never concedes on the learner's first good move: write at least one
+     further pushback or test before the good ending, as a person in that situation would.
    - \`ending\`: a limit (time or count), what good looks like, and the exit line if the AI ends it.
    - \`learnerBrief\`: written to the learner: who they are, the situation, the outcome to aim for, the limit. Never the
      hidden concerns.

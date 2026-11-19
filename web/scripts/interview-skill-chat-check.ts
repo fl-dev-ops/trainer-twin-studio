@@ -68,6 +68,25 @@ async function turn(chat: string, orgId: string, secret: string, session: { id: 
   return { reply: reply.trim(), model: trace.llm_model, tools: (Array.isArray(trace.tools_executed) ? trace.tools_executed : []).map((t) => object(t).name ?? object(t).tool) };
 }
 
+/** A second model plays a reasonably good, imperfect learner from the role play's learner brief (--simulate). */
+async function simulatedLearner(brief: string, history: string[]) {
+  const response = await fetch(`${process.env.AI_GATEWAY_BASE_URL ?? "https://ai-gateway.vercel.sh/v1"}/chat/completions`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${process.env.AI_GATEWAY_API_KEY}`, "content-type": "application/json" },
+    body: JSON.stringify({
+      model: process.env.INTERVIEW_LLM_MODEL, temperature: 0.8, max_tokens: 2500,
+      messages: [
+        { role: "system", content: `You are practising a live spoken conversation. Your brief:\n${brief}\n\nReply as yourself in one to three natural spoken sentences. Be a reasonably good but imperfect learner: sometimes vague, sometimes pushing too early. Never narrate or use stage directions.` },
+        { role: "user", content: `The conversation so far:\n${history.join("\n")}\n\nYour next line:` },
+      ],
+    }),
+  });
+  const body = await response.json() as { choices?: { message?: { content?: string } }[] };
+  const text = body.choices?.[0]?.message?.content?.trim();
+  if (!text) throw new Error(`Learner simulator failed: ${JSON.stringify(body).slice(0, 200)}`);
+  return text.replace(/^(You|Me):\s*/i, "");
+}
+
 async function main() {
   assertLocalPortEnvironment(process.env);
   assert(argv.includes("--apply"), "--apply is required for paid model calls");
@@ -75,7 +94,8 @@ async function main() {
   assert(secret, "COPILOT_SERVICE_SECRET is required");
   const chat = option("chat") ?? "http://127.0.0.1:2100";
   assert(/^http:\/\/(127\.0\.0\.1|localhost):\d+$/.test(chat), "Chat must be a local service");
-  const turns = Math.min(3, Math.max(1, Number(option("turns") ?? 3)));
+  const simulate = argv.includes("--simulate");
+  const turns = Math.min(simulate ? 20 : 3, Math.max(1, Number(option("turns") ?? 3)));
   const { db } = await import("../lib/db");
   const { activateSession } = await import("../lib/interview-sessions");
   const { buildSessionContext } = await import("../lib/session-context");
@@ -123,16 +143,22 @@ async function main() {
       const pinnedSkill = object((await buildSessionContext({ orgId: org.id, sessionId: session.id })).agent?.data).skill;
       const maxWords = Number(/At most (\d+) words per turn/.exec(String(pinnedSkill))?.[1] ?? 0);
       const learnerLines = option("lines") ? (await import("node:fs")).readFileSync(option("lines")!, "utf8").split("\n").filter(Boolean) : CANDIDATE;
-      const messages = ["[OPENING]", ...learnerLines].slice(0, turns + 1);
-      for (const [index, message] of messages.entries()) {
+      const messages = simulate ? ["[OPENING]"] : ["[OPENING]", ...learnerLines].slice(0, turns + 1);
+      const learnerBrief = String(object(object(agent.data).scenario).description ?? "");
+      const history: string[] = [];
+      for (let index = 0; index < (simulate ? turns + 1 : messages.length); index++) {
+        const message = simulate && index > 0 ? await simulatedLearner(learnerBrief, history) : messages[index];
+        if (index > 0) history.push(`You: ${message}`);
         const started = performance.now();
         const reply = await turn(chat, org.id, secret, { id: session.id, agentSlug: agent.slug }, message);
         const words = reply.reply.split(/\s+/).filter(Boolean).length;
+        history.push(`Them: ${reply.reply}`);
         (result.turns as unknown[]).push({ heard: message, reply: reply.reply, words, ms: Math.round(performance.now() - started), model: reply.model, tools: reply.tools });
         assert(reply.reply.length >= 8, `Turn ${index}: empty reply`);
         assert(!/CLIENT ROLE-PLAY|guard level/i.test(reply.reply), `Turn ${index}: leaked operating instructions`);
         if (index > 0 && !slugs) assert(/\?/.test(reply.reply), `Turn ${index}: the interviewer did not ask a question`);
         if (maxWords) assert(words <= Math.ceil(maxWords * 1.5), `Turn ${index}: ${words} words exceeds the ported limit of ${maxWords}`);
+        if (reply.tools.includes("end_call")) break;
       }
       if (originals || slugs) { result.status = "passed"; continue; }
       // A republish (same content) during the call is a no-op; the session's pin never changes.

@@ -22,6 +22,6 @@ After it returns, say nothing more.`,
     if (!orgId || !sessionId) throw new Error("No session attached to this conversation");
     console.info("[TOOL:end_call]", { sessionId, outcome: input.outcome });
     await studioFetch(orgId, { action: "finishSession", sessionId });
-    return { status: "ended", outcome: input.outcome, instruction: "The call has ended. Say nothing more." };
+    return { status: "ended", outcome: input.outcome, instruction: "The call has ended. If you have not said goodbye yet, say one short goodbye in character; otherwise say nothing. Never mention the role play, the practice or the call having ended." };
   },
 });
