@@ -31,7 +31,7 @@ test("floating handshake, microphone delegation and active call stays open", asy
   await expect(frame(page).locator("#state")).toHaveText("Ready");
   await frame(page).getByRole("button", { name: "Start fixture call" }).click();
   await expect(page.getByRole("status")).toHaveText("AI twin call in progress");
-  await expect(launcher(page)).toHaveText("Call in progress");
+  await expect(launcher(page)).toHaveText("");
   const originalFrame = page.frames().find((item) => item.url().startsWith(`${widgetOrigin}/embed/`));
   expect(originalFrame).toBeDefined();
   await frame(page).getByRole("button", { name: "Minimise" }).click();
@@ -68,28 +68,19 @@ test("floating mounts remain independent and inline mode is rejected", async ({ 
   await expect(page.locator("[data-trainertwin-widget]")).toHaveCount(1);
 });
 
-test("hover expands one surface, crosses into the iframe, and shrinks only after leaving", async ({ page }) => {
-  await page.clock.install();
+test("round icon-only launcher opens on click, not hover", async ({ page }) => {
   await page.goto("/");
   await hoverOpen(page);
-  expect(await page.locator("[data-trainertwin-widget] .floating").evaluate((node) =>
-    Number.parseFloat(getComputedStyle(node).borderTopLeftRadius))).toBeLessThanOrEqual(28);
+  await expect(page.locator("iframe")).toBeHidden();
+  expect(await launcher(page).boundingBox()).toMatchObject({ width: 48, height: 48 });
+  await expect(launcher(page)).toHaveText("");
+  await expect(launcher(page).locator("svg")).toBeVisible();
+  await launcher(page).click();
   await expect(page.getByRole("dialog")).toBeVisible();
-  await expect(launcher(page)).toBeHidden();
-  await frame(page).getByRole("button", { name: "Start fixture call" }).hover();
-  await expect(page.getByRole("dialog")).toBeVisible();
-  await frame(page).getByRole("button", { name: "Start fixture call" }).click();
-  const child = page.frames().find((item) => item.url().startsWith(`${widgetOrigin}/embed/`));
-  if (!child) throw new Error("Expected hosted frame");
   await page.getByRole("heading", { name: "Customer website" }).hover();
-  await page.clock.runFor(1000);
   await expect(page.getByRole("dialog")).toBeVisible();
-  await expect(launcher(page)).toBeHidden();
-  expect(await child.evaluate("window.active")).toBe(true);
-  await child.evaluate(() => window.parent.postMessage({
-    source: "trainertwin-widget", version: 1, type: "status", active: false,
-  }, "http://127.0.0.1:43181"));
-  await expect(page.getByRole("dialog")).toBeHidden();
+  await frame(page).getByRole("button", { name: "Minimise" }).click();
+  await expect(launcher(page)).toBeFocused();
 });
 
 test("touch uses tap rather than hover", async ({ browser }) => {

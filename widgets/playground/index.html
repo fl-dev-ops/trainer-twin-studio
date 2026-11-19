@@ -62,18 +62,9 @@
         <div class="state-picker" role="group" aria-labelledby="states-title">
           <h3 id="states-title">Widget state</h3>
           <div id="state-buttons" class="state-buttons">
-            <button type="button" data-state="launcher" aria-pressed="false">Launcher</button>
-            <button type="button" data-state="ready" aria-pressed="true">Before the call</button>
-            <button type="button" data-state="returning" aria-pressed="false">Returning visitor</button>
-            <button type="button" data-state="connecting" aria-pressed="false">Connecting</button>
-            <button type="button" data-state="listening" aria-pressed="false">Listening</button>
-            <button type="button" data-state="thinking" aria-pressed="false">Thinking</button>
-            <button type="button" data-state="speaking" aria-pressed="false">Speaking</button>
-            <button type="button" data-state="muted" aria-pressed="false">Muted</button>
-            <button type="button" data-state="reconnecting" aria-pressed="false">Reconnecting</button>
-            <button type="button" data-state="time-low" aria-pressed="false">Almost out of time</button>
-            <button type="button" data-state="ended" aria-pressed="false">Call ended</button>
-            <button type="button" data-state="failed" aria-pressed="false">Couldn’t connect</button>
+            <button type="button" data-state="launcher" aria-pressed="true">Button</button>
+            <button type="button" data-state="name" aria-pressed="false">Name</button>
+            <button type="button" data-state="call" aria-pressed="false">Call</button>
           </div>
         </div>
         <div class="preview-canvas"><iframe id="state-preview" title="Widget state preview"></iframe></div>
@@ -102,13 +93,13 @@
     </form>
     <section class="card" aria-labelledby="preview-title">
       <h2 id="preview-title">Website preview</h2>
-      <p class="muted">Hover over the button in the bottom-right corner, or tap it to open. Loading does not start a call.</p>
+      <p class="muted">Click or tap the phone button in the bottom-right corner. Loading alone does not start a call.</p>
     </section>
   </main>
   <script>
     const statePreview = document.getElementById("state-preview");
     const states = document.getElementById("state-buttons");
-    let state = "ready";
+    let state = "launcher";
     let revision = "";
     function openPreview() {
       statePreview.src = `/preview/frame?${new URLSearchParams({ state, revision })}`;

@@ -35,19 +35,15 @@ The loader derives the widget origin from its own script URL, delegates micropho
 validates message origin **and** source window. The widget waits for trusted parent initialization before allowing
 Start. Messages contain only versioned initialization, visibility, minimise/destroy, bounded integer height,
 editing-focus boolean and active-call state—never visitor data,
-transcripts or credentials. Minimising preserves the iframe/call and visibly marks the launcher as in progress.
+transcripts or credentials. Closing an inactive panel preserves the iframe.
 SPA owners must explicitly destroy mounts before removing containers; tab unload and durable deadlines are additional cleanup.
-Fine-pointer hover expands the launcher into the card; leaving the whole surface shrinks it after a short grace
-period, unless the name field is focused. Click/tap and keyboard opening remain available and pinned.
-The card is content-sized in every phase, viewport-bounded and at most 340px wide, without a fixed-height card cap.
-Resize messages accept only integers 280–4096px as a protocol safety boundary; the host uses available screen height.
-Portraits are full content width in every phase, with 16px top/side insets; the form has matching 16px side insets.
-On short screens, portrait height adapts so actions and the footer remain visible. The card body never scrolls;
-call controls sit outside it above the footer. Failed starts have a friendly failure/retry view, not a thank-you.
-Welcome/result titles use 20px type; failed/ended views have only their title and action, without a description.
-Image preload/eager fetching happens before opening. Independent fade/translate reveals do not scale the content.
-Connecting and active calls stay open regardless of pointer leave, Escape or minimise requests; no minus button is shown.
-Hover/minimising/visibility messages never start or end a call.
+The round phone button opens on click, tap, or keyboard activation, never hover. There are three surfaces: the
+launcher, a portrait-free name form for first-time visitors, and the call. Valid names are stored in the iframe's
+browser storage scoped to the Twin and exact embedding origin. Returning visitors skip the form and manually
+start the call from the call panel. Visibility messages never request microphone access or start a call.
+Resize messages accept only integers 280–4096px. The panel is viewport-bounded and at most 340px wide.
+On short screens the portrait shrinks so actions remain visible. The card body never scrolls. Connecting and
+active calls stay visible. Successful call teardown returns to the launcher, while failures are retryable in the call panel.
 
 Browser framing restrictions do not prove a human or make public IDs secret. A non-browser client can claim an
 allowed origin; server-side rate, concurrency and spend limits remain mandatory.

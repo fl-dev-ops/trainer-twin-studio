@@ -12,10 +12,11 @@ test("design preview renders widget states and refreshes the selected state with
   await page.goto("/playground");
   const iframe = page.locator("#state-preview");
   const widget = iframe.contentFrame();
-  await expect(widget.getByRole("heading", { name: "Talk to my AI twin" })).toBeVisible();
-  await page.getByRole("button", { name: "Connecting", exact: true }).click();
-  await expect(widget.getByRole("status")).toHaveText("Connecting…");
-  await page.getByRole("button", { name: "Speaking", exact: true }).click();
+  await expect(page.locator("#state-buttons button")).toHaveCount(3);
+  await page.getByRole("button", { name: "Name", exact: true }).click();
+  await expect(widget.getByRole("textbox", { name: "Your name" })).toBeVisible();
+  await expect(widget.locator(".tt-portrait-stage")).toBeHidden();
+  await page.getByRole("button", { name: "Call", exact: true }).click();
   await expect(widget.locator(".tt-card")).toHaveAttribute("data-agent-state", "speaking");
   await expect(widget.getByText("Powered by TrainerTwin", { exact: true })).toHaveCount(0);
   const mute = widget.getByRole("button", { name: "Mute microphone", exact: true });
@@ -26,22 +27,15 @@ test("design preview renders widget states and refreshes the selected state with
   await widget.getByRole("button", { name: "Expand captions" }).click();
   await expect(widget.getByText("What would you like to practice today?")).toBeVisible();
   revision = "second";
-  await expect(iframe).toHaveAttribute("src", /state=speaking&revision=second/);
-  await widget.getByRole("button", { name: "End call" }).click();
-  await expect(widget.getByRole("heading", { name: "Thanks for the conversation." })).toBeVisible();
-  await expect(widget.getByRole("alert")).toBeHidden();
-  await widget.getByRole("button", { name: "Start a new call" }).click();
-  await widget.getByRole("textbox", { name: "Your name" }).fill("Jordan");
-  await widget.getByRole("button", { name: "Start voice call" }).click();
-  await expect(widget.getByRole("button", { name: "Mute microphone" })).toBeEnabled();
-  await page.getByRole("button", { name: "Couldn’t connect" }).click();
-  await expect(widget.getByRole("heading", { name: "We couldn’t start the conversation." })).toBeVisible();
+  await expect(iframe).toHaveAttribute("src", /state=call&revision=second/);
+  await expect(widget.getByRole("button", { name: "End call" })).toBeVisible();
   expect(publicRequests).toEqual([]);
 });
 
 test("launcher preview runs the real loader and opens a simulated widget", async ({ page }) => {
   await page.goto("/playground");
-  await page.getByRole("button", { name: "Launcher", exact: true }).click();
+  await page.getByRole("button", { name: "Button", exact: true }).click();
+  await page.locator("#state-preview").scrollIntoViewIfNeeded();
   const preview = page.frameLocator("#state-preview");
   const launcher = preview.getByRole("button", { name: "Talk to AI twin" });
   await expect(launcher).toBeVisible();
@@ -49,12 +43,17 @@ test("launcher preview runs the real loader and opens a simulated widget", async
   await launcher.focus();
   await launcher.press("Enter");
   const hosted = preview.frameLocator(embedFrame);
+  await expect(hosted.locator(".tt-portrait-stage")).toBeHidden();
+  await hosted.getByRole("textbox", { name: "Your name" }).fill("Jordan");
+  await hosted.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(hosted.locator(".tt-portrait-stage")).toBeVisible();
+  await hosted.getByRole("button", { name: "End call" }).click();
+  await expect(launcher).toBeFocused();
+  await launcher.press("Enter");
+  await expect(hosted.getByRole("textbox", { name: "Your name" })).toBeHidden();
   await expect(hosted.getByRole("button", { name: "Start voice call" })).toBeEnabled();
-  await page.getByRole("button", { name: "Returning visitor", exact: true }).click();
-  await expect(preview.getByText("Jordan", { exact: true })).toBeVisible();
-  await expect(preview.getByRole("textbox", { name: "Your name" })).toBeHidden();
-  await preview.getByRole("button", { name: "Change your name" }).click();
-  await expect(preview.getByRole("textbox", { name: "Your name" })).toHaveValue("Jordan");
+  await hosted.getByRole("button", { name: "Change your name" }).click();
+  await expect(hosted.getByRole("textbox", { name: "Your name" })).toHaveValue("Jordan");
 });
 
 test("paste a floating snippet, remove and reload without executing pasted HTML", async ({ page }) => {
@@ -72,9 +71,7 @@ test("paste a floating snippet, remove and reload without executing pasted HTML"
   await expect(page.locator(embedFrame)).toHaveCount(0);
   await page.getByRole("button", { name: "Load widget", exact: true }).click();
   await expect(page.getByRole("button", { name: "Talk to AI twin", exact: true })).toBeVisible();
-  const launcher = await page.getByRole("button", { name: "Talk to AI twin", exact: true }).boundingBox();
-  if (!launcher) throw new Error("Expected floating launcher");
-  await page.mouse.move(launcher.x + launcher.width / 2, launcher.y + launcher.height / 2);
+  await page.getByRole("button", { name: "Talk to AI twin", exact: true }).click();
   await expect(frame.locator("#state")).toHaveText("Ready");
 });
 

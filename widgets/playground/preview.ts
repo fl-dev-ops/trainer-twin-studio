@@ -1,17 +1,8 @@
 import { mount, parseConfig, type WidgetPreview } from "../src/widget";
 
 const states = new Map<string, WidgetPreview>([
-  ["ready", { phase: "ready" }],
-  ["returning", { phase: "ready", name: "Jordan" }],
-  ["connecting", { phase: "connecting" }],
-  ["listening", { phase: "live", agentState: "listening" }],
-  ["thinking", { phase: "live", agentState: "thinking" }],
-  ["speaking", { phase: "live", agentState: "speaking" }],
-  ["muted", { phase: "live", muted: true }],
-  ["reconnecting", { phase: "live", reconnecting: true }],
-  ["time-low", { phase: "live", urgent: true }],
-  ["ended", { phase: "ended" }],
-  ["failed", { phase: "failed" }],
+  ["name", { phase: "ready" }],
+  ["call", { phase: "live", agentState: "speaking", name: "Jordan" }],
 ]);
 
 const root = document.getElementById("preview-widget");

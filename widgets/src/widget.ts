@@ -1,7 +1,7 @@
 import { createAudioAnalyser, Room, RoomEvent, Track, type Participant, type RemoteAudioTrack, type RemoteTrack, type TranscriptionSegment } from "livekit-client";
-import { createElement, Maximize2, Mic, MicOff, Minimize2, Phone, PhoneOff } from "lucide";
+import { createElement, Maximize2, Mic, MicOff, Minimize2, PhoneOff, X } from "lucide";
 import "./widget.css";
-import { MAX_WIDGET_HEIGHT, MIN_WIDGET_HEIGHT } from "./protocol";
+import { isHostMessage, MAX_WIDGET_HEIGHT, MIN_WIDGET_HEIGHT } from "./protocol";
 import { drawCallWaves, MIC_NOISE_GATE } from "../../shared/call-waves";
 
 type Config = {
@@ -18,7 +18,7 @@ type Config = {
 };
 type EndCapability = { id: string; embedToken: string };
 type Session = EndCapability & { secondsLeft: number; endsAt?: number; serverTime?: number };
-type Phase = "ready" | "connecting" | "live" | "ended" | "failed";
+type Phase = "ready" | "connecting" | "live" | "failed";
 type AgentState = "listening" | "thinking" | "speaking";
 export type WidgetPreview = { phase: Phase; agentState?: AgentState; reconnecting?: boolean; muted?: boolean; urgent?: boolean; name?: string; embedded?: boolean };
 
@@ -209,6 +209,10 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
     }
     return node;
   }
+  const dismiss = button("tt-icon-button tt-dismiss", "");
+  dismiss.append(icon(X));
+  dismiss.setAttribute("aria-label", "Close widget");
+  dismiss.addEventListener("click", () => post("close"));
   const body = element("div", "tt-body");
   const hero = element("div", "tt-hero");
   const portraitStage = element("div", "tt-portrait-stage");
@@ -218,35 +222,31 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
   const status = element("p", "tt-status");
   status.setAttribute("role", "status");
   status.setAttribute("aria-live", "polite");
-  const introduction = element("h2", "tt-introduction", config.welcome);
   portraitStage.append(heroPortrait);
-  hero.append(portraitStage, status, introduction);
+  hero.append(portraitStage, status);
 
   const form = element("form", "tt-prejoin");
-  const label = element("label", "tt-label", "Your name");
+  const label = element("label", "tt-label", "What’s your name?");
   label.htmlFor = "tt-visitor-name";
   const name = element("input", "tt-input");
   name.id = label.htmlFor;
   name.name = "name";
   name.type = "text";
   name.autocomplete = "name";
+  name.setAttribute("aria-label", "Your name");
   name.maxLength = 80;
-  name.placeholder = "What should I call you?";
+  name.placeholder = "Your name";
   name.required = true;
   name.setAttribute("aria-describedby", "tt-error");
-  const start = button("tt-start", "");
-  start.append(icon(Phone));
-  start.setAttribute("aria-label", "Start voice call");
-  start.title = "Start voice call";
+  const start = button("tt-primary", "Continue");
   start.type = "submit";
   start.disabled = true;
   const nameField = element("div", "tt-name-field");
   nameField.append(label, name);
-  const profile = element("div", "tt-name-field tt-profile");
-  const profileName = element("span", "tt-profile-name");
-  const changeName = button("tt-change-name", "Change");
+  const changeName = button("tt-change-name", "Change name");
   changeName.setAttribute("aria-label", "Change your name");
   changeName.addEventListener("click", () => {
+    phase = "ready";
     editingName = true;
     name.value = savedName ?? "";
     clearError();
@@ -254,8 +254,7 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
     name.focus();
     name.select();
   });
-  profile.append(profileName, changeName);
-  form.append(nameField, profile, start);
+  form.append(nameField, start);
 
   const call = element("section", "tt-call");
   call.hidden = true;
@@ -311,35 +310,36 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
   controls.append(muteControl, endControl);
   call.append(transcript, playbackHint);
 
-  const finished = element("section", "tt-finished");
-  finished.hidden = true;
-  finished.setAttribute("aria-live", "polite");
-  const finishedTitle = element("h2", "tt-finished-title", "Thanks for the conversation.");
-  const retry = button("tt-primary", "Start a new call");
+  const callActions = element("section", "tt-call-actions");
+  const callTitle = element("h2", "tt-call-title", config.welcome);
+  callTitle.setAttribute("aria-live", "polite");
+  const retry = button("tt-primary", "Start voice call");
   retry.addEventListener("click", () => {
     if (starting || finishing || destroyed) return;
     phase = "ready";
-    expandCaptions(false);
-    clearError();
-    render();
-    (nameField.hidden ? start : name).focus();
+    if (savedName && !editingName) void beginCall();
+    else {
+      clearError();
+      render();
+      name.focus();
+    }
   });
-  finished.append(finishedTitle, retry);
+  callActions.append(callTitle, retry, changeName);
   const error = element("p", "tt-error");
   error.id = "tt-error";
   error.hidden = true;
   error.tabIndex = -1;
   error.setAttribute("role", "alert");
-  body.append(hero, form, call, finished, error);
-  card.append(waves, callMeta, body, controls);
+  body.append(hero, form, call, callActions, error);
+  card.append(waves, dismiss, callMeta, body, controls);
   root.replaceChildren(card);
   card.dataset.visible = "false";
   let reportedHeight = 0;
   function reportSize() {
     if ((preview && !preview.embedded) || !initialized || destroyed || window.parent === window) return;
-    const portraitHeight = portraitStage.hidden || card.classList.contains("tt-captions-expanded") ? 0 : portraitStage.offsetHeight;
+    const portraitHeight = portraitStage.offsetHeight;
     const chromeHeight = card.offsetHeight - portraitHeight;
-    const squareHeight = card.classList.contains("tt-captions-expanded") ? 0 : portraitStage.offsetWidth;
+    const squareHeight = portraitStage.offsetWidth;
     const natural = chromeHeight + squareHeight;
     if (squareHeight) portraitStage.style.height = `${Math.max(0, Math.min(squareHeight, innerHeight - chromeHeight))}px`;
     const height = Math.max(MIN_WIDGET_HEIGHT, Math.min(MAX_WIDGET_HEIGHT, Math.ceil(natural)));
@@ -407,25 +407,26 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
     if (destroyed) return;
     card.dataset.phase = phase;
     card.dataset.agentState = agentState;
-    form.hidden = phase !== "ready";
+    const needsName = phase === "ready" && (!savedName || editingName);
+    card.dataset.stage = needsName ? "name" : "call";
+    form.hidden = !needsName;
+    hero.hidden = needsName;
     call.hidden = phase !== "connecting" && phase !== "live";
     callMeta.hidden = call.hidden;
     controls.hidden = call.hidden;
-    finished.hidden = phase !== "ended" && phase !== "failed";
-    finishedTitle.textContent = phase === "failed" ? "We couldn’t start the conversation." : "Thanks for the conversation.";
-    if (phase === "failed") finishedTitle.setAttribute("aria-description", finishMessage ?? "Please try again in a little while.");
-    else finishedTitle.removeAttribute("aria-description");
-    retry.textContent = phase === "failed" ? "Try again" : "Start a new call";
-    introduction.hidden = phase !== "ready";
+    dismiss.hidden = !call.hidden || (preview !== undefined && !preview.embedded);
+    callActions.hidden = needsName || !call.hidden;
+    callTitle.textContent = phase === "failed" ? "We couldn’t start the conversation." : config.welcome;
+    if (phase === "failed") callTitle.setAttribute("aria-description", finishMessage ?? "Please try again in a little while.");
+    else callTitle.removeAttribute("aria-description");
+    changeName.hidden = !savedName;
+    retry.textContent = phase === "failed" ? "Try again" : "Start voice call";
     const connecting = phase === "connecting" || (phase === "live" && reconnecting);
     status.hidden = !connecting;
     waves.hidden = phase !== "live";
     start.disabled = !initialized || starting || finishing;
     retry.disabled = starting || finishing || !initialized;
-    nameField.hidden = !!savedName && !editingName;
-    profile.hidden = !nameField.hidden;
-    profileName.textContent = savedName ?? "";
-    name.disabled = starting || nameField.hidden;
+    name.disabled = starting || !needsName;
     mute.disabled = phase !== "live" || mutePending || reconnecting;
     mute.setAttribute("aria-label", muted ? "Unmute microphone" : "Mute microphone");
     mute.title = muted ? "Unmute microphone" : "Mute microphone";
@@ -542,10 +543,9 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
     session = null;
     room = null;
     finishMessage = message;
-    phase = message && !connected ? "failed" : "ended";
-    post("status", false);
+    phase = message && !connected ? "failed" : "ready";
+    expandCaptions(false);
     render();
-    if (message && !unloading && phase !== "failed") showError(message);
     const results = await Promise.allSettled([
       closingSession ? closeSession(closingSession) : Promise.resolve(null),
       closingRoom ? disconnect(closingRoom) : Promise.resolve(),
@@ -560,9 +560,14 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
     }
     const endResult = results[0];
     const disconnectResult = results[1];
-    if (endResult.status === "fulfilled" && endResult.value) showError(endResult.value);
-    if (disconnectResult.status === "rejected") showError("Could not disconnect cleanly. Close this widget to stop microphone access.");
+    const warning = disconnectResult.status === "rejected" ? "Could not disconnect cleanly. Close this widget to stop microphone access."
+      : endResult.status === "fulfilled" ? endResult.value : null;
+    post("status", false);
     render();
+    if (warning) showError(warning);
+    else if (phase === "ready") {
+      if (card.dataset.visible === "true") post("close");
+    } else retry.focus();
   }
 
   function tick() {
@@ -649,7 +654,7 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
     clearError();
     let displayName: string;
     try {
-      displayName = visitorName(nameField.hidden ? savedName ?? "" : name.value);
+      displayName = visitorName(form.hidden ? savedName ?? "" : name.value);
     } catch (failure) {
       showError(mediaError(failure), true);
       return;
@@ -667,6 +672,7 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
       showError("Microphone access is blocked by this website. Ask the website owner to allow microphone access for this widget.");
       return;
     }
+    rememberName(displayName);
     starting = true;
     const attempt = ++generation;
     const cancelled = () => destroyed || generation !== attempt;
@@ -688,7 +694,9 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
       });
       room = current;
       bindRoom(current);
-      await current.startAudio();
+      await current.startAudio().catch((failure: unknown) => {
+        if (!(failure instanceof DOMException) || failure.name !== "NotAllowedError") throw failure;
+      });
       if (cancelled()) return;
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
       for (const track of stream.getTracks()) track.stop();
@@ -750,7 +758,6 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
       if (cancelled()) { await disconnect(current); return; }
       phase = "live";
       connected = true;
-      rememberName(displayName);
       updateWaves();
       render();
       end.focus();
@@ -762,40 +769,54 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
     }
   }
 
+  function beginCall() {
+    if (!preview) return startCall();
+    try {
+      rememberName(visitorName(form.hidden ? savedName ?? "" : name.value));
+    } catch (failure) {
+      showError(mediaError(failure), true);
+      return;
+    }
+    clearError();
+    showPreview({ phase: "live", agentState: "speaking" });
+    if (preview.embedded) post("status", true);
+  }
+
+  function showPreview(state: WidgetPreview) {
+    phase = state.phase;
+    agentState = state.agentState ?? "listening";
+    reconnecting = state.reconnecting ?? false;
+    muted = state.muted ?? false;
+    countdown.textContent = state.urgent ? "0:12 left" : `${clock(config.maxSeconds)} left`;
+    countdown.classList.toggle("tt-urgent", state.urgent === true);
+    expandCaptions(false);
+    render();
+    stopWaves?.();
+    stopWaves = phase === "live" ? drawCallWaves(waves, [
+      { color: "#85a75b", gate: 0, volume: () => agentState === "speaking" ? .26 + .12 * Math.sin(performance.now() / 180) : 0 },
+      { color: "#e5bf94", gate: MIC_NOISE_GATE, volume: () => agentState === "listening" && !muted ? .16 : 0 },
+    ]) : undefined;
+  }
+
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    void beginCall();
+  });
+
   if (preview) {
     initialized = !preview.embedded;
     card.dataset.visible = String(!preview.embedded);
-    function showPreview(state: WidgetPreview) {
-      phase = state.phase;
-      agentState = state.agentState ?? "listening";
-      reconnecting = state.reconnecting ?? false;
-      muted = state.muted ?? false;
-      countdown.textContent = state.urgent ? "0:12 left" : `${clock(config.maxSeconds)} left`;
-      countdown.classList.toggle("tt-urgent", state.urgent === true);
-      expandCaptions(false);
-      render();
-      stopWaves?.();
-      stopWaves = phase === "live" ? drawCallWaves(waves, [
-        { color: "#85a75b", gate: 0, volume: () => agentState === "speaking" ? .26 + .12 * Math.sin(performance.now() / 180) : 0 },
-        { color: "#e5bf94", gate: MIC_NOISE_GATE, volume: () => agentState === "listening" && !muted ? .16 : 0 },
-      ]) : undefined;
-    }
     setCaption("welcome", "What would you like to practice today?", true, false);
     setCaption("visitor", "I want to get better at giving feedback.", true, true);
     setCaption("response", "Let’s start with a conversation you’ve been putting off.", true, false);
-    form.addEventListener("submit", (event) => {
-      event.preventDefault();
-      try {
-        rememberName(visitorName(nameField.hidden ? savedName ?? "" : name.value));
-      } catch (failure) {
-        showError(mediaError(failure), true);
-        return;
-      }
-      clearError();
-      showPreview({ phase: "live", agentState: "speaking" });
-    });
     mute.addEventListener("click", () => { muted = !muted; render(); });
-    end.addEventListener("click", () => showPreview({ phase: "ended" }));
+    end.addEventListener("click", () => {
+      showPreview({ phase: "ready" });
+      if (preview.embedded) {
+        post("status", false);
+        post("close");
+      }
+    });
     if (preview.embedded) {
       window.addEventListener("message", receive);
       card.addEventListener("keydown", (event) => { if (event.key === "Escape") post("close"); });
@@ -811,10 +832,6 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
     return;
   }
 
-  form.addEventListener("submit", (event) => {
-    event.preventDefault();
-    void startCall();
-  });
   card.addEventListener("click", () => {
     if (phase === "live" && room?.canPlaybackAudio === false) {
       void room.startAudio().catch((failure: unknown) => showError(mediaError(failure)));
@@ -862,12 +879,12 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
   function receive(event: MessageEvent<unknown>) {
     if (destroyed || window.parent === window || event.source !== window.parent || event.origin !== config.parentOrigin) return;
     const data = event.data;
-    if (!record(data) || data.source !== "trainertwin-host" || data.version !== 1) return;
+    if (!isHostMessage(data)) return;
     if (data.type === "init") {
       if (!initialized && !preview) readName();
       initialized = true;
       render();
-    } else if (data.type === "visibility" && typeof data.open === "boolean") {
+    } else if (data.type === "visibility") {
       card.dataset.visible = String(data.open);
     } else if (data.type === "destroy") {
       destroy();

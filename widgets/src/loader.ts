@@ -21,23 +21,21 @@ declare global {
 const styles = `
 :host { all: initial; color-scheme: dark; font: 14px/1.4 system-ui, sans-serif; }
 * { box-sizing: border-box; }
-.floating { --panel-width: min(340px, calc(100vw - max(16px, env(safe-area-inset-left)) - max(16px, env(safe-area-inset-right)))); --panel-height: min(var(--content-height, 100dvh), calc(100dvh - max(16px, env(safe-area-inset-top)) - max(16px, env(safe-area-inset-bottom)))); position: fixed; right: max(16px, env(safe-area-inset-right)); bottom: max(16px, env(safe-area-inset-bottom)); z-index: 2147483000; width: var(--launcher-width, 180px); height: 52px; overflow: hidden; border-radius: 26px; background: #1b1c19; box-shadow: 0 8px 24px #0003; transition: width .6s cubic-bezier(.4,0,.2,1), height .6s cubic-bezier(.4,0,.2,1), border-radius .6s; }
+.floating { --panel-width: min(340px, calc(100vw - max(16px, env(safe-area-inset-left)) - max(16px, env(safe-area-inset-right)))); --panel-height: min(var(--content-height, 100dvh), calc(100dvh - max(16px, env(safe-area-inset-top)) - max(16px, env(safe-area-inset-bottom)))); position: fixed; right: max(16px, env(safe-area-inset-right)); bottom: max(16px, env(safe-area-inset-bottom)); z-index: 2147483000; width: 48px; height: 48px; overflow: hidden; border-radius: 50%; background: #0d0d0b; box-shadow: 0 10px 28px -12px #0009; transition: width .6s cubic-bezier(.4,0,.2,1), height .6s cubic-bezier(.4,0,.2,1), border-radius .6s; }
 .floating[data-open="true"] { width: var(--panel-width); height: var(--panel-height); border-radius: 28px; box-shadow: 0 24px 64px -12px #0006; transition-duration: .35s; transition-timing-function: cubic-bezier(.22,1,.36,1); }
 .floating:has(> button:focus-visible) { outline: 2px solid #8ca575; outline-offset: 4px; }
-button { display: flex; align-items: center; justify-content: center; gap: 12px; min-height: 52px; font: inherit; font-weight: 500; color: #f2eee5; background: #1b1c19; border: 1px solid #ffffff30; border-radius: 999px; padding: 12px 20px; cursor: pointer; box-shadow: 0 8px 24px #0003; transition: background .2s, transform .2s; }
-button { position: absolute; bottom: 0; right: 0; white-space: nowrap; height: 52px; border: 0; background: transparent; box-shadow: none; opacity: 1; visibility: visible; transition: background .2s, opacity .18s .2s, visibility 0s; }
+button { position: absolute; bottom: 0; right: 0; display: grid; place-items: center; width: 48px; height: 48px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: #f2eee5; cursor: pointer; opacity: 1; visibility: visible; transition: background .2s, opacity .18s .2s, visibility 0s; }
+button:active svg { transform: scale(.9); }
 button:hover { background: #2a2c26; }
 .floating[data-open="true"] > button { opacity: 0; visibility: hidden; pointer-events: none; transition: opacity .1s, visibility 0s .1s; }
 button:focus-visible { outline: 2px solid #8ca575; outline-offset: 4px; }
 button svg { width: 20px; height: 20px; flex-shrink: 0; }
-button[data-active="true"]::after { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #b5cf98; animation: pulse 2s ease-in-out infinite; }
 .panel { position: absolute; bottom: 0; right: 0; width: var(--panel-width); height: var(--panel-height); border-radius: 28px; overflow: hidden; background: #1b1c19; visibility: hidden; pointer-events: none; transition: visibility 0s .6s; }
 .floating[data-open="true"] .panel { visibility: visible; transition-delay: 0s; }
 .floating[data-open="true"] .panel[data-interactive="true"] { pointer-events: auto; }
 iframe { display: block; width: 100%; height: 100%; border: 0; }
 [hidden] { display: none !important; }
 .status { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-@keyframes pulse { 50% { opacity: .4; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 `;
 
@@ -81,9 +79,7 @@ function createAPI(): WidgetsAPI {
       const launcher = document.createElement("button");
       launcher.type = "button";
       const phone = createElement(Phone, { "aria-hidden": "true", focusable: "false", "stroke-width": 1.75 });
-      const launcherLabel = document.createElement("span");
-      launcherLabel.textContent = "Talk to AI twin";
-      launcher.append(phone, launcherLabel);
+      launcher.append(phone);
       launcher.setAttribute("aria-label", "Talk to AI twin");
       launcher.setAttribute("aria-expanded", "false");
       launcher.setAttribute("aria-haspopup", "dialog");
@@ -97,12 +93,7 @@ function createAPI(): WidgetsAPI {
       let destroyed = false;
       let ready = false;
       let opened = false;
-      let hovered = false;
-      let editing = false;
       let active = false;
-      let pinned = false;
-      let exitTimer: ReturnType<typeof setTimeout> | undefined;
-      const hover = window.matchMedia("(hover: hover) and (pointer: fine)");
       panel.inert = true;
       panel.setAttribute("aria-hidden", "true");
       iframe.tabIndex = -1;
@@ -112,28 +103,19 @@ function createAPI(): WidgetsAPI {
           : { source: "trainertwin-host", version: 1, type };
         iframe.contentWindow?.postMessage(message, widgetOrigin);
       };
-      const cancelExit = () => {
-        if (exitTimer !== undefined) clearTimeout(exitTimer);
-        exitTimer = undefined;
-      };
       const enablePanel = () => {
         if (destroyed || !opened) return;
         panel.inert = false;
         panel.dataset.interactive = "true";
         iframe.tabIndex = 0;
-        if (pinned && ready) iframe.focus();
+        if (ready) iframe.focus();
       };
       const onTransitionEnd = (event: TransitionEvent) => {
         if (event.target === container && event.propertyName === "height"
           && (event.type === "transitionend" || window.matchMedia("(prefers-reduced-motion: reduce)").matches)) enablePanel();
       };
-      const expand = (focus: boolean) => {
-          if (destroyed) return;
-          cancelExit();
-          if (opened) {
-            if (focus && ready && !panel.inert) iframe.focus();
-            return;
-          }
+      const expand = () => {
+          if (destroyed || opened) return;
           opened = true;
           container.dataset.open = "true";
           panel.setAttribute("aria-hidden", "false");
@@ -145,10 +127,7 @@ function createAPI(): WidgetsAPI {
       };
       const collapse = (focus: boolean) => {
           if (destroyed || active) return;
-          cancelExit();
           opened = false;
-          pinned = false;
-          editing = false;
           container.dataset.open = "false";
           panel.inert = true;
           panel.dataset.interactive = "false";
@@ -159,35 +138,15 @@ function createAPI(): WidgetsAPI {
           if (ready) send("visibility", false);
           if (focus) launcher.focus();
       };
-      const scheduleExit = () => {
-        cancelExit();
-        if (!opened || hovered || editing || pinned || active) return;
-        exitTimer = setTimeout(() => {
-          if (!hovered && !editing && !pinned && !active) collapse(false);
-        }, 350);
-      };
-      const onEnter = (event: PointerEvent) => {
-        if (!hover.matches || event.pointerType !== "mouse") return;
-        hovered = true;
-        expand(false);
-      };
-      const onLeave = (event: PointerEvent) => {
-        if (event.pointerType !== "mouse") return;
-        hovered = false;
-        scheduleExit();
-      };
       const handle: WidgetHandle = {
-        open() { pinned = true; expand(true); },
+        open: expand,
         minimise() { collapse(true); },
         destroy() {
           if (destroyed) return;
-          cancelExit();
           send("destroy");
           destroyed = true;
           window.removeEventListener("message", onMessage);
           window.removeEventListener("keydown", onKey);
-          container.removeEventListener("pointerenter", onEnter);
-          container.removeEventListener("pointerleave", onLeave);
           container.removeEventListener("transitionend", onTransitionEnd);
           container.removeEventListener("transitioncancel", onTransitionEnd);
           launcher.removeEventListener("click", toggle);
@@ -201,24 +160,15 @@ function createAPI(): WidgetsAPI {
           ready = true;
           send("init");
           send("visibility", opened);
-          if (opened && pinned) iframe.focus();
+          if (opened && !panel.inert) iframe.focus();
         } else if (event.data.type === "close") {
           handle.minimise();
-        } else if (event.data.type === "interaction") {
-          editing = event.data.editing;
-          if (editing) cancelExit();
-          else scheduleExit();
         } else if (event.data.type === "resize") {
           container.style.setProperty("--content-height", `${Math.min(MAX_WIDGET_HEIGHT, event.data.height)}px`);
-        } else {
+        } else if (event.data.type === "status") {
           active = event.data.active;
-          if (active) expand(false);
-          else scheduleExit();
-          status.textContent = event.data.active ? "AI twin call in progress" : "AI twin call ended";
-          launcherLabel.textContent = event.data.active ? "Call in progress" : "Talk to AI twin";
-          launcher.dataset.active = String(event.data.active);
-          launcher.setAttribute("aria-label", event.data.active ? "AI twin call in progress — reopen" : "Talk to AI twin");
-          container.style.setProperty("--launcher-width", `${Math.ceil(launcher.getBoundingClientRect().width)}px`);
+          if (active) expand();
+          status.textContent = active ? "AI twin call in progress" : "AI twin call ended";
         }
       };
       const onKey = (event: KeyboardEvent) => {
@@ -227,16 +177,13 @@ function createAPI(): WidgetsAPI {
           handle.minimise();
         }
       };
-      const toggle = () => opened ? handle.minimise() : handle.open();
+      const toggle = () => expand();
       launcher.addEventListener("click", toggle);
-      container.addEventListener("pointerenter", onEnter);
-      container.addEventListener("pointerleave", onLeave);
       container.addEventListener("transitionend", onTransitionEnd);
       container.addEventListener("transitioncancel", onTransitionEnd);
       window.addEventListener("message", onMessage);
       window.addEventListener("keydown", onKey);
       (document.body ?? document.documentElement).append(root);
-      container.style.setProperty("--launcher-width", `${Math.ceil(launcher.getBoundingClientRect().width)}px`);
       mounts.set(script, handle);
       return handle;
     },

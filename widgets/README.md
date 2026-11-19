@@ -46,32 +46,21 @@ outer mount element from deliberate customer CSS.
 
 ## Behaviour and teardown
 
-Floating mounts start minimised. On a fine mouse pointer, hovering “Talk to AI twin” expands the same surface
-into a non-modal dialog, anchored at the bottom-right. Moving between the button and iframe keeps it open.
-When no call is active, leaving the entire widget starts a 350ms grace period before a 600ms shrink transition; re-entry cancels closure.
-Name-field focus keeps a hover-opened widget open while typing. Click/tap, Enter/Space or the `open()` API pins it
-until explicit minimise/Escape, so keyboard and touch users never need hover. Hover alone never requests a microphone.
-Connecting and active calls keep the card open; pointer leave, Escape, close messages and API minimise cannot hide it.
-There is no minus button in the hosted card. Inactive minimising hides but **does not unload** the iframe.
-The launcher reports expanded state, the
-dialog has an accessible name, and closing returns focus to the launcher.
-The panel is capped at 340px wide and the viewport safe areas. Portraits fill the available content width in every
-call phase, with consistent 16px top/left/right insets; forms also sit 16px from each side. The welcome card fits
-its content without a bottom spacer. Every phase is content-sized with no fixed 580px card limit or scrollable
-card body. The host bounds the surface only to the viewport's safe areas. On short screens, the portrait retains
-full width and adapts its height to leave room for text and actions. Mute/end occupy a separate,
-non-shrinking row at the bottom. Only explicitly expanded transcript history scrolls.
-Trusted size messages accept integers 280–4096px; the upper bound is protocol validation, not a rendered card limit.
-The hosted UI uses a dark portrait-led card, the trainer's existing photo (initials if unavailable), and explicit
-name entry and browser microphone permission. The ready card uses a full-width square portrait on black, a simple
-title, and one row with a black pill-shaped name input and circular phone-only call button. After a successful call
-connects, the widget remembers the name in browser storage scoped to the Twin and embedding website. The next visit
-shows the saved name with a **Change** button. If storage is blocked, the name is remembered until the widget reloads.
-The name input label remains accessible but is visually hidden. Input/focus shadows are external, never inset. The prior AI/transcription/recording
-and “Up to” duration text lines are removed from this card; the required name and enforced call allowance remain.
-Photos remain in colour; initials appear only when no photo is available. Call-state indicators follow
-LiveKit audio tracks drive the exact shared Twin-session green/orange glow renderer, including noise gates,
-attack/release smoothing and muted-track silence. The portrait is full width in every phase and square when screen space permits.
+Floating mounts start as a round phone button. Click, tap, Enter or Space opens the panel; hover does not.
+First-time visitors see a compact **What’s your name?** form with no portrait. A valid name is saved in browser
+storage for this Twin and embedding site when the visitor starts a call. Returning visitors skip the form and
+land in the call panel. **Start voice call** is an explicit microphone gesture on both first and return visits;
+opening the widget alone never requests microphone access. **Change name** reopens the same form.
+If storage is blocked, the name is remembered until the widget reloads.
+
+The loader keeps connecting and active calls open. Inactive panels can close with Escape or **Close widget**.
+Successful teardown returns focus to the phone button without a separate result screen. Start failures can be
+retried in the call panel, and cleanup warnings stay visible. Closing the panel does not unload the iframe.
+The panel is capped at 340px wide and bounded by viewport safe areas. The call portrait fills the content width
+and adapts its height on short screens so the controls fit. Only expanded caption history scrolls. Trusted
+resize messages accept integers 280–4096px.
+LiveKit audio tracks drive the shared Twin-session green/orange glow renderer. Photos remain in colour; initials
+appear when no photo is available.
 The call has no header; only connecting/reconnecting shows “Connecting…”, not speaking/listening text.
 Compact captions follow Portfolio v4's last-two-entry centered plain-text presentation with an older-entry fade;
 expansion reveals history in the same frame without reconnecting. Mute and end are icon-only, with accessible names.
@@ -154,7 +143,7 @@ messages. `src/protocol.ts` is a dependency-free shared schema/URL helper.
 
 Run `pm2 start ecosystem.config.cjs --only widgets` from the repo root (or `bun run playground` from `widgets/`).
 Open [localhost:43190](http://localhost:43190). **Live design preview** renders the actual hosted card in simulated
-call states. Choose **Launcher** to try the real floating button, or **Returning visitor** to see the saved-name flow.
+call states. Choose **Button**, **Name**, or **Call**. The **Button** preview also lets you try the full flow.
 Edits in `widgets/src/`, `widgets/playground/preview.ts`, and `shared/` refresh the selected state without using a
 microphone, creating a session, or spending credits.
 
