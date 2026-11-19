@@ -25,6 +25,7 @@ export const publicCallRefusals = {
   unavailable: () => new AppError("public_twin_unavailable", "Public calls are not available for this twin.", 403),
   limited: () => new AppError("public_call_limit", "Too many public calls. Please try again later.", 429),
   busy: () => new AppError("public_call_busy", "A public call is already running. Please try again later.", 409),
+  creditsExhausted: () => new AppError("public_call_credits_exhausted", "There aren’t enough free call minutes available right now.", 403),
 };
 
 export async function startPublicTwinSession(input: {
@@ -81,7 +82,8 @@ export async function startPublicTwinSession(input: {
       throw publicCallRefusals.busy();
     }
     const credits = await orgCredits(input.orgId, { tx });
-    if (!credits.billed || credits.seconds < settings.maxSeconds) throw publicCallRefusals.unavailable();
+    if (!credits.billed) throw publicCallRefusals.unavailable();
+    if (credits.seconds < settings.maxSeconds) throw input.embedOrigin ? publicCallRefusals.creditsExhausted() : publicCallRefusals.unavailable();
     if (input.grantExpiresAt !== undefined && input.grantExpiresAt * 1000 <= Date.now()) throw widgetCredentialInvalid();
     return tx.interviewSession.create({
       data: {

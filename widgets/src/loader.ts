@@ -19,9 +19,16 @@ declare global {
 }
 
 const styles = `
-:host { all: initial; color-scheme: dark; font: 14px/1.4 system-ui, sans-serif; }
+:host {
+  all: initial !important;
+  display: contents !important;
+  direction: ltr !important;
+  unicode-bidi: isolate !important;
+  color-scheme: dark !important;
+  font: 14px/1.4 system-ui, sans-serif !important;
+}
 * { box-sizing: border-box; }
-.floating { --panel-width: min(340px, calc(100vw - max(16px, env(safe-area-inset-left)) - max(16px, env(safe-area-inset-right)))); --panel-height: min(var(--content-height, 100dvh), calc(100dvh - max(16px, env(safe-area-inset-top)) - max(16px, env(safe-area-inset-bottom)))); position: fixed; right: max(16px, env(safe-area-inset-right)); bottom: max(16px, env(safe-area-inset-bottom)); z-index: 2147483000; width: 48px; height: 48px; overflow: hidden; border-radius: 50%; background: #0d0d0b; box-shadow: 0 10px 28px -12px #0009; transition: width .6s cubic-bezier(.4,0,.2,1), height .6s cubic-bezier(.4,0,.2,1), border-radius .6s; }
+.floating { --content-height: 100dvh; --panel-width: min(340px, calc(100vw - max(16px, env(safe-area-inset-left)) - max(16px, env(safe-area-inset-right)))); --panel-height: min(var(--content-height, 100dvh), calc(100dvh - max(16px, env(safe-area-inset-top)) - max(16px, env(safe-area-inset-bottom)))); position: fixed; right: max(16px, env(safe-area-inset-right)); bottom: max(16px, env(safe-area-inset-bottom)); z-index: 2147483000; width: 48px; height: 48px; overflow: hidden; border-radius: 50%; background: #0d0d0b; box-shadow: 0 10px 28px -12px #0009; transition: width .6s cubic-bezier(.4,0,.2,1), height .6s cubic-bezier(.4,0,.2,1), border-radius .6s; }
 .floating[data-open="true"] { width: var(--panel-width); height: var(--panel-height); border-radius: 28px; background: transparent; box-shadow: 0 24px 64px -12px #0006; transition-duration: .35s; transition-timing-function: cubic-bezier(.22,1,.36,1); }
 .floating:has(> button:focus-visible) { outline: 2px solid #8ca575; outline-offset: 4px; }
 button { position: absolute; bottom: 0; right: 0; display: grid; place-items: center; width: 48px; height: 48px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: #f2eee5; cursor: pointer; opacity: 1; visibility: visible; transition: background .2s, opacity .18s .2s, visibility 0s; }
@@ -149,6 +156,7 @@ function createAPI(): WidgetsAPI {
           destroyed = true;
           window.removeEventListener("message", onMessage);
           window.removeEventListener("keydown", onKey);
+          document.removeEventListener("pointerdown", onOutside, true);
           container.removeEventListener("transitionend", onTransitionEnd);
           container.removeEventListener("transitioncancel", onTransitionEnd);
           launcher.removeEventListener("click", toggle);
@@ -181,12 +189,16 @@ function createAPI(): WidgetsAPI {
           handle.minimise();
         }
       };
+      const onOutside = (event: PointerEvent) => {
+        if (opened && !event.composedPath().includes(root)) collapse(false);
+      };
       const toggle = () => expand();
       launcher.addEventListener("click", toggle);
       container.addEventListener("transitionend", onTransitionEnd);
       container.addEventListener("transitioncancel", onTransitionEnd);
       window.addEventListener("message", onMessage);
       window.addEventListener("keydown", onKey);
+      document.addEventListener("pointerdown", onOutside, true);
       (document.body ?? document.documentElement).append(root);
       mounts.set(script, handle);
       return handle;

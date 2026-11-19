@@ -41,8 +41,9 @@ title, `referrerpolicy="no-referrer"`, sandboxed scripts/same-origin/forms acces
 widget origin. Customer `Permissions-Policy` must also permit that delegation.
 Customer CSP must allow the script and frame origins; loader Shadow DOM styles
 need permission under `style-src`. A script nonce is copied onto the style
-element for nonce-based policies. Shadow DOM isolates internal styles, not the
-outer mount element from deliberate customer CSS.
+element for nonce-based policies. Shadow DOM isolates the launcher, and its host has a reset for customer rules targeting
+wrapper elements directly. The iframe keeps the call UI’s styles separate from the customer page. The customer can still
+hide the widget by hiding an ancestor or removing its mount.
 
 ## Behaviour and teardown
 
@@ -52,8 +53,9 @@ button opens a minimal name form on first use. Returning visitors start the call
 The saved name is scoped to the Twin and embedding site; **Change your name** opens the form again.
 If storage is blocked, the name is remembered until the widget reloads.
 
-The loader keeps connecting and active calls open. The name panel's chevron returns to the intro card. Escape
-on the intro minimises it to a round phone button without unloading the iframe. Successful teardown returns focus
+The loader keeps connecting and active calls open. Clicking outside the widget or pressing Escape minimises inactive screens
+without unloading the iframe. The free-limit notice distinguishes exhausted free minutes or call quotas from connection failures.
+Successful teardown returns focus
 to the intro button, while failures remain retryable in the call panel. The panel is at most 340px wide and is
 bounded by viewport safe areas. Connecting and silent calls leave no blank caption area. The two latest captions wrap in full and scroll if needed. Trusted resize
 messages accept integers 140–4096px.

@@ -12,7 +12,11 @@ test("design preview renders widget states and refreshes the selected state with
   await page.goto("/playground");
   const iframe = page.locator("#state-preview");
   const widget = iframe.contentFrame();
-  await expect(page.locator("#state-buttons button")).toHaveCount(3);
+  await expect(page.locator("#state-buttons button")).toHaveCount(4);
+  await page.getByRole("button", { name: "Free limit reached" }).click();
+  await expect(widget.getByRole("heading", { name: "Free call limit reached" })).toBeVisible();
+  await expect(widget.getByText(/enough free call minutes/)).toBeVisible();
+  await expect(widget.getByRole("button")).toHaveCount(0);
   await page.getByRole("button", { name: "Name", exact: true }).click();
   await expect(widget.getByRole("textbox", { name: "Your name" })).toBeVisible();
   await expect(widget.locator(".tt-portrait-stage")).toBeHidden();
@@ -29,6 +33,7 @@ test("design preview renders widget states and refreshes the selected state with
   await page.getByRole("button", { name: "Call", exact: true }).hover();
   await expect(unmute).toHaveCSS("background-color", "rgb(242, 238, 229)");
   const captions = widget.getByRole("log");
+  await expect(captions).toHaveCSS("height", "62px");
   await expect(captions).toContainText("giving feedback");
   await expect(captions).toContainText("what made it difficult to say?");
   expect(await captions.locator(".tt-caption").last().evaluate((caption) =>
@@ -55,6 +60,7 @@ test("launcher preview runs the real loader and opens a simulated widget", async
   await launcher.click();
   const name = hosted.getByRole("textbox", { name: "Your name" });
   await expect(name).toBeFocused();
+  await expect(hosted.getByRole("button", { name: "Close widget" })).toHaveCount(0);
   await expect(hosted.locator(".tt-portrait-stage")).toBeHidden();
   await expect(hosted.getByText("What’s your name?", { exact: true })).toBeVisible();
   await expect(hosted.getByText("Press Enter to continue", { exact: true })).toBeHidden();

@@ -96,7 +96,8 @@ export function remainingCallMs(session: Pick<Session, "secondsLeft" | "endsAt" 
 class WidgetRequestError extends Error {
   constructor(readonly status: number, readonly code: string) {
     super(code === "widget_token_invalid" ? "This widget connection expired. Please start again."
-      : code === "public_call_limit" ? "Too many calls have been started. Please try again later."
+      : code === "public_call_limit" ? "The free call limit for now has been reached. Please try again later."
+      : code === "public_call_credits_exhausted" ? "There aren’t enough free call minutes available right now. Please try again later."
       : code === "public_call_busy" ? "A call is already running. Please try again after it ends."
       : code === "widget_unavailable" ? "This twin is not available on this website."
       : "The call is unavailable right now. Please try again later.");
@@ -144,7 +145,7 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
   let visible = false;
   let intro = !preview || !!preview.embedded;
   let seconds = config.maxSeconds;
-  let focusTarget: "intro" | "name" | "error" | "retry" | "end" | undefined;
+  let focusTarget: "intro" | "name" | "error" | "retry" | "notice" | "end" | undefined;
   let visitorToken: string | undefined;
   let savedName = preview?.name;
   let editingName = false;
@@ -168,7 +169,7 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
 
   const elements: WidgetRefs = {
     card: createRef(), body: createRef(), portrait: createRef(), waves: createRef(), intro: createRef(),
-    controls: createRef(), name: createRef(), end: createRef(), retry: createRef(), error: createRef(),
+    controls: createRef(), name: createRef(), end: createRef(), retry: createRef(), notice: createRef(), error: createRef(),
   };
   const view = createRoot(root);
   const channels = [1, 3, 5].map((offset) => {
@@ -298,10 +299,10 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
         elements, phase, trainer: config.trainerName, photoUrl: config.photoUrl, welcome: config.welcome,
         seconds, muted, reconnecting, mutePending, finishMessage, hasName: !!savedName,
         captions: [...captions.values()], canStart: initialized && !starting && !finishing,
-        dismissible: !preview || !!preview.embedded, playbackBlocked: phase === "live" && room?.canPlaybackAudio === false,
-        onDismiss: dismiss, onRetry: retry, onChangeName: changeName, onMute: toggleMute, onEnd: endCall,
+        playbackBlocked: phase === "live" && room?.canPlaybackAudio === false,
+        onRetry: retry, onChangeName: changeName, onMute: toggleMute, onEnd: endCall,
       },
-      onCommit, onOpen: openIntro, onStart: beginCall, onNameInput: nameInput, onUnlockAudio: unlockAudio,
+      onCommit, onDismiss: dismiss, onOpen: openIntro, onStart: beginCall, onNameInput: nameInput, onUnlockAudio: unlockAudio,
     }));
   }
 
@@ -398,7 +399,7 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
     await closing.disconnect();
   }
 
-  async function finish(unloading = false, message?: string) {
+  async function finish(unloading = false, message?: string, exhausted = false) {
     if (finishing) return;
     finishing = true;
     generation++;
@@ -411,7 +412,7 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
     session = null;
     room = null;
     finishMessage = message;
-    phase = message && !connected ? "failed" : "ready";
+    phase = exhausted ? "exhausted" : message && !connected ? "failed" : "ready";
     render();
     const results = await Promise.allSettled([
       closingSession ? closeSession(closingSession) : Promise.resolve(null),
@@ -433,7 +434,7 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
     if (warning) showError(warning);
     else {
       intro = phase === "ready";
-      focusTarget = intro ? "intro" : "retry";
+      focusTarget = intro ? "intro" : phase === "exhausted" ? "notice" : "retry";
       render();
     }
   }
@@ -619,7 +620,8 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
       focusTarget = "end";
       render();
     } catch (failure) {
-      if (!cancelled()) await finish(false, callStartError(failure));
+      const exhausted = failure instanceof WidgetRequestError && (failure.code === "public_call_limit" || failure.code === "public_call_credits_exhausted");
+      if (!cancelled()) await finish(false, callStartError(failure), exhausted);
     } finally {
       starting = false;
       render();
@@ -656,13 +658,7 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
 
   function dismiss() {
     if (phase === "connecting" || phase === "live" || finishing) return;
-    if (intro) { post("close"); return; }
-    intro = true;
-    phase = "ready";
-    editingName = false;
-    clearError();
-    focusTarget = "intro";
-    render();
+    post("close");
   }
   function unlockAudio() {
     if (phase === "live" && room?.canPlaybackAudio === false) {
@@ -723,6 +719,13 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
       render();
     } else if (data.type === "visibility") {
       visible = data.open;
+      if (!visible && phase !== "connecting" && phase !== "live" && !finishing) {
+        intro = true;
+        phase = "ready";
+        editingName = false;
+        focusTarget = undefined;
+        clearError();
+      }
       render();
     } else if (data.type === "destroy") {
       destroy();

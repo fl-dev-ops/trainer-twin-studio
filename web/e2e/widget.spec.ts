@@ -302,10 +302,26 @@ test.describe.serial("cross-origin hosted voice widget", () => {
     await introButton(hosted).click();
     await expect(hosted.locator(".tt-portrait-stage")).toBeHidden();
     await hosted.getByLabel("Your name", { exact: true }).fill("First visitor");
-    await hosted.getByRole("button", { name: "Close widget" }).click();
-    await expect(introButton(hosted)).toBeFocused();
+    await expect(hosted.getByRole("button", { name: "Close widget" })).toHaveCount(0);
+    await page.getByRole("heading", { name: "Independent customer website" }).click();
+    await expect(page.locator('iframe[title="Talk to AI twin"]')).toBeHidden();
+    await page.getByRole("button", { name: "Talk to AI twin", exact: true }).click();
+    await expect(introButton(hosted)).toBeVisible();
     expect(await hosted.evaluate(() => window.__widgetMicrophoneRequests)).toBe(0);
     await expectOnlySafeMessages(page);
+  });
+
+  test("exhausted free minutes show a dedicated notice without a retry or close button", async ({ page, context }) => {
+    await environment(context);
+    await page.route((url) => url.pathname === sessionsPath(), (route) =>
+      route.fulfill({ status: 403, json: { code: "public_call_credits_exhausted" } }));
+    const hosted = await open(page);
+    await begin(hosted);
+    await expect(hosted.getByRole("heading", { name: "Free call limit reached" })).toBeFocused();
+    await expect(hosted.getByText(/enough free call minutes/)).toBeVisible();
+    await expect(hosted.getByRole("button")).toHaveCount(0);
+    await page.getByRole("heading", { name: "Independent customer website" }).click();
+    await expect(page.locator('iframe[title="Talk to AI twin"]')).toBeHidden();
   });
 
   test("portrait-led design keeps name entry, captions and controls usable across call states", async ({ page, context, browserName }, testInfo) => {

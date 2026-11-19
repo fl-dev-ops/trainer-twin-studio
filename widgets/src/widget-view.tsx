@@ -13,6 +13,7 @@ export type WidgetRefs = {
   intro: RefObject<HTMLButtonElement | null>;
   end: RefObject<HTMLButtonElement | null>;
   retry: RefObject<HTMLButtonElement | null>;
+  notice: RefObject<HTMLHeadingElement | null>;
   error: RefObject<HTMLParagraphElement | null>;
 };
 
@@ -29,6 +30,7 @@ type WidgetViewProps = {
   nameInvalid: boolean;
   call: Omit<ComponentProps<typeof WidgetCall>, "visible">;
   onCommit: () => void;
+  onDismiss: () => void;
   onOpen: () => void;
   onStart: () => void;
   onNameInput: () => void;
@@ -36,20 +38,19 @@ type WidgetViewProps = {
 };
 
 export function WidgetView(props: WidgetViewProps) {
-  const { elements, trainer, photoUrl, welcome, canStart, dismissible, onDismiss } = props.call;
+  const { elements, trainer, photoUrl, welcome, canStart } = props.call;
   useLayoutEffect(() => props.onCommit());
 
   return (
     <section ref={elements.card} className="tt-card" style={props.theme}
       data-phase={props.call.phase} data-agent-state={props.agentState} data-stage={props.stage}
       data-visible={props.visible} aria-label={`${props.name} voice assistant`} onClick={props.onUnlockAudio}
-      onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); onDismiss(); } }}>
+      onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); props.onDismiss(); } }}>
       {props.stage === "intro" && <WidgetIntro trainer={trainer} photoUrl={photoUrl} welcome={welcome}
         disabled={!canStart} onOpen={props.onOpen} onChangeName={canStart && props.call.hasName ? props.call.onChangeName : undefined}
         buttonRef={elements.intro} />}
       {props.stage === "name" && <WidgetName inputRef={elements.name} initialName={props.draftName}
-        enabled={canStart} invalid={props.nameInvalid} onStart={props.onStart} onInput={props.onNameInput}
-        onDismiss={dismissible ? onDismiss : undefined} />}
+        enabled={canStart} invalid={props.nameInvalid} onStart={props.onStart} onInput={props.onNameInput} />}
       <WidgetCall {...props.call} visible={props.stage === "call"} />
       <p ref={elements.error} className="tt-error" id="tt-error" tabIndex={-1} role="alert" hidden={!props.errorMessage}>{props.errorMessage}</p>
     </section>

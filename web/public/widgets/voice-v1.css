@@ -113,13 +113,10 @@ p, h1, h2 { margin: 0; }
 .tt-intro-button svg { flex-shrink: 0; }
 .tt-intro-button:hover:not(:disabled) { background: #292722; }
 .tt-intro-button:focus-visible, .tt-intro-change:focus-visible { outline-color: #4d6842; }
-.tt-intro-change { flex-shrink: 0; padding: 8px 10px; min-height: 44px; border: 1px solid #c5bcb6; border-radius: 999px; background: transparent; color: #514946; font-size: 12px; font-weight: 500; }
+.tt-intro-change { display: grid; place-items: center; flex: 0 0 44px; min-height: 44px; padding: 0; border: 1px solid #c5bcb6; border-radius: 999px; background: transparent; color: #514946; }
 .tt-intro-change:hover { background: #eee6e0; }
 .tt-call-screen { display: contents; }
-.tt-dismiss { position: absolute; z-index: 2; top: 8px; right: 8px; background: #1b1c19; }
-.tt-dismiss .tt-icon { width: 16px; height: 16px; }
 .tt-card[data-stage="name"] { background: #151517; border-radius: 18px; height: min(480px, 100svh); min-height: min(140px, 100svh); }
-.tt-card[data-stage="name"] .tt-dismiss { background: transparent; color: #eeeef0; }
 .tt-prejoin { position: relative; flex: 1; min-height: 0; }
 .tt-name-hit-area { position: absolute; inset: 0; cursor: text; }
 .tt-name-prompt, .tt-name-hint { position: absolute; inset-inline: 16px; z-index: 1; text-align: center; pointer-events: none; }
@@ -170,7 +167,7 @@ p, h1, h2 { margin: 0; }
 .tt-countdown { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); color: #c8cbbd; font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .tt-countdown.tt-urgent { position: static; width: auto; height: auto; overflow: visible; clip-path: none; color: #ffb3a6; }
 .tt-transcript {
-  max-height: min(144px, 40svh);
+  height: min(62px, 40svh) !important;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
@@ -208,6 +205,8 @@ p, h1, h2 { margin: 0; }
 .tt-playback-hint { color: #e4dcbf; font-size: 12px; line-height: 20px; text-align: center; }
 .tt-call-actions { display: grid; gap: 12px; text-align: center; }
 .tt-call-title { font-size: 20px; font-weight: 500; line-height: 24px; letter-spacing: -.4px; }
+.tt-card[data-phase="exhausted"] .tt-body { padding: 24px; }
+.tt-limit-message { color: #c8cbbd; font-size: 14px; line-height: 20px; }
 .tt-error { margin: 0 16px 16px; border: 1px solid #eda59844; border-radius: 12px; padding: 12px; color: #ffc6ba; background: #512e2633; font-size: 12px; line-height: 20px; overflow-wrap: anywhere; }
 .tt-config-error { padding: 24px; color: #ffc6ba; background: #1b1c19; font-size: 14px; line-height: 24px; }
 .tt-waves { position: absolute; inset-inline: 0; bottom: -32px; width: 100%; height: 224px; filter: blur(24px); pointer-events: none; }

@@ -83,6 +83,23 @@ test("round icon-only launcher opens on click, not hover", async ({ page }) => {
   await expect(launcher(page)).toBeFocused();
 });
 
+test("customer styles cannot reset the launcher, its wrapper, or the iframe", async ({ page }) => {
+  await page.goto("/");
+  const before = await launcher(page).boundingBox();
+  expect(before).toMatchObject({ width: 48, height: 48 });
+  await page.addStyleTag({ content: `
+    body { direction: rtl; font: 60px/2 monospace; --content-height: 1px; }
+    div, button, iframe { display: none !important; }
+    [data-trainertwin-widget] { transform: translateX(900px) !important; opacity: 0 !important; }
+  ` });
+  await expect(launcher(page)).toBeVisible();
+  expect(await launcher(page).boundingBox()).toEqual(before);
+  await expect(launcher(page)).toHaveCSS("direction", "ltr");
+  await open(page);
+  await expect(page.locator("iframe")).toBeVisible();
+  await expect(frame(page).getByRole("button", { name: "Start fixture call" })).toBeVisible();
+});
+
 test("touch uses tap rather than hover", async ({ browser }) => {
   const context = await browser.newContext({ hasTouch: true, viewport: { width: 390, height: 844 } });
   const page = await context.newPage();

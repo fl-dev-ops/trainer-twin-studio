@@ -1,4 +1,4 @@
-import { Phone } from "lucide-react";
+import { PenLine, Phone } from "lucide-react";
 import type { RefObject } from "react";
 import { WidgetPortrait } from "./widget-portrait";
 
@@ -26,7 +26,9 @@ export function WidgetIntro({ trainer, photoUrl, welcome, disabled, onOpen, onCh
         <button ref={buttonRef} type="button" className="tt-intro-button" disabled={disabled} onClick={onOpen}>
           <Phone size={16} aria-hidden="true" />{callLabel}
         </button>
-        {onChangeName && <button type="button" className="tt-intro-change" aria-label="Change your name" onClick={onChangeName}>Change name</button>}
+        {onChangeName && <button type="button" className="tt-intro-change" aria-label="Change your name" title="Change your name" onClick={onChangeName}>
+          <PenLine size={18} aria-hidden="true" />
+        </button>}
       </div>
     </div>
   );

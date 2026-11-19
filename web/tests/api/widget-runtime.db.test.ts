@@ -122,6 +122,15 @@ describe.skipIf(!localMinutesDb)("widget cookieless lifecycle (real database)", 
     await noStart();
   });
 
+  test("insufficient org credit returns a distinct refusal without starting a call", async () => {
+    await fundOrg({ orgId: f.org.id, minutes: -9 });
+    const credentials = await grant();
+    await refusal(await launch(credentials.grant), 403, "public_call_credits_exhausted");
+    expect(await db.interviewSession.count({ where: { orgId: f.org.id } })).toBe(0);
+    expect(scheduling).not.toHaveBeenCalled();
+    expect(transport).not.toHaveBeenCalled();
+  });
+
   test("a grant that expires before reservation cannot create a session or hold credits", async () => {
     const credentials = await grant();
     const scope = readWidgetGrant(credentials.grant);
