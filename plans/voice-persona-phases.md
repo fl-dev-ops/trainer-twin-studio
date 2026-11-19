@@ -1,6 +1,6 @@
 # Voice and persona — two-phase plan
 
-Status: Voice phase implemented and locally verified, 19 November 2026. Persona phase remains planned only.
+Status: Voice phase implemented and locally verified, 19 November 2026. Persona phase implemented and locally verified, 19 November 2026.
 Grounding: `persona-research.md`, the current Prisma schema, persona editor/media helpers and TTS routes.
 
 ## Product decisions
@@ -242,6 +242,31 @@ Do not move skill-owned trainer behavior or question examples into Persona.
 - Description text cannot grant tools, bypass access controls or reveal hidden evaluation content.
 - Database/agent regression tests, typecheck, focused lint and local end-to-end checks pass.
   Report the known Next.js security build gate and browser-certificate prerequisite honestly if unresolved.
+
+### Persona implementation checkpoint
+
+- One short form replaces the Look / How they talk / Voice and avatar tabs: Name, Role (free text with suggestions),
+  About (optional, stored as `Persona.data.background`), Voice and optional Photo. One Save commits the definition and
+  voice selection in a single transaction; Cancel discards. Choosing or previewing a voice saves nothing; a photo is
+  uploaded after the definition saves and a failure says so. The avatar video upload left the editor; stored videos stay.
+- Saves replace only `name`, `role`, `background`. Every other stored key (older editor traits, a trainer's recorded
+  style, source evidence, `difficulty`/`knowledge`, settings, avatar) is kept; an unchanged save makes no SpecVersion.
+  Earlier editor traits are shown read-only as "Earlier settings" and still drive the brief. No new tables or migrations.
+- Brief: short-form characters get plain defaults (no fillers/pauses/interruptions); older-editor characters keep their
+  lines; the trainer's own persona stays identity-only. A recorded style/decision-preferences profile is carried in the
+  brief once a role exists (as chat's legacy line did), so the interviewer shape round-trips. Every brief states that
+  the description never changes instructions, tools, access or evaluation; scenario/skill wins on conflict.
+- Own-persona voice changes still go through `selectOwnPersonaVoice` (twin override retirement) in the same transaction.
+- "Used by N agents" on the editor, page and cards. Removal is refused (409) while any agent, archived included, uses the
+  persona, checked under a row lock before history or files are touched (previously a raw FK error after deletions).
+- Sessions already froze `compiledSnapshot.persona` and `resolvedVoiceId` at start; tests now prove A keeps both across
+  turns and reconnects while B gets the edit.
+- Verified on 19 Nov: new persona DB suite 10/10; full DB suite 1,084 pass / 1 unrelated ordering flake
+  (`org-people` member order, passes 3/3 standalone); offline unit 1,287/1,287; flows 150/150; chat 125/125;
+  component tests 85/85 (parallel); Chromium voice/persona specs 9/9 with real API and local S3 (synthetic inference);
+  typecheck, touched-file lint (3 existing `specs.ts` warnings) and `next build` pass.
+- Not verified: real-model multi-turn chat and a real LiveKit voice call after a persona edit (dispatch is asserted with
+  LiveKit mocked), and a visual pass on the Olga local copy. No production writes, pushes or Vasanth conversion.
 
 ## Completion and exclusions
 

@@ -42,6 +42,7 @@ const studioOnly: Record<string, (c: Caller) => Promise<unknown>> = {
   personas: (c) => c.personas(),
   persona: (c) => c.persona({ slug: "x", spec: false }),
   personaEdit: (c) => c.personaEdit({ slug: "x" }),
+  personaNew: (c) => c.personaNew(),
   sessions: (c) => c.sessions({}),
   session: (c) => c.session({ id: "x" }),
   twinKnowledge: (c) => c.twinKnowledge(),

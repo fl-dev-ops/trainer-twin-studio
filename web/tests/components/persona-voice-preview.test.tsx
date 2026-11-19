@@ -14,6 +14,7 @@ function newScope(): Scope {
 const realReact = { ...React };
 mock.module("react", () => ({
   ...realReact,
+  useId: () => "id",
   useState: (initial: unknown) => {
     const { values } = scope;
     const index = scope.cursor++;
@@ -77,8 +78,7 @@ function unmount(target: Scope) {
 }
 function picker() {
   const root = render(newScope(), () => PersonaEditor({
-    slug: "trainer", initial: { ...emptyPersona(), name: "Trainer" }, isOwn: true, defaultTab: "media",
-    media: { photoUrl: null, hasVideo: false, voiceId: null, voiceName: null },
+    slug: "trainer", initial: { ...emptyPersona(), name: "Trainer", role: "Sales coach" }, isOwn: true, voice: null,
     voices: [{ id: "ava", name: "Ava", kind: "cloned" }, { id: "jules", name: "Jules", kind: "sample" }],
   }));
   const sectionElement = find(root, (element) => typeof element.type === "function" && element.type.name === "VoiceSection")!;
@@ -170,4 +170,52 @@ test("Stop also aborts an active PCM consumer using the same request signal", as
   streaming.resolve();
   await streaming.promise;
   expect(error).not.toHaveBeenCalled();
+});
+
+test("choosing a voice saves nothing until Save, which sends the whole form with the new voice", async () => {
+  const sent: { url: string; init?: RequestInit }[] = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (async (url: string, init?: RequestInit) => {
+    sent.push({ url: String(url), init });
+    return Response.json({ slug: "trainer", version: 2 });
+  }) as typeof fetch;
+  try {
+    const rootScope = newScope();
+    const editor = () => render(rootScope, () => PersonaEditor({
+      slug: "trainer", initial: { name: "Trainer", role: "Sales coach", about: "Coaches new agents." }, isOwn: true,
+      voice: { id: "ava", name: "Ava" },
+      voices: [{ id: "ava", name: "Ava", kind: "cloned" }, { id: "jules", name: "Jules", kind: "sample" }],
+    }));
+    const sectionElement = find(editor(), (element) => typeof element.type === "function" && element.type.name === "VoiceSection")!;
+    const sectionScope = newScope();
+    find(renderElement(sectionScope, sectionElement), (element) => element.props.children === "Choose a voice")!.props.onClick();
+    const pickerElement = find(renderElement(sectionScope, sectionElement), (element) => typeof element.type === "function" && element.type.name === "VoicePicker")!;
+    (pickerElement.props as unknown as { onSelect(id: string): void }).onSelect("jules");
+    expect(sent).toEqual([]);
+    const save = find(editor(), (element) => Array.isArray(element.props.children) && element.props.children.includes("Save changes"))!;
+    save.props.onClick();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(sent).toHaveLength(1);
+    expect(sent[0].url).toBe("/api/personas/trainer");
+    expect(sent[0].init?.method).toBe("PATCH");
+    expect(JSON.parse(String(sent[0].init?.body))).toEqual({ name: "Trainer", role: "Sales coach", about: "Coaches new agents.", voiceId: "jules" });
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test("Save without a voice change sends no voice, so the saved voice is left as it is", async () => {
+  const sent: RequestInit[] = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (async (_url: string, init?: RequestInit) => { sent.push(init!); return Response.json({ slug: "trainer", version: 2 }); }) as typeof fetch;
+  try {
+    const root = render(newScope(), () => PersonaEditor({
+      slug: "trainer", initial: { name: "Trainer", role: "Coach", about: "" }, voice: { id: "ava", name: "Ava" }, voices: [{ id: "ava", name: "Ava", kind: "cloned" }],
+    }));
+    find(root, (element) => Array.isArray(element.props.children) && element.props.children.includes("Save changes"))!.props.onClick();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(JSON.parse(String(sent[0].body))).toEqual({ name: "Trainer", role: "Coach", about: "" });
+  } finally {
+    globalThis.fetch = realFetch;
+  }
 });

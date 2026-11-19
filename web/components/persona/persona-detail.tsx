@@ -1,8 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { ArrowLeft, Pencil } from "lucide-react";
-import { CARD, PersonaPhoto, RoleChip, Tags } from "@/components/persona/persona-parts";
-import { ANSWER_LENGTH, BEHAVIOURS, FORMALITY, INTERRUPTS, OPENING_STYLES, PACE, meaningOf, optionLabel } from "@/lib/persona";
+import { CARD, PersonaPhoto, RoleChip } from "@/components/persona/persona-parts";
 import type { PersonaView } from "@/lib/personas";
 import { cn } from "@/lib/utils";
 import { PageContainer } from "@/components/page-container";
@@ -16,20 +15,9 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-/** Option label with its meaning, e.g. "Formal · Polished and businesslike…". */
-function Option({ options, value }: { options: readonly { value: string; label: string; meaning: string }[]; value: string }) {
-  return (
-    <p className="m-0">
-      <span className="font-medium">{optionLabel(options, value)}</span>
-      <span className="text-(--text-secondary)"> · {meaningOf(options, value)}</span>
-    </p>
-  );
-}
-
-/** One role-play persona: who they are, how they talk, and their voice and avatar. */
+/** One persona: who they are, their voice and photo, and the agents that use it. */
 export function PersonaDetail({ item }: { item: PersonaView }) {
   const { persona } = item;
-  const place = [persona.age, persona.basedIn].filter(Boolean).join(" · ");
   const editHref = `/personas/${encodeURIComponent(item.slug)}/edit`;
   return (
     <PageContainer>
@@ -51,43 +39,41 @@ export function PersonaDetail({ item }: { item: PersonaView }) {
         <PersonaPhoto name={persona.name} photoUrl={item.photoUrl} size="xl" />
         <div className="absolute top-4 right-4 flex gap-2">
           {item.isOwn ? <RoleChip className="bg-(--brand)/15 text-(--brand-strong) dark:text-(--brand)">Your persona</RoleChip> : null}
-          <RoleChip>{persona.role}</RoleChip>
+          {persona.role ? <RoleChip>{persona.role}</RoleChip> : null}
         </div>
-        <div>
-          <h1 className="m-0 text-2xl leading-9 font-semibold tracking-title">{persona.name}</h1>
-          {place ? <p className="m-0 text-sm text-muted-foreground">{place}</p> : null}
-        </div>
+        <h1 className="m-0 text-2xl leading-9 font-semibold tracking-title">{persona.name}</h1>
       </article>
 
       <article className={cn(CARD, "mt-4 divide-y divide-(--border) px-6 py-2")}>
-        {persona.background ? <Row label="Background"><p className="m-0">{persona.background}</p></Row> : null}
-        <Row label="Behaviour">
-          {persona.behaviours.length ? (
-            <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
-              {persona.behaviours.map((b) => (
-                <li key={b}><span className="font-medium">{b}</span><span className="text-(--text-secondary)"> · {meaningOf(BEHAVIOURS.map((x) => ({ ...x, label: x.value })), b)}</span></li>
-              ))}
-            </ul>
-          ) : <span className="text-muted-foreground">Not set</span>}
-        </Row>
-        <Row label="Opening style"><Option options={OPENING_STYLES} value={persona.openingStyle} /></Row>
-        <Row label="Formality"><Option options={FORMALITY} value={persona.formality} /></Row>
-        <Row label="Answer length"><Option options={ANSWER_LENGTH} value={persona.answerLength} /></Row>
-        <Row label="Interrupts"><Option options={INTERRUPTS} value={persona.interrupts} /></Row>
-        <Row label="Pauses and fillers">
-          <p className="m-0">{[persona.pauses ? "Takes a beat before answering" : null, persona.fillers ? "Says “um”, “well”, “you know”" : null].filter(Boolean).join(" · ") || "Neither"}</p>
-        </Row>
-        {persona.phrases.length ? <Row label="Signature phrases"><Tags items={persona.phrases.map((p) => `“${p}”`)} /></Row> : null}
-        {persona.howTheyTalk ? <Row label="In their words"><p className="m-0">{persona.howTheyTalk}</p></Row> : null}
-        <Row label="Pace"><Option options={PACE} value={persona.pace} /></Row>
+        <Row label="Role">{persona.role ? <p className="m-0">{persona.role}</p> : <span className="text-muted-foreground">Not set · <Link href={editHref} className="text-foreground underline-offset-4 hover:underline">Add</Link></span>}</Row>
+        <Row label="About">{persona.about ? <p className="m-0 whitespace-pre-line">{persona.about}</p> : <span className="text-muted-foreground">Not set</span>}</Row>
         <Row label="Voice">
           {item.voice ? <p className="m-0 font-medium">{item.voice.name}</p> : <MissingMedia href={editHref} text="No voice yet" />}
         </Row>
-        <Row label="Avatar">
-          {item.photoUrl || item.hasVideo ? (
-            <p className="m-0">{[item.photoUrl ? "Photo" : null, item.hasVideo ? "Video" : null].filter(Boolean).join(" and ")} added</p>
-          ) : <MissingMedia href={item.isOwn ? null : editHref} text="No photo or video yet" />}
+        <Row label="Photo">
+          {item.photoUrl ? <p className="m-0">Photo added{item.hasVideo ? " · avatar video kept" : ""}</p>
+            : <MissingMedia href={item.isOwn ? null : editHref} text="No photo yet" />}
         </Row>
+        <Row label="Used by">
+          {item.usedBy.length ? (
+            <ul className="m-0 flex list-none flex-col gap-1 p-0" aria-label="Agents using this persona">
+              {item.usedBy.map((agent) => <li key={agent.slug}>{agent.name} <span className="text-muted-foreground">· {agent.kind === "TWIN" ? "Twin" : "Role play"}</span></li>)}
+            </ul>
+          ) : <span className="text-muted-foreground">No agents yet</span>}
+        </Row>
+        {item.traits.length ? (
+          <Row label="Earlier settings">
+            <p className="m-0 mb-2 text-xs text-muted-foreground">Kept from the earlier editor and still used in sessions. The short form does not change them.</p>
+            <dl className="m-0 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-1">
+              {item.traits.map((trait) => (
+                <div key={trait.label} className="contents">
+                  <dt className="text-muted-foreground">{trait.label}</dt>
+                  <dd className="m-0">{trait.value}</dd>
+                </div>
+              ))}
+            </dl>
+          </Row>
+        ) : null}
         {item.isOwn ? (
           <Row label="Recorded style">
             <p className="m-0">
@@ -101,11 +87,11 @@ export function PersonaDetail({ item }: { item: PersonaView }) {
   );
 }
 
-/** Missing media with where to add it: the media tab, or Twin's brain for the trainer's own persona. */
+/** Missing media with where to add it: the editor, or Twin's brain for the trainer's own photo. */
 function MissingMedia({ href, text }: { href: string | null; text: string }) {
   return (
     <p className="m-0 text-muted-foreground">
-      {text} · <Link href={href ? `${href}?tab=media` : "/twin/brain"} className="text-foreground underline-offset-4 hover:underline">{href ? "Add" : "Set up on Twin’s brain"}</Link>
+      {text} · <Link href={href ?? "/twin/brain"} className="text-foreground underline-offset-4 hover:underline">{href ? "Add" : "Set up on Twin’s brain"}</Link>
     </p>
   );
 }

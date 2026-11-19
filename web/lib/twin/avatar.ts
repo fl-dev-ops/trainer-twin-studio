@@ -161,7 +161,11 @@ export async function savePersonaVoice(orgId: string, input: { voiceId: string; 
 }
 
 /** Own-persona voice changes retire copied twin overrides while preserving their spec and skill history. */
-export async function selectOwnPersonaVoice(orgId: string, slug: string, voiceId: string, avatar?: { id: string; videoKey: string }) {
+export async function selectOwnPersonaVoice(
+  orgId: string, slug: string, voiceId: string, avatar?: { id: string; videoKey: string },
+  /** Other persona writes that must commit or roll back with this selection (the persona editor's Save). */
+  alongside?: (tx: Prisma.TransactionClient) => Promise<void>,
+) {
   const persona = await db.persona.findFirst({ where: { orgId, slug, isOwn: true }, select: { id: true, slug: true } });
   if (!persona) throw new VoiceError("persona_not_found", "Persona not found", 404);
   const twins = await db.agent.findMany({
@@ -170,6 +174,7 @@ export async function selectOwnPersonaVoice(orgId: string, slug: string, voiceId
   });
   // Twins that carry their own copy of a voice (written by the earlier setup) would override the persona's.
   return withLock([ownershipLock(orgId), ...twins.map((twin) => `agent:${twin.slug}`).sort()], async (tx) => {
+    if (alongside) await alongside(tx);
     const selected = await attachPersonaVoice(orgId, persona.slug, voiceId, tx);
     if (avatar) await tx.avatar.update({ where: { id: avatar.id }, data: { s3VideoKey: avatar.videoKey } });
     const current = await tx.agent.findMany({

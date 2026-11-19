@@ -513,7 +513,10 @@ export function SpecResourceEditor({
   async function remove() {
     if (!confirm(`Delete ${slug}? Its version history will also be removed.`)) return;
     const response = await fetch(`/api/spec/${type}/${encodeURIComponent(slug)}`, { method: "DELETE" });
-    if (!response.ok) return toast.error(`Could not delete ${slug}`);
+    if (!response.ok) {
+      const result = await response.json().catch(() => null) as { error?: string } | null;
+      return toast.error(response.status === 409 && result?.error ? result.error : `Could not delete ${slug}`);
+    }
     toast.success(`Deleted ${slug}`);
     router.push(`/${type}`);
     refresh();

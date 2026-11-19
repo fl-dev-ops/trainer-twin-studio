@@ -387,18 +387,13 @@ export async function deleteSpec(type: SpecType, slug: string, orgId: string) {
     await db.agent.update({ where: { slug }, data: { archivedAt: new Date() } });
     return;
   }
-  await db.specVersion.deleteMany({ where: { entityType: type, entitySlug: slug, orgId } });
-  const personaId = row.id;
-  if (!personaId) throw new Error("Persona identity missing");
-  const sources = await db.personaSource.findMany({
-    where: { personaId, orgId },
-    select: { id: true, s3Key: true },
-  });
+  // Refused while any agent uses it (PersonaInUseError); the row and its history go in one locked transaction, files after.
+  const { removePersonaRecord } = await import("@/lib/personas");
+  const removed = await removePersonaRecord(orgId, slug);
   await Promise.all([
-    ...sources.map((source) => deletePrefix(source.s3Key)),
-    MainCollectionService.removePersona(orgId, personaId),
+    ...removed.sourceKeys.map((key) => deletePrefix(key)),
+    MainCollectionService.removePersona(orgId, removed.personaId),
   ]);
-  await db.persona.delete({ where: { orgId_slug: { orgId, slug } } });
 }
 
 export async function listVersions(type: SpecType, slug: string, orgId: string) {

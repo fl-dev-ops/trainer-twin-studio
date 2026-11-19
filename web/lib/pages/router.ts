@@ -132,6 +132,9 @@ export const pageRouter = t.router({
     return { item, voices: await pickableVoices(ctx.user.orgId) };
   }),
 
+  /** The create form's voice choices. */
+  personaNew: studioProcedure.query(async ({ ctx }) => ({ voices: await pickableVoices(ctx.user.orgId) })),
+
   // Sessions.
   sessions: studioProcedure
     .input(z.object({ range: optional, scenario: optional, learner: optional }))

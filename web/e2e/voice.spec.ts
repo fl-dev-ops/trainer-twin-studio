@@ -14,8 +14,8 @@ const voices = [
 const personaData = (isOwn = false, voice = { id: voices[0].id, name: voices[0].name }) => ({
   item: {
     slug: SLUG, isOwn, version: 1, updatedAt: "2026-11-19T00:00:00.000Z",
-    persona: { ...emptyPersona(), name: "Voice UI Trainer", role: "Sales coach" },
-    photoUrl: null, hasVideo: true, voice,
+    persona: { ...emptyPersona(), name: "Voice UI Trainer", role: "Sales coach", about: "Coaches new agents." },
+    traits: [] as { label: string; value: string }[], photoUrl: null, hasVideo: true, voice, usedBy: [] as { slug: string; name: string; kind: string }[],
   },
   voices,
 });
@@ -38,7 +38,16 @@ async function multipart(request: Request) {
 }
 
 function voiceSection(page: Page) {
-  return page.locator("article").filter({ has: page.getByRole("heading", { name: "Voice", exact: true }) });
+  return page.getByRole("region", { name: "Voice", exact: true });
+}
+
+/** The persona PATCH a Save sends, intercepted: the whole form in one JSON request. */
+async function interceptSave(page: Page, onSave: (body: Record<string, unknown>) => { status?: number; json: unknown }) {
+  await page.route(`**/api/personas/${SLUG}`, async (route) => {
+    if (route.request().method() !== "PATCH") return route.fallback();
+    const reply = onSave(route.request().postDataJSON());
+    await route.fulfill({ status: reply.status ?? 200, json: reply.json });
+  });
 }
 
 function referenceWav() {
@@ -74,7 +83,7 @@ test("local voice references are shared without extra Voice rows and preview thr
     return result.voice;
   }
   async function addPersona(name: string) {
-    const response = await page.request.post("/api/personas", { data: { ...emptyPersona(), name, behaviours: ["Warm & Open"] } });
+    const response = await page.request.post("/api/personas", { data: { ...emptyPersona(), name, role: "Buyer" } });
     expect(response.status(), await response.text()).toBe(201);
     const result: { slug: string } = await response.json();
     return result.slug;
@@ -109,48 +118,51 @@ test("local voice references are shared without extra Voice rows and preview thr
   const alternative = await addVoice(`E2E other ${stamp}`);
   const first = await addPersona(`E2E voice first ${stamp}`);
   const second = await addPersona(`E2E voice second ${stamp}`);
-  const initial = await page.request.post(`/api/personas/${first}/media`, { multipart: { voiceId: shared.id } });
+  const initial = await page.request.patch(`/api/personas/${first}`, { data: { name: `E2E voice first ${stamp}`, role: "Buyer", about: "", voiceId: shared.id } });
   expect(initial.ok(), await initial.text()).toBe(true);
   const idsBefore = await voiceIds();
   const referenceBefore = await metadata(shared.id);
-  const mutations: string[] = [];
+  const saves: Record<string, unknown>[] = [];
   page.on("request", (request) => {
-    if (request.method() === "POST" && new URL(request.url()).pathname === `/api/personas/${second}/media`) mutations.push(request.url());
+    const path = new URL(request.url()).pathname;
+    if (path.startsWith(`/api/personas/${second}`) && request.method() !== "GET") saves.push(request.method() === "PATCH" ? request.postDataJSON() : { path });
   });
-  await page.goto(`/personas/${second}/edit?tab=media`);
+  await page.goto(`/personas/${second}/edit`);
   const section = voiceSection(page);
   await section.getByRole("button", { name: "Choose a voice", exact: true }).click();
   await expect(section.locator(`input[value="${shared.id}"]`)).toBeVisible();
   await expect(section.locator('input[type="radio"]:checked')).toHaveCount(0);
   await listen(shared.name);
-  expect(mutations).toHaveLength(0);
   await section.locator(`input[value="${shared.id}"]`).check();
   await section.getByRole("button", { name: "Cancel", exact: true }).click();
-  expect(mutations).toHaveLength(0);
+  await expect(section).toContainText("No voice yet.");
+  expect(saves).toHaveLength(0);
   await section.getByRole("button", { name: "Choose a voice", exact: true }).click();
-  await expect(section.locator('input[type="radio"]:checked')).toHaveCount(0);
   await section.locator(`input[value="${shared.id}"]`).check();
-  const attached = page.waitForResponse((response) => new URL(response.url()).pathname === `/api/personas/${second}/media`);
-  await section.getByRole("button", { name: "Save voice", exact: true }).click();
-  const saved = await attached;
-  expect(saved.ok(), await saved.text()).toBe(true);
-  const selected = await multipart(saved.request());
-  expect([...selected.keys()]).toEqual(["voiceId"]);
-  expect(selected.get("voiceId")).toBe(shared.id);
-  await expect(section).toContainText(`Current voice: ${shared.name}`);
+  await section.getByRole("button", { name: "Use this voice", exact: true }).click();
+  await expect(section).toContainText(`New voice: ${shared.name}`);
+  expect(saves).toHaveLength(0); // a choice is not saved on its own
+  const saved = page.waitForResponse((response) => new URL(response.url()).pathname === `/api/personas/${second}` && response.request().method() === "PATCH");
+  await page.getByRole("button", { name: "Save changes", exact: true }).click();
+  expect((await saved).ok()).toBe(true);
+  expect(saves).toEqual([{ name: `E2E voice second ${stamp}`, role: "Buyer", about: "", voiceId: shared.id }]);
+  await expect(page).toHaveURL(new RegExp(`/personas/${second}$`));
+  await expect(page.getByText(shared.name, { exact: true })).toBeVisible();
   expect(await voiceIds()).toEqual(idsBefore);
   expect(await metadata(shared.id)).toEqual(referenceBefore);
+  await page.goto(`/personas/${second}/edit`);
+  await expect(section).toContainText(`Current voice: ${shared.name}`);
   await section.getByRole("button", { name: "Choose a voice", exact: true }).click();
   await expect(section.locator(`input[value="${shared.id}"]`)).toBeChecked();
-  await expect(section.getByRole("button", { name: "Save voice", exact: true })).toBeDisabled();
   await section.locator(`input[value="${alternative.id}"]`).check();
-  const switched = page.waitForResponse((response) => new URL(response.url()).pathname === `/api/personas/${second}/media`);
-  await section.getByRole("button", { name: "Save voice", exact: true }).click();
+  await section.getByRole("button", { name: "Use this voice", exact: true }).click();
+  const switched = page.waitForResponse((response) => new URL(response.url()).pathname === `/api/personas/${second}` && response.request().method() === "PATCH");
+  await page.getByRole("button", { name: "Save changes", exact: true }).click();
   expect((await switched).ok()).toBe(true);
-  await expect(section).toContainText(`Current voice: ${alternative.name}`);
+  await expect(page.getByText(alternative.name, { exact: true })).toBeVisible();
   expect(await voiceIds()).toEqual(idsBefore);
   expect(await metadata(shared.id)).toEqual(referenceBefore);
-  await page.goto(`/personas/${first}/edit?tab=media`);
+  await page.goto(`/personas/${first}/edit`);
   await expect(voiceSection(page)).toContainText(`Current voice: ${shared.name}`);
   await voiceSection(page).getByRole("button", { name: "Choose a voice", exact: true }).click();
   await expect(voiceSection(page).locator(`input[value="${shared.id}"]`)).toBeChecked();
@@ -159,6 +171,44 @@ test("local voice references are shared without extra Voice rows and preview thr
   expect(deletion.status()).toBe(409);
   expect(await deletion.json()).toMatchObject({ code: "voice_in_use" });
   expect(await metadata(shared.id)).toEqual(referenceBefore);
+});
+
+test("create a persona with the short form, then a plain edit keeps its voice and photo (real API and local S3)", async ({ page }) => {
+  const name = `E2E short form ${Date.now()}`;
+  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
+  await page.goto("/personas/new");
+  await expect(page.getByRole("tab")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Create persona", exact: true })).toBeDisabled();
+  await page.getByLabel("Name", { exact: true }).fill(name);
+  await page.getByLabel("Role", { exact: true }).fill("Buyer");
+  await page.getByLabel("About this person (optional)", { exact: true }).fill("Careful first-time investor who asks for numbers.");
+  await page.getByLabel("Photo (optional)", { exact: true }).setInputFiles({ name: "face.png", mimeType: "image/png", buffer: png });
+  await expect(page.getByText("face.png will be uploaded when you save.", { exact: true })).toBeVisible();
+  const created = page.waitForResponse((response) => new URL(response.url()).pathname === "/api/personas" && response.request().method() === "POST");
+  const photo = page.waitForResponse((response) => /\/api\/personas\/[^/]+\/media$/.test(new URL(response.url()).pathname));
+  await page.getByRole("button", { name: "Create persona", exact: true }).click();
+  const response = await created;
+  expect(response.status(), await response.text()).toBe(201);
+  expect(response.request().postDataJSON()).toEqual({ name, role: "Buyer", about: "Careful first-time investor who asks for numbers." });
+  const { slug } = await response.json() as { slug: string };
+  expect((await photo).ok()).toBe(true);
+  await expect(page).toHaveURL(new RegExp(`/personas/${slug}$`));
+  await expect(page.getByText("Careful first-time investor who asks for numbers.", { exact: true })).toBeVisible();
+  await expect(page.getByText("Photo added", { exact: false })).toBeVisible();
+  await expect(page.getByText("No agents yet", { exact: true })).toBeVisible();
+
+  await page.getByRole("link", { name: "Edit", exact: true }).click();
+  await page.getByLabel("Role", { exact: true }).fill("Investor");
+  const edited = page.waitForResponse((r) => new URL(r.url()).pathname === `/api/personas/${slug}` && r.request().method() === "PATCH");
+  await page.getByRole("button", { name: "Save changes", exact: true }).click();
+  const patch = await edited;
+  expect(patch.ok(), await patch.text()).toBe(true);
+  expect(patch.request().postDataJSON()).toEqual({ name, role: "Investor", about: "Careful first-time investor who asks for numbers." });
+  await expect(page).toHaveURL(new RegExp(`/personas/${slug}$`));
+  await expect(page.getByText("Photo added", { exact: false })).toBeVisible();
+  await expect(page.locator("article").getByText("Investor", { exact: true }).first()).toBeVisible();
+  const removed = await page.request.delete(`/api/spec/personas/${slug}`);
+  expect(removed.ok()).toBe(true);
 });
 
 test("Add my voice stages an upload, Cancel creates nothing, and one Save creates one named voice", async ({ page }) => {
@@ -231,7 +281,7 @@ test.beforeEach(async ({ page }) => {
 test("voice selection is ID-based, preview-only until Save, and Cancel discards it (intercepted preview)", async ({ page }) => {
   const data = personaData();
   await mockQuery(page, "page.personaEdit", () => data);
-  const attached: string[][] = [];
+  const saved: Record<string, unknown>[] = [];
   let created = 0;
   let previews = 0;
   await page.route("**/api/tts/voices", async (route) => {
@@ -243,70 +293,69 @@ test("voice selection is ID-based, preview-only until Save, and Cancel discards 
     expect(route.request().postDataJSON().voice).toBe("sample-c");
     await route.fulfill({ contentType: "application/octet-stream", headers: { "X-Sample-Rate": "24000" }, body: Buffer.alloc(480) });
   });
-  await page.route(`**/api/personas/${SLUG}/media`, async (route) => {
-    const form = await multipart(route.request());
-    attached.push([...form.keys()]);
-    const voice = voices.find((candidate) => candidate.id === form.get("voiceId"));
-    if (!voice) throw new Error("Expected a known voice ID");
-    data.item.voice = { id: voice.id, name: voice.name };
-    await route.fulfill({ json: { ok: true } });
-  });
+  await interceptSave(page, (body) => { saved.push(body); return { json: { slug: SLUG, version: 2 } }; });
 
-  await page.goto(`/personas/${SLUG}/edit?tab=media`);
+  await page.goto(`/personas/${SLUG}/edit`);
   const section = voiceSection(page);
   await section.getByRole("button", { name: "Choose a voice", exact: true }).click();
   await expect(section.locator('input[value="shared-a"]')).toBeChecked();
   await expect(section.locator('input[value="shared-b"]')).not.toBeChecked();
-  await expect(section.getByRole("button", { name: "Save voice", exact: true })).toBeDisabled();
   await section.getByRole("button", { name: "Listen to Jules", exact: true }).click();
   await expect.poll(() => previews).toBe(1);
-  expect(attached).toHaveLength(0);
   await section.locator('input[value="sample-c"]').check();
   await section.getByRole("button", { name: "Cancel", exact: true }).click();
-  expect(attached).toHaveLength(0);
+  await expect(section).toContainText("Current voice: Shared voice");
   await section.getByRole("button", { name: "Choose a voice", exact: true }).click();
   await expect(section.locator('input[value="shared-a"]')).toBeChecked();
   await section.locator('input[value="shared-b"]').check();
-  await section.getByRole("button", { name: "Save voice", exact: true }).click();
-  await expect.poll(() => attached.length).toBe(1);
-  expect(attached).toEqual([["voiceId"]]);
-  expect(created).toBe(0);
+  await section.getByRole("button", { name: "Use this voice", exact: true }).click();
+  // Leaving with the page Cancel discards the unsaved choice.
+  await page.locator(`a[href="/personas/${SLUG}"]`, { hasText: "Cancel" }).click();
+  await expect(page).toHaveURL(new RegExp(`/personas/${SLUG}$`));
+  expect(saved).toHaveLength(0);
+  await page.goto(`/personas/${SLUG}/edit`);
   await section.getByRole("button", { name: "Choose a voice", exact: true }).click();
-  await expect(section.locator('input[value="shared-b"]')).toBeChecked();
-  await expect(section.getByRole("button", { name: "Save voice", exact: true })).toBeDisabled();
+  await section.locator('input[value="shared-b"]').check();
+  await section.getByRole("button", { name: "Use this voice", exact: true }).click();
+  await page.getByRole("button", { name: "Save changes", exact: true }).click();
+  await expect.poll(() => saved.length).toBe(1);
+  expect(saved).toEqual([{ name: "Voice UI Trainer", role: "Sales coach", about: "Coaches new agents.", voiceId: "shared-b" }]);
+  expect(created).toBe(0);
 });
 
-test("own-persona editing preserves an unavailable current voice and never submits video", async ({ page }) => {
+test("the persona form is five fields; own personas keep an unavailable voice and have no photo upload", async ({ page }) => {
   const data = personaData(true, { id: "unavailable", name: "Original trainer recording" });
+  data.item.usedBy = [{ slug: "twin", name: "Trainer twin", kind: "TWIN" }, { slug: "rp", name: "Manager review", kind: "ROLEPLAY" }];
   await mockQuery(page, "page.personaEdit", () => data);
-  const fields: string[][] = [];
-  await page.route(`**/api/personas/${SLUG}/media`, async (route) => {
-    const form = await multipart(route.request());
-    fields.push([...form.keys()]);
-    expect(form.get("voiceId")).toBe("sample-c");
-    data.item.voice = { id: "sample-c", name: "Jules" };
-    await route.fulfill({ json: { ok: true } });
-  });
-  await page.goto(`/personas/${SLUG}/edit?tab=media`);
+  const saved: Record<string, unknown>[] = [];
+  await interceptSave(page, (body) => { saved.push(body); return { json: { slug: SLUG, version: 2 } }; });
+  await page.goto(`/personas/${SLUG}/edit`);
+  for (const label of ["Name", "Role", "About this person (optional)"]) await expect(page.getByLabel(label, { exact: true })).toBeVisible();
+  for (const removed of ["Behaviour", "Formality", "Answer length", "Signature phrases", "Speaking pace", "Age", "Based in"]) {
+    await expect(page.getByText(removed, { exact: true })).toHaveCount(0);
+  }
+  await expect(page.getByRole("tab")).toHaveCount(0);
+  await expect(page.getByText("Used by 2 agents.", { exact: false })).toBeVisible();
   const section = voiceSection(page);
   await expect(section).toContainText("Original trainer recording");
   await expect(section).toContainText("It stays selected until you save another voice.");
-  await expect(page.getByLabel("Photo", { exact: true })).toHaveCount(0);
-  await expect(page.getByText("You can still record your voice there.", { exact: false })).toBeVisible();
+  await expect(page.locator('input[type="file"]')).toHaveCount(0);
+  await expect(page.getByRole("article").getByRole("link", { name: "Twin’s brain", exact: true })).toBeVisible();
+  await page.getByLabel("About this person (optional)", { exact: true }).fill("Runs the academy.");
   await section.getByRole("button", { name: "Choose a voice", exact: true }).click();
   await expect(section.locator('input[type="radio"]:checked')).toHaveCount(0);
-  await expect(section.getByRole("button", { name: "Save voice", exact: true })).toBeDisabled();
   await section.locator('input[value="sample-c"]').check();
-  await section.getByRole("button", { name: "Save voice", exact: true }).click();
-  await expect(section).toContainText("Current voice: Jules");
-  expect(fields).toEqual([["voiceId"]]);
+  await section.getByRole("button", { name: "Use this voice", exact: true }).click();
+  await page.getByRole("button", { name: "Save changes", exact: true }).click();
+  await expect.poll(() => saved.length).toBe(1);
+  expect(saved).toEqual([{ name: "Voice UI Trainer", role: "Sales coach", about: "Runs the academy.", voiceId: "sample-c" }]);
 });
 
-test("named upload has no assumed transcript, Cancel does nothing, and attachment retry does not upload twice", async ({ page }) => {
+test("Add my voice uploads once, Cancel does nothing, and a refused Save can be retried without another upload", async ({ page }) => {
   const data = personaData();
   await mockQuery(page, "page.personaEdit", () => data);
   const uploads: { name: FormDataEntryValue | null; transcript: FormDataEntryValue | null; audioSize: number; filename: string; mime: string }[] = [];
-  let attachments = 0;
+  const saves: Record<string, unknown>[] = [];
   await page.route("**/api/tts/voices", async (route) => {
     const form = await multipart(route.request());
     const audio = form.get("audio");
@@ -314,20 +363,13 @@ test("named upload has no assumed transcript, Cancel does nothing, and attachmen
     uploads.push({ name: form.get("name"), transcript: form.get("transcript"), audioSize: audio.size, filename: audio.name, mime: audio.type });
     await route.fulfill({ json: { voice: { id: "uploaded", name: "My recording", status: "ready" } } });
   });
-  await page.route(`**/api/personas/${SLUG}/media`, async (route) => {
-    attachments++;
-    const form = await multipart(route.request());
-    expect([...form.keys()]).toEqual(["voiceId"]);
-    expect(form.get("voiceId")).toBe("uploaded");
-    if (attachments === 1) {
-      await route.fulfill({ status: 409, json: { error: "The voice changed while saving. Try again." } });
-      return;
-    }
-    data.item.voice = { id: "uploaded", name: "My recording" };
-    data.voices = [...voices, { id: "uploaded", name: "My recording", kind: "cloned" }];
-    await route.fulfill({ json: { ok: true } });
+  await interceptSave(page, (body) => {
+    saves.push(body);
+    return saves.length === 1
+      ? { status: 409, json: { error: "The voice changed while saving. Try again." } }
+      : { json: { slug: SLUG, version: 2 } };
   });
-  await page.goto(`/personas/${SLUG}/edit?tab=media`);
+  await page.goto(`/personas/${SLUG}/edit`);
   const section = voiceSection(page);
   await section.getByRole("button", { name: "Add my voice", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Add my voice", exact: true });
@@ -338,20 +380,22 @@ test("named upload has no assumed transcript, Cancel does nothing, and attachmen
   await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(dialog).toBeHidden();
   expect(uploads).toHaveLength(0);
-  expect(attachments).toBe(0);
   await section.getByRole("button", { name: "Add my voice", exact: true }).click();
   await expect(dialog.getByLabel("Voice name", { exact: true })).toHaveValue("");
   await dialog.getByLabel("Voice name", { exact: true }).fill("My recording");
   await dialog.getByRole("tab", { name: "Upload", exact: true }).click();
   await dialog.getByLabel("Recording", { exact: true }).setInputFiles(recording);
   await dialog.getByRole("button", { name: "Save voice", exact: true }).click();
-  await expect(dialog.getByRole("alert")).toHaveText("The voice changed while saving. Try again.");
-  await expect(dialog).toContainText("without another upload");
-  await dialog.getByRole("button", { name: "Save voice", exact: true }).click();
   await expect(dialog).toBeHidden();
-  await expect(section).toContainText("Current voice: My recording");
+  await expect(section).toContainText("New voice: My recording");
+  expect(saves).toHaveLength(0);
+  await page.getByRole("button", { name: "Save changes", exact: true }).click();
+  await expect(page.getByText("The voice changed while saving. Try again.", { exact: true })).toBeVisible();
+  await expect(section).toContainText("New voice: My recording");
+  await page.getByRole("button", { name: "Save changes", exact: true }).click();
+  await expect.poll(() => saves.length).toBe(2);
+  expect(saves.map((body) => body.voiceId)).toEqual(["uploaded", "uploaded"]);
   expect(uploads).toEqual([{ name: "My recording", transcript: "", audioSize: recording.buffer.length, filename: recording.name, mime: recording.mimeType }]);
-  expect(attachments).toBe(2);
 });
 
 test("voice rename is explicit and in-use deletion leaves the voice visible with the server's explanation", async ({ page }) => {

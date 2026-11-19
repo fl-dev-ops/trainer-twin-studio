@@ -14,59 +14,93 @@ const voices = [
   { id: "shared-voice", name: "Shared recording", kind: "cloned" },
   { id: "sample-voice", name: "Sample recording", kind: "sample" },
 ];
-const persona = { ...emptyPersona(), name: "Trainer", role: "Sales coach" };
+const persona = { ...emptyPersona(), name: "Trainer", role: "Sales coach", about: "Coaches new agents." };
 
 function editor(props: Partial<ComponentProps<typeof PersonaEditor>> = {}) {
   return renderToStaticMarkup(
-    <PersonaEditor slug="trainer" initial={persona} defaultTab="media" voices={voices}
-      media={{ photoUrl: null, hasVideo: true, voiceId: "shared-voice", voiceName: "Shared recording" }} {...props} />,
+    <PersonaEditor slug="trainer" initial={persona} voices={voices} voice={{ id: "shared-voice", name: "Shared recording" }} {...props} />,
   );
 }
 
-test("voice controls preserve the saved voice and keep the existing persona tabs", () => {
+const view = (patch: Record<string, unknown> = {}) => ({
+  slug: "trainer", isOwn: false, version: 1, updatedAt: "2026-11-19T00:00:00.000Z",
+  persona, traits: [], voice: null, photoUrl: null, hasVideo: false, usedBy: [], ...patch,
+});
+
+test("the form has exactly five fields and no advanced settings", () => {
   const html = editor();
+  for (const label of ["Name", "Role", "About this person", "Voice", "Photo"]) expect(html).toContain(label);
+  expect(html).toContain('id="p-name"');
+  expect(html).toContain('id="p-role"');
+  expect(html).toContain('id="p-about"');
+  expect(html).toContain('id="p-photo"');
   expect(html).toContain("Current voice:");
   expect(html).toContain("Shared recording");
   expect(html).toContain("Choose a voice");
   expect(html).toContain("Add my voice");
-  expect(html).toContain("Look");
-  expect(html).toContain("How they talk");
-  expect(html).toContain("Voice and avatar");
+  expect(html).toContain("Save changes");
+  expect(html).toContain("Cancel");
+  for (const removed of ["Behaviour", "Opening style", "Formality", "Answer length", "Interrupts", "Signature phrases", "Speaking pace", "Age", "Based in",
+    "How they talk", "Voice and avatar", 'role="tab"', 'id="p-video"', "Advanced"]) {
+    expect(html).not.toContain(removed);
+  }
   expect(html).not.toContain("unavailable for new voice sessions");
-  expect(html).not.toContain("copied");
   expect(html).not.toContain('type="radio"');
 });
 
-test("own personas can choose or add a voice without exposing avatar uploads", () => {
+test("the role field is free text with suggestions, and the form keeps the saved values", () => {
+  const html = editor();
+  expect(html).toContain('value="Sales coach"');
+  expect(html).toContain("<datalist");
+  expect(html).toContain('value="Buyer"');
+  expect(html).toContain("Coaches new agents.");
+});
+
+test("own personas keep their photo on Twin's brain", () => {
   const html = editor({ isOwn: true });
   expect(html).toContain("Choose a voice");
-  expect(html).toContain("Add my voice");
-  expect(html).toContain("You can still record your voice there.");
   expect(html).toContain('href="/twin/brain"');
-  expect(html).not.toContain('id="p-image"');
-  expect(html).not.toContain('id="p-video"');
+  expect(html).not.toContain('id="p-photo"');
 });
 
 test("an unavailable current voice is preserved with a clear explanation", () => {
-  const html = editor({ media: { photoUrl: null, hasVideo: false, voiceId: "old-voice", voiceName: "Old recording" } });
+  const html = editor({ voice: { id: "old-voice", name: "Old recording" } });
   expect(html).toContain("Old recording");
   expect(html).toContain("The current voice is unavailable for new voice sessions.");
   expect(html).toContain("It stays selected until you save another voice.");
-  expect(html).not.toContain("Current voice: <b class=\"font-semibold\">Shared recording");
 });
 
 test("a persona with no voice stays empty instead of choosing the first voice", () => {
-  const html = editor({ media: { photoUrl: null, hasVideo: false, voiceId: null, voiceName: null } });
+  const html = editor({ voice: null });
   expect(html).toContain("No voice yet. Choose or add one before starting a voice session.");
   expect(html).not.toContain("Current voice:");
 });
 
-test("an own persona's missing-voice link opens its voice editor", () => {
-  const html = renderToStaticMarkup(<PersonaDetail item={{
-    slug: "trainer", isOwn: true, version: 1, updatedAt: "2026-11-19T00:00:00.000Z",
-    persona, voice: null, photoUrl: null, hasVideo: true,
-  }} />);
-  expect(html).toContain('href="/personas/trainer/edit?tab=media"');
+test("a shared persona says how many agents an edit affects; a new one does not", () => {
+  const used = [{ slug: "a", name: "Discovery call", kind: "ROLEPLAY" }, { slug: "b", name: "Objections", kind: "ROLEPLAY" }];
+  const html = editor({ usedBy: used });
+  expect(html).toContain("Used by 2 agents.");
+  expect(html).toContain("Changes apply to their next sessions.");
+  expect(renderToStaticMarkup(<PersonaEditor initial={emptyPersona()} voices={voices} />)).not.toContain("Used by");
+});
+
+test("the persona page shows the five fields, users and earlier settings read-only", () => {
+  const html = renderToStaticMarkup(<PersonaDetail item={view({
+    usedBy: [{ slug: "a", name: "Discovery call", kind: "ROLEPLAY" }, { slug: "t", name: "Trainer twin", kind: "TWIN" }],
+    traits: [{ label: "Behaviour", value: "Skeptical & Reserved" }],
+  })} />);
+  expect(html).toContain("Coaches new agents.");
+  expect(html).toContain("Discovery call");
+  expect(html).toContain("Trainer twin");
+  expect(html).toContain("Earlier settings");
+  expect(html).toContain("Skeptical &amp; Reserved");
+  expect(renderToStaticMarkup(<PersonaDetail item={view()} />)).not.toContain("Earlier settings");
+});
+
+test("an own persona's missing voice links to its editor and missing photo to Twin's brain", () => {
+  const html = renderToStaticMarkup(<PersonaDetail item={view({ isOwn: true })} />);
+  expect(html).toContain('href="/personas/trainer/edit"');
+  expect(html).toContain('href="/twin/brain"');
 });
 
 test("the voice library offers Listen without generation controls", () => {
