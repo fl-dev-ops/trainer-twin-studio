@@ -2,7 +2,8 @@ import { createAudioAnalyser, Room, RoomEvent, Track, type Participant, type Rem
 import { createElement, createRef, type CSSProperties } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
-import { WidgetView, type AgentState, type Caption, type WidgetPhase, type WidgetRefs } from "./widget-view";
+import type { Caption, WidgetPhase } from "./widget-call";
+import { WidgetView, type AgentState, type WidgetRefs } from "./widget-view";
 import "./widget.css";
 import { isHostMessage, MAX_WIDGET_HEIGHT, MIN_WIDGET_HEIGHT } from "./protocol";
 import { drawCallWaves, MIC_NOISE_GATE } from "../../shared/call-waves";
@@ -141,10 +142,9 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
   let errorMessage: string | undefined;
   let nameInvalid = false;
   let visible = false;
-  let expanded = false;
+  let intro = !preview || !!preview.embedded;
   let seconds = config.maxSeconds;
-  let focusTarget: "name" | "error" | "retry" | "end" | undefined;
-  let scrollCaptions = false;
+  let focusTarget: "intro" | "name" | "error" | "retry" | "end" | undefined;
   let visitorToken: string | undefined;
   let savedName = preview?.name;
   let editingName = false;
@@ -159,6 +159,7 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
     if (window.parent !== window) {
       window.parent.postMessage({
         source: "trainertwin-widget", version: 1, type,
+        ...(type === "ready" ? { intro: true } : {}),
         ...(type === "status" ? { active: active === true } : {}),
         ...(type === "interaction" ? { editing: active === true } : {}),
       }, config.parentOrigin);
@@ -166,7 +167,7 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
   };
 
   const elements: WidgetRefs = {
-    card: createRef(), body: createRef(), portrait: createRef(), waves: createRef(), transcript: createRef(),
+    card: createRef(), body: createRef(), portrait: createRef(), waves: createRef(), intro: createRef(),
     controls: createRef(), name: createRef(), end: createRef(), retry: createRef(), error: createRef(),
   };
   const view = createRoot(root);
@@ -188,7 +189,8 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
     const chromeHeight = card.offsetHeight - portrait.offsetHeight;
     const squareHeight = portrait.offsetWidth;
     if (squareHeight) portrait.style.height = `${Math.max(0, Math.min(squareHeight, innerHeight - chromeHeight))}px`;
-    const height = Math.max(MIN_WIDGET_HEIGHT, Math.min(MAX_WIDGET_HEIGHT, Math.ceil(chromeHeight + squareHeight)));
+    const natural = !intro && needsName() ? 480 : chromeHeight + squareHeight;
+    const height = Math.max(MIN_WIDGET_HEIGHT, Math.min(MAX_WIDGET_HEIGHT, Math.ceil(natural)));
     if (height === reportedHeight) return;
     reportedHeight = height;
     window.parent.postMessage({ source: "trainertwin-widget", version: 1, type: "resize", height }, config.parentOrigin);
@@ -248,10 +250,6 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
 
   function onCommit() {
     reportSize();
-    if (scrollCaptions && elements.transcript.current) {
-      elements.transcript.current.scrollTop = elements.transcript.current.scrollHeight;
-      scrollCaptions = false;
-    }
     if (!focusTarget) return;
     const target = elements[focusTarget].current;
     if (target instanceof HTMLButtonElement && target.disabled) return;
@@ -261,9 +259,9 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
   }
 
   function changeName() {
+    intro = false;
     phase = "ready";
     editingName = true;
-    if (elements.name.current) elements.name.current.value = savedName ?? "";
     clearError();
     focusTarget = "name";
     render();
@@ -280,15 +278,27 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
     }
   }
 
+  function openIntro() {
+    if (!initialized || starting || finishing) return;
+    intro = false;
+    clearError();
+    if (savedName && !editingName) void beginCall();
+    else { focusTarget = "name"; render(); }
+  }
+
   function render() {
     if (destroyed) return;
     view.render(createElement(WidgetView, {
-      config, elements, theme, phase, agentState, visible, expanded, seconds, muted, reconnecting, mutePending,
-      finishMessage, errorMessage, nameInvalid, needsName: needsName(), hasName: !!savedName,
-      captions: [...captions.values()], canStart: initialized && !starting && !finishing,
-      dismissible: !preview || !!preview.embedded, playbackBlocked: phase === "live" && room?.canPlaybackAudio === false,
-      onCommit, onDismiss: dismiss, onStart: beginCall, onRetry: retry, onChangeName: changeName,
-      onNameInput: nameInput, onToggleCaptions: toggleCaptions, onMute: toggleMute, onEnd: endCall, onUnlockAudio: unlockAudio,
+      name: config.name, theme, stage: intro ? "intro" : needsName() ? "name" : "call",
+      agentState, visible, draftName: savedName, errorMessage, nameInvalid,
+      call: {
+        elements, phase, trainer: config.trainerName, photoUrl: config.photoUrl, welcome: config.welcome,
+        seconds, muted, reconnecting, mutePending, finishMessage, hasName: !!savedName,
+        captions: [...captions.values()], canStart: initialized && !starting && !finishing,
+        dismissible: !preview || !!preview.embedded, playbackBlocked: phase === "live" && room?.canPlaybackAudio === false,
+        onDismiss: dismiss, onRetry: retry, onChangeName: changeName, onMute: toggleMute, onEnd: endCall,
+      },
+      onCommit, onOpen: openIntro, onStart: beginCall, onNameInput: nameInput, onUnlockAudio: unlockAudio,
     }));
   }
 
@@ -399,7 +409,6 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
     room = null;
     finishMessage = message;
     phase = message && !connected ? "failed" : "ready";
-    expanded = false;
     render();
     const results = await Promise.allSettled([
       closingSession ? closeSession(closingSession) : Promise.resolve(null),
@@ -420,9 +429,9 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
     post("status", false);
     if (warning) showError(warning);
     else {
-      if (phase === "failed") focusTarget = "retry";
+      intro = phase === "ready";
+      focusTarget = intro ? "intro" : "retry";
       render();
-      if (phase === "ready" && visible) post("close");
     }
   }
 
@@ -456,8 +465,6 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
     current.on(RoomEvent.LocalTrackUnpublished, updateWaves);
     current.on(RoomEvent.TranscriptionReceived, (segments: TranscriptionSegment[], participant?: Participant) => {
       if (current !== room || destroyed) return;
-      const transcript = elements.transcript.current;
-      if (transcript && transcript.scrollHeight - transcript.scrollTop - transcript.clientHeight < 64) scrollCaptions = true;
       for (const segment of segments) {
         if (!segment.text.trim()) continue;
         setCaption(`${participant?.identity ?? "agent"}:${segment.id}`, segment.text, segment.final,
@@ -526,7 +533,6 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
     const attempt = ++generation;
     const cancelled = () => destroyed || generation !== attempt;
     phase = "connecting";
-    expanded = false;
     captions.clear();
     seconds = config.maxSeconds;
     muted = false;
@@ -636,7 +642,6 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
     reconnecting = state.reconnecting ?? false;
     muted = state.muted ?? false;
     seconds = state.urgent ? 12 : config.maxSeconds;
-    expanded = false;
     render();
     stopWaves?.();
     const waves = elements.waves.current;
@@ -646,7 +651,16 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
     ]) : undefined;
   }
 
-  function dismiss() { post("close"); }
+  function dismiss() {
+    if (phase === "connecting" || phase === "live" || finishing) return;
+    if (intro) { post("close"); return; }
+    intro = true;
+    phase = "ready";
+    editingName = false;
+    clearError();
+    focusTarget = "intro";
+    render();
+  }
   function unlockAudio() {
     if (phase === "live" && room?.canPlaybackAudio === false) {
       void room.startAudio().catch((failure: unknown) => showError(mediaError(failure)));
@@ -657,17 +671,12 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
     nameInvalid = false;
     render();
   }
-  function toggleCaptions() {
-    expanded = !expanded;
-    render();
-  }
   function endCall() {
     if (!preview) { void finish(); return; }
+    intro = true;
+    focusTarget = "intro";
     showPreview({ phase: "ready" });
-    if (preview.embedded) {
-      post("status", false);
-      post("close");
-    }
+    if (preview.embedded) post("status", false);
   }
   function toggleMute() {
     if (preview) { muted = !muted; render(); return; }

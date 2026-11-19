@@ -94,6 +94,7 @@ function createAPI(): WidgetsAPI {
       let ready = false;
       let opened = false;
       let active = false;
+      let focusOnOpen = false;
       panel.inert = true;
       panel.setAttribute("aria-hidden", "true");
       iframe.tabIndex = -1;
@@ -108,14 +109,15 @@ function createAPI(): WidgetsAPI {
         panel.inert = false;
         panel.dataset.interactive = "true";
         iframe.tabIndex = 0;
-        if (ready) iframe.focus();
+        if (ready && focusOnOpen) iframe.focus();
       };
       const onTransitionEnd = (event: TransitionEvent) => {
         if (event.target === container && event.propertyName === "height"
           && (event.type === "transitionend" || window.matchMedia("(prefers-reduced-motion: reduce)").matches)) enablePanel();
       };
-      const expand = () => {
+      const expand = (focus = true) => {
           if (destroyed || opened) return;
+          focusOnOpen = focus;
           opened = true;
           container.dataset.open = "true";
           panel.setAttribute("aria-hidden", "false");
@@ -157,17 +159,19 @@ function createAPI(): WidgetsAPI {
       const onMessage = (event: MessageEvent<unknown>) => {
         if (event.source !== iframe.contentWindow || event.origin !== widgetOrigin || !isWidgetMessage(event.data)) return;
         if (event.data.type === "ready") {
+          const showIntro = !ready && !opened && event.data.intro;
           ready = true;
           send("init");
-          send("visibility", opened);
-          if (opened && !panel.inert) iframe.focus();
+          if (showIntro) expand(false);
+          else send("visibility", opened);
+          if (opened && focusOnOpen && !panel.inert) iframe.focus();
         } else if (event.data.type === "close") {
           handle.minimise();
         } else if (event.data.type === "resize") {
           container.style.setProperty("--content-height", `${Math.min(MAX_WIDGET_HEIGHT, event.data.height)}px`);
         } else if (event.data.type === "status") {
           active = event.data.active;
-          if (active) expand();
+          if (active) expand(false);
           status.textContent = active ? "AI twin call in progress" : "AI twin call ended";
         }
       };

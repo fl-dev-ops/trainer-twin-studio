@@ -36,6 +36,7 @@ describe("widget protocol", () => {
     expect(isWidgetMessage({ source: "trainertwin-widget", version: 1, type: "resize", height: 900 })).toBe(true);
     for (const value of [null, {}, "ready", { source: "trainertwin-host", version: 1, type: "ready" },
       { source: "trainertwin-widget", version: 2, type: "ready" },
+      { source: "trainertwin-widget", version: 1, type: "ready", intro: "yes" },
       { source: "trainertwin-widget", version: 1, type: "resize", height: 100000 },
       { source: "trainertwin-widget", version: 1, type: "resize", height: 4097 },
       { source: "trainertwin-widget", version: 1, type: "resize", height: 100 },
@@ -44,6 +45,8 @@ describe("widget protocol", () => {
       { source: "trainertwin-widget", version: 1, type: "status", active: "yes" }]) {
       expect(isWidgetMessage(value)).toBe(false);
     }
+    expect(isWidgetMessage({ source: "trainertwin-widget", version: 1, type: "ready", intro: true })).toBe(true);
+    expect(isWidgetMessage({ source: "trainertwin-widget", version: 1, type: "resize", height: 140 })).toBe(true);
     expect(isHostMessage({ source: "trainertwin-host", version: 1, type: "init" })).toBe(true);
     expect(isHostMessage({ source: "trainertwin-host", version: 1, type: "destroy" })).toBe(true);
     expect(isHostMessage({ source: "trainertwin-host", version: 1, type: "visibility", open: true })).toBe(true);

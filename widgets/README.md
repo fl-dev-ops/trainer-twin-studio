@@ -46,24 +46,22 @@ outer mount element from deliberate customer CSS.
 
 ## Behaviour and teardown
 
-Floating mounts start as a round phone button. Click, tap, Enter or Space opens the panel; hover does not.
-First-time visitors see a compact **What’s your name?** form with no portrait. A valid name is saved in browser
-storage for this Twin and embedding site when the visitor starts a call. Returning visitors skip the form and
-land in the call panel. **Start voice call** is an explicit microphone gesture on both first and return visits;
-opening the widget alone never requests microphone access. **Change name** reopens the same form.
+Floating mounts show an intro card with the trainer portrait and a voice button when the iframe is ready.
+Hover and widget initialization never request microphone access. Click/tap or keyboard activation of the voice
+button opens a minimal name form on first use. Returning visitors start the call directly with that same button.
+The saved name is scoped to the Twin and embedding site; **Change your name** opens the form again.
 If storage is blocked, the name is remembered until the widget reloads.
 
-The loader keeps connecting and active calls open. Inactive panels can close with Escape or **Close widget**.
-Successful teardown returns focus to the phone button without a separate result screen. Start failures can be
-retried in the call panel, and cleanup warnings stay visible. Closing the panel does not unload the iframe.
-The panel is capped at 340px wide and bounded by viewport safe areas. The call portrait fills the content width
-and adapts its height on short screens so the controls fit. Only expanded caption history scrolls. Trusted
-resize messages accept integers 280–4096px.
+The loader keeps connecting and active calls open. The name panel's chevron returns to the intro card. Escape
+on the intro minimises it to a round phone button without unloading the iframe. Successful teardown returns focus
+to the intro button, while failures remain retryable in the call panel. The panel is at most 340px wide and is
+bounded by viewport safe areas. The call shows the two latest captions without an expand control. Trusted resize
+messages accept integers 140–4096px.
 LiveKit audio tracks drive the shared Twin-session green/orange glow renderer. Photos remain in colour; initials
 appear when no photo is available.
 The call has no header; only connecting/reconnecting shows “Connecting…”, not speaking/listening text.
-Compact captions follow Portfolio v4's last-two-entry centered plain-text presentation with an older-entry fade;
-expansion reveals history in the same frame without reconnecting. Mute and end are icon-only, with accessible names.
+Compact captions follow Portfolio v4’s last-two-entry presentation with an older-entry fade.
+Mute and end are icon-only, with accessible names.
 The remaining allowance stays accessible and appears visually in the final 15 seconds.
 Mute and hang-up remain distinct controls. Reduced-motion preferences disable decorative animation.
 The loader stays credential-free: it receives only lifecycle status, bounded height and an editing-focus boolean,
@@ -73,11 +71,8 @@ On open/close the photo, heading, input and CTA independently fade/translate upw
 Controls become interactive when the outer surface settles, preventing moving-target clicks during expansion.
 LiveKit audio is unlocked from the original call-start gesture before network awaits. There is no standalone sound
 button; if a browser later blocks playback, a short message asks the visitor to tap the widget to retry audio.
-Autofill retains the black pill surface and light text: the field wrapper supplies the background while
-`:autofill`/`:-webkit-autofill` clips browser autofill paint to text. No inset fill-shadow or long transition is used.
-Failed starts show “We couldn’t start the conversation.” and a retry action, not a completed-call thank-you.
-Ready/result titles use 20px text. Failed/ended views show only their title and action, without a description
-paragraph. Safe failure guidance remains available to assistive technology through the title's `aria-description`.
+The transparent name field keeps browser autofill paint clipped to text. Failed starts show “We couldn’t start the
+conversation.” and a retry action. Safe failure guidance remains available through the title’s `aria-description`.
 Network/provider details stay generic; microphone permission/device errors retain actionable guidance there.
 
 Escape in the parent minimises an inactive floating panel; active calls ignore collapse requests.
@@ -113,11 +108,11 @@ Every message is an object using **`version: 1`**, never `v: 1`.
 
 | Direction | Source | Type | Other fields |
 | --- | --- | --- | --- |
-| iframe → parent | `trainertwin-widget` | `ready` | none |
+| iframe → parent | `trainertwin-widget` | `ready` | optional `intro: boolean`, to open the intro without moving focus |
 | iframe → parent | `trainertwin-widget` | `close` | none |
 | iframe → parent | `trainertwin-widget` | `status` | `active: boolean` |
 | iframe → parent | `trainertwin-widget` | `interaction` | `editing: boolean`, name field focused; no field contents |
-| iframe → parent | `trainertwin-widget` | `resize` | `height: integer`, 280–4096 only; host clips sizing to available screen |
+| iframe → parent | `trainertwin-widget` | `resize` | `height: integer`, 140–4096 only; host clips sizing to available screen |
 | parent → iframe | `trainertwin-host` | `init` | none |
 | parent → iframe | `trainertwin-host` | `destroy` | none |
 | parent → iframe | `trainertwin-host` | `visibility` | `open: boolean`, triggers content reveal only |
@@ -144,7 +139,8 @@ messages. `src/protocol.ts` is a dependency-free shared schema/URL helper.
 Run `pm2 start ecosystem.config.cjs --only widgets` from the repo root (or `bun run playground` from `widgets/`).
 Open [localhost:43190](http://localhost:43190). **Live design preview** renders the actual hosted card in simulated
 call states. Choose **Button**, **Name**, or **Call**. The **Button** preview also lets you try the full flow.
-Edit the React markup in [`src/widget-view.tsx`](src/widget-view.tsx) and the styles in [`src/widget.css`](src/widget.css).
+Edit each screen separately: [`widget-intro.tsx`](src/widget-intro.tsx), [`widget-name.tsx`](src/widget-name.tsx),
+or [`widget-call.tsx`](src/widget-call.tsx). Styles are in [`widget.css`](src/widget.css).
 The playground refreshes the selected state on save without using a microphone, creating a session, or spending
 credits. The preview and the real embed render the same component.
 
@@ -187,7 +183,7 @@ It is a loader test, **not a real LiveKit/provider or backend verification**.
 `build.ts` minifies the loader into `web/public/widgets/v1.js`. That artifact
 must be checked in so direct Next development/e2e servers can serve installation
 scripts. A unit test compares it byte-for-byte against a fresh in-memory build.
-The hosted build uses `src/widget.ts` (iframe handshake and call lifecycle), `src/widget-view.tsx` (React UI),
+The hosted build uses `src/widget.ts` (iframe handshake and call lifecycle), `src/widget-view.tsx` (React screen shell),
 and `src/widget.css`. It emits `web/public/widgets/voice-v1.js` and `web/public/widgets/voice-v1.css`.
 React and LiveKit are bundled only in the hosted client. `src/loader.ts` remains the small framework-independent
 launcher script.

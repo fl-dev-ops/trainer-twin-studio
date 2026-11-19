@@ -1,9 +1,9 @@
 export const PROTOCOL_VERSION = 1;
-export const MIN_WIDGET_HEIGHT = 280;
+export const MIN_WIDGET_HEIGHT = 140;
 export const MAX_WIDGET_HEIGHT = 4096;
 
 export type WidgetMessage =
-  | { source: "trainertwin-widget"; version: 1; type: "ready" }
+  | { source: "trainertwin-widget"; version: 1; type: "ready"; intro?: boolean }
   | { source: "trainertwin-widget"; version: 1; type: "close" }
   | { source: "trainertwin-widget"; version: 1; type: "interaction"; editing: boolean }
   | { source: "trainertwin-widget"; version: 1; type: "resize"; height: number }
@@ -20,7 +20,8 @@ export function isWidgetMessage(value: unknown): value is WidgetMessage {
   if (!("source" in value) || value.source !== "trainertwin-widget") return false;
   if (!("version" in value) || value.version !== PROTOCOL_VERSION) return false;
   if (!("type" in value)) return false;
-  if (value.type === "ready" || value.type === "close") return true;
+  if (value.type === "ready") return !("intro" in value) || typeof value.intro === "boolean";
+  if (value.type === "close") return true;
   if (value.type === "interaction") return "editing" in value && typeof value.editing === "boolean";
   if (value.type === "resize") return "height" in value && typeof value.height === "number"
     && Number.isInteger(value.height) && value.height >= MIN_WIDGET_HEIGHT && value.height <= MAX_WIDGET_HEIGHT;

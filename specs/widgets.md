@@ -37,13 +37,13 @@ Start. Messages contain only versioned initialization, visibility, minimise/dest
 editing-focus boolean and active-call state—never visitor data,
 transcripts or credentials. Closing an inactive panel preserves the iframe.
 SPA owners must explicitly destroy mounts before removing containers; tab unload and durable deadlines are additional cleanup.
-The round phone button opens on click, tap, or keyboard activation, never hover. There are three surfaces: the
-launcher, a portrait-free name form for first-time visitors, and the call. Valid names are stored in the iframe's
-browser storage scoped to the Twin and exact embedding origin. Returning visitors skip the form and manually
-start the call from the call panel. Visibility messages never request microphone access or start a call.
-Resize messages accept only integers 280–4096px. The panel is viewport-bounded and at most 340px wide.
-On short screens the portrait shrinks so actions remain visible. The card body never scrolls. Connecting and
-active calls stay visible. Successful call teardown returns to the launcher, while failures are retryable in the call panel.
+The iframe opens the intro card once it is ready, without stealing focus. There are three surfaces: the intro card,
+a portrait-free name form for first-time visitors, and the call. The intro button is an explicit user gesture;
+initialization, hover and visibility messages never request microphone access or start a call. Valid names are
+stored in browser storage scoped to the Twin and exact embedding origin. Returning visitors skip the form.
+Resize messages accept only integers 140–4096px. The panel is viewport-bounded and at most 340px wide.
+Connecting and active calls stay visible, with two compact captions and no expand control. Successful teardown
+returns to the intro card, while failures are retryable in the call panel.
 
 Browser framing restrictions do not prove a human or make public IDs secret. A non-browser client can claim an
 allowed origin; server-side rate, concurrency and spend limits remain mandatory.

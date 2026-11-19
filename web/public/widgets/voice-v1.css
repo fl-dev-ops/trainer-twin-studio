@@ -101,28 +101,43 @@ p, h1, h2 { margin: 0; }
   font-size: 12px;
   line-height: 16px;
 }
+.tt-card[data-stage="intro"] { color-scheme: light; color: #141310; background: #fbf5f2; }
+.tt-intro { display: grid; padding: 16px; gap: 16px; }
+.tt-intro-heading { display: grid; grid-template-columns: 56px minmax(0, 1fr); align-items: start; gap: 12px; }
+.tt-intro-heading h2 { font-size: 15px; font-weight: 700; line-height: 20px; letter-spacing: -.3px; overflow-wrap: anywhere; }
+.tt-intro-heading p { margin-top: 4px; color: #68615f; font-size: 14px; line-height: 20px; overflow-wrap: anywhere; }
+.tt-intro-portrait { width: 56px; height: 56px; border-radius: 50%; background: #ede7e3; border: 1px solid #d8d0cc; color: #22211e; }
+.tt-intro-portrait .tt-photo { filter: grayscale(1); }
+.tt-intro-button { display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 44px; padding: 8px 16px; border: 0; border-radius: 999px; background: #0e0e0b; color: #f7f2e9; font-size: 15px; font-weight: 600; }
+.tt-intro-button:hover:not(:disabled) { background: #292722; }
+.tt-intro-button:focus-visible, .tt-intro-change:focus-visible { outline-color: #4d6842; }
+.tt-intro-change { justify-self: center; margin-top: -12px; padding: 8px 12px; min-height: 34px; border: 0; border-radius: 8px; background: transparent; color: #68615f; font-size: 12px; }
+.tt-intro-change:hover { text-decoration: underline; }
+.tt-call-screen { display: contents; }
 .tt-dismiss { position: absolute; z-index: 2; top: 8px; right: 8px; background: #1b1c19; }
 .tt-dismiss .tt-icon { width: 16px; height: 16px; }
-.tt-card[data-stage="name"] .tt-body { min-height: 280px; justify-content: center; padding: 40px 24px 24px; }
-.tt-prejoin, .tt-name-field { display: grid; gap: 12px; }
-.tt-label { font-size: 20px; line-height: 26px; letter-spacing: -.4px; font-weight: 500; }
+.tt-card[data-stage="name"] { background: #151517; border-radius: 18px; height: min(480px, 100svh); min-height: min(140px, 100svh); display: grid; place-items: center; padding: 20px 24px; }
+.tt-card[data-stage="name"] .tt-dismiss { background: transparent; color: #eeeef0; }
+.tt-prejoin { position: relative; width: 100%; max-width: 248px; }
+.tt-prejoin .tt-primary { position: absolute; inset-inline: 0; top: calc(100% + 8px); }
+.tt-card[data-stage="name"] .tt-error { position: absolute; inset: auto 16px 12px; margin: 0; }
 .tt-change-name { justify-self: center; min-height: 44px; border: 0; padding: 0 12px; border-radius: 999px; color: #c8cbbd; background: transparent; font-size: 13px; }
 .tt-change-name:hover { color: #f2eee5; background: #ffffff14; }
 .tt-input {
   width: 100%;
   min-width: 0;
   min-height: 46px;
-  border: 1px solid #ffffff26;
-  border-radius: 12px;
-  padding: 10px 14px;
-  background: #11120f;
-  box-shadow: 0 4px 16px #0003;
+  border: 0;
+  border-radius: 8px;
+  padding: 10px 8px;
+  background: transparent;
+  text-align: center;
   color: #f2eee5;
   font-size: 16px;
   line-height: 24px;
 }
-.tt-input::placeholder { color: #a2a69a; font-size: 13px; }
-.tt-input:focus-visible { outline: none; box-shadow: 0 0 0 2px #d7e5c5, 0 4px 16px #0005; }
+.tt-input::placeholder { color: #96959f; font-weight: 500; }
+.tt-input:focus-visible { outline: none; box-shadow: 0 1px 0 #a9a7b3; }
 .tt-input[aria-invalid="true"] { box-shadow: 0 0 0 2px #eea59a; }
 .tt-input:is(:autofill, :-webkit-autofill) { background-clip: text; -webkit-background-clip: text; -webkit-text-fill-color: #f2eee5; caret-color: #f2eee5; }
 .tt-primary {
@@ -147,8 +162,6 @@ p, h1, h2 { margin: 0; }
 .tt-call-meta { position: absolute; top: 16px; right: 16px; z-index: 2; display: flex; align-items: center; gap: 8px; }
 .tt-countdown { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); color: #c8cbbd; font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .tt-countdown.tt-urgent { position: static; width: auto; height: auto; overflow: visible; clip-path: none; color: #ffb3a6; }
-.tt-caption-toggle { width: 32px; height: 32px; }
-.tt-caption-toggle .tt-icon { width: 16px; height: 16px; }
 .tt-transcript {
   margin-top: auto;
   height: 84px;
@@ -199,13 +212,9 @@ p, h1, h2 { margin: 0; }
 .tt-playback-hint { color: #e4dcbf; font-size: 12px; line-height: 20px; text-align: center; }
 .tt-call-actions { display: grid; gap: 12px; text-align: center; }
 .tt-call-title { font-size: 20px; font-weight: 500; line-height: 24px; letter-spacing: -.4px; }
-.tt-error { border: 1px solid #eda59844; border-radius: 12px; padding: 12px; color: #ffc6ba; background: #512e2633; font-size: 12px; line-height: 20px; overflow-wrap: anywhere; }
+.tt-error { margin: 0 16px 16px; border: 1px solid #eda59844; border-radius: 12px; padding: 12px; color: #ffc6ba; background: #512e2633; font-size: 12px; line-height: 20px; overflow-wrap: anywhere; }
 .tt-config-error { padding: 24px; color: #ffc6ba; background: #1b1c19; font-size: 14px; line-height: 24px; }
 .tt-waves { position: absolute; inset-inline: 0; bottom: -32px; width: 100%; height: 224px; filter: blur(24px); pointer-events: none; }
-.tt-captions-expanded .tt-hero { display: none; }
-.tt-captions-expanded .tt-transcript { height: min(360px, max(0px, calc(100svh - 180px))); overflow-y: auto; mask-image: none; justify-content: flex-start; }
-.tt-captions-expanded .tt-caption { display: block; overflow: visible; opacity: 1; }
-.tt-captions-expanded .tt-call { padding-top: 44px; }
 .tt-portrait-stage, .tt-prejoin > *, .tt-call, .tt-call-actions, .tt-status, .tt-error {
   opacity: 1;
   transform: translateY(0);
