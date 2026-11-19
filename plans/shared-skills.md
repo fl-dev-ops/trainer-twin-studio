@@ -9,6 +9,15 @@ Working checkout: `application-v3`, branch `feat/shared-skills` from `origin/v3`
 The old checkout's `application/AGENTS.md` is not applicable after moving this session to this worktree.
 The durable plan is this file; do not delete it as a temporary planning artifact.
 
+### New local-content phase — 19 November 2026
+
+The user subsequently authorized Olga's local-only content port, with Vasanth conversion deferred.
+See `olga-local-phase-one.md` for isolated service destinations, checksum audits, managed restoration,
+verification results and the explicit historical-vector gap. All 11 current package owners are restored;
+the main twin aggregates the two skills. No production writes or ownership cutover were performed.
+Vasanth's existing ten interview roleplays are documented in `vasanth-roleplay-inventory.md` only.
+Stop for the user's Phase 2 direction before changing Vasanth.
+
 | Phase | Implementation | Verification / release |
 | --- | --- | --- |
 | 1 — Registry + publisher | Complete implementation/local verification | Live comparison deferred until all phases; not deployed |
