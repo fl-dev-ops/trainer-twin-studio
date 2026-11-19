@@ -350,6 +350,20 @@ Next resume here: review the live-verification report, resolve provider quota / 
 the listed live gates. Raw reports have private synthetic session tokens; never commit them or reuse completed tokens.
 The detailed report records the initial broad-wrapper billing-config/MSW safety finding as well as the database incident.
 
+### Latest: Vasanth port, local Chroma, full suite and rehearsal — 20 Nov 2026
+
+- Vasanth's ten interviews ported to skill role plays beside the originals: `vasanth-skill-port.md`.
+- Local self-hosted Chroma: real provider check 12/12; `.env.test` blanks `CHROMA_API_KEY` so tests never create
+  Chroma Cloud databases (a test run had hit the cloud quota).
+- Fixed: runtime replies cut mid-sentence — reasoning tokens consumed the 500-token cap (`finish_reason: length`).
+  Caps are now the visible budget plus `REASONING_TOKEN_ALLOWANCE` (2048), and a truncated reply is logged.
+  The two document-grounding tests were failing because of this (plus spoken number/acronym forms); 5/5 runs green.
+- Fixed stale tests: org-people member order (same-millisecond fixture), Usage pagination and twin-users locators,
+  sign-in measurement before the entrance animation settled.
+- Results: DB 1,087/1,087; unit incl. real-model 1,316/1,316; flows 150/150; chat 127/127; Python agent 44/44;
+  Playwright 36/36; typecheck, lint (0 errors) and build pass.
+- Migration rehearsal on a production copy: `shared-skills-rehearsal.md`.
+
 ## Goal
 
 Give published skill packages their own identity and lifecycle. Twins and role plays reference those packages rather
