@@ -1,4 +1,3 @@
-import { createElement, Phone } from "lucide";
 import { embedUrl, isWidgetMessage, MAX_WIDGET_HEIGHT, type HostMessage } from "./protocol";
 
 export interface WidgetHandle {
@@ -28,23 +27,17 @@ const styles = `
   font: 14px/1.4 system-ui, sans-serif !important;
 }
 * { box-sizing: border-box; }
-.floating { --content-height: 100dvh; --panel-width: min(340px, calc(100vw - max(16px, env(safe-area-inset-left)) - max(16px, env(safe-area-inset-right)))); --panel-height: min(var(--content-height, 100dvh), calc(100dvh - max(16px, env(safe-area-inset-top)) - max(16px, env(safe-area-inset-bottom)))); position: fixed; right: max(16px, env(safe-area-inset-right)); bottom: max(16px, env(safe-area-inset-bottom)); z-index: 2147483000; width: 48px; height: 48px; overflow: hidden; border-radius: 50%; background: #0d0d0b; box-shadow: 0 10px 28px -12px #0009; transition: width .6s cubic-bezier(.4,0,.2,1), height .6s cubic-bezier(.4,0,.2,1), border-radius .6s; }
-.floating[data-open="true"] { width: var(--panel-width); height: var(--panel-height); border-radius: 28px; background: transparent; box-shadow: 0 24px 64px -12px #0006; transition-duration: .35s; transition-timing-function: cubic-bezier(.22,1,.36,1); }
-.floating:has(> button:focus-visible) { outline: 2px solid #8ca575; outline-offset: 4px; }
-button { position: absolute; bottom: 0; right: 0; display: grid; place-items: center; width: 48px; height: 48px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: #f2eee5; cursor: pointer; opacity: 1; visibility: visible; transition: background .2s, opacity .18s .2s, visibility 0s; }
-button:active svg { transform: scale(.9); }
-button:hover { background: #2a2c26; }
-.floating[data-open="true"] > button { opacity: 0; visibility: hidden; pointer-events: none; transition: opacity .1s, visibility 0s .1s; }
-button:focus-visible { outline: 2px solid #8ca575; outline-offset: 4px; }
-button svg { width: 20px; height: 20px; flex-shrink: 0; }
-.panel { position: absolute; bottom: 0; right: 0; width: var(--panel-width); height: var(--panel-height); border-radius: 28px; overflow: hidden; visibility: hidden; pointer-events: none; transition: visibility 0s .6s; }
-.floating[data-open="true"] .panel { visibility: visible; transition-delay: 0s; }
-.floating[data-open="true"] .panel[data-interactive="true"] { pointer-events: auto; }
+.floating { --content-height: 100dvh; --panel-width: min(340px, calc(100vw - max(16px, env(safe-area-inset-left)) - max(16px, env(safe-area-inset-right)))); --panel-height: min(var(--content-height, 100dvh), calc(100dvh - max(16px, env(safe-area-inset-top)) - max(16px, env(safe-area-inset-bottom)))); position: fixed; right: max(16px, env(safe-area-inset-right)); bottom: max(16px, env(safe-area-inset-bottom)); z-index: 2147483000; width: var(--panel-width); height: var(--panel-height); overflow: hidden; border-radius: 28px; background: transparent; box-shadow: 0 24px 64px -12px #0006; opacity: 0; visibility: hidden; transform: translateY(12px); transition: opacity .3s ease, transform .45s cubic-bezier(.22,1,.36,1), visibility 0s .45s; }
+.floating[data-shown="true"] { opacity: 1; visibility: visible; transform: none; transition: opacity .3s ease, transform .45s cubic-bezier(.22,1,.36,1), visibility 0s, height .35s cubic-bezier(.22,1,.36,1); }
+.panel { position: absolute; bottom: 0; right: 0; width: var(--panel-width); height: var(--panel-height); border-radius: 28px; overflow: hidden; }
 iframe { display: block; width: 100%; height: 100%; border: 0; }
 [hidden] { display: none !important; }
 .status { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 `;
+
+/** Show the card anyway if the hosted page never reports its height. */
+const SHOW_FALLBACK_MS = 2000;
 
 function createAPI(): WidgetsAPI {
   const mounts = new WeakMap<HTMLScriptElement, WidgetHandle>();
@@ -74,7 +67,7 @@ function createAPI(): WidgetsAPI {
       container.className = "floating";
       const panel = document.createElement("div");
       panel.className = "panel";
-      panel.setAttribute("role", "dialog");
+      panel.setAttribute("role", "region");
       panel.setAttribute("aria-label", "AI twin conversation");
       const iframe = document.createElement("iframe");
       iframe.title = "Talk to AI twin";
@@ -83,83 +76,50 @@ function createAPI(): WidgetsAPI {
       iframe.referrerPolicy = "no-referrer";
       iframe.src = url.href;
       panel.append(iframe);
-      const launcher = document.createElement("button");
-      launcher.type = "button";
-      const phone = createElement(Phone, { "aria-hidden": "true", focusable: "false", "stroke-width": 1.75 });
-      launcher.append(phone);
-      launcher.setAttribute("aria-label", "Talk to AI twin");
-      launcher.setAttribute("aria-expanded", "false");
-      launcher.setAttribute("aria-haspopup", "dialog");
       const status = document.createElement("span");
       status.className = "status";
       status.setAttribute("role", "status");
       status.setAttribute("aria-live", "polite");
-      container.append(panel);
-      container.append(launcher, status);
+      container.append(panel, status);
       shadow.append(style, container);
+      // There is no collapsed launcher: the intro card is the resting state. It stays invisible until the hosted
+      // page has reported its height, so it appears once at the right size instead of growing from a placeholder.
       let destroyed = false;
       let ready = false;
-      let opened = false;
+      let shown = false;
       let active = false;
-      let focusOnOpen = false;
-      panel.inert = true;
-      panel.setAttribute("aria-hidden", "true");
-      iframe.tabIndex = -1;
+      let fallback: ReturnType<typeof setTimeout> | undefined;
       const send = (type: HostMessage["type"], open = false) => {
         const message: HostMessage = type === "visibility"
           ? { source: "trainertwin-host", version: 1, type, open }
           : { source: "trainertwin-host", version: 1, type };
         iframe.contentWindow?.postMessage(message, widgetOrigin);
       };
-      const enablePanel = () => {
-        if (destroyed || !opened) return;
-        panel.inert = false;
-        panel.dataset.interactive = "true";
-        iframe.tabIndex = 0;
-        if (ready && focusOnOpen) iframe.focus();
+      const show = () => {
+        if (destroyed || shown || !ready) return;
+        shown = true;
+        clearTimeout(fallback);
+        void container.offsetHeight; // commit the measured height before enabling the height transition
+        container.dataset.shown = "true";
+        send("visibility", true);
       };
-      const onTransitionEnd = (event: TransitionEvent) => {
-        if (event.target === container && event.propertyName === "height"
-          && (event.type === "transitionend" || window.matchMedia("(prefers-reduced-motion: reduce)").matches)) enablePanel();
-      };
-      const expand = (focus = true) => {
-          if (destroyed || opened) return;
-          focusOnOpen = focus;
-          opened = true;
-          container.dataset.open = "true";
-          panel.setAttribute("aria-hidden", "false");
-          launcher.inert = true;
-          launcher.setAttribute("aria-expanded", "true");
-          if (ready) send("visibility", true);
-          if (window.matchMedia("(prefers-reduced-motion: reduce)").matches
-            || Math.abs(container.getBoundingClientRect().height - panel.offsetHeight) < 1) enablePanel();
-      };
-      const collapse = (focus: boolean) => {
-          if (destroyed || active) return;
-          opened = false;
-          container.dataset.open = "false";
-          panel.inert = true;
-          panel.dataset.interactive = "false";
-          panel.setAttribute("aria-hidden", "true");
-          iframe.tabIndex = -1;
-          launcher.inert = false;
-          launcher.setAttribute("aria-expanded", "false");
-          if (ready) send("visibility", false);
-          if (focus) launcher.focus();
+      const reset = () => {
+        if (destroyed || !ready || active) return;
+        send("reset");
       };
       const handle: WidgetHandle = {
-        open: expand,
-        minimise() { collapse(true); },
+        open() {
+          if (shown) iframe.focus();
+        },
+        minimise: reset,
         destroy() {
           if (destroyed) return;
           send("destroy");
           destroyed = true;
+          clearTimeout(fallback);
           window.removeEventListener("message", onMessage);
           window.removeEventListener("keydown", onKey);
           document.removeEventListener("pointerdown", onOutside, true);
-          container.removeEventListener("transitionend", onTransitionEnd);
-          container.removeEventListener("transitioncancel", onTransitionEnd);
-          launcher.removeEventListener("click", toggle);
           root.remove();
           mounts.delete(script);
         },
@@ -167,35 +127,24 @@ function createAPI(): WidgetsAPI {
       const onMessage = (event: MessageEvent<unknown>) => {
         if (event.source !== iframe.contentWindow || event.origin !== widgetOrigin || !isWidgetMessage(event.data)) return;
         if (event.data.type === "ready") {
-          const showIntro = !ready && !opened && event.data.intro;
           ready = true;
           send("init");
-          if (showIntro) expand(false);
-          else send("visibility", opened);
-          if (opened && focusOnOpen && !panel.inert) iframe.focus();
-        } else if (event.data.type === "close") {
-          handle.minimise();
+          if (shown) send("visibility", true);
+          else fallback ??= setTimeout(show, SHOW_FALLBACK_MS);
         } else if (event.data.type === "resize") {
           container.style.setProperty("--content-height", `${Math.min(MAX_WIDGET_HEIGHT, event.data.height)}px`);
+          show();
         } else if (event.data.type === "status") {
           active = event.data.active;
-          if (active) expand(false);
           status.textContent = active ? "AI twin call in progress" : "AI twin call ended";
         }
       };
       const onKey = (event: KeyboardEvent) => {
-        if (event.key === "Escape" && opened) {
-          event.preventDefault();
-          handle.minimise();
-        }
+        if (event.key === "Escape" && shown && !active) reset();
       };
       const onOutside = (event: PointerEvent) => {
-        if (opened && !event.composedPath().includes(root)) collapse(false);
+        if (shown && !event.composedPath().includes(root)) reset();
       };
-      const toggle = () => expand();
-      launcher.addEventListener("click", toggle);
-      container.addEventListener("transitionend", onTransitionEnd);
-      container.addEventListener("transitioncancel", onTransitionEnd);
       window.addEventListener("message", onMessage);
       window.addEventListener("keydown", onKey);
       document.addEventListener("pointerdown", onOutside, true);

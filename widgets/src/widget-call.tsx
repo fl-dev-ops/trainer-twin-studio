@@ -1,7 +1,7 @@
 import { Mic, MicOff, PhoneOff } from "lucide-react";
 import { useLayoutEffect, useRef } from "react";
 import { WidgetPortrait } from "./widget-portrait";
-import type { WidgetRefs } from "./widget-view";
+import type { AgentState, WidgetRefs } from "./widget-view";
 
 export type WidgetPhase = "ready" | "connecting" | "live" | "failed" | "exhausted";
 export type Caption = { id: string; text: string; final: boolean; visitor: boolean };
@@ -10,8 +10,8 @@ type WidgetCallProps = {
   elements: WidgetRefs;
   trainer: string;
   photoUrl: string | null;
-  welcome: string;
   phase: WidgetPhase;
+  agentState: AgentState;
   visible: boolean;
   hasName: boolean;
   canStart: boolean;
@@ -35,7 +35,9 @@ export function WidgetCall(props: WidgetCallProps) {
   const inCall = phase === "connecting" || phase === "live";
   const connecting = phase === "connecting" || (phase === "live" && props.reconnecting);
   const failed = phase === "failed";
-  const exhausted = phase === "exhausted";
+  // Only three visible states; "thinking" reads as still listening to the visitor.
+  const callState = connecting ? "connecting" : props.agentState === "speaking" ? "speaking" : "listening";
+  const callLabel = { connecting: "Connecting", speaking: "Speaking", listening: "Listening" }[callState];
   const muteAction = muted ? "Unmute microphone" : "Mute microphone";
   const timeRemaining = `${Math.floor(props.seconds / 60)}:${String(props.seconds % 60).padStart(2, "0")} left`;
   const transcript = useRef<HTMLDivElement>(null);
@@ -53,18 +55,22 @@ export function WidgetCall(props: WidgetCallProps) {
         <span className={`tt-countdown${props.seconds <= 15 ? " tt-urgent" : ""}`} aria-label="Time remaining">{timeRemaining}</span>
       </div>
       <div ref={elements.body} className="tt-body">
-        <div className="tt-hero" hidden={exhausted}>
+        <div className="tt-hero">
           <div ref={elements.portrait} className="tt-portrait-stage">
             <WidgetPortrait name={props.trainer} photoUrl={props.photoUrl} className="tt-hero-portrait" />
           </div>
-          <p className="tt-status" role="status" aria-live="polite" hidden={!connecting}>{connecting ? "Connecting…" : ""}</p>
+          <p className="tt-status" data-state={callState} hidden={!inCall}>
+            <span className="tt-status-dot" aria-hidden="true" />
+            <span key={callState} className="tt-status-label" aria-hidden="true">{callLabel}</span>
+            <span className="tt-sr-only" role="status" aria-live="polite">{connecting ? "Connecting…" : ""}</span>
+          </p>
         </div>
-        <section className="tt-call" aria-label="Voice call" hidden={phase !== "live" || (!latest && !props.playbackBlocked)}>
+        <section className="tt-call" aria-label="Voice call" hidden={!inCall}>
           <div ref={transcript} className="tt-transcript" role="log" aria-label="Conversation captions" aria-live="polite" aria-relevant="additions text"
-            hidden={!latest} tabIndex={0} onScroll={({ currentTarget }) => {
+            tabIndex={latest ? 0 : -1} onScroll={({ currentTarget }) => {
               followCaptions.current = currentTarget.scrollHeight - currentTarget.scrollTop - currentTarget.clientHeight < 4;
             }}>
-            {props.captions.slice(-2).map(({ id, text, final, visitor }) => (
+            {phase === "live" && props.captions.slice(-2).map(({ id, text, final, visitor }) => (
               <p key={id} className={`tt-caption${visitor ? " tt-caption-you" : ""}`} data-final={final}>
                 <span className="tt-caption-text">{text}</span>
               </p>
@@ -72,28 +78,20 @@ export function WidgetCall(props: WidgetCallProps) {
           </div>
           <p className="tt-playback-hint" role="alert" hidden={!props.playbackBlocked}>Audio is blocked by your browser. Tap the widget to hear the call.</p>
         </section>
-        <section className="tt-call-actions" hidden={inCall}>
-          <h2 ref={elements.notice} className="tt-call-title" tabIndex={exhausted ? -1 : undefined} aria-live="polite"
-            aria-description={failed ? props.finishMessage ?? "Please try again in a little while." : undefined}>
-            {exhausted ? "Free call limit reached" : failed ? "We couldn’t start the conversation." : props.welcome}
+        <section className="tt-call-actions" hidden={!failed}>
+          <h2 className="tt-call-title" aria-live="polite" aria-description={props.finishMessage ?? "Please try again in a little while."}>
+            We couldn’t start the conversation.
           </h2>
-          {exhausted && <p className="tt-limit-message">{props.finishMessage ?? "There aren’t enough free call minutes available right now. Please try again later."}</p>}
-          <button ref={elements.retry} type="button" className="tt-primary" hidden={exhausted} disabled={!props.canStart} onClick={props.onRetry}>
-            {failed ? "Try again" : "Start voice call"}
+          <button ref={elements.retry} type="button" className="tt-primary" disabled={!props.canStart} onClick={props.onRetry}>
+            Try again
           </button>
-          <button type="button" className="tt-change-name" aria-label="Change your name" hidden={exhausted || !props.hasName} onClick={props.onChangeName}>Change name</button>
+          <button type="button" className="tt-change-name" aria-label="Change your name" hidden={!props.hasName} onClick={props.onChangeName}>Change name</button>
         </section>
       </div>
       <div ref={elements.controls} className="tt-controls" hidden={!inCall}>
-        <div className="tt-control">
-          <button type="button" className="tt-secondary tt-mute" aria-label={muteAction} title={muteAction} aria-pressed={muted}
-            disabled={phase !== "live" || props.mutePending || props.reconnecting} onClick={props.onMute}><Mic {...icon} /><MicOff {...icon} /></button>
-          <span className="tt-control-label">{muted ? "Unmute" : "Mute"}</span>
-        </div>
-        <div className="tt-control">
-          <button ref={elements.end} type="button" className="tt-end" aria-label="End call" title="End call" onClick={props.onEnd}><PhoneOff {...icon} /></button>
-          <span className="tt-control-label">End call</span>
-        </div>
+        <button type="button" className="tt-secondary tt-mute" aria-label={muteAction} title={muteAction} aria-pressed={muted}
+          disabled={phase !== "live" || props.mutePending || props.reconnecting} onClick={props.onMute}><Mic {...icon} /><MicOff {...icon} /></button>
+        <button ref={elements.end} type="button" className="tt-end" aria-label="End call" title="End call" onClick={props.onEnd}><PhoneOff {...icon} /></button>
       </div>
     </div>
   );

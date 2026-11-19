@@ -96,8 +96,8 @@ export function remainingCallMs(session: Pick<Session, "secondsLeft" | "endsAt" 
 class WidgetRequestError extends Error {
   constructor(readonly status: number, readonly code: string) {
     super(code === "widget_token_invalid" ? "This widget connection expired. Please start again."
-      : code === "public_call_limit" ? "The free call limit for now has been reached. Please try again later."
-      : code === "public_call_credits_exhausted" ? "There aren’t enough free call minutes available right now. Please try again later."
+      : code === "public_call_limit" ? "You’ve used all the free calls for now."
+      : code === "public_call_credits_exhausted" ? "There aren’t enough free call minutes left right now."
       : code === "public_call_busy" ? "A call is already running. Please try again after it ends."
       : code === "widget_unavailable" ? "This twin is not available on this website."
       : "The call is unavailable right now. Please try again later.");
@@ -120,6 +120,20 @@ export function callStartError(failure: unknown): string {
   if (failure instanceof WidgetRequestError) return failure.message;
   if (failure instanceof Error && ["NotAllowedError", "SecurityError", "NotFoundError", "NotReadableError"].includes(failure.name)) return mediaError(failure);
   return "Please try again in a little while.";
+}
+
+/** How long a refused start is remembered, so later clicks go straight to the limit card instead of flashing the call screen. */
+export const LIMIT_MEMORY_MS = 60 * 60 * 1000;
+
+export function readLimitMemory(value: string | null, now: number): { until: number; reason?: string } | undefined {
+  if (!value || value.length > 600) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!record(parsed) || typeof parsed.until !== "number" || parsed.until <= now || parsed.until > now + LIMIT_MEMORY_MS) return undefined;
+    return { until: parsed.until, ...(bounded(parsed.reason, 200) ? { reason: parsed.reason } : {}) };
+  } catch {
+    return undefined;
+  }
 }
 
 export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview) {
@@ -148,21 +162,22 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
   let focusTarget: "intro" | "name" | "error" | "retry" | "notice" | "end" | undefined;
   let visitorToken: string | undefined;
   let savedName = preview?.name;
+  let limitUntil = 0;
+  let limitReason: string | undefined;
+  let messageSentTo: string | undefined;
   let editingName = false;
   let storageAvailable = true;
   const scope = `${config.agentId}:${config.parentOrigin}`;
   const tokenKey = `trainertwin-widget:visitor:${scope}`;
   const nameKey = `trainertwin-widget:name:${scope}`;
+  const limitKey = `trainertwin-widget:limit:${scope}`;
   const captions = new Map<string, Caption>();
   const attachedTracks = new Set<RemoteTrack>();
 
-  const post = (type: "ready" | "close" | "status" | "interaction", active?: boolean) => {
+  const post = (type: "ready" | "status", active?: boolean) => {
     if (window.parent !== window) {
       window.parent.postMessage({
-        source: "trainertwin-widget", version: 1, type,
-        ...(type === "ready" ? { intro: true } : {}),
-        ...(type === "status" ? { active: active === true } : {}),
-        ...(type === "interaction" ? { editing: active === true } : {}),
+        source: "trainertwin-widget", version: 1, type, ...(type === "status" ? { active: active === true } : {}),
       }, config.parentOrigin);
     }
   };
@@ -178,8 +193,7 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
   });
   const luminance = .2126 * channels[0] + .7152 * channels[1] + .0722 * channels[2];
   const theme: CSSProperties & Record<`--tt-${string}`, string> = {
-    "--tt-accent": config.accentColor,
-    "--tt-action": luminance < .04 ? "#f2eee5" : config.accentColor,
+    "--tt-action": luminance < .04 ? "#fafafa" : config.accentColor,
     "--tt-on-accent": luminance < .04 || luminance > .179 ? "#111111" : "#ffffff",
   };
   let reportedHeight = 0;
@@ -190,7 +204,7 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
     const chromeHeight = card.offsetHeight - portrait.offsetHeight;
     const squareHeight = portrait.offsetWidth;
     if (squareHeight) portrait.style.height = `${Math.max(0, Math.min(squareHeight, innerHeight - chromeHeight))}px`;
-    const natural = !intro && needsName() ? 480 : chromeHeight + squareHeight;
+    const natural = chromeHeight + squareHeight;
     const height = Math.max(MIN_WIDGET_HEIGHT, Math.min(MAX_WIDGET_HEIGHT, Math.ceil(natural)));
     if (height === reportedHeight) return;
     reportedHeight = height;
@@ -253,8 +267,9 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
     reportSize();
     if (!focusTarget) return;
     const target = elements[focusTarget].current;
-    if (target instanceof HTMLButtonElement && target.disabled) return;
-    target?.focus();
+    // The target may not be mounted yet while the previous screen fades out; keep the request until it is.
+    if (!target || (target instanceof HTMLButtonElement && target.disabled)) return;
+    target.focus();
     if (target instanceof HTMLInputElement && editingName && !nameInvalid) target.select();
     focusTarget = undefined;
   }
@@ -279,8 +294,64 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
     }
   }
 
+  function limitActive() {
+    if (limitUntil > Date.now()) return true;
+    if (preview) return preview.phase === "exhausted";
+    if (!storageAvailable) return false;
+    try {
+      const memory = readLimitMemory(localStorage.getItem(limitKey), Date.now());
+      if (!memory) return false;
+      limitUntil = memory.until;
+      limitReason = memory.reason;
+      return true;
+    } catch (failure) {
+      if (!(failure instanceof DOMException) || failure.name !== "SecurityError") throw failure;
+      return false;
+    }
+  }
+
+  function rememberLimit(reason?: string) {
+    limitUntil = Date.now() + LIMIT_MEMORY_MS;
+    limitReason = reason;
+    if (preview || !storageAvailable) return;
+    try {
+      localStorage.setItem(limitKey, JSON.stringify({ until: limitUntil, reason }));
+    } catch (failure) {
+      if (!(failure instanceof DOMException) || !["SecurityError", "QuotaExceededError"].includes(failure.name)) throw failure;
+    }
+  }
+
+  function forgetLimit() {
+    limitUntil = 0;
+    if (preview || !storageAvailable) return;
+    try {
+      localStorage.removeItem(limitKey);
+    } catch (failure) {
+      if (!(failure instanceof DOMException) || failure.name !== "SecurityError") throw failure;
+    }
+  }
+
+  function showLimit() {
+    intro = false;
+    phase = "exhausted";
+    finishMessage = limitReason;
+    clearError();
+    focusTarget = "notice";
+    flushSync(render);
+  }
+
+  // UI only for now: there is no backend for visitor notes yet, so nothing leaves the browser.
+  // Wire this to a public API route before relying on it in production.
+  async function sendMessage(email: string, _message: string) {
+    await new Promise((resolve) => setTimeout(resolve, preview ? 400 : 0));
+    messageSentTo = email;
+    focusTarget = "notice";
+    render();
+  }
+
   function openIntro() {
     if (!initialized || starting || finishing) return;
+    if (limitActive()) { showLimit(); return; }
     intro = false;
     clearError();
     if (savedName && !editingName) void beginCall();
@@ -293,16 +364,17 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
   function render() {
     if (destroyed) return;
     view.render(createElement(WidgetView, {
-      name: config.name, theme, stage: intro ? "intro" : needsName() ? "name" : "call",
-      agentState, visible, draftName: savedName, errorMessage, nameInvalid,
+      name: config.name, welcome: config.welcome, theme, stage: intro ? "intro" : phase === "exhausted" ? "limit" : needsName() ? "name" : "call",
+      agentState, visible, draftName: savedName, errorMessage, nameInvalid, limitReason: finishMessage, messageSentTo,
       call: {
-        elements, phase, trainer: config.trainerName, photoUrl: config.photoUrl, welcome: config.welcome,
+        elements, phase, agentState, trainer: config.trainerName, photoUrl: config.photoUrl,
         seconds, muted, reconnecting, mutePending, finishMessage, hasName: !!savedName,
         captions: [...captions.values()], canStart: initialized && !starting && !finishing,
         playbackBlocked: phase === "live" && room?.canPlaybackAudio === false,
         onRetry: retry, onChangeName: changeName, onMute: toggleMute, onEnd: endCall,
       },
       onCommit, onDismiss: dismiss, onOpen: openIntro, onStart: beginCall, onNameInput: nameInput, onUnlockAudio: unlockAudio,
+      onSendMessage: sendMessage,
     }));
   }
 
@@ -412,7 +484,9 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
     session = null;
     room = null;
     finishMessage = message;
+    if (exhausted) rememberLimit(message);
     phase = exhausted ? "exhausted" : message && !connected ? "failed" : "ready";
+    if (phase === "ready") intro = true;
     render();
     const results = await Promise.allSettled([
       closingSession ? closeSession(closingSession) : Promise.resolve(null),
@@ -433,8 +507,7 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
     post("status", false);
     if (warning) showError(warning);
     else {
-      intro = phase === "ready";
-      focusTarget = intro ? "intro" : phase === "exhausted" ? "notice" : "retry";
+      focusTarget = phase === "ready" ? "intro" : phase === "exhausted" ? "notice" : "retry";
       render();
     }
   }
@@ -616,6 +689,7 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
       if (cancelled()) { await disconnect(current); return; }
       phase = "live";
       connected = true;
+      forgetLimit();
       updateWaves();
       focusTarget = "end";
       render();
@@ -629,6 +703,7 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
   }
 
   function beginCall() {
+    if (!starting && !finishing && limitActive()) { showLimit(); return; }
     if (!preview) return startCall();
     try {
       rememberName(visitorName(needsName() ? elements.name.current?.value ?? "" : savedName ?? ""));
@@ -656,9 +731,21 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
     ]) : undefined;
   }
 
+  /** Return an idle widget to its intro card (Escape, outside click, or `minimise()` on the host). */
+  function resetToIntro() {
+    if (phase === "connecting" || phase === "live" || starting || finishing) return;
+    if (intro && phase === "ready" && !editingName && !errorMessage) return;
+    intro = true;
+    phase = "ready";
+    editingName = false;
+    clearError();
+    focusTarget = undefined;
+    render();
+  }
+
   function dismiss() {
-    if (phase === "connecting" || phase === "live" || finishing) return;
-    post("close");
+    if (preview && !preview.embedded) return;
+    resetToIntro();
   }
   function unlockAudio() {
     if (phase === "live" && room?.canPlaybackAudio === false) {
@@ -700,10 +787,6 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
     window.removeEventListener("pageshow", ready);
     window.removeEventListener("pagehide", destroy);
     document.removeEventListener("visibilitychange", visibility);
-    document.removeEventListener("focusin", interaction);
-    document.removeEventListener("focusout", interaction);
-    window.removeEventListener("focus", interaction);
-    window.removeEventListener("blur", interaction);
     stopWaves?.();
     stopWaves = undefined;
     void finish(true).finally(() => { if (ownsAudioContainer) audioContainer.remove(); });
@@ -719,14 +802,9 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
       render();
     } else if (data.type === "visibility") {
       visible = data.open;
-      if (!visible && phase !== "connecting" && phase !== "live" && !finishing) {
-        intro = true;
-        phase = "ready";
-        editingName = false;
-        focusTarget = undefined;
-        clearError();
-      }
       render();
+    } else if (data.type === "reset") {
+      resetToIntro();
     } else if (data.type === "destroy") {
       destroy();
     }
@@ -737,12 +815,8 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
   function visibility() {
     if (session) tick();
   }
-  function interaction() {
-    queueMicrotask(() => {
-      if (!destroyed) post("interaction", document.hasFocus() && document.activeElement === elements.name.current);
-    });
-  }
   flushSync(render);
+  if (elements.card.current) sizeObserver.observe(elements.card.current);
   if (elements.body.current) sizeObserver.observe(elements.body.current);
   if (elements.controls.current) sizeObserver.observe(elements.controls.current);
   window.addEventListener("resize", reportSize);
@@ -761,10 +835,6 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
     showPreview(preview);
     return;
   }
-  document.addEventListener("focusin", interaction);
-  document.addEventListener("focusout", interaction);
-  window.addEventListener("focus", interaction);
-  window.addEventListener("blur", interaction);
   window.addEventListener("message", receive);
   window.addEventListener("pageshow", ready);
   document.addEventListener("visibilitychange", visibility);

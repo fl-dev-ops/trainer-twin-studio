@@ -2,6 +2,7 @@ import { mount, parseConfig, type WidgetPreview } from "../src/widget";
 
 const states = new Map<string, WidgetPreview>([
   ["name", { phase: "ready" }],
+  ["connecting", { phase: "connecting", name: "Jordan" }],
   ["call", { phase: "live", agentState: "speaking", name: "Jordan" }],
   ["exhausted", { phase: "exhausted" }],
 ]);

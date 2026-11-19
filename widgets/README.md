@@ -28,7 +28,7 @@ inline embed URLs and `data-target` are rejected; copy the current floating snip
 Invalid configuration throws without creating a widget. No user-controlled HTML
 is interpolated. Multiple scripts produce independent mounts; mounting the same
 script again returns its existing handle. Multiple floating installations should
-normally be avoided because their fixed launchers occupy the same corner.
+normally be avoided because their fixed intro cards occupy the same corner.
 
 The iframe URL derives solely from the installation script's HTTP(S) origin:
 
@@ -41,7 +41,7 @@ title, `referrerpolicy="no-referrer"`, sandboxed scripts/same-origin/forms acces
 widget origin. Customer `Permissions-Policy` must also permit that delegation.
 Customer CSP must allow the script and frame origins; loader Shadow DOM styles
 need permission under `style-src`. A script nonce is copied onto the style
-element for nonce-based policies. Shadow DOM isolates the launcher, and its host has a reset for customer rules targeting
+element for nonce-based policies. Shadow DOM isolates the card wrapper, and its host has a reset for customer rules targeting
 wrapper elements directly. The iframe keeps the call UI’s styles separate from the customer page. The customer can still
 hide the widget by hiding an ancestor or removing its mount.
 
@@ -49,27 +49,31 @@ hide the widget by hiding an ancestor or removing its mount.
 
 Floating mounts show an intro card with the trainer portrait and a voice button when the iframe is ready.
 Hover and widget initialization never request microphone access. Click/tap or keyboard activation of the voice
-button opens a minimal name form on first use. Returning visitors start the call directly with that same button.
+button morphs in place into a name field with a submit arrow on first use. Returning visitors start the call directly with that same button.
+Screen changes cross-fade: the outgoing screen fades out (200ms), the card recolours, and the incoming screen rises in;
+headings animate word by word when their text changes.
 The saved name is scoped to the Twin and embedding site; **Change your name** opens the form again.
 If storage is blocked, the name is remembered until the widget reloads.
 
-The loader keeps connecting and active calls open. Clicking outside the widget or pressing Escape minimises inactive screens
-without unloading the iframe. The free-limit notice distinguishes exhausted free minutes or call quotas from connection failures.
+The loader keeps connecting and active calls open. Clicking outside the widget or pressing Escape returns inactive screens to the intro card
+without unloading the iframe. The free-limit card distinguishes exhausted free minutes or call quotas from connection failures and offers an email + note
+form. **The note form is UI only for now: `sendMessage` in `src/widget.ts` does not send anything yet.** A refused start is
+remembered for an hour (`trainertwin-widget:limit:*`), so later clicks open the limit card without flashing the call screen.
 Successful teardown returns focus
 to the intro button, while failures remain retryable in the call panel. The panel is at most 340px wide and is
-bounded by viewport safe areas. Connecting and silent calls leave no blank caption area. The two latest captions wrap in full and scroll if needed. Trusted resize
-messages accept integers 140–4096px.
+bounded by viewport safe areas. The caption area keeps a fixed 62px height from Connecting onwards, so the layout never jumps. The two latest captions wrap in full and scroll if needed. Trusted resize
+messages accept integers 64–4096px.
 LiveKit audio tracks drive the shared Twin-session green/orange glow renderer. Photos remain in colour; initials
 appear when no photo is available.
-The call has no header; only connecting/reconnecting shows “Connecting…”, not speaking/listening text.
+The call has no header. A status row under the portrait shows a dot and one of CONNECTING, SPEAKING or LISTENING (the agent's thinking state reads as Listening).
 Compact captions follow Portfolio v4’s last-two-entry presentation with an older-entry fade.
 Mute and end are icon-only, with accessible names.
 The remaining allowance stays accessible and appears visually in the final 15 seconds.
 Mute and hang-up remain distinct controls. Reduced-motion preferences disable decorative animation.
-The loader stays credential-free: it receives only lifecycle status, bounded height and an editing-focus boolean,
+The loader stays credential-free: it receives only lifecycle status and bounded height,
 not trainer or visitor data.
 The portrait is preloaded by the hosted HTML and loaded eagerly/high-priority while the iframe is still closed.
-On open/close the photo, heading, input and CTA independently fade/translate upward/downward, without scaling.
+On first reveal the photo, heading, input and CTA independently fade/translate upward/downward, without scaling.
 Controls become interactive when the outer surface settles, preventing moving-target clicks during expansion.
 LiveKit audio is unlocked from the original call-start gesture before network awaits. There is no standalone sound
 button; if a browser later blocks playback, a short message asks the visitor to tap the widget to retry audio.
@@ -77,7 +81,7 @@ The transparent name field keeps browser autofill paint clipped to text. Failed 
 conversation.” and a retry action. Safe failure guidance remains available through the title’s `aria-description`.
 Network/provider details stay generic; microphone permission/device errors retain actionable guidance there.
 
-Escape in the parent minimises an inactive floating panel; active calls ignore collapse requests.
+There is no collapsed launcher: the intro card is the resting state, shown once the hosted page reports its height. Escape in the parent sends `reset`; active calls ignore it.
 Keyboard events do not cross iframe boundaries. The loader supplies `parentOrigin` and `mode=floating` in the iframe URL.
 
 After the async loader executes, the deliberately small API is available:
@@ -85,8 +89,8 @@ After the async loader executes, the deliberately small API is available:
 ```js
 const script = document.querySelector("script[data-twin-id]");
 const handle = window.TrainerTwinWidgets.mount({ script });
-handle.open();
-handle.minimise();
+handle.open();     // focuses the widget
+handle.minimise(); // returns an idle widget to its intro card
 handle.destroy();
 // Equivalent idempotent teardown:
 window.TrainerTwinWidgets.destroy(script);
@@ -110,14 +114,13 @@ Every message is an object using **`version: 1`**, never `v: 1`.
 
 | Direction | Source | Type | Other fields |
 | --- | --- | --- | --- |
-| iframe → parent | `trainertwin-widget` | `ready` | optional `intro: boolean`, to open the intro without moving focus |
-| iframe → parent | `trainertwin-widget` | `close` | none |
+| iframe → parent | `trainertwin-widget` | `ready` | none |
 | iframe → parent | `trainertwin-widget` | `status` | `active: boolean` |
-| iframe → parent | `trainertwin-widget` | `interaction` | `editing: boolean`, name field focused; no field contents |
-| iframe → parent | `trainertwin-widget` | `resize` | `height: integer`, 140–4096 only; host clips sizing to available screen |
+| iframe → parent | `trainertwin-widget` | `resize` | `height: integer`, 64–4096 only; host clips sizing to available screen |
 | parent → iframe | `trainertwin-host` | `init` | none |
 | parent → iframe | `trainertwin-host` | `destroy` | none |
 | parent → iframe | `trainertwin-host` | `visibility` | `open: boolean`, triggers content reveal only |
+| parent → iframe | `trainertwin-host` | `reset` | none; returns an idle widget to the intro card |
 
 The iframe installs its listener and sends `ready`; the loader replies `init`.
 The loader requires both `event.source === iframe.contentWindow` and
@@ -141,7 +144,7 @@ messages. `src/protocol.ts` is a dependency-free shared schema/URL helper.
 Run `pm2 start ecosystem.config.cjs --only widgets` from the repo root (or `bun run playground` from `widgets/`).
 Open [localhost:43190](http://localhost:43190). **Live design preview** renders the actual hosted card in simulated
 call states. Choose **Button**, **Name**, or **Call**. The **Button** preview also lets you try the full flow.
-Edit each screen separately: [`widget-intro.tsx`](src/widget-intro.tsx), [`widget-name.tsx`](src/widget-name.tsx),
+Edit each screen separately: [`widget-intro.tsx`](src/widget-intro.tsx) (intro + name), [`widget-limit.tsx`](src/widget-limit.tsx),
 or [`widget-call.tsx`](src/widget-call.tsx). Styles are in [`widget.css`](src/widget.css).
 The playground refreshes the selected state on save without using a microphone, creating a session, or spending
 credits. The preview and the real embed render the same component.
