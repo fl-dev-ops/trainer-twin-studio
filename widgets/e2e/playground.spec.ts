@@ -17,6 +17,11 @@ test("design preview renders widget states and refreshes the selected state with
   await expect(widget.getByRole("status")).toHaveText("Connecting…");
   await page.getByRole("button", { name: "Speaking", exact: true }).click();
   await expect(widget.locator(".tt-card")).toHaveAttribute("data-agent-state", "speaking");
+  await expect(widget.getByText("Powered by TrainerTwin", { exact: true })).toHaveCount(0);
+  const mute = widget.getByRole("button", { name: "Mute microphone", exact: true });
+  await expect(mute.locator("svg:first-child")).toBeVisible();
+  await mute.click();
+  await expect(widget.getByRole("button", { name: "Unmute microphone" }).locator("svg:last-child")).toBeVisible();
   await expect(widget.getByRole("log")).toContainText("giving feedback");
   await widget.getByRole("button", { name: "Expand captions" }).click();
   await expect(widget.getByText("What would you like to practice today?")).toBeVisible();

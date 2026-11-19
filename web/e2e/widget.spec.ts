@@ -187,12 +187,12 @@ async function expectNoCardScroll(hosted: Frame) {
   })).toBe(true);
 }
 
-async function expectCallControlsAboveFooter(hosted: Frame) {
+async function expectCallControlsFit(hosted: Frame) {
   for (const name of ["Mute microphone", "End call"]) {
     await expect.poll(() => hosted.getByRole("button", { name, exact: true }).evaluate((node) => {
       const bounds = node.getBoundingClientRect();
-      const footer = document.querySelector(".tt-footer")!.getBoundingClientRect();
-      return bounds.top >= 0 && bounds.bottom <= footer.top && footer.bottom <= innerHeight + 1;
+      const card = node.closest(".tt-card")?.getBoundingClientRect();
+      return !!card && bounds.top >= 0 && bounds.bottom <= card.bottom && card.bottom <= innerHeight + 1;
     })).toBe(true);
   }
   await expectNoCardScroll(hosted);
@@ -417,7 +417,7 @@ test.describe.serial("cross-origin hosted voice widget", () => {
     expect(await photo.evaluate((node) => getComputedStyle(node).objectFit)).toBe("cover");
     expect(await hosted.locator(".tt-portrait-stage").evaluate((node) => Math.abs(node.clientWidth - node.clientHeight))).toBeLessThanOrEqual(1);
     await expectPortraitInsets(hosted);
-    await expectCallControlsAboveFooter(hosted);
+    await expectCallControlsFit(hosted);
     await page.locator("[data-trainertwin-widget] .floating").screenshot({ path: testInfo.outputPath("widget-starting-call.png"), animations: "disabled" });
     calls.release();
     await expect(hosted.getByRole("button", { name: "Mute microphone", exact: true })).toBeEnabled();
@@ -452,10 +452,10 @@ test.describe.serial("cross-origin hosted voice widget", () => {
     })).toBe(true);
     await page.locator("[data-trainertwin-widget] .floating").screenshot({ path: testInfo.outputPath("widget-visitor-speaking.png"), animations: "disabled" });
     await page.setViewportSize({ width: 1280, height: 480 });
-    await expectCallControlsAboveFooter(hosted);
+    await expectCallControlsFit(hosted);
     await page.locator("[data-trainertwin-widget] .floating").screenshot({ path: testInfo.outputPath("widget-short-call.png"), animations: "disabled" });
     await hosted.getByRole("button", { name: "Expand captions", exact: true }).click();
-    await expectCallControlsAboveFooter(hosted);
+    await expectCallControlsFit(hosted);
     await hosted.getByRole("button", { name: "Collapse captions", exact: true }).click();
     await page.setViewportSize({ width: 1280, height: 1000 });
     await hosted.getByRole("button", { name: "Expand captions", exact: true }).click();
@@ -528,7 +528,7 @@ test.describe.serial("cross-origin hosted voice widget", () => {
     await expect(hosted.getByLabel("Your name", { exact: true })).toHaveValue("Retry visitor");
     await begin(hosted, "Retry visitor");
     await expect(hosted.getByRole("button", { name: "Mute microphone", exact: true })).toBeEnabled();
-    await expectCallControlsAboveFooter(hosted);
+    await expectCallControlsFit(hosted);
     await hosted.getByRole("button", { name: "End call", exact: true }).click();
     await expect.poll(() => calls.ends.length).toBe(1);
     expect(calls.starts).toHaveLength(1);

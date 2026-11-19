@@ -59,8 +59,8 @@ The panel is capped at 340px wide and the viewport safe areas. Portraits fill th
 call phase, with consistent 16px top/left/right insets; forms also sit 16px from each side. The welcome card fits
 its content without a bottom spacer. Every phase is content-sized with no fixed 580px card limit or scrollable
 card body. The host bounds the surface only to the viewport's safe areas. On short screens, the portrait retains
-full width and adapts its height to leave room for text, actions and footer. Mute/end occupy a separate,
-non-shrinking row above the footer. Only explicitly expanded transcript history scrolls.
+full width and adapts its height to leave room for text and actions. Mute/end occupy a separate,
+non-shrinking row at the bottom. Only explicitly expanded transcript history scrolls.
 Trusted size messages accept integers 280–4096px; the upper bound is protocol validation, not a rendered card limit.
 The hosted UI uses a dark portrait-led card, the trainer's existing photo (initials if unavailable), and explicit
 name entry and browser microphone permission. The ready card uses a full-width square portrait on black, a simple

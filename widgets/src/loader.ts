@@ -1,3 +1,4 @@
+import { createElement, Phone } from "lucide";
 import { embedUrl, isWidgetMessage, MAX_WIDGET_HEIGHT, type HostMessage } from "./protocol";
 
 export interface WidgetHandle {
@@ -79,17 +80,7 @@ function createAPI(): WidgetsAPI {
       panel.append(iframe);
       const launcher = document.createElement("button");
       launcher.type = "button";
-      const phone = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-      phone.setAttribute("viewBox", "0 0 24 24");
-      phone.setAttribute("fill", "none");
-      phone.setAttribute("stroke", "currentColor");
-      phone.setAttribute("stroke-width", "1.7");
-      phone.setAttribute("stroke-linecap", "round");
-      phone.setAttribute("stroke-linejoin", "round");
-      phone.setAttribute("aria-hidden", "true");
-      const phonePath = document.createElementNS(phone.namespaceURI, "path");
-      phonePath.setAttribute("d", "M5 3h3l2 5-2 2a14 14 0 0 0 6 6l2-2 5 2v3a2 2 0 0 1-2 2A18 18 0 0 1 3 5a2 2 0 0 1 2-2Z");
-      phone.append(phonePath);
+      const phone = createElement(Phone, { "aria-hidden": "true", focusable: "false", "stroke-width": 1.75 });
       const launcherLabel = document.createElement("span");
       launcherLabel.textContent = "Talk to AI twin";
       launcher.append(phone, launcherLabel);

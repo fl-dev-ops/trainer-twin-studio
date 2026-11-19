@@ -146,17 +146,6 @@ p, h1, h2 { margin: 0; }
   transition: filter .2s, transform .2s;
 }
 .tt-primary:hover:not(:disabled) { filter: brightness(.92); transform: translateY(-1px); }
-.tt-footer {
-  flex-shrink: 0;
-  padding: 12px 16px;
-  text-align: center;
-  color: #a5ab9a;
-  font-size: 10px;
-  line-height: 16px;
-  border-top: 1px solid #ffffff0a;
-  position: relative;
-  z-index: 1;
-}
 .tt-call { display: flex; flex-direction: column; gap: 12px; width: 100%; align-self: center; }
 .tt-call-meta { position: absolute; top: 16px; right: 16px; z-index: 2; display: flex; align-items: center; gap: 8px; }
 .tt-countdown { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); color: #c8cbbd; font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -207,9 +196,8 @@ p, h1, h2 { margin: 0; }
 }
 .tt-secondary:hover:not(:disabled) { background: #ffffff14; }
 .tt-secondary[aria-pressed="true"] { background: #f2eee5; color: #1b1c19; }
-.tt-secondary[aria-pressed="true"] .tt-icon { opacity: .6; }
+.tt-mute[aria-pressed="false"] .tt-icon:last-child, .tt-mute[aria-pressed="true"] .tt-icon:first-child { display: none; }
 .tt-end { background: #d8464d; color: #fff; border-color: transparent; }
-.tt-end .tt-icon { transform: rotate(135deg); }
 .tt-end:hover { background: #bd363e; }
 .tt-playback-hint { color: #e4dcbf; font-size: 12px; line-height: 20px; text-align: center; }
 .tt-finished { display: flex; flex-direction: column; gap: 16px; text-align: center; margin: auto 0; }
@@ -221,7 +209,7 @@ p, h1, h2 { margin: 0; }
 .tt-captions-expanded .tt-transcript { height: min(360px, max(0px, calc(100svh - 180px))); overflow-y: auto; mask-image: none; justify-content: flex-start; }
 .tt-captions-expanded .tt-caption { display: block; overflow: visible; opacity: 1; }
 .tt-captions-expanded .tt-call { padding-top: 44px; }
-.tt-portrait-stage, .tt-introduction, .tt-prejoin > *, .tt-call, .tt-finished, .tt-status, .tt-footer, .tt-error {
+.tt-portrait-stage, .tt-introduction, .tt-prejoin > *, .tt-call, .tt-finished, .tt-status, .tt-error {
   opacity: 1;
   transform: translateY(0);
   transition: opacity .24s ease, transform .32s cubic-bezier(.22,1,.36,1);
@@ -232,7 +220,6 @@ p, h1, h2 { margin: 0; }
 .tt-card[data-visible="false"] .tt-call,
 .tt-card[data-visible="false"] .tt-finished,
 .tt-card[data-visible="false"] .tt-status,
-.tt-card[data-visible="false"] .tt-footer,
 .tt-card[data-visible="false"] .tt-error { opacity: 0; transform: translateY(12px); }
 .tt-card[data-phase="ready"] .tt-hero { gap: 16px; }
 @keyframes tt-caption-in { from { transform: translateY(12px); } to { transform: translateY(0); } }

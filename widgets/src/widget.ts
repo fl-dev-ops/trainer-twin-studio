@@ -1,4 +1,5 @@
 import { createAudioAnalyser, Room, RoomEvent, Track, type Participant, type RemoteAudioTrack, type RemoteTrack, type TranscriptionSegment } from "livekit-client";
+import { createElement, Maximize2, Mic, MicOff, Minimize2, Phone, PhoneOff } from "lucide";
 import "./widget.css";
 import { MAX_WIDGET_HEIGHT, MIN_WIDGET_HEIGHT } from "./protocol";
 import { drawCallWaves, MIC_NOISE_GATE } from "../../shared/call-waves";
@@ -115,24 +116,8 @@ function button(className: string, text: string): HTMLButtonElement {
   return node;
 }
 
-const PHONE = "M5 3h3l2 5-2 2a14 14 0 0 0 6 6l2-2 5 2v3a2 2 0 0 1-2 2A18 18 0 0 1 3 5a2 2 0 0 1 2-2Z";
-const MICROPHONE = "M12 3a3 3 0 0 0-3 3v5a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3ZM6 11a6 6 0 0 0 12 0M12 17v4M9 21h6";
-
-function icon(path: string) {
-  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.setAttribute("viewBox", "0 0 24 24");
-  svg.setAttribute("fill", "none");
-  svg.setAttribute("stroke", "currentColor");
-  svg.setAttribute("stroke-width", "1.7");
-  svg.setAttribute("stroke-linecap", "round");
-  svg.setAttribute("stroke-linejoin", "round");
-  svg.setAttribute("aria-hidden", "true");
-  svg.setAttribute("focusable", "false");
-  svg.classList.add("tt-icon");
-  const shape = document.createElementNS(svg.namespaceURI, "path");
-  shape.setAttribute("d", path);
-  svg.append(shape);
-  return svg;
+function icon(node: Parameters<typeof createElement>[0]) {
+  return createElement(node, { class: "tt-icon", "aria-hidden": "true", focusable: "false", "stroke-width": 1.75 });
 }
 
 function mediaError(failure: unknown): string {
@@ -250,7 +235,7 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
   name.required = true;
   name.setAttribute("aria-describedby", "tt-error");
   const start = button("tt-start", "");
-  start.append(icon(PHONE));
+  start.append(icon(Phone));
   start.setAttribute("aria-label", "Start voice call");
   start.title = "Start voice call";
   start.type = "submit";
@@ -279,15 +264,13 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
   const countdown = element("span", "tt-countdown", `${clock(config.maxSeconds)} left`);
   countdown.setAttribute("aria-label", "Time remaining");
   const captionToggle = button("tt-icon-button tt-caption-toggle", "");
-  captionToggle.append(icon("M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"));
+  captionToggle.append(icon(Maximize2));
   captionToggle.setAttribute("aria-label", "Expand captions");
   captionToggle.setAttribute("aria-expanded", "false");
   captionToggle.setAttribute("aria-controls", "tt-captions");
   captionToggle.title = "Expand captions";
   function expandCaptions(expanded: boolean) {
-    captionToggle.replaceChildren(icon(expanded
-      ? "M20 10h-6V4M4 14h6v6M14 10l7-7M3 21l7-7"
-      : "M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"));
+    captionToggle.replaceChildren(icon(expanded ? Minimize2 : Maximize2));
     captionToggle.setAttribute("aria-expanded", String(expanded));
     captionToggle.setAttribute("aria-label", expanded ? "Collapse captions" : "Expand captions");
     captionToggle.title = expanded ? "Collapse captions" : "Expand captions";
@@ -312,12 +295,12 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
   playbackHint.setAttribute("role", "alert");
   const controls = element("div", "tt-controls");
   const mute = button("tt-secondary tt-mute", "");
-  mute.append(icon(MICROPHONE));
+  mute.append(icon(Mic), icon(MicOff));
   mute.setAttribute("aria-label", "Mute microphone");
   mute.title = "Mute microphone";
   mute.setAttribute("aria-pressed", "false");
   const end = button("tt-end", "");
-  end.append(icon(PHONE));
+  end.append(icon(PhoneOff));
   end.setAttribute("aria-label", "End call");
   end.title = "End call";
   const muteControl = element("div", "tt-control");
@@ -347,9 +330,8 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
   error.hidden = true;
   error.tabIndex = -1;
   error.setAttribute("role", "alert");
-  const footer = element("footer", "tt-footer", "Powered by TrainerTwin");
   body.append(hero, form, call, finished, error);
-  card.append(waves, callMeta, body, controls, footer);
+  card.append(waves, callMeta, body, controls);
   root.replaceChildren(card);
   card.dataset.visible = "false";
   let reportedHeight = 0;
@@ -367,7 +349,6 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
   }
   const sizeObserver = new ResizeObserver(reportSize);
   sizeObserver.observe(body);
-  sizeObserver.observe(footer);
   sizeObserver.observe(controls);
   window.addEventListener("resize", reportSize);
   const audioContainer = document.getElementById("trainertwin-audio") ?? element("div", "tt-audio");
