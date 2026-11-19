@@ -11,8 +11,8 @@ const DATA_DIR = path.resolve(import.meta.dir, "../../../data");
 function loadConfig(agentSlug = "resume-mastery", personaSlug = "vasanth") {
   const agentYaml = fs.readFileSync(path.join(DATA_DIR, `agents/${agentSlug}.yaml`), "utf8");
   const personaYaml = fs.readFileSync(path.join(DATA_DIR, `personas/${personaSlug}.yaml`), "utf8");
-  const agentData = (yaml.load(agentYaml) as any).agent;
-  const personaData = (yaml.load(personaYaml) as any).persona;
+  const agentData = (yaml.load(agentYaml) as { agent: unknown }).agent;
+  const personaData = (yaml.load(personaYaml) as { persona: unknown }).persona;
 
   return {
     persona: { id: "test-vasanth", slug: personaSlug, version: 1, data: personaData },
@@ -21,19 +21,18 @@ function loadConfig(agentSlug = "resume-mastery", personaSlug = "vasanth") {
   };
 }
 
+type Completion = { choices?: { message?: { content?: string } }[] };
 const tokenHash = (token: string) => createHash("sha256").update(token).digest("hex");
 
 describe("Document On-Demand Retrieval E2E Live Flow", () => {
   let orgId: string;
   let userId: string;
-  let agentId: string;
-  let docId = `test-doc-${randomBytes(4).toString("hex")}`;
-  let sessionId = `test-sess-doc-${randomBytes(4).toString("hex")}`;
-  let runtimeToken = `test-token-${randomBytes(16).toString("hex")}`;
+  const docId = `test-doc-${randomBytes(4).toString("hex")}`;
+  const sessionId = `test-sess-doc-${randomBytes(4).toString("hex")}`;
+  const runtimeToken = `test-token-${randomBytes(16).toString("hex")}`;
 
   beforeAll(async () => {
     const existingAgent = await db.agent.findFirstOrThrow();
-    agentId = existingAgent.id;
     orgId = existingAgent.orgId!;
 
     const existingMember = await db.member.findFirstOrThrow({
@@ -163,7 +162,7 @@ describe("Document On-Demand Retrieval E2E Live Flow", () => {
 
     const res = await handleCompletions(req);
     expect(res.status).toBe(200);
-    const body = (await res.json()) as any;
+    const body = (await res.json()) as Completion;
     const content = body.choices?.[0]?.message?.content;
     expect(typeof content).toBe("string");
     expect(content.length).toBeGreaterThan(10);
@@ -187,18 +186,23 @@ describe("Document On-Demand Retrieval E2E Live Flow", () => {
 
     const res = await handleCompletions(req);
     expect(res.status).toBe(200);
-    const body = (await res.json()) as any;
+    const body = (await res.json()) as Completion;
     const content = body.choices?.[0]?.message?.content?.toLowerCase() ?? "";
 
     console.log("\n[E2E TEST] Agent response to HyperSync turn:\n", content, "\n");
 
     // Verify the agent response has the specific context from the document
-    // (HyperSync, Rust, 500,000, WAL, or latency/synchronization)
+    // (HyperSync, Rust, 500,000, WAL, or latency/synchronization). Replies are spoken-first: abbreviations and numbers
+    // are spelled out ("write-ahead log", "five hundred thousand"), and "edge databases" appears only in the document.
     const mentionsDocumentFact =
       content.includes("hypersync") ||
       content.includes("rust") ||
       content.includes("wal") ||
+      content.includes("write-ahead") ||
+      content.includes("write ahead") ||
+      content.includes("edge database") ||
       content.includes("500,000") ||
+      content.includes("five hundred thousand") ||
       content.includes("sync");
 
     expect(mentionsDocumentFact).toBe(true);
@@ -224,7 +228,7 @@ describe("Document On-Demand Retrieval E2E Live Flow", () => {
 
     const res = await handleCompletions(req);
     expect(res.status).toBe(200);
-    const body = (await res.json()) as any;
+    const body = (await res.json()) as Completion;
     const content = body.choices?.[0]?.message?.content?.toLowerCase() ?? "";
 
     console.log("\n[E2E TEST] Agent response to Edge Invalidation turn:\n", content, "\n");
@@ -234,6 +238,7 @@ describe("Document On-Demand Retrieval E2E Live Flow", () => {
       content.includes("invalidation") ||
       content.includes("cache") ||
       content.includes("280") ||
+      content.includes("two hundred eighty") ||
       content.includes("durable");
 
     expect(mentionsEdgeFact).toBe(true);

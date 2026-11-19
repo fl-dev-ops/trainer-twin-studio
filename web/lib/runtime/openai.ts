@@ -61,6 +61,12 @@ const AI_GATEWAY_BASE_URL = (
   "https://ai-gateway.vercel.sh/v1"
 ).replace(/\/$/, "");
 const RUNTIME_MODEL = env.INTERVIEW_LLM_MODEL;
+/**
+ * Hidden reasoning tokens count toward `max_tokens` on the runtime's reasoning models (gemini flash spends ~500–800
+ * before answering) and the gateway ignores reasoning-effort controls. Callers' caps are the visible answer budget;
+ * this allowance is added on top so replies are not cut off mid-sentence (finish_reason "length").
+ */
+export const REASONING_TOKEN_ALLOWANCE = 2048;
 const MCQ_SUBMISSION_PREFIX = "__TRAINERTWIN_MCQ_SUBMISSION__:";
 const CODE_SUBMISSION_PREFIX = "__TRAINERTWIN_CODE_SUBMISSION__:";
 const WHITEBOARD_SUBMISSION_PREFIX = "__TRAINERTWIN_WHITEBOARD_SUBMISSION__:";
@@ -416,7 +422,7 @@ export async function callOpenRouter(
       model: RUNTIME_MODEL,
       messages,
       temperature: responseFormatJson ? 0 : 0.4,
-      max_tokens: maxTokens ?? (responseFormatJson ? 1400 : 500),
+      max_tokens: (maxTokens ?? (responseFormatJson ? 1400 : 500)) + REASONING_TOKEN_ALLOWANCE,
       ...(responseFormatJson ? { response_format: { type: "json_object" } } : {}),
     }),
   });
@@ -440,6 +446,10 @@ export async function callOpenRouter(
     model: RUNTIME_MODEL,
     durationMs,
   });
+  if (data?.choices?.[0]?.finish_reason === "length") {
+    // Still cut off with the reasoning allowance: say so instead of silently using a partial reply.
+    console.warn(`[interview-runtime] ${stage} reply hit the token limit`, { model: RUNTIME_MODEL, usage: data?.usage?.completion_tokens_details });
+  }
   return data?.choices?.[0]?.message?.content ?? "";
 }
 

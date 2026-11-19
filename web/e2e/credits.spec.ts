@@ -19,7 +19,7 @@ test("Usage: the org's remaining credits, Meteroid grants, and learners' balance
   const rows = page.getByRole("region", { name: "Learners" }).locator("ul li");
   await expect(rows).toHaveCount(20);
   await expect(page.getByText(`1–20 of ${more.length + 2}`)).toBeVisible();
-  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await page.getByRole("region", { name: "Learners" }).getByRole("button", { name: "Next", exact: true }).click();
   await expect(rows).toHaveCount(more.length + 2 - 20);
 
   await page.getByLabel("Search learners").fill(learner.name);

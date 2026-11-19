@@ -40,13 +40,15 @@ test("Settings adds a learner, assigns a twin, and all three people lists show t
   await expect(row).not.toContainText(/Invite|pending|waiting/i);
 
   await page.goto("/twin/users");
-  const twinRow = page.locator("main div.grid").filter({ has: page.getByText(email, { exact: true }) }).filter({ has: page.getByText(name, { exact: true }) });
+  // Each learner row is a link to their profile.
+  const twinRow = page.getByRole("link", { name: `Open profile for ${name}`, exact: true });
   await expect(twinRow).toHaveCount(1);
   await expect(twinRow).toContainText(name);
   await expect(twinRow).toContainText(email);
   await expect(twinRow).toContainText("30 min");
   await expect(twinRow).toContainText("0 used · 30 left");
   await expect(twinRow).not.toContainText(/Invite|pending|waiting/i);
+  await expect(twinRow).toHaveAttribute("href", href!);
 
   await page.goto("/settings?tab=team");
   await users.getByRole("searchbox", { name: "Search users" }).fill(email);
