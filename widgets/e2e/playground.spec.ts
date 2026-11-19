@@ -46,6 +46,8 @@ test("launcher preview runs the real loader and opens a simulated widget", async
   const launcher = hosted.getByRole("button", { name: "Talk to my AI twin" });
   await expect(hosted.getByRole("heading", { name: /Vasanth’s AI twin/ })).toBeVisible();
   await expect(hosted.locator(".tt-intro-portrait img")).toBeVisible();
+  await expect(preview.locator('.floating[data-open="true"]')).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  await expect(preview.locator(".panel")).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
   await launcher.click();
   const name = hosted.getByRole("textbox", { name: "Your name" });
   await expect(name).toBeFocused();

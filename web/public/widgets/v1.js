@@ -2,7 +2,7 @@
 :host { all: initial; color-scheme: dark; font: 14px/1.4 system-ui, sans-serif; }
 * { box-sizing: border-box; }
 .floating { --panel-width: min(340px, calc(100vw - max(16px, env(safe-area-inset-left)) - max(16px, env(safe-area-inset-right)))); --panel-height: min(var(--content-height, 100dvh), calc(100dvh - max(16px, env(safe-area-inset-top)) - max(16px, env(safe-area-inset-bottom)))); position: fixed; right: max(16px, env(safe-area-inset-right)); bottom: max(16px, env(safe-area-inset-bottom)); z-index: 2147483000; width: 48px; height: 48px; overflow: hidden; border-radius: 50%; background: #0d0d0b; box-shadow: 0 10px 28px -12px #0009; transition: width .6s cubic-bezier(.4,0,.2,1), height .6s cubic-bezier(.4,0,.2,1), border-radius .6s; }
-.floating[data-open="true"] { width: var(--panel-width); height: var(--panel-height); border-radius: 28px; box-shadow: 0 24px 64px -12px #0006; transition-duration: .35s; transition-timing-function: cubic-bezier(.22,1,.36,1); }
+.floating[data-open="true"] { width: var(--panel-width); height: var(--panel-height); border-radius: 28px; background: transparent; box-shadow: 0 24px 64px -12px #0006; transition-duration: .35s; transition-timing-function: cubic-bezier(.22,1,.36,1); }
 .floating:has(> button:focus-visible) { outline: 2px solid #8ca575; outline-offset: 4px; }
 button { position: absolute; bottom: 0; right: 0; display: grid; place-items: center; width: 48px; height: 48px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: #f2eee5; cursor: pointer; opacity: 1; visibility: visible; transition: background .2s, opacity .18s .2s, visibility 0s; }
 button:active svg { transform: scale(.9); }
@@ -10,7 +10,7 @@ button:hover { background: #2a2c26; }
 .floating[data-open="true"] > button { opacity: 0; visibility: hidden; pointer-events: none; transition: opacity .1s, visibility 0s .1s; }
 button:focus-visible { outline: 2px solid #8ca575; outline-offset: 4px; }
 button svg { width: 20px; height: 20px; flex-shrink: 0; }
-.panel { position: absolute; bottom: 0; right: 0; width: var(--panel-width); height: var(--panel-height); border-radius: 28px; overflow: hidden; background: #1b1c19; visibility: hidden; pointer-events: none; transition: visibility 0s .6s; }
+.panel { position: absolute; bottom: 0; right: 0; width: var(--panel-width); height: var(--panel-height); border-radius: 28px; overflow: hidden; visibility: hidden; pointer-events: none; transition: visibility 0s .6s; }
 .floating[data-open="true"] .panel { visibility: visible; transition-delay: 0s; }
 .floating[data-open="true"] .panel[data-interactive="true"] { pointer-events: auto; }
 iframe { display: block; width: 100%; height: 100%; border: 0; }
