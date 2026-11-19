@@ -7,7 +7,7 @@ import { z } from "zod";
 import { Bubble, TwinPortrait } from "@/components/calibration/parts";
 import { CallWaves } from "@/components/calibration/call-waves";
 import { Button } from "@/components/ui/button";
-import { publicVisitorNameSchema } from "@/lib/public-twin-settings";
+import { DEFAULT_PUBLIC_CALL_SECONDS, publicVisitorNameSchema } from "@/lib/public-twin-settings";
 import type { Trainer, Twin } from "@/components/twin/twin-learner-flow";
 
 const launchSchema = z.object({
@@ -27,7 +27,7 @@ function VisitorCall({ room, twin, trainer, onBack }: { room: Room; twin: Twin; 
   const [name, setName] = useState("");
   const [phase, setPhase] = useState<"ready" | "connecting" | "live" | "ended">("ready");
   const [error, setError] = useState("");
-  const [remaining, setRemaining] = useState<number>(twin.publicAccess?.maxSeconds ?? 120);
+  const [remaining, setRemaining] = useState<number>(twin.publicAccess?.maxSeconds ?? DEFAULT_PUBLIC_CALL_SECONDS);
   const [captions, setCaptions] = useState<Caption[]>([]);
   const active = useRef<Connection | null>(null);
   const mounted = useRef(true);
@@ -161,7 +161,7 @@ function VisitorCall({ room, twin, trainer, onBack }: { room: Room; twin: Twin; 
       <h1 className="m-0 text-xl font-semibold">{twin.name}</h1>
       {phase === "ready" ? <form className="flex w-full flex-col gap-4" onSubmit={(event) => { event.preventDefault(); void start(); }}>
         <p className="text-sm text-muted-foreground">You’re speaking with an AI twin, not {trainer.name}. This voice call is transcribed and may be recorded. The organization can review your name, transcript, any recording and call usage. No camera or screen sharing is requested.</p>
-        <p className="text-sm text-muted-foreground">Up to {(twin.publicAccess?.maxSeconds ?? 120) / 60} minutes, funded by the organization. Your name is self-reported; no account is created.</p>
+        <p className="text-sm text-muted-foreground">Up to {(twin.publicAccess?.maxSeconds ?? DEFAULT_PUBLIC_CALL_SECONDS) / 60} minutes, funded by the organization. Your name is self-reported; no account is created.</p>
         <label htmlFor="visitor-name" className="text-sm font-medium">Your name</label>
         <input id="visitor-name" autoComplete="name" maxLength={80} value={name} onChange={(event) => setName(event.target.value)} className="h-10 rounded-lg border bg-card px-3 text-sm" required />
         <Button type="submit" variant="brand" disabled={!name.trim()}>Start voice call</Button>

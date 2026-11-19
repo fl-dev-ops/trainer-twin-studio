@@ -21,7 +21,11 @@ export async function updateTwin(orgId: string, slug: string, patch: { name?: st
   const current = await tx.agent.findUniqueOrThrow({ where: { id: found.id }, select: { name: true, version: true, data: true } });
   const previous = asRecord(current.data);
   const name = patch.name ?? current.name;
-  const widget = patch.widget ? widgetSettingsSchema.safeParse({ ...widgetSettings(current.data), ...patch.widget }) : null;
+  // The widget's `enabled` always follows its website list: on with at least one website, off with none.
+  const mergedWidget = patch.widget ? { ...widgetSettings(current.data), ...patch.widget } : null;
+  const widget = mergedWidget
+    ? widgetSettingsSchema.safeParse({ ...mergedWidget, enabled: Array.isArray(mergedWidget.allowedOrigins) && mergedWidget.allowedOrigins.length > 0 })
+    : null;
   if (widget && !widget.success) throw refusals.invalidInput(widget.error.issues[0].message);
   // Before settings: read by the session screen (lib/context-upload), enforced by session start and the attach
   // route. An older `twinSettings` key is left as is; `before` wins.

@@ -5,8 +5,12 @@ import { PUBLIC_CALL_DURATIONS, publicTwinSettings, publicVisitorNameSchema } fr
 import { publicSessionExpired } from "@/lib/interview-sessions";
 
 describe("public twin boundary contracts", () => {
-  test.each([null, {}, { publicAccess: {} }, { publicAccess: { enabled: true, maxSeconds: 61 } }])("invalid settings fail closed: %j", (data) => {
-    expect(publicTwinSettings(data)).toEqual({ enabled: false, maxSeconds: 120 });
+  test.each([null, {}, { publicAccess: {} }, { publicAccess: { enabled: true, maxSeconds: 61 } }, { publicAccess: { enabled: "yes", maxSeconds: 120 } }])("invalid settings fail closed: %j", (data) => {
+    expect(publicTwinSettings(data)).toEqual({ enabled: false, maxSeconds: 300 });
+  });
+  test.each([60, 120, 180])("a twin saved with the retired %s-second duration keeps its switch and gets 5 minutes", (maxSeconds) => {
+    expect(publicTwinSettings({ publicAccess: { enabled: true, maxSeconds } })).toEqual({ enabled: true, maxSeconds: 300 });
+    expect(publicTwinSettings({ publicAccess: { enabled: false, maxSeconds } })).toEqual({ enabled: false, maxSeconds: 300 });
   });
   test.each(PUBLIC_CALL_DURATIONS)("accepts the configured %s-second duration", (maxSeconds) => {
     expect(publicTwinSettings({ publicAccess: { enabled: true, maxSeconds } })).toEqual({ enabled: true, maxSeconds });

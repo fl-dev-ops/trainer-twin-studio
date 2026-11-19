@@ -8,7 +8,7 @@ describe.skipIf(!localMinutesDb)("hosted widget security (real database)", () =>
   const origins = ["https://customer.example", "https://other.example:8443", "http://localhost:4312"];
   const xss = '</script><script>alert("xss")</script>&\u2028\u2029';
   const settings = () => ({
-    publicAccess: { enabled: true, maxSeconds: 120 },
+    publicAccess: { enabled: true, maxSeconds: 300 },
     widget: { enabled: true, allowedOrigins: origins, welcome: xss, accentColor: "#123456" },
     privateInstructions: "never-expose-private-instructions",
   });
@@ -57,7 +57,7 @@ describe.skipIf(!localMinutesDb)("hosted widget security (real database)", () =>
   });
   test.each(["widget-off", "public-off", "archived", "removed-origin"])("unavailable hosted page after %s", async (kind) => {
     const data = settings();
-    if (kind === "widget-off") data.widget.enabled = false;
+    if (kind === "widget-off") data.widget = { ...data.widget, enabled: false, allowedOrigins: [] };
     if (kind === "public-off") data.publicAccess.enabled = false;
     if (kind === "removed-origin") data.widget.allowedOrigins = [origins[1]];
     await db.agent.update({ where: { id: f.twin.id }, data: { data, ...(kind === "archived" ? { archivedAt: new Date() } : {}) } });

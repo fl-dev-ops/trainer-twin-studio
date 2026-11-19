@@ -334,7 +334,8 @@ const agentsRouter = t.router({
         uploadInstruction: z.string().trim().max(300),
       }).strict().optional(),
       publicAccess: publicTwinSettingsSchema.partial().optional(),
-      widget: z.object(widgetSettingsSchema.shape).strict().partial().optional(),
+      // `enabled` is derived from the website list on save (lib/twin/manage), so it isn't accepted here.
+      widget: z.object(widgetSettingsSchema.shape).omit({ enabled: true }).strict().partial().optional(),
     }))
     .mutation(({ ctx, input }) => twinCall(async () => {
       const { version } = await updateTwin(ctx.user.orgId, input.slug, { name: input.name, description: input.description, settings: input.settings, publicAccess: input.publicAccess, widget: input.widget });

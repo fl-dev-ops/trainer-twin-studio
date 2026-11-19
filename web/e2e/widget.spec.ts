@@ -225,15 +225,17 @@ test.describe.serial("cross-origin hosted voice widget", () => {
     original = settingsResponse.parse(await response.json()).result.data.json;
     agentId = original.widget.id;
     await update(admin.request, {
-      publicAccess: { enabled: true, maxSeconds: 120 },
-      widget: { enabled: true, allowedOrigins: [CUSTOMER_ORIGIN], welcome: "A conversation with your AI twin", accentColor: "#35482e" },
+      publicAccess: { enabled: true, maxSeconds: 300 },
+      widget: { allowedOrigins: [CUSTOMER_ORIGIN], welcome: "A conversation with your AI twin", accentColor: "#35482e" },
     });
     server = await customerServer(widgetOrigin(), agentId);
   });
 
   test.afterAll(async () => {
     if (admin && original) {
-      await update(admin.request, { publicAccess: original.publicAccess, widget: original.widget.config });
+      const { allowedOrigins, welcome, accentColor } = original.widget.config;
+      const widget = { allowedOrigins, welcome, accentColor };
+      await update(admin.request, { publicAccess: original.publicAccess, widget });
     }
     if (admin) await admin.close();
     if (server) await new Promise<void>((done, reject) => server?.close((error) => error ? reject(error) : done()));

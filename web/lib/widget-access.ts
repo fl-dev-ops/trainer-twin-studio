@@ -11,7 +11,9 @@ export const widgetUnavailable = () => new AppError("widget_unavailable", "This 
 
 export function assertWidgetAccess(data: unknown, origin: string) {
   const settings = widgetSettings(data);
-  if (!publicTwinSettings(data).enabled || !settings.enabled || !settings.allowedOrigins.includes(origin)) throw widgetUnavailable();
+  // The widget is on exactly when the twin is public and lists this website; the stored `enabled` flag is derived from
+  // the list on save (lib/twin/manage), so older rows with websites but `enabled: false` are not consulted.
+  if (!publicTwinSettings(data).enabled || !settings.allowedOrigins.includes(origin)) throw widgetUnavailable();
   return settings;
 }
 

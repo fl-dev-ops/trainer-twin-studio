@@ -3,7 +3,7 @@
 import { followEmailProgress } from "@/lib/follow-email-progress";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Check, Copy, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { twinClient } from "@/lib/twin/client";
@@ -17,13 +17,11 @@ import { UserAvatar } from "@/components/user-avatar";
 import { useRefresh } from "@/lib/use-refresh";
 import { PageContainer } from "@/components/page-container";
 import { PageSection, SECTION_CARD, SectionRow } from "@/components/page-section";
-import { NativeSelect } from "@/components/ui/native-select";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { AccessUntil } from "@/components/twin/access-until";
 import { TWIN_UPLOAD_TITLE_DEFAULT } from "@/lib/context-upload";
-import { PUBLIC_CALL_DURATIONS, type PublicTwinSettings } from "@/lib/public-twin-settings";
-import { WidgetSettingsPanel } from "@/components/twin/widget-settings";
+import { PublicAccessPanel } from "@/components/twin/public-access-panel";
 
 type LearnerAssign = TwinOutputs["assignments"]["list"][number];
 
@@ -208,7 +206,6 @@ export function TwinEditPage({
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="conversation">Conversation</TabsTrigger>
           <TabsTrigger value="public">Public access</TabsTrigger>
-          <TabsTrigger value="embed">Embed</TabsTrigger>
           <TabsTrigger value="learners">
             Learners
             <span className="text-muted-foreground tabular-nums">· {assigned.length}</span>
@@ -297,10 +294,7 @@ export function TwinEditPage({
       </TabsContent>
 
       <TabsContent value="public">
-        <PublicAccessSettings twin={twin} />
-      </TabsContent>
-      <TabsContent value="embed">
-        <WidgetSettingsPanel twin={twin} />
+        <PublicAccessPanel twin={twin} />
       </TabsContent>
       <TabsContent value="learners">
       <div id="assign">
@@ -346,70 +340,5 @@ export function TwinEditPage({
 
       </div>
     </PageContainer>
-  );
-}
-
-function PublicAccessSettings({ twin }: { twin: Pick<TwinOutputs["agents"]["get"], "slug" | "name" | "description" | "settings" | "publicAccess"> }) {
-  const refresh = useRefresh();
-  const shareLink = useQuery({
-    queryKey: ["twin-share-link", twin.slug],
-    queryFn: () => twinClient.agents.shareLink.mutate({ slug: twin.slug }),
-    staleTime: Infinity,
-    retry: 2,
-  });
-  const [saved, setSaved] = useState(twin.publicAccess);
-  const [duration, setDuration] = useState(twin.publicAccess.maxSeconds);
-  const [saving, setSaving] = useState(false);
-
-  async function save(patch: Partial<PublicTwinSettings>) {
-    setSaving(true);
-    try {
-      await twinClient.agents.update.mutate({ slug: twin.slug, publicAccess: patch });
-      setSaved((current) => ({ ...current, ...patch }));
-      toast.success("Public access updated");
-      refresh();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not save public access");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <div className="flex flex-col gap-10">
-      <PageSection title="Public voice calls" description="Let signed-out visitors talk without an account. Signed-in learner access stays unchanged.">
-        <form className="flex flex-col gap-3" onSubmit={(event) => { event.preventDefault(); void save({ maxSeconds: duration }); }}>
-          <fieldset disabled={saving} className={cn(SECTION_CARD, "min-w-0")}>
-            <SectionRow title="Allow anonymous visitors" detail="Expose the twin’s current available skills. Calls are funded by your organization’s balance, not learner credits.">
-              <SwitchToggle checked={saved.enabled} onChange={(enabled) => { if (!saving) void save({ enabled }); }} label="Allow anonymous visitors" />
-            </SectionRow>
-            <SectionRow title={<label htmlFor="public-call-duration">Maximum call duration</label>} detail="Each public voice call ends automatically at this limit.">
-              <NativeSelect id="public-call-duration" value={duration}
-                onChange={(event) => { const seconds = PUBLIC_CALL_DURATIONS.find((value) => String(value) === event.target.value); if (seconds) setDuration(seconds); }}>
-                {PUBLIC_CALL_DURATIONS.map((seconds) => <option key={seconds} value={seconds}>{seconds / 60} min</option>)}
-              </NativeSelect>
-            </SectionRow>
-          </fieldset>
-          <div className="flex items-center justify-end gap-3">
-            <Button variant="ghost" type="button" disabled={saving || duration === saved.maxSeconds} onClick={() => setDuration(saved.maxSeconds)}>Cancel</Button>
-            <Button type="submit" disabled={saving || duration === saved.maxSeconds}>{saving ? "Saving…" : "Save"}</Button>
-          </div>
-        </form>
-      </PageSection>
-      <PageSection title="Public URL" description="Share your existing twin link. Visitors enter their name before starting a voice call.">
-        <div className={cn(SECTION_CARD, "flex flex-col items-start gap-4 p-5")}>
-          {shareLink.data ? (
-            <a href={shareLink.data.url} target="_blank" rel="noopener noreferrer"
-              className="break-all text-sm underline underline-offset-4">{shareLink.data.url}</a>
-          ) : shareLink.isError ? (
-            <div className="flex flex-wrap items-center gap-3">
-              <p role="alert" className="m-0 text-sm text-muted-foreground">Could not load the public URL.</p>
-              <Button variant="outline" size="sm" onClick={() => void shareLink.refetch()}>Retry</Button>
-            </div>
-          ) : <p role="status" className="m-0 text-sm text-muted-foreground">Loading public URL…</p>}
-          <CopyShareLinkButton slug={twin.slug} publicEnabled={saved.enabled} />
-        </div>
-      </PageSection>
-    </div>
   );
 }

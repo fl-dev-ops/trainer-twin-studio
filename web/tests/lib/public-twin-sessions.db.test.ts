@@ -21,7 +21,7 @@ describe.skipIf(!localMinutesDb)("public twin lifecycle (real database)", () => 
   beforeEach(async () => {
     f = minutesFixture();
     await f.create();
-    await db.agent.update({ where: { id: f.twin.id }, data: { data: { publicAccess: { enabled: true, maxSeconds: 120 } } } });
+    await db.agent.update({ where: { id: f.twin.id }, data: { data: { publicAccess: { enabled: true, maxSeconds: 300 } } } });
     oldSecret = process.env.COPILOT_SERVICE_SECRET;
     initializeFails = false;
     process.env.COPILOT_SERVICE_SECRET = "public-twin-test-secret";
@@ -66,19 +66,19 @@ describe.skipIf(!localMinutesDb)("public twin lifecycle (real database)", () => 
     expect(await db.minuteLedger.findMany({ where: { sessionId: row.id } })).toHaveLength(1);
   });
   test("enabled start pins an anonymous voice session, reserves full credit, and exposes no agent token", async () => {
-    await fundOrg({ orgId: f.org.id, minutes: 5 });
+    await fundOrg({ orgId: f.org.id, minutes: 8 });
     const userCount = () => db.user.count({ where: { OR: [{ id: { in: [f.learner.id, f.trainer.id] } }, { name: "Public Visitor" }] } });
     const before = await Promise.all([userCount(), db.member.count({ where: { organizationId: f.org.id } }), db.twinAssignment.count({ where: { orgId: f.org.id } }), db.minuteLedger.count({ where: { orgId: f.org.id } })]);
     const result = await startPublicTwinSession(input());
     expect(result.session).toMatchObject({ status: "active", mode: "voice", runtimeToken: browserToken(result.session.id) });
     expect(result.session).not.toHaveProperty("agentToken");
     const row = await db.interviewSession.findUniqueOrThrow({ where: { id: result.session.id } });
-    expect(row).toMatchObject({ userId: null, anonymousName: "Public Visitor", chargesOrg: true, allowedSeconds: 120, assignmentId: null, twinAssignmentId: null, contextId: null, runtimeTokenHash: tokenHash(runtimeToken(row.id)) });
+    expect(row).toMatchObject({ userId: null, anonymousName: "Public Visitor", chargesOrg: true, allowedSeconds: 300, assignmentId: null, twinAssignmentId: null, contextId: null, runtimeTokenHash: tokenHash(runtimeToken(row.id)) });
     expect(row.compiledSnapshot).not.toBeNull();
     expect(await availableOrgSeconds(f.org.id)).toBe(180);
     expect(await Promise.all([userCount(), db.member.count({ where: { organizationId: f.org.id } }), db.twinAssignment.count({ where: { orgId: f.org.id } }), db.minuteLedger.count({ where: { orgId: f.org.id } })])).toEqual(before);
-    expect(scheduling.mock.calls[0][1]).toEqual([row.id, new Date(row.startedAt!.getTime() + 120_000).toISOString()]);
-    expect(transport.mock.calls[0][0]).toMatchObject({ anonymous: true, userName: "Public Visitor", runtimeToken: runtimeToken(row.id), endsAt: Math.floor(row.startedAt!.getTime() / 1000) + 120 });
+    expect(scheduling.mock.calls[0][1]).toEqual([row.id, new Date(row.startedAt!.getTime() + 300_000).toISOString()]);
+    expect(transport.mock.calls[0][0]).toMatchObject({ anonymous: true, userName: "Public Visitor", runtimeToken: runtimeToken(row.id), endsAt: Math.floor(row.startedAt!.getTime() / 1000) + 300 });
   });
   test.each(["off", "archived", "other-org", "roleplay", "invalid-name"])("refuses %s without session or runtime", async (state) => {
     await fundOrg({ orgId: f.org.id, minutes: 10 });
@@ -93,13 +93,13 @@ describe.skipIf(!localMinutesDb)("public twin lifecycle (real database)", () => 
     expect(scheduling).not.toHaveBeenCalled();
     expect(transport).not.toHaveBeenCalled();
   });
-  test.each([null, 0, 119])("requires billed org and full allowance (%s seconds available)", async (seconds) => {
+  test.each([null, 0, 299])("requires billed org and full allowance (%s seconds available)", async (seconds) => {
     if (seconds !== null) await fundOrg({ orgId: f.org.id, minutes: seconds / 60 });
     await expect(startPublicTwinSession(input())).rejects.toMatchObject({ code: "public_twin_unavailable" });
     expect(await db.interviewSession.count({ where: { orgId: f.org.id } })).toBe(0);
   });
   test("parallel starts cannot overspend the org's last reservation", async () => {
-    await fundOrg({ orgId: f.org.id, minutes: 2 });
+    await fundOrg({ orgId: f.org.id, minutes: 5 });
     const results = await Promise.allSettled(Array.from({ length: 4 }, () => startPublicTwinSession(input())));
     expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
     expect(await availableOrgSeconds(f.org.id)).toBe(0);
@@ -145,14 +145,14 @@ describe.skipIf(!localMinutesDb)("public twin lifecycle (real database)", () => 
     expect(results.filter((r) => r.status === "rejected").map((r) => r.reason.code)).toEqual(Array(3).fill("public_call_limit"));
   });
   test.each(["workflow", "initialize", "livekit"])("%s failure releases reservation and invalidates runtime credentials", async (failure) => {
-    await fundOrg({ orgId: f.org.id, minutes: 2 });
+    await fundOrg({ orgId: f.org.id, minutes: 5 });
     if (failure === "workflow") scheduling.mockRejectedValueOnce(new Error("workflow unavailable"));
     if (failure === "initialize") initializeFails = true;
     if (failure === "livekit") transport.mockRejectedValueOnce(new Error("livekit unavailable"));
     await expect(startPublicTwinSession(input())).rejects.toThrow();
     const row = await db.interviewSession.findFirstOrThrow({ where: { orgId: f.org.id } });
     expect(row).toMatchObject({ status: "failed", runtimeTokenHash: null, endedAt: expect.any(Date) });
-    expect(await availableOrgSeconds(f.org.id)).toBe(120);
+    expect(await availableOrgSeconds(f.org.id)).toBe(300);
     expect(await db.minuteLedger.count({ where: { orgId: f.org.id } })).toBe(0);
     if (failure === "workflow") expect(transport).not.toHaveBeenCalled();
   });

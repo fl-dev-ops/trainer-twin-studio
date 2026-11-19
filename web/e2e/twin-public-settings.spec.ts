@@ -11,7 +11,7 @@ const settingsSchema = z.object({
       preScreenshare: z.boolean(), preUpload: z.boolean(), duringUpload: z.boolean(),
       uploadTitle: z.string(), uploadInstruction: z.string(),
     }),
-    publicAccess: z.object({ enabled: z.boolean(), maxSeconds: z.union([z.literal(60), z.literal(120), z.literal(180), z.literal(300)]) }),
+    publicAccess: z.object({ enabled: z.boolean(), maxSeconds: z.union([z.literal(300), z.literal(600), z.literal(900), z.literal(1200), z.literal(1800)]) }),
     widget: z.object({
       id: z.string(),
       config: z.object({ enabled: z.boolean(), allowedOrigins: z.array(z.string()), welcome: z.string(), accentColor: z.string() }),
@@ -30,8 +30,10 @@ test.describe.serial("twin settings layout", () => {
   });
   test.afterAll(async ({ request }) => {
     if (!original) return;
+    const { allowedOrigins, welcome, accentColor } = original.widget.config;
+    const widget = { allowedOrigins, welcome, accentColor };
     const response = await request.post(e2eUrl("dash", "/api/twin/agents.update"), {
-      data: { json: { slug: seed().twin.slug, name: original.name, description: original.description ?? "", settings: original.settings, publicAccess: original.publicAccess, widget: original.widget.config } },
+      data: { json: { slug: seed().twin.slug, name: original.name, description: original.description ?? "", settings: original.settings, publicAccess: original.publicAccess, widget } },
     });
     expect(response.ok()).toBe(true);
   });
@@ -116,95 +118,64 @@ test.describe.serial("twin settings layout", () => {
     await expect(dialog).toBeHidden();
   });
 
-  test("public duration uses shared rows and explicit save/cancel", async ({ page }, testInfo) => {
+  test("public duration saves as soon as it changes", async ({ page }, testInfo) => {
     await page.getByRole("tab", { name: "Public access", exact: true }).click();
     const panel = page.getByRole("tabpanel", { name: "Public access", exact: true });
     await expect(panel.getByRole("region", { name: "Public voice calls", exact: true })).toBeVisible();
+    await expect(panel.getByRole("region", { name: "Public URL", exact: true })).toHaveCount(0);
     await expect(panel.locator('[data-slot="card"]')).toHaveCount(0);
     const duration = panel.getByLabel("Maximum call duration", { exact: true });
-    const before = await duration.inputValue();
-    const next = before === "60" ? "120" : "60";
-    await duration.selectOption(next);
-    await panel.getByRole("button", { name: "Cancel", exact: true }).click();
-    await expect(duration).toHaveValue(before);
-    await duration.selectOption(next);
+    await expect(duration.locator("option")).toHaveText(["5 min", "10 min", "15 min", "20 min", "30 min"]);
+    const next = (await duration.inputValue()) === "300" ? "600" : "300";
     const saved = page.waitForResponse((response) => response.url().includes("agents.update") && response.request().method() === "POST");
-    await panel.getByRole("button", { name: "Save", exact: true }).click();
+    await duration.selectOption(next);
     expect((await saved).ok()).toBe(true);
-    await expect(panel.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
     await page.reload();
     await page.getByRole("tab", { name: "Public access", exact: true }).click();
     await expect(duration).toHaveValue(next);
-    const publicUrl = panel.getByRole("region", { name: "Public URL", exact: true });
-    const link = publicUrl.getByRole("link");
-    await expect(link).toHaveAttribute("href", /^https:\/\/[^/]+\/t\/.+/);
-    expect(await link.textContent()).toBe(await link.getAttribute("href"));
-    await page.evaluate(() => {
-      Object.defineProperty(navigator.clipboard, "writeText", {
-        configurable: true,
-        value: async (text: string) => { sessionStorage.setItem("copied-public-url", text); },
-      });
-    });
-    await publicUrl.getByRole("button", { name: "Copy link", exact: true }).click();
-    await expect(publicUrl.getByRole("button", { name: "Copied", exact: true })).toBeVisible();
-    expect(await page.evaluate(() => sessionStorage.getItem("copied-public-url"))).toBe(await link.getAttribute("href"));
     await page.screenshot({ path: testInfo.outputPath("public-access-desktop.png"), animations: "disabled" });
   });
 
-  test("public URL loading failure offers retry without changing access", async ({ page }) => {
-    const endpoint = "**/api/twin/agents.shareLink*";
-    await page.route(endpoint, (route) => route.abort());
-    await page.getByRole("tab", { name: "Public access", exact: true }).click();
-    const panel = page.getByRole("tabpanel", { name: "Public access", exact: true });
-    const toggle = panel.getByRole("switch", { name: "Allow anonymous visitors", exact: true });
-    const enabled = await toggle.getAttribute("aria-checked");
-    const publicUrl = panel.getByRole("region", { name: "Public URL", exact: true });
-    await expect(publicUrl.getByRole("alert")).toHaveText("Could not load the public URL.");
-    await page.unroute(endpoint);
-    await publicUrl.getByRole("button", { name: "Retry", exact: true }).click();
-    await expect(publicUrl.getByRole("link")).toHaveAttribute("href", /^https:\/\/[^/]+\/t\/.+/);
-    await expect(publicUrl.getByRole("alert")).toHaveCount(0);
-    await expect(toggle).toHaveAttribute("aria-checked", enabled!);
-  });
-
-  test("embed drafts cancel, validate and persist without starting a call", async ({ page }, testInfo) => {
+  test("allowed websites are a draft that discards, validates and persists without starting a call", async ({ page }, testInfo) => {
     let starts = 0;
     page.on("request", (request) => { if (new URL(request.url()).pathname.startsWith("/api/public/")) starts++; });
-    await page.getByRole("tab", { name: "Embed", exact: true }).click();
-    const panel = page.getByRole("tabpanel", { name: "Embed", exact: true });
-    const origins = panel.getByLabel("Allowed website origins", { exact: true });
-    const welcome = panel.getByLabel("Welcome message", { exact: true });
-    const colour = panel.getByLabel("Accent colour", { exact: true });
-    await expect(panel.getByRole("region", { name: "Website widget", exact: true })).toBeVisible();
-    await expect(panel.locator('[data-slot="card"]')).toHaveCount(0);
+    await page.getByRole("tab", { name: "Public access", exact: true }).click();
+    const panel = page.getByRole("tabpanel", { name: "Public access", exact: true });
+    const access = panel.getByRole("switch", { name: "Allow anonymous visitors", exact: true });
+    if ((await access.getAttribute("aria-checked")) === "false") {
+      const enabled = page.waitForResponse((response) => response.url().includes("agents.update") && response.request().method() === "POST");
+      await access.click();
+      expect((await enabled).ok()).toBe(true);
+    }
+    const widget = panel.getByRole("region", { name: "Website widget", exact: true });
+    const origins = widget.getByLabel("Allowed websites", { exact: true });
+    await expect(widget.getByLabel("Welcome message", { exact: true })).toHaveCount(0);
+    await expect(widget.getByLabel("Accent colour", { exact: true })).toHaveCount(0);
+    await expect(widget.getByRole("button", { name: "Save", exact: true })).toHaveCount(0);
     await origins.fill("https://example.com");
-    await welcome.fill("Try this twin");
-    await colour.fill("#27533f");
-    await panel.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(widget.getByText("Unsaved changes", { exact: true })).toBeVisible();
+    await widget.getByRole("button", { name: "Discard", exact: true }).click();
     await expect(origins).toHaveValue(original.widget.config.allowedOrigins.join("\n"));
-    await expect(welcome).toHaveValue(original.widget.config.welcome);
-    await expect(colour).toHaveValue(original.widget.config.accentColor);
+    await expect(widget.getByRole("button", { name: "Save", exact: true })).toHaveCount(0);
     await origins.fill("https://example.com/path");
-    await panel.getByRole("button", { name: "Save", exact: true }).click();
+    await widget.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByText(/Use an exact HTTPS origin without/i).first()).toBeVisible();
     await origins.fill("https://example.com\nhttps://www.example.com");
-    await welcome.fill("Talk to our twin");
-    await colour.fill("#27533f");
     const saved = page.waitForResponse((response) => response.url().includes("agents.update") && response.request().method() === "POST");
-    await panel.getByRole("button", { name: "Save", exact: true }).click();
+    await widget.getByRole("button", { name: "Save", exact: true }).click();
     expect((await saved).ok()).toBe(true);
-    await expect(panel.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
+    await expect(widget.getByRole("button", { name: "Save", exact: true })).toHaveCount(0);
     await page.reload();
-    await page.getByRole("tab", { name: "Embed", exact: true }).click();
-    await expect(welcome).toHaveValue("Talk to our twin");
-    await expect(colour).toHaveValue("#27533f");
+    await page.getByRole("tab", { name: "Public access", exact: true }).click();
     await expect(origins).toHaveValue("https://example.com\nhttps://www.example.com");
+    await expect(widget.getByRole("switch")).toHaveCount(0);
+    await expect(widget.getByRole("status")).toHaveText("Live on 2 websites.");
     expect(starts).toBe(0);
-    await page.screenshot({ path: testInfo.outputPath("embed-desktop.png"), animations: "disabled" });
+    await page.screenshot({ path: testInfo.outputPath("widget-desktop.png"), animations: "disabled" });
   });
 
-  test("install actions copy the unchanged ID and floating snippet only", async ({ page }) => {
-    await page.getByRole("tab", { name: "Embed", exact: true }).click();
+  test("install copies the unchanged floating snippet", async ({ page }) => {
+    await page.getByRole("tab", { name: "Public access", exact: true }).click();
     await page.evaluate(() => {
       Object.defineProperty(navigator.clipboard, "writeText", {
         configurable: true,
@@ -212,24 +183,21 @@ test.describe.serial("twin settings layout", () => {
       });
     });
     const install = page.getByRole("region", { name: "Install", exact: true });
-    await install.getByRole("button", { name: "Copy ID", exact: true }).click();
-    expect(await page.evaluate(() => sessionStorage.getItem("copied-widget-value"))).toBe(original.widget.id);
-    await expect(install.getByRole("region", { name: "Inline panel", exact: true })).toHaveCount(0);
-    for (const [name, mode] of [["Floating launcher", "floating"]]) {
-      await install.getByRole("region", { name, exact: true }).getByRole("button", { name: "Copy snippet", exact: true }).click();
-      const copied = await page.evaluate(() => sessionStorage.getItem("copied-widget-value"));
-      expect(copied).toContain(`data-twin-id="${original.widget.id}"`);
-      expect(copied).toContain(`data-mode="${mode}"`);
-      expect(copied).toContain("/widgets/v1.js");
-      const code = install.getByRole("region", { name, exact: true }).locator("pre");
-      await expect(code).toContainText("\n  src=");
-      expect(await code.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
-    }
+    await expect(install.getByRole("button", { name: "Copy ID", exact: true })).toHaveCount(0);
+    await install.getByRole("button", { name: "Copy code", exact: true }).click();
+    await expect(install.getByRole("button", { name: "Copied", exact: true })).toBeVisible();
+    const copied = await page.evaluate(() => sessionStorage.getItem("copied-widget-value"));
+    expect(copied).toContain(`data-twin-id="${original.widget.id}"`);
+    expect(copied).toContain('data-mode="floating"');
+    expect(copied).toContain("/widgets/v1.js");
+    const code = install.locator("pre");
+    await expect(code).toContainText("\n  src=");
+    expect(await code.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
   });
 
   test("all tabs share a compact gap and fit a narrow viewport", async ({ page }, testInfo) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    for (const tab of ["General", "Conversation", "Public access", "Embed", "Learners"]) {
+    for (const tab of ["General", "Conversation", "Public access", "Learners"]) {
       await page.getByRole("tab", { name: new RegExp(`^${tab}`) }).click();
       const panel = page.getByRole("tabpanel", { name: new RegExp(`^${tab}`) });
       await expect(panel.getByRole("region").first()).toBeVisible();
@@ -247,7 +215,7 @@ test.describe.serial("twin settings layout", () => {
       expect(box!.x).toBeGreaterThanOrEqual(0);
       expect(box!.x + box!.width).toBeLessThanOrEqual(390);
       await page.screenshot({ path: testInfo.outputPath(`${tab.toLowerCase().replaceAll(" ", "-")}-mobile.png`), animations: "disabled" });
-      if (tab === "Embed") {
+      if (tab === "Public access") {
         const install = panel.getByRole("region", { name: "Install", exact: true });
         for (const code of await install.locator("pre").all()) {
           expect(await code.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);

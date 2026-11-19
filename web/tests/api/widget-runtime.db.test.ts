@@ -32,7 +32,7 @@ describe.skipIf(!localMinutesDb)("widget cookieless lifecycle (real database)", 
   let transport: ReturnType<typeof spyOn<typeof livekit, "activateLiveKitSession">>;
   let scheduling: ReturnType<typeof spyOn<typeof workflow, "start">>;
   const config = () => ({
-    publicAccess: { enabled: true, maxSeconds: 120 },
+    publicAccess: { enabled: true, maxSeconds: 300 },
     widget: { enabled: true, allowedOrigins: [parent, secondParent], welcome: "Talk to us", accentColor: "#123456" },
   });
   beforeEach(async () => {
@@ -204,7 +204,7 @@ describe.skipIf(!localMinutesDb)("widget cookieless lifecycle (real database)", 
     const first = await grant();
     const data = config();
     if (kind === "removed-parent") data.widget.allowedOrigins = [secondParent];
-    if (kind === "widget-off") data.widget.enabled = false;
+    if (kind === "widget-off") data.widget = { ...data.widget, enabled: false, allowedOrigins: [] };
     if (kind === "public-off") data.publicAccess.enabled = false;
     await db.agent.update({ where: { id: f.twin.id }, data: { data, ...(kind === "archived" ? { archivedAt: new Date() } : {}) } });
     await refusal(await launch(first.grant), kind === "archived" ? 404 : 403,
@@ -222,9 +222,9 @@ describe.skipIf(!localMinutesDb)("widget cookieless lifecycle (real database)", 
     expect(body.session.runtimeToken).toBe(browserToken(id));
     expect(await db.interviewSession.findUniqueOrThrow({ where: { id } })).toMatchObject({
       orgId: f.org.id, userId: null, anonymousName: "Visitor <admin>", anonymousId: readWidgetGrant(credentials.grant).visitorId,
-      embedOrigin: parent, allowedSeconds: 120, chargesOrg: true,
+      embedOrigin: parent, allowedSeconds: 300, chargesOrg: true,
     });
-    expect(await availableOrgSeconds(f.org.id)).toBe(480);
+    expect(await availableOrgSeconds(f.org.id)).toBe(300);
     await db.interviewSession.update({ where: { id }, data: { startedAt: new Date(Date.now() - 90_000) } });
     expect((await finish(id, body.session.embedToken)).status).toBe(200);
     expect((await finish(id, body.session.embedToken)).status).toBe(200);
@@ -280,7 +280,7 @@ describe.skipIf(!localMinutesDb)("widget cookieless lifecycle (real database)", 
     expect(responses.map((response) => response.status).sort()).toEqual([200, 409]);
     await refusal(responses.find((response) => response.status === 409)!, 409, "public_call_busy");
     expect(await db.interviewSession.count({ where: { orgId: f.org.id } })).toBe(1);
-    expect(await availableOrgSeconds(f.org.id)).toBe(480);
+    expect(await availableOrgSeconds(f.org.id)).toBe(300);
     expect(transport).toHaveBeenCalledTimes(1);
   });
   test("public_call_busy: separate allowed parent origins share the same IP concurrency quota", async () => {
@@ -300,7 +300,7 @@ describe.skipIf(!localMinutesDb)("widget cookieless lifecycle (real database)", 
     expect(await db.interviewSession.count({ where: { orgId: f.org.id } })).toBe(3);
   });
   test("concurrent distinct widget origins cannot reserve beyond shared org budget", async () => {
-    await fundOrg({ orgId: f.org.id, minutes: -8 });
+    await fundOrg({ orgId: f.org.id, minutes: -5 });
     const results = await Promise.allSettled([parent, secondParent].map((embedOrigin, i) => startPublicTwinSession({
       orgId: f.org.id, agentId: f.twin.id, visitorId: String(i).repeat(64), ipHash: String(i + 2).repeat(64), name: "Concurrent visitor", embedOrigin,
     })));
@@ -333,8 +333,8 @@ describe.skipIf(!localMinutesDb)("widget cookieless lifecycle (real database)", 
     spies.push(spyOn(livekit, "closeLiveKitSession").mockImplementation(async () => { roomExists = false; }));
     const pending = launch(credentials.grant);
     const id = await connecting.promise;
-    expect(await availableOrgSeconds(f.org.id)).toBe(480);
-    await db.interviewSession.update({ where: { id }, data: { startedAt: new Date(Date.now() - 121_000) } });
+    expect(await availableOrgSeconds(f.org.id)).toBe(300);
+    await db.interviewSession.update({ where: { id }, data: { startedAt: new Date(Date.now() - 301_000) } });
     try {
       await expirePublicCall(id);
       expect(roomExists).toBe(false);
@@ -346,8 +346,8 @@ describe.skipIf(!localMinutesDb)("widget cookieless lifecycle (real database)", 
       });
       const ledger = await db.minuteLedger.findMany({ where: { sessionId: id } });
       expect(ledger).toHaveLength(1);
-      expect(ledger[0]).toMatchObject({ type: "org_usage", seconds: -120, userId: null, email: null });
-      expect(await availableOrgSeconds(f.org.id)).toBe(480);
+      expect(ledger[0]).toMatchObject({ type: "org_usage", seconds: -300, userId: null, email: null });
+      expect(await availableOrgSeconds(f.org.id)).toBe(300);
       expect(roomExists).toBe(false);
     } finally {
       release.resolve();

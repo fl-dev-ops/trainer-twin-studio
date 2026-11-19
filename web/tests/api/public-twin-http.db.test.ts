@@ -41,7 +41,7 @@ describe.skipIf(!localMinutesDb)("public twin HTTP lifecycle (real database)", (
     process.env.COPILOT_SERVICE_SECRET = secret;
     const agent = await db.agent.update({
       where: { id: f.twin.id },
-      data: { version: 3, data: { objective: "Pinned original twin", publicAccess: { enabled: true, maxSeconds: 120 } } },
+      data: { version: 3, data: { objective: "Pinned original twin", publicAccess: { enabled: true, maxSeconds: 300 } } },
     });
     await db.persona.update({ where: { id: agent.personaId }, data: { version: 2, data: { identity: "Pinned original persona" } } });
     await fundOrg({ orgId: f.org.id, minutes: 10 });
@@ -132,9 +132,9 @@ describe.skipIf(!localMinutesDb)("public twin HTTP lifecycle (real database)", (
       orgId: f.org.id, userId: null, anonymousName: "Visitor <admin>",
       anonymousId: digest(`visitor:${f.org.id}:${result.value}`),
       anonymousIpHash: digest(`public-ip:${f.org.id}:shared`),
-      allowedSeconds: 120, agentVersion: 3, personaVersion: 2,
+      allowedSeconds: 300, agentVersion: 3, personaVersion: 2,
     });
-    expect(await availableOrgSeconds(f.org.id)).toBe(480);
+    expect(await availableOrgSeconds(f.org.id)).toBe(300);
     expect(transport.mock.calls[0][0]).toMatchObject({ anonymous: true, userName: "Visitor <admin>", userId: `visitor-${id}`, runtimeToken: runtimeToken(id) });
     await db.interviewSession.update({ where: { id }, data: { startedAt: new Date(Date.now() - 90_000) } });
     const forged = { transcript: [{ role: "user", text: "Forged browser transcript" }], evidence: { transcriptFinal: true }, status: "completed" };

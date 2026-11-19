@@ -43,7 +43,7 @@ async function fakeMicrophone(context: BrowserContext, denied = false) {
 }
 
 test.describe.serial("public twin phase 1", () => {
-  test("public-off requires sign-in; studio settings persist the enable switch and explicit duration save", async ({ page, browser }) => {
+  test("public-off requires sign-in; studio settings save the enable switch and duration immediately", async ({ page, browser }) => {
     await page.goto(publicUrl());
     await page.getByRole("button", { name: "Start conversation", exact: true }).click();
     await expect(page.getByRole("dialog")).toContainText("Sign in to talk");
@@ -53,23 +53,18 @@ test.describe.serial("public twin phase 1", () => {
     try {
       const toggle = studio.page.getByRole("switch", { name: "Allow anonymous visitors", exact: true });
       await expect(toggle).toHaveAttribute("aria-checked", "false");
-      await expect(studio.page.getByText(/current available skills/)).toBeVisible();
-      await expect(studio.page.getByText(/funded by your organization/)).toBeVisible();
+      await expect(studio.page.getByText(/paid from your organization’s balance/)).toBeVisible();
       await setEnabled(studio.page, true);
       const duration = studio.page.getByLabel("Maximum call duration", { exact: true });
-      await expect(duration).toHaveValue("120");
-      await duration.selectOption("300");
-      await studio.page.getByRole("tabpanel").getByRole("button", { name: "Cancel", exact: true }).click();
-      await expect(duration).toHaveValue("120");
-      await duration.selectOption("180");
+      await expect(duration).toHaveValue("300");
       const saved = studio.page.waitForResponse((response) => response.url().includes("agents.update") && response.request().method() === "POST");
-      await studio.page.getByRole("tabpanel").getByRole("button", { name: "Save", exact: true }).click();
+      await duration.selectOption("600");
       expect((await saved).ok()).toBe(true);
-      await expect(studio.page.getByRole("tabpanel").getByRole("button", { name: "Save", exact: true })).toBeDisabled();
+      await expect(studio.page.getByRole("tabpanel").getByRole("button", { name: "Save", exact: true })).toHaveCount(0);
       await studio.page.reload();
       await studio.page.getByRole("tab", { name: "Public access", exact: true }).click();
       await expect(toggle).toHaveAttribute("aria-checked", "true");
-      await expect(duration).toHaveValue("180");
+      await expect(duration).toHaveValue("600");
     } finally {
       await studio.context.close();
     }
