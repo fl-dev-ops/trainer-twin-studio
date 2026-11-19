@@ -34,6 +34,24 @@ test("design preview renders widget states and refreshes the selected state with
   expect(publicRequests).toEqual([]);
 });
 
+test("launcher preview runs the real loader and opens a simulated widget", async ({ page }) => {
+  await page.goto("/playground");
+  await page.getByRole("button", { name: "Launcher", exact: true }).click();
+  const preview = page.frameLocator("#state-preview");
+  const launcher = preview.getByRole("button", { name: "Talk to AI twin" });
+  await expect(launcher).toBeVisible();
+  await expect(launcher).toHaveAttribute("aria-expanded", "false");
+  await launcher.focus();
+  await launcher.press("Enter");
+  const hosted = preview.frameLocator(embedFrame);
+  await expect(hosted.getByRole("button", { name: "Start voice call" })).toBeEnabled();
+  await page.getByRole("button", { name: "Returning visitor", exact: true }).click();
+  await expect(preview.getByText("Jordan", { exact: true })).toBeVisible();
+  await expect(preview.getByRole("textbox", { name: "Your name" })).toBeHidden();
+  await preview.getByRole("button", { name: "Change your name" }).click();
+  await expect(preview.getByRole("textbox", { name: "Your name" })).toHaveValue("Jordan");
+});
+
 test("paste a floating snippet, remove and reload without executing pasted HTML", async ({ page }) => {
   await page.goto("/playground");
   await expect(page.locator("#origin")).toHaveText("http://127.0.0.1:43181");

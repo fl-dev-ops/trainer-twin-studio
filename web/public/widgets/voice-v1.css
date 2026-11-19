@@ -104,6 +104,10 @@ p, h1, h2 { margin: 0; }
 .tt-introduction { font-size: 20px; line-height: 24px; letter-spacing: -.4px; font-weight: 500; overflow-wrap: anywhere; }
 .tt-prejoin { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 52px; align-items: center; gap: 12px; width: 100%; align-self: center; }
 .tt-name-field { min-width: 0; position: relative; background: #090a08; border-radius: 999px; }
+.tt-profile { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 52px; padding: 4px 8px 4px 20px; box-shadow: 0 4px 16px #0005; }
+.tt-profile-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.tt-change-name { flex: none; min-height: 44px; border: 0; padding: 0 10px; border-radius: 999px; color: #c8cbbd; background: transparent; font-size: 12px; }
+.tt-change-name:hover { color: #f2eee5; background: #ffffff14; }
 .tt-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .tt-input {
   width: 100%;

@@ -19,7 +19,7 @@ type EndCapability = { id: string; embedToken: string };
 type Session = EndCapability & { secondsLeft: number; endsAt?: number; serverTime?: number };
 type Phase = "ready" | "connecting" | "live" | "ended" | "failed";
 type AgentState = "listening" | "thinking" | "speaking";
-export type WidgetPreview = { phase: Phase; agentState?: AgentState; reconnecting?: boolean; muted?: boolean; urgent?: boolean };
+export type WidgetPreview = { phase: Phase; agentState?: AgentState; reconnecting?: boolean; muted?: boolean; urgent?: boolean; name?: string; embedded?: boolean };
 
 function record(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -172,8 +172,12 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
   let connected = false;
   let finishMessage: string | undefined;
   let visitorToken: string | undefined;
+  let savedName = preview?.name;
+  let editingName = false;
   let storageAvailable = true;
-  const tokenKey = `trainertwin-widget:visitor:${config.agentId}:${config.parentOrigin}`;
+  const scope = `${config.agentId}:${config.parentOrigin}`;
+  const tokenKey = `trainertwin-widget:visitor:${scope}`;
+  const nameKey = `trainertwin-widget:name:${scope}`;
   const captions = new Map<string, HTMLElement>();
   const attachedTracks = new Set<RemoteTrack>();
 
@@ -253,7 +257,20 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
   start.disabled = true;
   const nameField = element("div", "tt-name-field");
   nameField.append(label, name);
-  form.append(nameField, start);
+  const profile = element("div", "tt-name-field tt-profile");
+  const profileName = element("span", "tt-profile-name");
+  const changeName = button("tt-change-name", "Change");
+  changeName.setAttribute("aria-label", "Change your name");
+  changeName.addEventListener("click", () => {
+    editingName = true;
+    name.value = savedName ?? "";
+    clearError();
+    render();
+    name.focus();
+    name.select();
+  });
+  profile.append(profileName, changeName);
+  form.append(nameField, profile, start);
 
   const call = element("section", "tt-call");
   call.hidden = true;
@@ -322,7 +339,7 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
     expandCaptions(false);
     clearError();
     render();
-    name.focus();
+    (nameField.hidden ? start : name).focus();
   });
   finished.append(finishedTitle, retry);
   const error = element("p", "tt-error");
@@ -337,7 +354,7 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
   card.dataset.visible = "false";
   let reportedHeight = 0;
   function reportSize() {
-    if (preview || !initialized || destroyed || window.parent === window) return;
+    if ((preview && !preview.embedded) || !initialized || destroyed || window.parent === window) return;
     const portraitHeight = portraitStage.hidden || card.classList.contains("tt-captions-expanded") ? 0 : portraitStage.offsetHeight;
     const chromeHeight = card.offsetHeight - portraitHeight;
     const squareHeight = card.classList.contains("tt-captions-expanded") ? 0 : portraitStage.offsetWidth;
@@ -424,7 +441,10 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
     waves.hidden = phase !== "live";
     start.disabled = !initialized || starting || finishing;
     retry.disabled = starting || finishing || !initialized;
-    name.disabled = starting;
+    nameField.hidden = !!savedName && !editingName;
+    profile.hidden = !nameField.hidden;
+    profileName.textContent = savedName ?? "";
+    name.disabled = starting || nameField.hidden;
     mute.disabled = phase !== "live" || mutePending || reconnecting;
     mute.setAttribute("aria-label", muted ? "Unmute microphone" : "Mute microphone");
     mute.title = muted ? "Unmute microphone" : "Mute microphone";
@@ -433,6 +453,26 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
     status.textContent = connecting ? "Connecting…" : "";
     playbackHint.hidden = phase !== "live" || room?.canPlaybackAudio !== false;
     reportSize();
+  }
+
+  function readName() {
+    try {
+      const value = localStorage.getItem(nameKey);
+      if (bounded(value, 80)) savedName = visitorName(value);
+    } catch (failure) {
+      if (!(failure instanceof DOMException) || failure.name !== "SecurityError") throw failure;
+    }
+  }
+
+  function rememberName(value: string) {
+    savedName = value;
+    editingName = false;
+    if (preview) return;
+    try {
+      localStorage.setItem(nameKey, value);
+    } catch (failure) {
+      if (!(failure instanceof DOMException) || !["SecurityError", "QuotaExceededError"].includes(failure.name)) throw failure;
+    }
   }
 
   function readVisitorToken() {
@@ -628,7 +668,7 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
     clearError();
     let displayName: string;
     try {
-      displayName = visitorName(name.value);
+      displayName = visitorName(nameField.hidden ? savedName ?? "" : name.value);
     } catch (failure) {
       showError(mediaError(failure), true);
       return;
@@ -729,6 +769,7 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
       if (cancelled()) { await disconnect(current); return; }
       phase = "live";
       connected = true;
+      rememberName(displayName);
       updateWaves();
       render();
       end.focus();
@@ -741,8 +782,8 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
   }
 
   if (preview) {
-    initialized = true;
-    card.dataset.visible = "true";
+    initialized = !preview.embedded;
+    card.dataset.visible = String(!preview.embedded);
     function showPreview(state: WidgetPreview) {
       phase = state.phase;
       agentState = state.agentState ?? "listening";
@@ -763,11 +804,28 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
     setCaption("response", "Let’s start with a conversation you’ve been putting off.", true, false);
     form.addEventListener("submit", (event) => {
       event.preventDefault();
+      try {
+        rememberName(visitorName(nameField.hidden ? savedName ?? "" : name.value));
+      } catch (failure) {
+        showError(mediaError(failure), true);
+        return;
+      }
+      clearError();
       showPreview({ phase: "live", agentState: "speaking" });
     });
     mute.addEventListener("click", () => { muted = !muted; render(); });
     end.addEventListener("click", () => showPreview({ phase: "ended" }));
-    window.addEventListener("pagehide", () => { stopWaves?.(); sizeObserver.disconnect(); }, { once: true });
+    if (preview.embedded) {
+      window.addEventListener("message", receive);
+      card.addEventListener("keydown", (event) => { if (event.key === "Escape") post("close"); });
+      ready();
+    }
+    window.addEventListener("pagehide", () => {
+      stopWaves?.();
+      sizeObserver.disconnect();
+      window.removeEventListener("resize", reportSize);
+      window.removeEventListener("message", receive);
+    }, { once: true });
     showPreview(preview);
     return;
   }
@@ -825,6 +883,7 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
     const data = event.data;
     if (!record(data) || data.source !== "trainertwin-host" || data.version !== 1) return;
     if (data.type === "init") {
+      if (!initialized && !preview) readName();
       initialized = true;
       render();
     } else if (data.type === "visibility" && typeof data.open === "boolean") {

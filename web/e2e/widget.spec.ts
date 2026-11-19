@@ -390,28 +390,21 @@ test.describe.serial("cross-origin hosted voice widget", () => {
     })).toEqual({ left: 16, right: 16 });
     await page.locator("[data-trainertwin-widget] .floating").screenshot({ path: testInfo.outputPath("widget-desktop-portrait.png"), animations: "disabled" });
     if (browserName === "chromium") {
-      const client = await context.newCDPSession(page);
+      const client = await context.newCDPSession(hosted);
       try {
         await client.send("DOM.enable");
         await client.send("CSS.enable");
         await hosted.getByLabel("Your name", { exact: true }).fill("Surya Umapathy");
-        const { root } = await client.send("DOM.getDocument", { depth: -1, pierce: true });
-        function findNameField(node: typeof root): typeof root | undefined {
-          if (node.nodeName === "INPUT" && node.attributes?.includes("tt-visitor-name")) return node;
-          for (const child of [...(node.children ?? []), ...(node.shadowRoots ?? []), ...(node.contentDocument ? [node.contentDocument] : [])]) {
-            const found = findNameField(child);
-            if (found) return found;
-          }
-        }
-        const field = findNameField(root);
-        if (!field) throw new Error("Expected hosted name field in the browser DOM");
-        await client.send("CSS.forcePseudoState", { nodeId: field.nodeId, forcedPseudoClasses: ["autofill"] });
+        const { root } = await client.send("DOM.getDocument");
+        const { nodeId } = await client.send("DOM.querySelector", { nodeId: root.nodeId, selector: "#tt-visitor-name" });
+        expect(nodeId).not.toBe(0);
+        await client.send("CSS.forcePseudoState", { nodeId, forcedPseudoClasses: ["autofill"] });
         await expect(hosted.getByLabel("Your name", { exact: true })).toHaveValue("Surya Umapathy");
         expect(await hosted.getByLabel("Your name", { exact: true }).evaluate((node) => node.matches(":autofill"))).toBe(true);
         expect(await hosted.getByLabel("Your name", { exact: true }).evaluate((node) => getComputedStyle(node).backgroundClip)).toBe("text");
-        expect(await hosted.locator(".tt-name-field").evaluate((node) => getComputedStyle(node).backgroundColor)).toBe("rgb(9, 10, 8)");
+        expect(await hosted.locator(".tt-name-field:visible").evaluate((node) => getComputedStyle(node).backgroundColor)).toBe("rgb(9, 10, 8)");
         await page.locator("[data-trainertwin-widget] .floating").screenshot({ path: testInfo.outputPath("widget-autofilled.png"), animations: "disabled" });
-        await client.send("CSS.forcePseudoState", { nodeId: field.nodeId, forcedPseudoClasses: [] });
+        await client.send("CSS.forcePseudoState", { nodeId, forcedPseudoClasses: [] });
       } finally {
         await client.detach();
       }
@@ -486,7 +479,8 @@ test.describe.serial("cross-origin hosted voice widget", () => {
     await expectNoCardScroll(hosted);
     await page.locator("[data-trainertwin-widget] .floating").screenshot({ path: testInfo.outputPath("widget-ended-call.png"), animations: "disabled" });
     await hosted.getByRole("button", { name: "Start a new call", exact: true }).click();
-    await expect(hosted.getByLabel("Your name", { exact: true })).toBeFocused();
+    await expect(hosted.getByRole("button", { name: "Start voice call", exact: true })).toBeFocused();
+    await expect(hosted.getByLabel("Your name", { exact: true })).toBeHidden();
     await expect(hosted.locator(".tt-portrait-stage")).toBeVisible();
     expect(calls.starts).toHaveLength(1);
     await page.setViewportSize({ width: 320, height: 568 });
@@ -620,10 +614,41 @@ test.describe.serial("cross-origin hosted voice widget", () => {
     expect(requests.map((request) => request.path)).toContain(bootstrapPath());
     expect(requests.every((request) => request.credentials === "omit")).toBe(true);
     const stored = await hosted.evaluate(() => Object.entries(localStorage));
-    expect(stored).toHaveLength(1);
-    expect(stored[0][0]).toBe(visitorKey());
+    expect(Object.fromEntries(stored)).toEqual({
+      [visitorKey()]: expect.any(String),
+      [`trainertwin-widget:name:${agentId}:${CUSTOMER_ORIGIN}`]: "Visitor Name",
+    });
     expect(JSON.stringify(stored)).not.toMatch(/end-capability-secret|livekit-boundary-secret|unused-runtime-secret|Bearer/);
     await expectOnlySafeMessages(page);
+  });
+
+  test("remembers the visitor name across reloads and lets them change it", async ({ page, context }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await environment(context);
+    const calls = await simulatedCalls(page);
+    const hosted = await open(page);
+    await begin(hosted, "Visitor One");
+    await expect(hosted.getByRole("button", { name: "Mute microphone", exact: true })).toBeEnabled();
+    await hosted.getByRole("button", { name: "End call" }).click();
+    await expect.poll(() => calls.ends.length).toBe(1);
+    const returning = await open(page);
+    await expect(returning.getByText("Visitor One", { exact: true })).toBeVisible();
+    await expect(returning.getByRole("textbox", { name: "Your name" })).toBeHidden();
+    await returning.getByRole("button", { name: "Start voice call" }).click();
+    await expect(returning.getByRole("button", { name: "Mute microphone", exact: true })).toBeEnabled();
+    await returning.getByRole("button", { name: "End call" }).click();
+    await expect.poll(() => calls.ends.length).toBe(2);
+    const newCall = returning.getByRole("button", { name: "Start a new call" });
+    await expect(newCall).toBeEnabled();
+    await newCall.press("Enter");
+    await returning.getByRole("button", { name: "Change your name" }).press("Enter");
+    await expect(returning.getByRole("textbox", { name: "Your name" })).toHaveValue("Visitor One");
+    await begin(returning, "Visitor Two");
+    await expect(returning.getByRole("button", { name: "Mute microphone", exact: true })).toBeEnabled();
+    await returning.getByRole("button", { name: "End call" }).click();
+    await expect.poll(() => calls.ends.length).toBe(3);
+    expect(calls.starts.map((call) => call.name)).toEqual(["Visitor One", "Visitor One", "Visitor Two"]);
+    await expect((await open(page)).getByText("Visitor Two", { exact: true })).toBeVisible();
   });
 
   test("a dropped connection ends the call without a redundant alert", async ({ page, context }) => {

@@ -64,8 +64,10 @@ non-shrinking row above the footer. Only explicitly expanded transcript history 
 Trusted size messages accept integers 280–4096px; the upper bound is protocol validation, not a rendered card limit.
 The hosted UI uses a dark portrait-led card, the trainer's existing photo (initials if unavailable), and explicit
 name entry and browser microphone permission. The ready card uses a full-width square portrait on black, a simple
-title, and one row with a black pill-shaped name input and circular phone-only call button. The name label remains
-accessible but is visually hidden. Input/focus shadows are external, never inset. The prior AI/transcription/recording
+title, and one row with a black pill-shaped name input and circular phone-only call button. After a successful call
+connects, the widget remembers the name in browser storage scoped to the Twin and embedding website. The next visit
+shows the saved name with a **Change** button. If storage is blocked, the name is remembered until the widget reloads.
+The name input label remains accessible but is visually hidden. Input/focus shadows are external, never inset. The prior AI/transcription/recording
 and “Up to” duration text lines are removed from this card; the required name and enforced call allowance remain.
 Photos remain in colour; initials appear only when no photo is available. Call-state indicators follow
 LiveKit audio tracks drive the exact shared Twin-session green/orange glow renderer, including noise gates,
@@ -152,8 +154,9 @@ messages. `src/protocol.ts` is a dependency-free shared schema/URL helper.
 
 Run `pm2 start ecosystem.config.cjs --only widgets` from the repo root (or `bun run playground` from `widgets/`).
 Open [localhost:43190](http://localhost:43190). **Live design preview** renders the actual hosted card in simulated
-call states. Edits in `widgets/src/`, `widgets/playground/preview.ts`, and `shared/` refresh the selected state
-without using a microphone, creating a session, or spending credits.
+call states. Choose **Launcher** to try the real floating button, or **Returning visitor** to see the saved-name flow.
+Edits in `widgets/src/`, `widgets/playground/preview.ts`, and `shared/` refresh the selected state without using a
+microphone, creating a session, or spending credits.
 
 Under **Test a real embed**, paste a full installation snippet or `/embed/<id>` URL and click **Load widget**. The page displays the exact origin
 to add in the Twin's Embed allowlist. You can remove and reload the floating mount; it never starts voice automatically.

@@ -9,8 +9,9 @@ Bun.serve({
   port: 43181,
   async fetch(request) {
     const url = new URL(request.url);
-    if (url.pathname === "/playground" || url.pathname.startsWith("/preview/")) {
-      return await playgroundResponse(url.pathname === "/playground" ? "/" : url.pathname) ?? new Response(null, { status: 404 });
+    if (url.pathname === "/playground" || url.pathname.startsWith("/preview/") || url.pathname === "/embed/preview") {
+      if (url.pathname === "/playground") url.pathname = "/";
+      return await playgroundResponse(url) ?? new Response(null, { status: 404 });
     }
     if (url.pathname === "/attacker") {
       return new Response(`<!doctype html><meta charset="utf-8"><script>parent.postMessage({
