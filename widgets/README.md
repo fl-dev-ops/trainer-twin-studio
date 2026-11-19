@@ -144,8 +144,9 @@ messages. `src/protocol.ts` is a dependency-free shared schema/URL helper.
 Run `pm2 start ecosystem.config.cjs --only widgets` from the repo root (or `bun run playground` from `widgets/`).
 Open [localhost:43190](http://localhost:43190). **Live design preview** renders the actual hosted card in simulated
 call states. Choose **Button**, **Name**, or **Call**. The **Button** preview also lets you try the full flow.
-Edits in `widgets/src/`, `widgets/playground/preview.ts`, and `shared/` refresh the selected state without using a
-microphone, creating a session, or spending credits.
+Edit the React markup in [`src/widget-view.tsx`](src/widget-view.tsx) and the styles in [`src/widget.css`](src/widget.css).
+The playground refreshes the selected state on save without using a microphone, creating a session, or spending
+credits. The preview and the real embed render the same component.
 
 Under **Test a real embed**, paste a full installation snippet or `/embed/<id>` URL and click **Load widget**. The page displays the exact origin
 to add in the Twin's Embed allowlist. You can remove and reload the floating mount; it never starts voice automatically.
@@ -186,10 +187,10 @@ It is a loader test, **not a real LiveKit/provider or backend verification**.
 `build.ts` minifies the loader into `web/public/widgets/v1.js`. That artifact
 must be checked in so direct Next development/e2e servers can serve installation
 scripts. A unit test compares it byte-for-byte against a fresh in-memory build.
-The same build requires `src/widget.ts` and `src/widget.css` and emits
-`web/public/widgets/voice-v1.js` and `web/public/widgets/voice-v1.css`.
-The hosted UI uses package-local `livekit-client@2.23.0`; the loader itself
-imports no SDK or runtime dependencies.
+The hosted build uses `src/widget.ts` (iframe handshake and call lifecycle), `src/widget-view.tsx` (React UI),
+and `src/widget.css`. It emits `web/public/widgets/voice-v1.js` and `web/public/widgets/voice-v1.css`.
+React and LiveKit are bundled only in the hosted client. `src/loader.ts` remains the small framework-independent
+launcher script.
 
 Deployment checklist, keys, migrations and rollback: [production runbook](../docs/runbooks/public-twins-and-widgets.md).
 

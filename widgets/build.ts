@@ -17,6 +17,7 @@ export async function buildHostedWidget() {
     target: "browser",
     format: "iife",
     minify: true,
+    define: { "process.env.NODE_ENV": '"production"' },
   });
   if (!result.success) throw new AggregateError(result.logs, "Hosted widget build failed");
   return result.outputs[0].text();

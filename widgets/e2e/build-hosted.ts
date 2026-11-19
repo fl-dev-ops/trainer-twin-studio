@@ -6,6 +6,7 @@ const result = await Bun.build({
   entrypoints: [resolve(import.meta.dir, "../src/widget.ts")],
   target: "browser",
   format: "iife",
+  define: { "process.env.NODE_ENV": '"production"' },
   plugins: [{
     name: "external-livekit-boundary",
     setup(builder) {

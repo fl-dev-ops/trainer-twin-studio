@@ -1,5 +1,8 @@
 import { createAudioAnalyser, Room, RoomEvent, Track, type Participant, type RemoteAudioTrack, type RemoteTrack, type TranscriptionSegment } from "livekit-client";
-import { createElement, Maximize2, Mic, MicOff, Minimize2, PhoneOff, X } from "lucide";
+import { createElement, createRef, type CSSProperties } from "react";
+import { flushSync } from "react-dom";
+import { createRoot } from "react-dom/client";
+import { WidgetView, type AgentState, type Caption, type WidgetPhase, type WidgetRefs } from "./widget-view";
 import "./widget.css";
 import { isHostMessage, MAX_WIDGET_HEIGHT, MIN_WIDGET_HEIGHT } from "./protocol";
 import { drawCallWaves, MIC_NOISE_GATE } from "../../shared/call-waves";
@@ -18,9 +21,7 @@ type Config = {
 };
 type EndCapability = { id: string; embedToken: string };
 type Session = EndCapability & { secondsLeft: number; endsAt?: number; serverTime?: number };
-type Phase = "ready" | "connecting" | "live" | "failed";
-type AgentState = "listening" | "thinking" | "speaking";
-export type WidgetPreview = { phase: Phase; agentState?: AgentState; reconnecting?: boolean; muted?: boolean; urgent?: boolean; name?: string; embedded?: boolean };
+export type WidgetPreview = { phase: WidgetPhase; agentState?: AgentState; reconnecting?: boolean; muted?: boolean; urgent?: boolean; name?: string; embedded?: boolean };
 
 function record(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -101,25 +102,6 @@ class WidgetRequestError extends Error {
   }
 }
 
-const clock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
-
-function element<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text?: string): HTMLElementTagNameMap[K] {
-  const node = document.createElement(tag);
-  node.className = className;
-  if (text !== undefined) node.textContent = text;
-  return node;
-}
-
-function button(className: string, text: string): HTMLButtonElement {
-  const node = element("button", className, text);
-  node.type = "button";
-  return node;
-}
-
-function icon(node: Parameters<typeof createElement>[0]) {
-  return createElement(node, { class: "tt-icon", "aria-hidden": "true", focusable: "false", "stroke-width": 1.75 });
-}
-
 function mediaError(failure: unknown): string {
   if (failure instanceof Error) {
     if (failure.name === "NotAllowedError" || failure.name === "SecurityError") {
@@ -139,7 +121,7 @@ export function callStartError(failure: unknown): string {
 }
 
 export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview) {
-  let phase: Phase = "ready";
+  let phase: WidgetPhase = "ready";
   let agentState: AgentState = "listening";
   let initialized = false;
   let destroyed = false;
@@ -156,6 +138,13 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
   let mutePending = false;
   let connected = false;
   let finishMessage: string | undefined;
+  let errorMessage: string | undefined;
+  let nameInvalid = false;
+  let visible = false;
+  let expanded = false;
+  let seconds = config.maxSeconds;
+  let focusTarget: "name" | "error" | "retry" | "end" | undefined;
+  let scrollCaptions = false;
   let visitorToken: string | undefined;
   let savedName = preview?.name;
   let editingName = false;
@@ -163,7 +152,7 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
   const scope = `${config.agentId}:${config.parentOrigin}`;
   const tokenKey = `trainertwin-widget:visitor:${scope}`;
   const nameKey = `trainertwin-widget:name:${scope}`;
-  const captions = new Map<string, HTMLElement>();
+  const captions = new Map<string, Caption>();
   const attachedTracks = new Set<RemoteTrack>();
 
   const post = (type: "ready" | "close" | "status" | "interaction", active?: boolean) => {
@@ -176,182 +165,36 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
     }
   };
 
-  const card = element("section", "tt-card");
-  card.style.setProperty("--tt-accent", config.accentColor);
+  const elements: WidgetRefs = {
+    card: createRef(), body: createRef(), portrait: createRef(), waves: createRef(), transcript: createRef(),
+    controls: createRef(), name: createRef(), end: createRef(), retry: createRef(), error: createRef(),
+  };
+  const view = createRoot(root);
   const channels = [1, 3, 5].map((offset) => {
     const channel = Number.parseInt(config.accentColor.slice(offset, offset + 2), 16) / 255;
     return channel <= .04045 ? channel / 12.92 : ((channel + .055) / 1.055) ** 2.4;
   });
   const luminance = .2126 * channels[0] + .7152 * channels[1] + .0722 * channels[2];
-  card.style.setProperty("--tt-action", luminance < .04 ? "#f2eee5" : config.accentColor);
-  card.style.setProperty("--tt-on-accent", luminance < .04 || luminance > .179 ? "#111111" : "#ffffff");
-  card.setAttribute("aria-label", `${config.name} voice assistant`);
-  function portrait(className: string) {
-    const node = element("div", `tt-portrait ${className}`);
-    node.setAttribute("aria-hidden", "true");
-    const initials = config.trainerName.trim().split(/\s+/u).slice(0, 2).map((part) => part.charAt(0)).join("");
-    const fallback = element("span", "tt-initials", initials);
-    node.append(fallback);
-    if (config.photoUrl) {
-      fallback.hidden = true;
-      const image = element("img", "tt-photo");
-      image.alt = "";
-      image.referrerPolicy = "no-referrer";
-      image.loading = "eager";
-      image.fetchPriority = "high";
-      image.decoding = "async";
-      image.src = config.photoUrl;
-      image.addEventListener("error", () => {
-        image.remove();
-        fallback.hidden = false;
-      }, { once: true });
-      node.append(image);
-    }
-    return node;
-  }
-  const dismiss = button("tt-icon-button tt-dismiss", "");
-  dismiss.append(icon(X));
-  dismiss.setAttribute("aria-label", "Close widget");
-  dismiss.addEventListener("click", () => post("close"));
-  const body = element("div", "tt-body");
-  const hero = element("div", "tt-hero");
-  const portraitStage = element("div", "tt-portrait-stage");
-  const heroPortrait = portrait("tt-hero-portrait");
-  const waves = element("canvas", "tt-waves");
-  waves.setAttribute("aria-hidden", "true");
-  const status = element("p", "tt-status");
-  status.setAttribute("role", "status");
-  status.setAttribute("aria-live", "polite");
-  portraitStage.append(heroPortrait);
-  hero.append(portraitStage, status);
-
-  const form = element("form", "tt-prejoin");
-  const label = element("label", "tt-label", "What’s your name?");
-  label.htmlFor = "tt-visitor-name";
-  const name = element("input", "tt-input");
-  name.id = label.htmlFor;
-  name.name = "name";
-  name.type = "text";
-  name.autocomplete = "name";
-  name.setAttribute("aria-label", "Your name");
-  name.maxLength = 80;
-  name.placeholder = "Your name";
-  name.required = true;
-  name.setAttribute("aria-describedby", "tt-error");
-  const start = button("tt-primary", "Continue");
-  start.type = "submit";
-  start.disabled = true;
-  const nameField = element("div", "tt-name-field");
-  nameField.append(label, name);
-  const changeName = button("tt-change-name", "Change name");
-  changeName.setAttribute("aria-label", "Change your name");
-  changeName.addEventListener("click", () => {
-    phase = "ready";
-    editingName = true;
-    name.value = savedName ?? "";
-    clearError();
-    render();
-    name.focus();
-    name.select();
-  });
-  form.append(nameField, start);
-
-  const call = element("section", "tt-call");
-  call.hidden = true;
-  call.setAttribute("aria-label", "Voice call");
-  const callMeta = element("div", "tt-call-meta");
-  const countdown = element("span", "tt-countdown", `${clock(config.maxSeconds)} left`);
-  countdown.setAttribute("aria-label", "Time remaining");
-  const captionToggle = button("tt-icon-button tt-caption-toggle", "");
-  captionToggle.append(icon(Maximize2));
-  captionToggle.setAttribute("aria-label", "Expand captions");
-  captionToggle.setAttribute("aria-expanded", "false");
-  captionToggle.setAttribute("aria-controls", "tt-captions");
-  captionToggle.title = "Expand captions";
-  function expandCaptions(expanded: boolean) {
-    captionToggle.replaceChildren(icon(expanded ? Minimize2 : Maximize2));
-    captionToggle.setAttribute("aria-expanded", String(expanded));
-    captionToggle.setAttribute("aria-label", expanded ? "Collapse captions" : "Expand captions");
-    captionToggle.title = expanded ? "Collapse captions" : "Expand captions";
-    card.classList.toggle("tt-captions-expanded", expanded);
-    updateCaptionVisibility();
-  }
-  function updateCaptionVisibility() {
-    const latest = [...captions.values()].slice(-2);
-    for (const caption of captions.values()) caption.hidden = !card.classList.contains("tt-captions-expanded") && !latest.includes(caption);
-  }
-  captionToggle.addEventListener("click", () => expandCaptions(captionToggle.getAttribute("aria-expanded") !== "true"));
-  callMeta.append(countdown, captionToggle);
-  const transcript = element("div", "tt-transcript");
-  transcript.id = "tt-captions";
-  transcript.setAttribute("role", "log");
-  transcript.setAttribute("aria-label", "Conversation captions");
-  transcript.setAttribute("aria-live", "polite");
-  transcript.setAttribute("aria-relevant", "additions text");
-  transcript.tabIndex = 0;
-  const playbackHint = element("p", "tt-playback-hint", "Audio is blocked by your browser. Tap the widget to hear the call.");
-  playbackHint.hidden = true;
-  playbackHint.setAttribute("role", "alert");
-  const controls = element("div", "tt-controls");
-  const mute = button("tt-secondary tt-mute", "");
-  mute.append(icon(Mic), icon(MicOff));
-  mute.setAttribute("aria-label", "Mute microphone");
-  mute.title = "Mute microphone";
-  mute.setAttribute("aria-pressed", "false");
-  const end = button("tt-end", "");
-  end.append(icon(PhoneOff));
-  end.setAttribute("aria-label", "End call");
-  end.title = "End call";
-  const muteControl = element("div", "tt-control");
-  const muteLabel = element("span", "tt-control-label", "Mute");
-  const endControl = element("div", "tt-control");
-  muteControl.append(mute, muteLabel);
-  endControl.append(end, element("span", "tt-control-label", "End call"));
-  controls.append(muteControl, endControl);
-  call.append(transcript, playbackHint);
-
-  const callActions = element("section", "tt-call-actions");
-  const callTitle = element("h2", "tt-call-title", config.welcome);
-  callTitle.setAttribute("aria-live", "polite");
-  const retry = button("tt-primary", "Start voice call");
-  retry.addEventListener("click", () => {
-    if (starting || finishing || destroyed) return;
-    phase = "ready";
-    if (savedName && !editingName) void beginCall();
-    else {
-      clearError();
-      render();
-      name.focus();
-    }
-  });
-  callActions.append(callTitle, retry, changeName);
-  const error = element("p", "tt-error");
-  error.id = "tt-error";
-  error.hidden = true;
-  error.tabIndex = -1;
-  error.setAttribute("role", "alert");
-  body.append(hero, form, call, callActions, error);
-  card.append(waves, dismiss, callMeta, body, controls);
-  root.replaceChildren(card);
-  card.dataset.visible = "false";
+  const theme: CSSProperties & Record<`--tt-${string}`, string> = {
+    "--tt-accent": config.accentColor,
+    "--tt-action": luminance < .04 ? "#f2eee5" : config.accentColor,
+    "--tt-on-accent": luminance < .04 || luminance > .179 ? "#111111" : "#ffffff",
+  };
   let reportedHeight = 0;
   function reportSize() {
-    if ((preview && !preview.embedded) || !initialized || destroyed || window.parent === window) return;
-    const portraitHeight = portraitStage.offsetHeight;
-    const chromeHeight = card.offsetHeight - portraitHeight;
-    const squareHeight = portraitStage.offsetWidth;
-    const natural = chromeHeight + squareHeight;
-    if (squareHeight) portraitStage.style.height = `${Math.max(0, Math.min(squareHeight, innerHeight - chromeHeight))}px`;
-    const height = Math.max(MIN_WIDGET_HEIGHT, Math.min(MAX_WIDGET_HEIGHT, Math.ceil(natural)));
+    const card = elements.card.current;
+    const portrait = elements.portrait.current;
+    if (!card || !portrait || (preview && !preview.embedded) || !initialized || destroyed || window.parent === window) return;
+    const chromeHeight = card.offsetHeight - portrait.offsetHeight;
+    const squareHeight = portrait.offsetWidth;
+    if (squareHeight) portrait.style.height = `${Math.max(0, Math.min(squareHeight, innerHeight - chromeHeight))}px`;
+    const height = Math.max(MIN_WIDGET_HEIGHT, Math.min(MAX_WIDGET_HEIGHT, Math.ceil(chromeHeight + squareHeight)));
     if (height === reportedHeight) return;
     reportedHeight = height;
     window.parent.postMessage({ source: "trainertwin-widget", version: 1, type: "resize", height }, config.parentOrigin);
   }
   const sizeObserver = new ResizeObserver(reportSize);
-  sizeObserver.observe(body);
-  sizeObserver.observe(controls);
-  window.addEventListener("resize", reportSize);
-  const audioContainer = document.getElementById("trainertwin-audio") ?? element("div", "tt-audio");
+  const audioContainer = document.getElementById("trainertwin-audio") ?? document.createElement("div");
   audioContainer.hidden = true;
   const ownsAudioContainer = !audioContainer.isConnected;
   if (ownsAudioContainer) root.after(audioContainer);
@@ -359,7 +202,8 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
   function updateWaves() {
     stopWaves?.();
     stopWaves = undefined;
-    if (!room || phase !== "live") return;
+    const waves = elements.waves.current;
+    if (!room || !waves || phase !== "live") return;
     const tracks = [
       [...attachedTracks].find((track): track is RemoteAudioTrack => track.kind === Track.Kind.Audio),
       room.localParticipant.getTrackPublication(Track.Source.Microphone)?.audioTrack,
@@ -386,55 +230,66 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
   }
 
   function clearError() {
-    error.textContent = "";
-    error.hidden = true;
-    name.removeAttribute("aria-invalid");
+    errorMessage = undefined;
+    nameInvalid = false;
   }
 
-  function showError(message: string, nameError = false) {
+  function showError(message: string, invalidName = false) {
     if (destroyed) return;
-    error.textContent = message;
-    error.hidden = false;
-    if (nameError) {
-      name.setAttribute("aria-invalid", "true");
-      name.focus();
-    } else {
-      error.focus();
+    errorMessage = message;
+    nameInvalid = invalidName;
+    focusTarget = invalidName ? "name" : "error";
+    render();
+  }
+
+  function needsName() {
+    return phase === "ready" && (!savedName || editingName);
+  }
+
+  function onCommit() {
+    reportSize();
+    if (scrollCaptions && elements.transcript.current) {
+      elements.transcript.current.scrollTop = elements.transcript.current.scrollHeight;
+      scrollCaptions = false;
+    }
+    if (!focusTarget) return;
+    const target = elements[focusTarget].current;
+    if (target instanceof HTMLButtonElement && target.disabled) return;
+    target?.focus();
+    if (target instanceof HTMLInputElement && editingName && !nameInvalid) target.select();
+    focusTarget = undefined;
+  }
+
+  function changeName() {
+    phase = "ready";
+    editingName = true;
+    if (elements.name.current) elements.name.current.value = savedName ?? "";
+    clearError();
+    focusTarget = "name";
+    render();
+  }
+
+  function retry() {
+    if (starting || finishing || destroyed) return;
+    phase = "ready";
+    if (savedName && !editingName) void beginCall();
+    else {
+      clearError();
+      focusTarget = "name";
+      render();
     }
   }
 
   function render() {
     if (destroyed) return;
-    card.dataset.phase = phase;
-    card.dataset.agentState = agentState;
-    const needsName = phase === "ready" && (!savedName || editingName);
-    card.dataset.stage = needsName ? "name" : "call";
-    form.hidden = !needsName;
-    hero.hidden = needsName;
-    call.hidden = phase !== "connecting" && phase !== "live";
-    callMeta.hidden = call.hidden;
-    controls.hidden = call.hidden;
-    dismiss.hidden = !call.hidden || (preview !== undefined && !preview.embedded);
-    callActions.hidden = needsName || !call.hidden;
-    callTitle.textContent = phase === "failed" ? "We couldn’t start the conversation." : config.welcome;
-    if (phase === "failed") callTitle.setAttribute("aria-description", finishMessage ?? "Please try again in a little while.");
-    else callTitle.removeAttribute("aria-description");
-    changeName.hidden = !savedName;
-    retry.textContent = phase === "failed" ? "Try again" : "Start voice call";
-    const connecting = phase === "connecting" || (phase === "live" && reconnecting);
-    status.hidden = !connecting;
-    waves.hidden = phase !== "live";
-    start.disabled = !initialized || starting || finishing;
-    retry.disabled = starting || finishing || !initialized;
-    name.disabled = starting || !needsName;
-    mute.disabled = phase !== "live" || mutePending || reconnecting;
-    mute.setAttribute("aria-label", muted ? "Unmute microphone" : "Mute microphone");
-    mute.title = muted ? "Unmute microphone" : "Mute microphone";
-    muteLabel.textContent = muted ? "Unmute" : "Mute";
-    mute.setAttribute("aria-pressed", String(muted));
-    status.textContent = connecting ? "Connecting…" : "";
-    playbackHint.hidden = phase !== "live" || room?.canPlaybackAudio !== false;
-    reportSize();
+    view.render(createElement(WidgetView, {
+      config, elements, theme, phase, agentState, visible, expanded, seconds, muted, reconnecting, mutePending,
+      finishMessage, errorMessage, nameInvalid, needsName: needsName(), hasName: !!savedName,
+      captions: [...captions.values()], canStart: initialized && !starting && !finishing,
+      dismissible: !preview || !!preview.embedded, playbackBlocked: phase === "live" && room?.canPlaybackAudio === false,
+      onCommit, onDismiss: dismiss, onStart: beginCall, onRetry: retry, onChangeName: changeName,
+      onNameInput: nameInput, onToggleCaptions: toggleCaptions, onMute: toggleMute, onEnd: endCall, onUnlockAudio: unlockAudio,
+    }));
   }
 
   function readName() {
@@ -544,7 +399,7 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
     room = null;
     finishMessage = message;
     phase = message && !connected ? "failed" : "ready";
-    expandCaptions(false);
+    expanded = false;
     render();
     const results = await Promise.allSettled([
       closingSession ? closeSession(closingSession) : Promise.resolve(null),
@@ -563,30 +418,25 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
     const warning = disconnectResult.status === "rejected" ? "Could not disconnect cleanly. Close this widget to stop microphone access."
       : endResult.status === "fulfilled" ? endResult.value : null;
     post("status", false);
-    render();
     if (warning) showError(warning);
-    else if (phase === "ready") {
-      if (card.dataset.visible === "true") post("close");
-    } else retry.focus();
+    else {
+      if (phase === "failed") focusTarget = "retry";
+      render();
+      if (phase === "ready" && visible) post("close");
+    }
   }
 
   function tick() {
     const remaining = Math.max(0, Math.ceil((deadline - performance.now()) / 1000));
-    countdown.textContent = `${clock(remaining)} left`;
-    countdown.classList.toggle("tt-urgent", remaining <= 15);
+    if (remaining !== seconds) {
+      seconds = remaining;
+      render();
+    }
     if (remaining === 0) void finish(false, "This call reached its time limit.");
   }
 
-  function setCaption(key: string, value: string, final: boolean, visitor: boolean) {
-    let caption = captions.get(key);
-    if (!caption) {
-      caption = element("p", visitor ? "tt-caption tt-caption-you" : "tt-caption");
-      caption.append(element("span", "tt-caption-text"));
-      captions.set(key, caption);
-      transcript.append(caption);
-    }
-    if (caption.lastElementChild) caption.lastElementChild.textContent = value.slice(0, 8000);
-    caption.dataset.final = String(final);
+  function setCaption(id: string, value: string, final: boolean, visitor: boolean) {
+    captions.set(id, { id, text: value.slice(0, 8000), final, visitor });
   }
 
   function bindRoom(current: Room) {
@@ -606,7 +456,8 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
     current.on(RoomEvent.LocalTrackUnpublished, updateWaves);
     current.on(RoomEvent.TranscriptionReceived, (segments: TranscriptionSegment[], participant?: Participant) => {
       if (current !== room || destroyed) return;
-      const nearBottom = transcript.scrollHeight - transcript.scrollTop - transcript.clientHeight < 64;
+      const transcript = elements.transcript.current;
+      if (transcript && transcript.scrollHeight - transcript.scrollTop - transcript.clientHeight < 64) scrollCaptions = true;
       for (const segment of segments) {
         if (!segment.text.trim()) continue;
         setCaption(`${participant?.identity ?? "agent"}:${segment.id}`, segment.text, segment.final,
@@ -615,11 +466,9 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
       while (captions.size > 120) {
         const oldest = captions.entries().next().value;
         if (!oldest) break;
-        oldest[1].remove();
         captions.delete(oldest[0]);
       }
-      updateCaptionVisibility();
-      if (nearBottom) transcript.scrollTop = transcript.scrollHeight;
+      render();
     });
     const updateAgent = (attributes: Record<string, string>, participant: Participant) => {
       if (participant.identity === current.localParticipant.identity || current !== room) return;
@@ -654,7 +503,7 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
     clearError();
     let displayName: string;
     try {
-      displayName = visitorName(form.hidden ? savedName ?? "" : name.value);
+      displayName = visitorName(needsName() ? elements.name.current?.value ?? "" : savedName ?? "");
     } catch (failure) {
       showError(mediaError(failure), true);
       return;
@@ -677,10 +526,9 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
     const attempt = ++generation;
     const cancelled = () => destroyed || generation !== attempt;
     phase = "connecting";
-    expandCaptions(false);
+    expanded = false;
     captions.clear();
-    transcript.replaceChildren();
-    countdown.textContent = `${clock(config.maxSeconds)} left`;
+    seconds = config.maxSeconds;
     muted = false;
     reconnecting = false;
     agentState = "listening";
@@ -759,8 +607,8 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
       phase = "live";
       connected = true;
       updateWaves();
+      focusTarget = "end";
       render();
-      end.focus();
     } catch (failure) {
       if (!cancelled()) await finish(false, callStartError(failure));
     } finally {
@@ -772,7 +620,7 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
   function beginCall() {
     if (!preview) return startCall();
     try {
-      rememberName(visitorName(form.hidden ? savedName ?? "" : name.value));
+      rememberName(visitorName(needsName() ? elements.name.current?.value ?? "" : savedName ?? ""));
     } catch (failure) {
       showError(mediaError(failure), true);
       return;
@@ -787,61 +635,42 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
     agentState = state.agentState ?? "listening";
     reconnecting = state.reconnecting ?? false;
     muted = state.muted ?? false;
-    countdown.textContent = state.urgent ? "0:12 left" : `${clock(config.maxSeconds)} left`;
-    countdown.classList.toggle("tt-urgent", state.urgent === true);
-    expandCaptions(false);
+    seconds = state.urgent ? 12 : config.maxSeconds;
+    expanded = false;
     render();
     stopWaves?.();
-    stopWaves = phase === "live" ? drawCallWaves(waves, [
+    const waves = elements.waves.current;
+    stopWaves = phase === "live" && waves ? drawCallWaves(waves, [
       { color: "#85a75b", gate: 0, volume: () => agentState === "speaking" ? .26 + .12 * Math.sin(performance.now() / 180) : 0 },
       { color: "#e5bf94", gate: MIC_NOISE_GATE, volume: () => agentState === "listening" && !muted ? .16 : 0 },
     ]) : undefined;
   }
 
-  form.addEventListener("submit", (event) => {
-    event.preventDefault();
-    void beginCall();
-  });
-
-  if (preview) {
-    initialized = !preview.embedded;
-    card.dataset.visible = String(!preview.embedded);
-    setCaption("welcome", "What would you like to practice today?", true, false);
-    setCaption("visitor", "I want to get better at giving feedback.", true, true);
-    setCaption("response", "Let’s start with a conversation you’ve been putting off.", true, false);
-    mute.addEventListener("click", () => { muted = !muted; render(); });
-    end.addEventListener("click", () => {
-      showPreview({ phase: "ready" });
-      if (preview.embedded) {
-        post("status", false);
-        post("close");
-      }
-    });
-    if (preview.embedded) {
-      window.addEventListener("message", receive);
-      card.addEventListener("keydown", (event) => { if (event.key === "Escape") post("close"); });
-      ready();
-    }
-    window.addEventListener("pagehide", () => {
-      stopWaves?.();
-      sizeObserver.disconnect();
-      window.removeEventListener("resize", reportSize);
-      window.removeEventListener("message", receive);
-    }, { once: true });
-    showPreview(preview);
-    return;
-  }
-
-  card.addEventListener("click", () => {
+  function dismiss() { post("close"); }
+  function unlockAudio() {
     if (phase === "live" && room?.canPlaybackAudio === false) {
       void room.startAudio().catch((failure: unknown) => showError(mediaError(failure)));
     }
-  });
-  name.addEventListener("input", () => {
-    name.removeAttribute("aria-invalid");
-  });
-  end.addEventListener("click", () => { void finish(); });
-  mute.addEventListener("click", () => {
+  }
+  function nameInput() {
+    if (!nameInvalid) return;
+    nameInvalid = false;
+    render();
+  }
+  function toggleCaptions() {
+    expanded = !expanded;
+    render();
+  }
+  function endCall() {
+    if (!preview) { void finish(); return; }
+    showPreview({ phase: "ready" });
+    if (preview.embedded) {
+      post("status", false);
+      post("close");
+    }
+  }
+  function toggleMute() {
+    if (preview) { muted = !muted; render(); return; }
     const current = room;
     if (!current || phase !== "live" || mutePending) return;
     mutePending = true;
@@ -852,13 +681,7 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
       mutePending = false;
       render();
     });
-  });
-  card.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && config.mode === "floating") {
-      event.preventDefault();
-      post("close");
-    }
-  });
+  }
   function destroy() {
     if (destroyed) return;
     destroyed = true;
@@ -873,8 +696,10 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
     document.removeEventListener("focusout", interaction);
     window.removeEventListener("focus", interaction);
     window.removeEventListener("blur", interaction);
+    stopWaves?.();
+    stopWaves = undefined;
     void finish(true).finally(() => { if (ownsAudioContainer) audioContainer.remove(); });
-    root.replaceChildren();
+    view.unmount();
   }
   function receive(event: MessageEvent<unknown>) {
     if (destroyed || window.parent === window || event.source !== window.parent || event.origin !== config.parentOrigin) return;
@@ -885,7 +710,8 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
       initialized = true;
       render();
     } else if (data.type === "visibility") {
-      card.dataset.visible = String(data.open);
+      visible = data.open;
+      render();
     } else if (data.type === "destroy") {
       destroy();
     }
@@ -898,8 +724,26 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
   }
   function interaction() {
     queueMicrotask(() => {
-      if (!destroyed) post("interaction", document.hasFocus() && document.activeElement === name);
+      if (!destroyed) post("interaction", document.hasFocus() && document.activeElement === elements.name.current);
     });
+  }
+  flushSync(render);
+  if (elements.body.current) sizeObserver.observe(elements.body.current);
+  if (elements.controls.current) sizeObserver.observe(elements.controls.current);
+  window.addEventListener("resize", reportSize);
+  window.addEventListener("pagehide", destroy);
+  if (preview) {
+    initialized = !preview.embedded;
+    visible = !preview.embedded;
+    setCaption("welcome", "What would you like to practice today?", true, false);
+    setCaption("visitor", "I want to get better at giving feedback.", true, true);
+    setCaption("response", "Let’s start with a conversation you’ve been putting off.", true, false);
+    if (preview.embedded) {
+      window.addEventListener("message", receive);
+      ready();
+    }
+    showPreview(preview);
+    return;
   }
   document.addEventListener("focusin", interaction);
   document.addEventListener("focusout", interaction);
@@ -907,7 +751,6 @@ export function mount(root: HTMLElement, config: Config, preview?: WidgetPreview
   window.addEventListener("blur", interaction);
   window.addEventListener("message", receive);
   window.addEventListener("pageshow", ready);
-  window.addEventListener("pagehide", destroy);
   document.addEventListener("visibilitychange", visibility);
   render();
   ready();
@@ -926,9 +769,7 @@ if (typeof document !== "undefined") {
         if (event.persisted) mount(root, config);
       });
     } catch (failure) {
-      const error = element("p", "tt-config-error", mediaError(failure));
-      error.setAttribute("role", "alert");
-      root.replaceChildren(error);
+      createRoot(root).render(createElement("p", { className: "tt-config-error", role: "alert" }, mediaError(failure)));
     }
   }
 }
