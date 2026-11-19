@@ -1,5 +1,9 @@
 # Olga local port — Phase 1
 
+Status: current-content restoration and local API/runtime/conversation verification complete.
+Historical-vector, browser-certificate and build-security limitations are explicitly retained below.
+Stop before Vasanth Phase 2 until the user provides conversion direction.
+
 ## Boundary
 
 This phase restores Olga's authored experiences into isolated local services.
@@ -89,12 +93,27 @@ A synthetic local administrator is created instead.
   vectors. No model calls, invented vectors or new sessions were needed for this check.
   Native catalog helpers perform locking reads, so this target-only verifier uses a read-write
   transaction while making no data changes; it does not weaken the source connection's read-only guard.
+- **Six real chat turns passed**, two each for Objection Handling v5, When the Client Goes Silent v6,
+  and the main twin. Every response returned HTTP 200 with nonempty text and successful durable
+  Eve delivery. Six turn-evidence rows were saved; all **18 retrieved examples** matched pinned packages.
+  Pins retained 70, 77 and combined 147 examples respectively.
+- The native one-live-session rule abandoned the earlier two synthetic test sessions when the next
+  began; the main-twin session remains active. No manual finish, final transcript or final report
+  generation is claimed. Billing and ledger tables remain empty.
+- Conversation checks used local Studio 3100 and chat 2100 with configured model inference.
+  This is not an offline-inference claim. Microphone/audio transport was not tested.
+  Private results: `backups/olga-local/private-chat-check-report.json` and
+  `backups/olga-local/private-chat-durable-report.json`.
 
-## Remaining acceptance checks
+## Handoff and deferred checks
 
-1. Finish new-session-pin and real conversation verification; visual browser verification requires local certificate trust.
-2. Record conversation checks and exact local test entry points; commit locally only.
-3. Return Phase 1 results and Vasanth's existing component breakdown, then stop for Phase 2 direction.
+1. Current-content restoration, native new-session pins and real conversation checks are verified.
+2. Visual browser verification requires local certificate trust; no trust installation was authorized.
+3. Historical Objection Handling v1–v4 cannot become runtime-ready without the eight missing original
+   vectors or a separately approved re-embedding decision. Original files and history are preserved.
+4. Next.js security upgrade and microphone/audio end-to-end verification remain separate work.
+5. Changes are committed locally only; nothing was pushed or deployed.
+6. Return Vasanth's existing component breakdown, then stop for Phase 2 direction.
 
 ## Commands
 
