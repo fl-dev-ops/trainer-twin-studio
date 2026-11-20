@@ -19,6 +19,8 @@ mock.module("@/lib/s3", () => ({
   },
 }));
 const { runCopilotStudio } = await import("@/lib/copilot-studio");
+const { roleplayRouter } = await import("@/lib/roleplay/trpc");
+const { listAgentBriefs } = await import("@/lib/specs");
 
 describe.skipIf(process.env.DATABASE_URL !== isolatedDatabase)("role plays written from requirements, through the copilot's studio actions (real Postgres)", () => {
   let f: MinutesFixture;
@@ -114,6 +116,40 @@ describe.skipIf(process.env.DATABASE_URL !== isolatedDatabase)("role plays writt
     expect(data.scenario).toMatchObject({ trainer_role: "Employee", learner_role: "Founder", description: briefFixtures["bevan-missed-deadlines"].brief.learnerBrief });
     expect(context.persona).toMatchObject({ slug: "chloe" });
     expect(context.personaBrief).toContain("- Who: Chloe Martin, Operations lead.");
+  });
+
+  test("the role-play pages read a copilot-written role play: library, detail, edit; core fields save as a new version", async () => {
+    const { slug } = await studio({ action: "publishRoleplay", persona: "chloe", brief: brief("bevan-missed-deadlines") }) as { slug: string; version: number };
+    const caller = roleplayRouter.createCaller({ user: { ...f.trainer, orgId: f.org.id, orgSlug: f.org.slug, role: "admin" } } as never);
+    const fixture = briefFixtures["bevan-missed-deadlines"].brief;
+
+    const card = (await caller.scenarios.list()).find((row) => row.slug === slug);
+    expect(card).toMatchObject({ interview: false, href: `/roleplay/${slug}`, description: fixture.learnerBrief, opening: fixture.start.openingLine });
+
+    const detail = await caller.scenarios.get({ slug });
+    expect(detail).toMatchObject({ situation: fixture.summary, learnerRole: fixture.learner.role, description: fixture.learnerBrief });
+    expect(detail.script).toMatchObject({ aiRole: fixture.ai.role, steps: fixture.steps.map((step) => ({ name: step.name, what: step.what })) });
+
+    const edit = await caller.builder.get({ slug });
+    expect(edit.builder).toBeNull();
+    expect(edit.brief).toMatchObject({ persona: "chloe", title: fixture.title, openingLine: fixture.start.openingLine, aiStarts: true });
+
+    const unchanged = await caller.builder.saveBrief({ slug, persona: "chloe", title: fixture.title, learnerBrief: fixture.learnerBrief, openingLine: fixture.start.openingLine!, limit: fixture.ending.limit ?? "" });
+    expect(unchanged.changed).toBe(false);
+    const saved = await caller.builder.saveBrief({ slug, persona: "chloe", title: "Missed deadlines, take two", learnerBrief: "You are the founder. Find out why the release slipped.", openingLine: "You wanted to see me?", limit: "At most 3 minutes." });
+    expect(saved).toMatchObject({ slug, changed: true });
+    const after = await caller.builder.get({ slug });
+    expect(after.brief).toMatchObject({ title: "Missed deadlines, take two", openingLine: "You wanted to see me?", limit: "At most 3 minutes." });
+    // The rest of the script is untouched, and the session runs the re-rendered skill.
+    expect(after.brief?.script.steps).toEqual(detail.script!.steps);
+    const agent = await db.agent.findUniqueOrThrow({ where: { slug }, include: { primarySkill: { include: { currentVersion: true } } } });
+    expect(agent.name).toBe("Missed deadlines, take two");
+    expect(agent.primarySkill?.currentVersion?.skillText).toContain('"You wanted to see me?"');
+    expect(await listAgentBriefs(f.org.id, [slug])).toEqual({ [slug]: "You are the founder. Find out why the release slipped." });
+
+    await expect(caller.builder.saveBrief({ slug, persona: "nobody", title: "x", learnerBrief: "x", openingLine: "x", limit: "At most 3 minutes." })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    // The brief's own checks still apply: clearing the only ending is refused with the reason.
+    await expect(caller.builder.saveBrief({ slug, persona: "chloe", title: "x", learnerBrief: "x", openingLine: "x", limit: "" })).rejects.toMatchObject({ code: "BAD_REQUEST", message: expect.stringContaining("Say when the conversation ends") });
   });
 
   test("refuses an incomplete brief, an unknown persona and an id another role play already owns", async () => {

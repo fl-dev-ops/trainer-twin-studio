@@ -153,7 +153,9 @@ export function resolveContextUpload(context: unknown): AgentContextUpload {
 const storedBefore = (data: unknown) => asRecord(asRecord(data)?.before) ?? asRecord(asRecord(data)?.twinSettings);
 
 /** Twins always follow their before settings; any other agent only once it has a `before` block. */
-export const usesBeforeSettings = (data: unknown, kind?: string | null) => kind === "TWIN" || asRecord(asRecord(data)?.before) !== null;
+/** Twins, role plays with saved Before settings, and role plays the copilot wrote (all off until switched on). */
+export const usesBeforeSettings = (data: unknown, kind?: string | null) =>
+  kind === "TWIN" || asRecord(asRecord(data)?.before) !== null || asRecord(asRecord(data)?.roleplayBrief) !== null;
 
 export function beforeSettings(data: unknown): BeforeSettings {
   const settings = storedBefore(data);

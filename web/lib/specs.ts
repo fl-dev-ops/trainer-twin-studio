@@ -237,6 +237,17 @@ export async function listAgentNames(orgId: string, slugs: string[]) {
   );
 }
 
+/** What each role play tells the learner before the call (the learner brief of one the copilot wrote). */
+export async function listAgentBriefs(orgId: string, slugs: string[]): Promise<Record<string, string>> {
+  if (slugs.length === 0) return {};
+  const agents = await db.agent.findMany({ where: { orgId, slug: { in: slugs }, kind: "ROLEPLAY" }, select: { slug: true, data: true } });
+  const record = (value: unknown) => (value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {});
+  return Object.fromEntries(agents.flatMap((agent) => {
+    const brief = record(record(agent.data).roleplayBrief).learnerBrief;
+    return typeof brief === "string" && brief.trim() ? [[agent.slug, brief.trim()]] : [];
+  }));
+}
+
 export async function listAgentContextUploads(orgId: string, slugs: string[]): Promise<Record<string, AgentContextUpload>> {
   if (slugs.length === 0) return {};
   const agents = await db.agent.findMany({

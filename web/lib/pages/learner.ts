@@ -9,7 +9,7 @@ import { orgPerson } from "@/lib/org-people";
 import { agentPhotoUrls } from "@/lib/persona-media";
 import { presignedGetUrl } from "@/lib/s3";
 import { resolveSessionUser } from "@/lib/session-user";
-import { listAgentContextRequired, listAgentContextUploads, listScenarioIntroVideos } from "@/lib/specs";
+import { listAgentBriefs, listAgentContextRequired, listAgentContextUploads, listScenarioIntroVideos } from "@/lib/specs";
 import { learnerBalance } from "@/lib/minutes";
 import { AppError } from "@/lib/errors";
 import { practicePerson, startAllowance } from "@/lib/practice";
@@ -118,15 +118,17 @@ export async function loadSharedSession(code: string): Promise<SharedSessionView
     },
   });
   const agent = assignment.deployment.agent;
-  const [introVideos, agentPhotos, agentContextRequired, agentContextUploads] = await Promise.all([
+  const [introVideos, agentPhotos, agentContextRequired, agentContextUploads, agentBriefs] = await Promise.all([
     listScenarioIntroVideos(org.id, [agent.slug]),
     agentPhotoUrls(org.id, [agent.slug]),
     listAgentContextRequired(org.id, [agent.slug]),
     listAgentContextUploads(org.id, [agent.slug]),
+    listAgentBriefs(org.id, [agent.slug]),
   ]);
   return {
     kind: "session",
     props: {
+      agentBriefs,
       personas: [agent.persona.slug],
       agents: [agent.slug],
       scenarioName: agent.name,

@@ -102,3 +102,11 @@ test("generate overlay stamps résumé upload on resume interviews", () => {
   assert.equal(context.mode, "resume_grounding");
   assert.equal(context.prompt, "Upload your current résumé as a PDF.");
 });
+
+test("a role play the copilot wrote uses its own Before settings, all off until switched on (not the older screen-share default)", () => {
+  const upload = contextUploadFromAgentData({ roleplayBrief: { id: "first-call" }, scenario: { description: "x" } }, "ROLEPLAY");
+  assert.equal(upload.screenShare, false);
+  assert.equal(upload.offered, false);
+  assert.equal(upload.required, false);
+  assert.equal(upload.duringSession, false);
+});

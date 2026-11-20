@@ -115,6 +115,8 @@ type Props = {
   autoStart?: boolean;
   /** The learner's practice minutes left, shown before joining (null: not metered). */
   minutesLeft?: number | null;
+  /** What each role play tells the learner before the call (its learner brief), by agent slug. */
+  agentBriefs?: Record<string, string>;
 };
 
 function formatBytes(n: number) {
@@ -138,6 +140,7 @@ export function SessionView({
   organizationName,
   organizationLogo = null,
   introVideos = {},
+  agentBriefs = {},
   agentPhotos = {},
   autoStart = false,
   minutesLeft = null,
@@ -968,6 +971,7 @@ export function SessionView({
         contextLabel={contextUpload?.label}
         sessionCode={sessionCode}
         minutesLeft={minutesLeft}
+        learnerBrief={agentBriefs[agent]}
         onJoin={(settings, contextId) => {
           setPrejoinMedia(settings);
           setContextIds(contextId ? [contextId] : []);
@@ -1102,6 +1106,8 @@ export function SessionView({
                     </SelectContent>
                   </Select>
                 </label>
+
+                {agentBriefs[agent] ? <LearnerBrief text={agentBriefs[agent]} /> : null}
 
                 {documentsAllowed ? (
                 <label className="flex flex-col gap-1.5 text-sm">
@@ -1639,6 +1645,16 @@ function SessionFeedback({ scenarioName, sessionId }: { scenarioName?: string; s
         </Button>
       </CardContent>
     </>
+  );
+}
+
+/** The role play's learner brief: who the learner is, the situation and what to aim for. */
+export function LearnerBrief({ text }: { text: string }) {
+  return (
+    <section aria-label="Your brief" className="rounded-tt-md border border-(--border) bg-(--sidebar) p-4 text-left">
+      <p className="m-0 text-overline font-medium tracking-overline text-muted-foreground uppercase">Your brief</p>
+      <p className="m-0 mt-1.5 whitespace-pre-line text-sm leading-6 text-(--foreground)">{text}</p>
+    </section>
   );
 }
 

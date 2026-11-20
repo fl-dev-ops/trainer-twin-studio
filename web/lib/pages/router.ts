@@ -16,6 +16,7 @@ import { loadSpecResource } from "@/lib/pages/spec-resource";
 import {
   agentDisplayName,
   listAgentContextRequired,
+  listAgentBriefs,
   listAgentContextUploads,
   listAgentNames,
   listAgentPersonas,
@@ -153,15 +154,17 @@ export const pageRouter = t.router({
     // Learners see role plays plus only the twins assigned to them; admin and team see every agent.
     const agents = await startableAgentSlugs(orgId, user, runnable, isStudioRole(ctx.user.role));
     const initialAgent = input.agent && agents.includes(input.agent) ? input.agent : agents[0];
-    const [agentNames, agentPersonas, introVideos, agentPhotos, agentContextRequired, agentContextUploads] = await Promise.all([
+    const [agentNames, agentPersonas, introVideos, agentPhotos, agentContextRequired, agentContextUploads, agentBriefs] = await Promise.all([
       listAgentNames(orgId, agents),
       listAgentPersonas(orgId, agents),
       listScenarioIntroVideos(orgId, agents),
       agentPhotoUrls(orgId, agents),
       listAgentContextRequired(orgId, agents),
       listAgentContextUploads(orgId, agents),
+      listAgentBriefs(orgId, agents),
     ]);
     return {
+      agentBriefs,
       personas,
       agents,
       agentNames,
