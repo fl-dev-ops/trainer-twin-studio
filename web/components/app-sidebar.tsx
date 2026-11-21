@@ -58,13 +58,6 @@ const NAV_GROUPS = [
       { title: "Personas", href: "/personas", icon: PersonaIcon },
     ],
   },
-  {
-    label: "People",
-    items: [
-      { title: "Users", href: "/users", icon: UsersIcon },
-      { title: "Team", href: "/settings?tab=team", icon: UsersIcon },
-    ],
-  },
 ];
 
 type NavItem = {

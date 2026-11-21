@@ -7,9 +7,7 @@ import { composeInstructions } from "../../../agent/lib/compose-instructions";
 import { roleplaySkill } from "../../../agent/lib/roleplay";
 import { CALIBRATION_FEEDBACK_EVENT, sessionMode, userInactiveEvent } from "../../../agent/lib/session-mode";
 import { clearSessionModeCache, primeSessionMode } from "../../../agent/lib/session-mode-lookup";
-import { interviewSpecs } from "../fixtures/interview-specs";
 
-const golden = await readFile(new URL("../fixtures/interview-prompt.golden.txt", import.meta.url), "utf8");
 const platform = await readFile(new URL("../../../prompts/platform.md", import.meta.url), "utf8");
 
 const playbook: TwinPlaybook = { slug: "olga-objections", id: "objections", name: "Objections", description: "", steps: [], skill: "# Objections" };
@@ -31,16 +29,20 @@ describe("session mode", () => {
     assert.equal(sessionMode({ roleplay: {}, twin: {}, calibration: true }), "roleplay-client");
     assert.equal(sessionMode({ twin: {} }), "twin");
     assert.equal(sessionMode({ twin: {}, calibration: true }), "twin-calibration");
-    assert.equal(sessionMode({ calibration: true }), "roleplay-interview");
+    assert.equal(sessionMode({ calibration: true }), "unavailable");
     assert.equal(sessionMode({ playbook: {} }), "legacy-playbook");
-    assert.equal(sessionMode({}), "roleplay-interview");
+    assert.equal(sessionMode({}), "unavailable");
   });
 });
 
 describe("composed instructions", () => {
-  test("interview role plays (Vasanth's v1) are byte-identical to before modes", () => {
-    assert.equal(sessionMode(interviewSpecs), "roleplay-interview");
-    assert.equal(composeInstructions(interviewSpecs), golden);
+  test("an agent with nothing to run (an old interview not converted yet) says it isn't ready, on the platform rules only", () => {
+    const specs = { agentName: "Frontend mock", agentSlug: "cwv-frontend", objective: "", phases: [], documents: [], mode: "voice" } as unknown as SessionSpecs;
+    assert.equal(sessionMode(specs), "unavailable");
+    const prompt = composeInstructions(specs);
+    assert.ok(prompt.includes(platform.trim()));
+    assert.match(prompt, /This practice is not available right now/);
+    for (const word of INTERVIEW_WORDS) assert.doesNotMatch(prompt, word);
   });
 
   test("a twin gets the platform rules and the twin contract, with no interview wording", () => {
@@ -121,12 +123,12 @@ describe("runtime events", () => {
     return message;
   }
 
-  test("silence: interview texts are frozen; twins and clients get the fact, their instructions say what to do", async () => {
-    primeSessionMode("org1", "iv", "a", "roleplay-interview");
+  test("silence: legacy playbooks keep their directive; twins and clients get the fact, their instructions say what to do", async () => {
+    primeSessionMode("org1", "pb", "a", "legacy-playbook");
     primeSessionMode("org1", "tw", "a", "twin");
     primeSessionMode("org1", "rp", "a", "roleplay-client");
     const inactive = "__TRAINERTWIN_USER_INACTIVE__";
-    assert.equal(await sent("iv", inactive, "system"), "[USER INACTIVE] The learner has been silent for 60 seconds. Adapt to the current moment in the session. Do not advance the interview or ask a new interview question.");
+    assert.equal(await sent("pb", inactive, "system"), "[USER INACTIVE] The learner has been silent for 60 seconds. Adapt to the current moment in the session. Do not advance the interview or ask a new interview question.");
     assert.equal(await sent("tw", inactive, "system"), "[USER INACTIVE] The learner has been silent for 60 seconds.");
     assert.equal(await sent("rp", inactive, "system"), userInactiveEvent("roleplay-client"));
   });

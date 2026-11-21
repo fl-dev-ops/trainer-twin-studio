@@ -29,6 +29,7 @@ import { rawScore, type CalibrationScore } from "@/lib/twin/calibration-score";
 import { sessionEvidence } from "@/lib/twin/evidence";
 import { updateTwin } from "@/lib/twin/manage";
 import { attachRatings, durationSeconds, firstExchange, lastSevenDays, likeRateByWeek, mostAsked, titleFrom, transcriptTurns } from "@/lib/twin/stats";
+import { hydrateAgentSkill } from "@/lib/skill-history";
 
 /**
  * Twin-scoped tRPC surface, mounted at /api/twin. Studio members (admin, team) only; every query is
@@ -236,8 +237,8 @@ const agentsRouter = t.router({
   get: studioProcedure.input(slugInput).query(({ ctx, input }) => twinCall(async () => {
     const orgId = ctx.user.orgId;
     const found = await findTwinAgent(orgId, input.slug);
-    const [agent, assignments, sessions, calibrations, skillAgents] = await Promise.all([
-      db.agent.findUniqueOrThrow({ where: { id: found.id }, select: { data: true, version: true } }),
+    const [savedAgent, assignments, sessions, calibrations, skillAgents] = await Promise.all([
+      db.agent.findUniqueOrThrow({ where: { id: found.id }, select: { id: true, slug: true, primarySkillId: true, data: true, version: true } }),
       listTwinAssignments(orgId, found.id),
       db.interviewSession.findMany({
         where: learnerSessions(orgId, found.id),
@@ -253,6 +254,7 @@ const agentsRouter = t.router({
         select: { id: true, slug: true, name: true, version: true },
       }),
     ]);
+    const agent = savedAgent.primarySkillId ? await hydrateAgentSkill(orgId, savedAgent) : savedAgent;
     const data = asRecord(agent.data);
     const allSkills = data.source === TWIN_SOURCE;
     const active = assignments.filter((row) => row.status === "active");

@@ -4,15 +4,15 @@ from session import build_agent_session
 from tts import build_tts
 
 
-def test_build_agent_session_configuration():
+async def test_build_agent_session_configuration():
     session = build_agent_session(
-        base_url="http://localhost:3000/api/v1",
+        base_url="http://localhost:2000/v1",
         api_key="dynamic-runtime-token",
         model="trainertwin-brain",
         voice="test-voice",
     )
 
-    assert session.llm._client.base_url == "http://localhost:3000/api/v1/"
+    assert session.llm._client.base_url == "http://localhost:2000/v1/"
     assert session.llm._client.api_key == "dynamic-runtime-token"
     assert session.llm._opts.model == "trainertwin-brain"
     assert session.options.user_away_timeout == 60.0

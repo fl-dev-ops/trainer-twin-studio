@@ -1,74 +1,28 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, RefreshCw } from "lucide-react";
-import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { VoiceRecorder } from "@/components/voice-recorder";
-import { randomPassage } from "@/lib/voice-passage";
+import { ArrowLeft } from "lucide-react";
+import { VoiceCreateForm } from "@/components/voice-library";
 
 export default function VoiceCloningPage() {
   const router = useRouter();
-  const [passage, setPassage] = useState(randomPassage);
-  const [uploading, setUploading] = useState(false);
-
-  async function upload(wav: Blob) {
-    setUploading(true);
-
-    try {
-      const form = new FormData();
-      form.set("audio", new File([wav], "reference.wav", { type: "audio/wav" }));
-      form.set("transcript", passage);
-      const response = await fetch("/api/tts/voices", { method: "POST", body: form });
-      if (!response.ok) return toast.error((await response.json()).error ?? "Upload failed");
-      const { voice } = await response.json();
-      toast.success(`Voice "${voice.name}" created`);
-      router.push(`/voice/${voice.id}`);
-    } catch {
-      toast.error("Upload failed. Please try again.");
-    } finally {
-      setUploading(false);
-    }
-  }
 
   return (
     <main className="min-h-svh bg-muted p-2">
       <div className="min-h-[calc(100svh-1.1rem)] rounded-2xl bg-background">
         <header className="px-5 py-5 sm:px-9 sm:py-7">
           <Link href="/voice" className="-ml-2 inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-base font-medium transition-colors hover:bg-muted [&_svg]:size-4">
-            <ArrowLeft data-icon="inline-start" /> Voice cloning
+            <ArrowLeft data-icon="inline-start" /> Voices
           </Link>
         </header>
 
         <section className="mx-auto w-full max-w-3xl px-5 pt-[8vh] pb-12 sm:px-8">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">Read this out aloud</p>
-            <Button
-              variant="subtle"
-              size="icon-sm"
-              className="-mr-2"
-              aria-label="Try another text"
-              title="Try another text"
-              onClick={() => setPassage(randomPassage(passage))}
-            >
-              <RefreshCw />
-            </Button>
+          <div className="mb-6">
+            <h1 className="m-0 text-2xl font-semibold tracking-title">Add my voice</h1>
+            <p className="mt-2 text-sm text-muted-foreground">Name your voice, then record a short passage or upload one recording.</p>
           </div>
-          <p className="mt-7 font-serif text-3xl leading-tight tracking-tight sm:text-4xl">
-            {passage}
-          </p>
-
-          <div className="mt-20">
-            {uploading ? (
-              <div className="grid min-h-72 place-items-center rounded-3xl bg-muted/40">
-                <p className="text-sm text-muted-foreground">Saving your voice…</p>
-              </div>
-            ) : (
-              <VoiceRecorder onFinished={upload} />
-            )}
-          </div>
+          <VoiceCreateForm onCancel={() => router.push("/voice")} onSaved={() => router.push("/voice")} />
         </section>
       </div>
     </main>

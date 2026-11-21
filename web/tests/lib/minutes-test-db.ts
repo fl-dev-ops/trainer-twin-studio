@@ -4,6 +4,7 @@ import { setupServer } from "msw/node";
 import { meteroidHandlers } from "../setup/meteroid";
 import { randomUUID } from "node:crypto";
 import { db } from "@/lib/db";
+import { voicePrefix } from "@/lib/s3";
 import type { Prisma } from "@/lib/generated/prisma/client";
 
 // Never use a remote database, or a fake left behind by another file's mock.module.
@@ -19,9 +20,11 @@ export function minutesFixture() {
   const trainer = { id: `${id}-trainer`, name: "Trainer", email: `${id}-trainer@example.com` };
   const roleplay = { id: `${id}-rp`, slug: `${id}-rp`, name: "Role play", data: {} };
   const twin = { id: `${id}-twin`, slug: `${id}-twin`, name: "Twin", data: {} };
+  const fixtureVoiceId = `${id}-voice`;
   return {
     org, learner, trainer, roleplay, twin,
-    async create(learnerMember = true) {
+    async create(options: boolean | { learnerMember?: boolean; voice?: boolean } = true) {
+      const { learnerMember = true, voice = false } = typeof options === "boolean" ? { learnerMember: options } : options;
       // Publish the org with its admin atomically: parallel invariant checks must never see an admin-less fixture.
       await db.$transaction(async (tx) => {
         for (const user of [learner, trainer]) await tx.user.create({ data: { ...user, emailVerified: true } });
@@ -30,7 +33,12 @@ export function minutesFixture() {
           ...(learnerMember ? [{ id: `${learner.id}-member`, userId: learner.id, role: "user", createdAt: new Date() }] : []),
         ] } } });
       });
-      const persona = await db.persona.create({ data: { orgId: id, slug: id, name: "Persona", data: {}, isOwn: true } });
+      const voiceId = voice ? fixtureVoiceId : null;
+      if (voiceId) await db.voice.create({ data: {
+        id: voiceId, orgId: id, name: "Fixture voice", kind: "cloned", status: "ready",
+        s3AudioKey: `${voicePrefix(id, voiceId)}/reference.wav`,
+      } });
+      const persona = await db.persona.create({ data: { orgId: id, slug: id, name: "Persona", data: {}, isOwn: true, voiceId } });
       for (const [agent, kind] of [[roleplay, "ROLEPLAY"], [twin, "TWIN"]] as const) {
         await db.agent.create({ data: { ...agent, kind, orgId: id, personaId: persona.id } });
       }
@@ -40,7 +48,9 @@ export function minutesFixture() {
       await db.interviewSession.deleteMany({ where: { orgId: id } });
       await db.deployment.deleteMany({ where: { orgId: id } });
       await db.agent.deleteMany({ where: { orgId: id } });
+      await db.specVersion.deleteMany({ where: { orgId: id } });
       await db.persona.deleteMany({ where: { orgId: id } });
+      await db.voice.deleteMany({ where: { id: fixtureVoiceId, orgId: id } });
       await db.organization.deleteMany({ where: { id } });
       await db.user.deleteMany({ where: { email: { contains: id, mode: "insensitive" } } });
     },

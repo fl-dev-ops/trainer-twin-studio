@@ -5,16 +5,15 @@
  *
  * Presets are not the user's own persona (isOwn = false). Prompt fields go to Persona.data in the shape the
  * role-play brain reads; pace goes to Persona.settings. Voice/avatar briefs stay in the JSON.
- * --media also gives each persona its own avatar photo (`media.image`, next to the JSON) and its own voice, cloned
- * from a sample voice's reference audio + transcript (`media.voice_sample`). Media a persona already has is kept.
+ * --media gives each persona its own avatar photo (`media.image`, next to the JSON) and attaches the shared
+ * sample voice (`media.voice_sample`). Media a persona already has is kept.
  * Idempotent: a changed preset gets a new version (the previous data is kept in SpecVersion), an unchanged one is skipped.
  */
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { db } from "@/lib/db";
 import type { Prisma } from "@/lib/generated/prisma/client";
-import { personaSettingsSchema, setPersonaAvatar, setPersonaVoice } from "@/lib/persona-media";
-import { getObjectBytes, getObjectText } from "@/lib/s3";
+import { personaSettingsSchema, setPersonaAvatar, setPersonaVoiceFrom } from "@/lib/persona-media";
 
 type Preset = {
   slug: string;
@@ -63,7 +62,7 @@ function personaData(preset: Preset) {
   };
 }
 
-/** Gives the persona its own photo and voice from the preset, unless it already has them. */
+/** Adds missing preset media without replacing existing persona selections. */
 async function attachMedia(orgId: string, client: string, preset: Preset) {
   const row = await db.persona.findFirstOrThrow({ where: { orgId, slug: preset.slug }, select: { voiceId: true, avatar: { select: { s3ImageKey: true } } } });
   if (preset.media?.image && !row.avatar?.s3ImageKey) {
@@ -72,14 +71,8 @@ async function attachMedia(orgId: string, client: string, preset: Preset) {
     console.log(`  photo   ${preset.media.image}`);
   }
   if (preset.media?.voice_sample && !row.voiceId) {
-    const sample = await db.voice.findFirst({ where: { id: preset.media.voice_sample, orgId: null, status: "ready" } });
-    if (!sample) throw new Error(`Sample voice not found: ${preset.media.voice_sample}`);
-    const [audio, transcript] = await Promise.all([
-      getObjectBytes(sample.s3AudioKey),
-      sample.s3TranscriptKey ? getObjectText(sample.s3TranscriptKey) : Promise.resolve(""),
-    ]);
-    await setPersonaVoice(orgId, preset.slug, { audio: new File([audio], "reference.wav", { type: "audio/wav" }), transcript });
-    console.log(`  voice   from ${sample.id}`);
+    await setPersonaVoiceFrom(orgId, preset.slug, preset.media.voice_sample);
+    console.log(`  voice   ${preset.media.voice_sample}`);
   }
 }
 

@@ -5,8 +5,6 @@ import { createLegacyStream, type LegacyEvent } from "../lib/legacy-stream";
 import { fetchUpload, UPLOAD_POLICY, withAttachments } from "../lib/uploads";
 import { SPEAKING_MODEL, SPEAKING_ROUTE } from "../lib/models";
 import { studioPrincipal } from "../lib/auth";
-import { createQuestionBridge } from "../lib/question-bridge";
-import { followUpGradesFor } from "../lib/turn-grades";
 import { summarizeToolInput, summarizeToolOutput, withoutImageBytes } from "../lib/tool-trace";
 import { thinkingBudgetSchema } from "../lib/thinking-budget";
 import { CALIBRATION_FEEDBACK_EVENT, userInactiveEvent } from "../lib/session-mode";
@@ -14,7 +12,7 @@ import { sessionModeFor } from "../lib/session-mode-lookup";
 import { studioFetch } from "../lib/studio";
 
 /** Lookups shown in "Why this answer" (the web describes and resolves them; UI tools are left out). */
-const EVIDENCE_TOOLS = new Set(["scenario_examples", "search_knowledge", "read_knowledge_document", "search_style", "read_document", "eve__skill"]);
+const EVIDENCE_TOOLS = new Set(["scenario_examples", "search_knowledge", "read_knowledge_document", "read_document", "eve__skill"]);
 /** What "Heard" says for replies that don't answer a learner's words (the rest show the words themselves). */
 const EVIDENCE_HEARD: Record<string, string> = {
   opening: "",
@@ -23,17 +21,6 @@ const EVIDENCE_HEARD: Record<string, string> = {
   tool_result: "A result from the call screen",
 };
 
-/** Resume claims already highlighted per session, so the bridge never speaks a spent claim's question. */
-// ponytail: unbounded Map, one small Set per voice session; a process restart clears it.
-const usedClaimsBySession = new Map<string, Set<string>>();
-function usedClaimsFor(sessionId: string) {
-  let used = usedClaimsBySession.get(sessionId);
-  if (!used) {
-    used = new Set();
-    usedClaimsBySession.set(sessionId, used);
-  }
-  return used;
-}
 /**
  * OpenAI-compatible chat completions bridge. This endpoint allows LiveKit
  * (or any standard OpenAI client) to use the Eve agent as the conversational brain.
@@ -64,6 +51,8 @@ const END_CALL_FALLBACK_GOODBYE: Record<string, string> = {
   agreed: "Okay, speak then. Bye for now.",
   declined: "Sorry, I have to go. Bye.",
   guard_ran_out: "Sorry, I have to go. Bye.",
+  // An authored practice that reached its ending: no verdict either way (the skill's own close follows when given).
+  completed: "Okay, thank you.",
 };
 
 type ChatMessage = {
@@ -346,6 +335,8 @@ export default defineChannel({
         let sawActivity = false;
         /** Leading blank lines (Qwen opens replies with "\n\n") are dropped so bubbles don't start with empty space. */
         let textStarted = false;
+        /** end_call came before any words: speak a fallback goodbye at the end of the step only if none follows. */
+        let pendingGoodbye: string | null = null;
         let sawTurnStarted = false;
         let ttftMs: number | null = null;
         let tFirstEvent = 0;
@@ -371,7 +362,6 @@ export default defineChannel({
           spoke?: boolean;
         }> = [];
         const totals = { inputTokens: 0, outputTokens: 0 };
-        const questionBridge = createQuestionBridge(mode, usedClaimsFor(sessionId), () => followUpGradesFor(sessionId));
         const markSpoken = () => {
           if (ttftMs === null) {
             ttftMs = Date.now() - t_start;
@@ -439,8 +429,7 @@ export default defineChannel({
             // Text deltas
             if (ev.type === "message.appended" && typeof ev.data.messageDelta === "string") {
               sawActivity = true;
-              let content = questionBridge.onModelText(ev.data.messageDelta);
-              if (content === null) continue;
+              let content: string = ev.data.messageDelta;
               if (!textStarted) {
                 content = content.trimStart();
                 if (!content) continue;
@@ -466,28 +455,17 @@ export default defineChannel({
                   allToolsCalled.push({ name: action.toolName, callId: action.callId, input: action.input });
                   toolExecutionTimes[action.callId] = { start: Date.now() };
                 }
-                // The browser disconnects ~5s after end_call, so a missing goodbye must go out now.
+                // The browser disconnects ~5s after end_call: when the model hung up before speaking, a goodbye is
+                // spoken when the turn ends unless the model's own words follow first.
                 if (action.kind === "tool-call" && action.toolName === "end_call" && !textStarted) {
-                  const outcome = String((action.input as { outcome?: unknown } | null)?.outcome ?? "");
-                  console.warn("[openai-compat] end_call without goodbye; speaking fallback", { sessionId, mode, outcome });
-                  sawActivity = true;
-                  textStarted = true;
-                  markSpoken();
-                  await writeText(END_CALL_FALLBACK_GOODBYE[outcome] ?? END_CALL_FALLBACK_GOODBYE.declined);
+                  pendingGoodbye = String((action.input as { outcome?: unknown } | null)?.outcome ?? "");
                 }
-              }
-              const bridged = questionBridge.onToolCalls(ev.data.actions);
-              if (bridged) {
-                sawActivity = true;
-                markSpoken();
-                await writeText(bridged);
               }
               continue;
             }
 
             if (ev.type === "action.result") {
               const result = ev.data.result;
-              if (result) questionBridge.onToolResult(result);
               if (result?.kind === "tool-result") {
                 const callId = result.callId ?? "";
                 const timing = toolExecutionTimes[callId];
@@ -553,6 +531,14 @@ export default defineChannel({
             }
 
             const terminal = ev.type === "terminal";
+            // The model hung up and never spoke in this turn (its goodbye may come in a later step): goodbye now.
+            if (terminal && pendingGoodbye !== null && !textStarted) {
+              console.warn("[openai-compat] end_call without goodbye; speaking fallback", { sessionId, mode, outcome: pendingGoodbye });
+              sawActivity = true;
+              textStarted = true;
+              markSpoken();
+              await writeText(END_CALL_FALLBACK_GOODBYE[pendingGoodbye] ?? END_CALL_FALLBACK_GOODBYE.declined);
+            }
 
             if (terminal && (sawActivity || sawTurnStarted)) {
               const wallMs = Date.now() - t_start;
@@ -573,7 +559,6 @@ export default defineChannel({
                 // The model Eve actually ran (locked in agent.ts), not the request label.
                 llm_model: SPEAKING_MODEL,
                 llm_route: SPEAKING_ROUTE,
-                ...questionBridge.trace(t_start),
                 started_at_ms: t_start,
                 status: ev.status,
                 input_kind: inputKind,

@@ -1,13 +1,12 @@
 import Link from "next/link";
 import { PersonaIcon } from "@/components/icons";
-import { CARD, ItemLabel, PersonaPhoto, RoleChip, Tags } from "@/components/persona/persona-parts";
-import { speakingTags } from "@/lib/persona";
+import { CARD, PersonaPhoto, RoleChip } from "@/components/persona/persona-parts";
 import type { PersonaView } from "@/lib/personas";
 import { cn } from "@/lib/utils";
 import { PageContainer } from "@/components/page-container";
 
 /**
- * Persona Library: the characters learners practise with in role plays (photo, role, behaviour, how they talk, voice).
+ * Persona Library: the people learners practise with (photo, role, about, voice, where each is used).
  * The trainer's own persona comes first ("You"): a role play can use them too, e.g. as the manager.
  */
 export function PersonaLibrary({ personas }: { personas: PersonaView[] }) {
@@ -63,7 +62,7 @@ export function PersonaLibrary({ personas }: { personas: PersonaView[] }) {
   );
 }
 
-/** A persona at a glance: name, background, behaviour and how they talk. The card opens the persona. */
+/** A persona at a glance: name, role, about, voice and how many agents use it. The card opens the persona. */
 function PersonaCard({ item }: { item: PersonaView }) {
   const { persona } = item;
   return (
@@ -77,17 +76,13 @@ function PersonaCard({ item }: { item: PersonaView }) {
         <PersonaPhoto name={persona.name} photoUrl={item.photoUrl} size="md" />
         <div className="min-w-0 flex-1">
           <h2 className="m-0 truncate text-page-title leading-6 font-semibold tracking-title">{persona.name}</h2>
-          <RoleChip className={cn("mt-0.5 inline-block", item.isOwn && "bg-(--brand)/15 text-(--brand-strong) dark:text-(--brand)")}>{item.isOwn ? "Your persona" : persona.role}</RoleChip>
+          <RoleChip className={cn("mt-0.5 inline-block", item.isOwn && "bg-(--brand)/15 text-(--brand-strong) dark:text-(--brand)")}>{item.isOwn ? "Your persona" : persona.role || "No role yet"}</RoleChip>
         </div>
       </div>
-      {persona.background ? <p className="m-0 line-clamp-2 text-sm leading-body text-(--text-secondary)">{persona.background}</p> : null}
-      <div className="flex flex-col gap-1.5">
-        <ItemLabel>Behaviour</ItemLabel>
-        <Tags items={persona.behaviours.length ? persona.behaviours : ["Not set"]} />
-      </div>
-      <div className="flex flex-col gap-1.5">
-        <ItemLabel>How they talk</ItemLabel>
-        <Tags items={speakingTags(persona)} />
+      {persona.about ? <p className="m-0 line-clamp-2 text-sm leading-body text-(--text-secondary)">{persona.about}</p> : null}
+      <div className="mt-auto flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+        <span>{item.voice ? `Voice: ${item.voice.name}` : "No voice yet"}</span>
+        <span>{item.usedBy.length ? `Used by ${item.usedBy.length} ${item.usedBy.length === 1 ? "agent" : "agents"}` : "Not used yet"}</span>
       </div>
     </article>
   );

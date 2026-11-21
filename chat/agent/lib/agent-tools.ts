@@ -4,8 +4,12 @@ import { studioFetch } from "./studio";
  * Which workspace surfaces an agent (role play or twin) may use: Agent.data.tools, saved from the role play's Tools tab.
  * Missing or partial settings are off. The web parses the same shape (web/lib/agent-tools.ts).
  */
-export type ToolSettings = { canvas: boolean; codeEditor: boolean; preview: boolean; choice: boolean };
-export const NO_TOOLS: ToolSettings = { canvas: false, codeEditor: false, preview: false, choice: false };
+export type ToolSettings = {
+  canvas: boolean; codeEditor: boolean; preview: boolean; choice: boolean;
+  /** Knowledge-base search (search_knowledge, read_knowledge_document) in a role play. Not a screen surface. */
+  knowledge?: boolean;
+};
+export const NO_TOOLS: ToolSettings = { canvas: false, codeEditor: false, preview: false, choice: false, knowledge: false };
 
 const asRecord = (value: unknown): Record<string, unknown> =>
   value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
@@ -17,6 +21,7 @@ export function toolSettings(agentData: unknown): ToolSettings {
     codeEditor: tools.codeEditor === true,
     preview: tools.preview === true,
     choice: tools.choice === true,
+    knowledge: tools.knowledge === true,
   };
 }
 

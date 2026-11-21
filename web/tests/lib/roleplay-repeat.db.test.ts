@@ -20,7 +20,7 @@ describe.skipIf(!localMinutesDb)("repeat role-play activation (local database)",
   let secret: string | undefined;
   const spies: { mockRestore(): void }[] = [];
   beforeEach(async () => {
-    f = minutesFixture(); await f.create();
+    f = minutesFixture(); await f.create({ voice: true });
     secret = process.env.COPILOT_SERVICE_SECRET;
     process.env.COPILOT_SERVICE_SECRET = "roleplay-test-secret";
     const networkFetch = globalThis.fetch;

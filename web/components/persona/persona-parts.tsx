@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
 
-/** Shared persona visuals (Persona Library card, detail page): photo, chips, tags, labels. */
+/** Shared persona visuals (Persona Library card, detail page, editor): photo and role chip. */
 
 export const CARD = "rounded-tt-lg border border-(--card-border) bg-card shadow-card";
 
@@ -22,18 +22,4 @@ export function PersonaPhoto({ name, photoUrl, size = "md", className }: { name:
 
 export function RoleChip({ children, className }: { children: ReactNode; className?: string }) {
   return <span className={cn("rounded-full bg-(--tone-control) px-3 py-0.5 text-body-s leading-5 font-medium text-(--text-secondary)", className)}>{children}</span>;
-}
-
-export function Tags({ items }: { items: string[] }) {
-  return (
-    <div className="flex flex-wrap gap-1.5">
-      {items.map((item) => (
-        <span key={item} className="rounded-full bg-(--tone-control) px-2.5 py-0.5 text-xs leading-5 font-medium text-(--text-secondary)">{item}</span>
-      ))}
-    </div>
-  );
-}
-
-export function ItemLabel({ children }: { children: ReactNode }) {
-  return <p className="m-0 text-xs leading-4 font-medium tracking-overline text-muted-foreground uppercase">{children}</p>;
 }

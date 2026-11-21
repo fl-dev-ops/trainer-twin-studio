@@ -25,8 +25,10 @@ export async function POST(request: Request) {
     const result = await ingestScenario(orgId, body as ScenarioIngestInput);
     return Response.json({ ok: true, scenario: result }, { status: result.created ? 201 : 200 });
   } catch (error) {
+    if (error instanceof AppError) return errorResponse(error);
     if (error instanceof ScenarioIngestError) return Response.json({ error: error.message }, { status: error.status });
     console.error("[API:internal:scenarios] ingest failed:", error);
     return Response.json({ error: "Could not store the scenario" }, { status: 500 });
   }
 }
+import { AppError, errorResponse } from "@/lib/errors";

@@ -93,7 +93,7 @@ test("before settings: `before` wins over an older twinSettings; a role play fol
     { offered: roleplay.offered, screenShare: roleplay.screenShare, label: roleplay.label, duringSession: roleplay.duringSession },
     { offered: true, screenShare: false, label: "Listing", duringSession: false },
   );
-  assert.deepEqual(beforeSettings({}), { preScreenshare: false, preUpload: false, duringUpload: false, uploadTitle: "", uploadInstruction: "" });
+  assert.deepEqual(beforeSettings({}), { preScreenshare: false, preUpload: false, preUploadRequired: false, duringUpload: false, uploadTitle: "", uploadInstruction: "" });
 });
 
 test("generate overlay stamps résumé upload on resume interviews", () => {
@@ -101,4 +101,25 @@ test("generate overlay stamps résumé upload on resume interviews", () => {
   assert.equal(context.required, true);
   assert.equal(context.mode, "resume_grounding");
   assert.equal(context.prompt, "Upload your current résumé as a PDF.");
+});
+
+test("a role play the copilot wrote uses its own Before settings, all off until switched on (not the older screen-share default)", () => {
+  const upload = contextUploadFromAgentData({ roleplayBrief: { id: "first-call" }, scenario: { description: "x" } }, "ROLEPLAY");
+  assert.equal(upload.screenShare, false);
+  assert.equal(upload.offered, false);
+  assert.equal(upload.required, false);
+  assert.equal(upload.duringSession, false);
+});
+
+test("Required upload: only with an upload before the call; then the call can't start without the file", () => {
+  const required = contextUploadFromAgentData({ source: "scenario-ingest", before: { preUpload: true, preUploadRequired: true, uploadTitle: "Résumé" } }, "ROLEPLAY");
+  assert.deepEqual({ required: required.required, offered: required.offered, label: required.label }, { required: true, offered: true, label: "Résumé" });
+  // Required without the upload switched on means nothing.
+  assert.equal(contextUploadFromAgentData({ source: "scenario-ingest", before: { preUpload: false, preUploadRequired: true } }, "ROLEPLAY").required, false);
+  assert.equal(beforeSettings({ before: { preUpload: false, preUploadRequired: true } }).preUploadRequired, false);
+  // A skill role play with no saved settings asks for nothing (no legacy screen-share default).
+  for (const source of ["scenario-ingest", "roleplay-skill"]) {
+    const none = contextUploadFromAgentData({ source, skill: "x" }, "ROLEPLAY");
+    assert.deepEqual({ required: none.required, offered: none.offered, screenShare: none.screenShare }, { required: false, offered: false, screenShare: false });
+  }
 });

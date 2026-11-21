@@ -112,7 +112,7 @@ describe.skipIf(!localMinutesDb)("billing phase 2 lifecycle (real DB, fake Meter
     // These lifecycle tests deliberately exercise missing-key failures, never real Razorpay requests.
     for (const key of razorpayKeys) delete process.env[key];
     starts.length = requests.length = syncs.length = 0; invoices.clear(); sent.clear(); topups.clear(); keptObjects.clear(); puts.length = gets.length = 0; runSteps = true; failStart = grpcPaidRace = false;
-    outside.start(); f = minutesFixture(); await f.create(); await fundOrg({ orgId: f.org.id, minutes: 100 });
+    outside.start(); f = minutesFixture(); await f.create({ voice: true }); await fundOrg({ orgId: f.org.id, minutes: 100 });
     outside.use(
       http.post("https://meteroid-grpc.test/meteroid.api.invoicingentities.v1.InvoicingEntitiesService/GetInvoicingEntity", () => new HttpResponse(sellerReply())),
       http.patch("https://meteroid.test/api/v1/customers/:id", async ({ request, params }) => { requests.push({ method: "PATCH", path: `/customers/${params.id}`, key: request.headers.get("idempotency-key"), body: await request.json() as Raw }); return HttpResponse.json({ id: params.id }); }),

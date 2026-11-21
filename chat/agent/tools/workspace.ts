@@ -55,7 +55,7 @@ function surfaceDescription(tools: ToolSettings): string {
     tools.codeEditor && "open_code_editor (payload { questionId, question, language, starterCode, readOnly })",
     tools.choice && "open_choice (payload { questionId, question, options: [{ id, text }], correctOptionId, code? })",
     tools.preview &&
-      "open_pdf (payload { fileId }) for an attached PDF, highlight_document (payload { fileId, highlightQuery }) to search for a phrase. Resume interviews must use start_resume_question with a claim ID for highlights, never highlight_document or a free-form query",
+      "open_pdf (payload { fileId }) for an attached PDF, highlight_document (payload { fileId, highlightQuery }) to search for a phrase",
     "close_surface",
   ].filter(Boolean);
   return `Open or change the learner-visible workspace. Actions available in this conversation: ${actions.join("; ")}. For documents, pass a SESSION DATA fileId; never invent IDs.`;

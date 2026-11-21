@@ -24,6 +24,8 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
     const google = page.getByRole("button", { name: "Continue with Google", exact: true });
     if (await google.count()) {
       await expect(google).toBeVisible();
+      // The one-time entrance can start after hydration (after the wait above): measure once it has settled.
+      await expect.poll(async () => (await google.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
       const googleBox = (await google.boundingBox())!;
       const sendBox = (await send.boundingBox())!;
       expect(googleBox.y + googleBox.height).toBeLessThan(emailBox.y);

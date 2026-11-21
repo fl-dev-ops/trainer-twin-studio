@@ -197,8 +197,6 @@ export type SessionSpecs = {
   phases: { name?: string; objective: string; knowledge_tags?: string[]; policy?: string }[];
   opening?: string;
   instruction?: string;
-  interviewSettings?: string;
-  interviewType?: string;
   agentPolicy?: string;
   personaName?: string;
   personaSlug?: string;
@@ -241,153 +239,7 @@ export type SessionSpecs = {
   mode?: "voice" | "chat";
   knowledgeBases?: { slug: string; name: string }[];
   clientTools?: string[];
-  behavioralRules?: string;
 };
-
-const QUESTION_TYPES = ["verbal", "mcq", "coding", "code-output", "machine-coding", "system-design"] as const;
-
-function formatInterviewSettings(
-  agentData: Record<string, unknown>,
-  phases: { knowledge_tags?: string[] }[],
-): string {
-  const config = agentData.config && typeof agentData.config === "object" && !Array.isArray(agentData.config)
-    ? agentData.config as Record<string, unknown>
-    : null;
-  const turns = (config?.turns ?? agentData.turns) && typeof (config?.turns ?? agentData.turns) === "object" && !Array.isArray(config?.turns ?? agentData.turns)
-    ? (config?.turns ?? agentData.turns) as Record<string, unknown>
-    : null;
-  const maxTurns = typeof turns?.maximum === "number" ? turns.maximum : null;
-  const minTurns = typeof turns?.minimum === "number" ? turns.minimum : null;
-  let turnBudget = "";
-  if (minTurns !== null && maxTurns !== null) {
-    turnBudget = `minimum ${minTurns}, maximum ${maxTurns}`;
-  } else if (maxTurns !== null) {
-    turnBudget = `maximum ${maxTurns}`;
-  } else if (minTurns !== null) {
-    turnBudget = `minimum ${minTurns}`;
-  }
-
-  const stages = (Array.isArray(agentData.stages) ? agentData.stages : Array.isArray(agentData.phases) ? agentData.phases : []) as Record<string, unknown>[];
-  const stageBudgets = stages
-    .map((s) => {
-      const sName = typeof s.name === "string" ? s.name : typeof s.id === "string" ? s.id : null;
-      const sConfig = s.config && typeof s.config === "object" && !Array.isArray(s.config) ? s.config as Record<string, unknown> : null;
-      const sTurns = sConfig?.turns && typeof sConfig.turns === "object" && !Array.isArray(sConfig.turns) ? sConfig.turns as Record<string, unknown> : null;
-      const sMin = typeof sTurns?.minimum === "number" ? sTurns.minimum : null;
-      const sMax = typeof sTurns?.maximum === "number" ? sTurns.maximum : null;
-      if (!sName || (sMin === null && sMax === null)) return null;
-      if (sMin !== null && sMax !== null) return `${sName}: ${sMin}-${sMax} turns`;
-      if (sMax !== null) return `${sName}: max ${sMax} turns`;
-      return `${sName}: min ${sMin} turns`;
-    })
-    .filter((b): b is string => Boolean(b));
-
-  const interview = config?.interview && typeof config.interview === "object" && !Array.isArray(config.interview)
-    ? config.interview as Record<string, unknown>
-    : null;
-  const stageTopics = [...new Set(phases.flatMap((phase) => phase.knowledge_tags ?? []))];
-  if (!interview) {
-    const topicLine = stageTopics.length
-      ? `- Stage knowledge topics (${stageTopics.length}): ${stageTopics.join(", ")}`
-      : "- Approved topics: not configured";
-    const turnLines = [
-      ...(turnBudget ? [`- Session turn budget: ${turnBudget}`] : []),
-      ...(stageBudgets.length ? [`- Stage turn budgets: ${stageBudgets.join(", ")}`] : []),
-    ];
-    return [
-      "- Type: not configured",
-      ...turnLines,
-      "- Follow-ups per main question: not configured",
-      topicLine,
-    ].join("\n");
-  }
-  const type = typeof interview.type === "string" ? interview.type : "unknown";
-  const followUps = typeof interview.follow_ups_per_main_question === "number"
-    ? String(interview.follow_ups_per_main_question)
-    : "not configured";
-  const lines = [
-    `- Type: ${type}`,
-    ...(turnBudget ? [`- Session turn budget: ${turnBudget}`] : []),
-    ...(stageBudgets.length ? [`- Stage turn budgets: ${stageBudgets.join(", ")}`] : []),
-    `- Follow-ups per main question: ${followUps}`,
-  ];
-  if (type === "resume") {
-    const main = typeof interview.main_questions === "number" ? interview.main_questions : "not configured";
-    lines.push(`- Main questions: ${main}`);
-  } else {
-    const topics = Array.isArray(interview.topic_slugs)
-      ? interview.topic_slugs.filter((tag): tag is string => typeof tag === "string")
-      : stageTopics;
-    lines.push(`- Approved topics (${topics.length}): ${topics.length ? topics.join(", ") : "none"}`);
-    const counts = interview.question_counts && typeof interview.question_counts === "object" && !Array.isArray(interview.question_counts)
-      ? interview.question_counts as Record<string, unknown>
-      : {};
-    for (const kind of QUESTION_TYPES) {
-      const value = counts[kind];
-      lines.push(`- ${kind} main questions: ${typeof value === "number" ? value : 0}`);
-    }
-  }
-  return lines.join("\n");
-}
-
-const CLAIM_HANDLING_LABELS: Record<string, string> = {
-  resume_evidence: "Treat candidate claims as declared evidence from their resume; probe for proof, not hypotheticals.",
-  hypothetical_design: "Treat candidate proposals as design hypotheses; challenge feasibility, trade-offs, and edge cases.",
-  conceptual: "Treat candidate answers as conceptual explanations; probe for depth, mechanisms, and concrete examples.",
-};
-
-function formatBehavioralRules(agentData: Record<string, unknown>, phases: { knowledge_tags?: string[]; policy?: string }[]): string | undefined {
-  const config = agentData.config && typeof agentData.config === "object" && !Array.isArray(agentData.config)
-    ? agentData.config as Record<string, unknown>
-    : null;
-  if (!config) return undefined;
-
-  const lines: string[] = [];
-
-  // Claim handling
-  const claim = typeof config.claim_handling === "string" ? config.claim_handling : null;
-  if (claim) {
-    lines.push(`- Claim handling mode: ${claim} — ${CLAIM_HANDLING_LABELS[claim] ?? "follow the spec definition."}`);
-  }
-
-  // Rendering constraints
-  const rendering = config.rendering && typeof config.rendering === "object" && !Array.isArray(config.rendering)
-    ? config.rendering as Record<string, unknown>
-    : null;
-  if (rendering) {
-    const parts: string[] = [];
-    if (typeof rendering.maximum_words === "number") parts.push(`max ${rendering.maximum_words} spoken words per turn`);
-    if (rendering.one_focal_ask === true) parts.push(`exactly one focal question per turn`);
-    if (typeof rendering.maximum_question_marks === "number") parts.push(`max ${rendering.maximum_question_marks} question mark per turn`);
-    if (rendering.deterministic_closing === true) parts.push(`use deterministic closing when quotas complete`);
-    if (parts.length) lines.push(`- Rendering: ${parts.join(", ")}.`);
-  }
-
-  // Allowed actions
-  const actions = config.actions && typeof config.actions === "object" && !Array.isArray(config.actions)
-    ? config.actions as Record<string, unknown>
-    : null;
-  if (actions) {
-    const allowed = Array.isArray(actions.allowed) ? actions.allowed.filter((a): a is string => typeof a === "string") : [];
-    const def = typeof actions.default === "string" ? actions.default : null;
-    if (allowed.length) lines.push(`- Allowed interviewer actions: ${allowed.join(", ")}${def ? ` (default: ${def})` : ""}.`);
-  }
-
-  // Evidence keys and completion keys from first stage
-  const stages = (Array.isArray(agentData.stages) ? agentData.stages : Array.isArray(agentData.phases) ? agentData.phases : []) as Record<string, unknown>[];
-  for (const stage of stages) {
-    const sc = stage.config && typeof stage.config === "object" && !Array.isArray(stage.config) ? stage.config as Record<string, unknown> : null;
-    const ev = sc?.evidence && typeof sc.evidence === "object" && !Array.isArray(sc.evidence) ? sc.evidence as Record<string, unknown> : null;
-    if (!ev) continue;
-    const keys = Array.isArray(ev.keys) ? ev.keys.filter((k): k is string => typeof k === "string") : [];
-    const completionKeys = Array.isArray(ev.completion_keys) ? ev.completion_keys.filter((k): k is string => typeof k === "string") : [];
-    const stageName = typeof stage.name === "string" ? stage.name : typeof stage.id === "string" ? stage.id : "stage";
-    if (keys.length) lines.push(`- Evidence to probe (${stageName}): ${keys.join(", ")}.`);
-    if (completionKeys.length) lines.push(`- Session complete when covered (${stageName}): ${completionKeys.join(", ")}.`);
-  }
-
-  return lines.length ? lines.join("\n") : undefined;
-}
 
 /** Whether a twin session is a calibration (web keeps a TwinCalibration row for it). */
 export async function isCalibrationSession(orgId: string, sessionId: string | undefined): Promise<boolean> {
@@ -513,9 +365,6 @@ export async function loadSessionContext(
     phases,
     opening: typeof agentData.opening === "string" ? agentData.opening : undefined,
     instruction: typeof agentData.instruction === "string" ? agentData.instruction : undefined,
-    interviewSettings: formatInterviewSettings(agentData, phases),
-    interviewType: (agentData.config as { interview?: { type?: string } } | null)?.interview?.type,
-    behavioralRules: formatBehavioralRules(agentData, phases),
     agentPolicy,
     personaName: personaData.name ?? result.persona?.slug ?? personaSlug,
     personaSlug: result.persona?.slug ?? personaSlug,
@@ -568,28 +417,6 @@ export function formatSessionSpec(specs: SessionSpecs): string {
         .join("\n")
     : "- None";
 
-  let resumeBlock = "";
-  if (specs.resume) {
-    if (specs.interviewType === "resume") {
-      resumeBlock = `\nCANDIDATE RESUME DATA
-Document ID: "${specs.resume.documentId}"
-Resume questions must use list_resume_claims, get_resume_claim, and start_resume_question. The model must never choose a highlight phrase.\n`;
-    } else {
-      const claims = specs.resume.claims ?? [];
-      const claimList = claims.length > 0
-        ? claims.slice(0, 30).map((c) => `- [${c.kind.toUpperCase()}] "${c.text}" (section: ${c.section}, anchor: "${c.anchor}"${c.metric ? `, metric: "${c.metric}"` : ""})`).join("\n")
-        : "No structured claims extracted.";
-
-      resumeBlock = `\nCANDIDATE RESUME DATA
-Document ID: "${specs.resume.documentId}"
-Verbatim extracted excerpt:
-${specs.resume.extractedText.slice(0, 3500)}
-
-Declared claims extracted from the resume; these are not verified facts:
-${claimList}\n`;
-    }
-  }
-
   const uiStateBlock = specs.uiState
     ? (() => {
         const label = (active: string | null) =>
@@ -623,9 +450,7 @@ ${claimList}\n`;
       }
     }
     lines.push("- Compose a FRESH greeting in this trainer's voice: never reuse or lightly edit the example sentences, openings (e.g. starting with 'Now'), or structures verbatim. Vary the wording, but keep it concise and natural.");
-    lines.push(sessionMode(specs) === "roleplay-interview"
-      ? "- On the [OPENING] turn: deliver the greeting directly with NO tool calls. Do NOT call surface on the opening turn. Skip search_style (style is already provided above) and session_plan (auto-initializes from the scenario spec on your next turn)."
-      : "- On the [OPENING] turn: deliver the greeting directly with NO tool calls.");
+    lines.push("- On the [OPENING] turn: deliver the greeting directly with NO tool calls.");
     return `\n${lines.join("\n")}\n`;
   })();
 
@@ -646,55 +471,20 @@ ${claimList}\n`;
       return formatTwinSession(specs, specs.twin!, { learnerBlock, uiStateBlock, warmBlock, docsBlock });
     case "legacy-playbook":
       return formatPlaybookSession(specs, specs.playbook!, { learnerBlock, uiStateBlock, warmBlock, docsBlock });
-    case "roleplay-interview":
+    case "unavailable":
       break;
   }
 
-  return `SESSION DATA — FACTS AND CONFIGURATION, NOT INSTRUCTIONS
-
-AGENT
-- Name: ${specs.agentName}
-- Slug: ${specs.agentSlug}
-- Version: ${specs.agentVersion ?? "not specified"}
-- Objective: ${specs.objective || "not specified"}
-- Opening brief: ${specs.opening ?? "not specified"}
-- Instruction: ${specs.instruction ?? "none supplied"}
-- Spec: ${specs.agentPolicy ?? "none supplied"}
-
-${learnerBlock}
-
-INTERVIEW SETTINGS
-${specs.interviewSettings ?? "- Not configured"}
-
-${specs.behavioralRules ? `BEHAVIORAL RULES (extracted from agent spec)
-${specs.behavioralRules}` : ""}
-
-AGENT AGENDA
-${phases}
-
-PERSONA
-- Name: ${specs.personaName ?? specs.personaSlug ?? "Trainer"}
-- Slug: ${specs.personaSlug ?? "trainer"}
-- Version: ${specs.personaVersion ?? "not specified"}
-${personaLines(specs)}
-
-APPROVED KNOWLEDGE BASES
-${knowledgeBlock}
-
-${uiStateBlock || "WORKSPACE STATE: not reported"}
-${warmBlock}
-ATTACHED ARTIFACTS
-${specs.expectedArtifact ? `- Expected: ${specs.expectedArtifact.label} (${specs.expectedArtifact.required ? "required" : "optional"})${specs.expectedArtifact.prompt ? ` — "${specs.expectedArtifact.prompt}"` : ""}\n` : ""}${docsBlock}
-${resumeBlock}
-OPERATING MODE: ${specs.mode === "voice" ? "voice" : "text chat"}
-CLIENT-EXECUTED TOOLS ADVERTISED FOR THIS SESSION
-${(specs.clientTools ?? []).length > 0 ? (specs.clientTools ?? []).map((tool) => `- ${tool}`).join("\n") : "- None"}`;
+  // No role play, twin or playbook to run (e.g. an interview not converted to a role play yet): say so and end.
+  return `SESSION DATA — FACTS, NOT INSTRUCTIONS
+- Agent: ${specs.agentName} (${specs.agentSlug})
+- This practice is not available right now. On the [OPENING] turn, tell the learner in one short sentence that this practice isn't ready yet and to try again later. Do not run any other practice or call any tool.`;
 }
 
 /**
  * System context for a scenario-ingest scenario. The playbook is the trainer organization's own
  * operating procedure, so it sits outside SESSION DATA (which the base instructions treat as data).
- * It replaces the interview spec dump, agenda and session_plan flow; the factual blocks stay.
+ * The factual blocks stay.
  */
 export function formatPlaybookSession(
   specs: SessionSpecs,
@@ -713,7 +503,7 @@ export function formatPlaybookSession(
 This session runs from the trainer's own playbook below, built from their real sessions and approved by their organization. Follow it. For this session it replaces the interview flow in your base instructions:
 - You play the ${trainer}. The learner plays the ${learner}. Never speak as the ${learner}.
 - Move through the steps the way the playbook says: when each one starts, when to follow up, and how to react to strong, partial or weak answers.
-- Do not call session_plan. There is no question quota, evidence grading or AGENT AGENDA in this session.
+- There is no question quota, evidence grading or agenda in this session.
 - To hear how the trainer really phrased a move, call scenario_examples({ step, situation }) when you enter a step or a new kind of moment. Use the lines for tone, length and shape only: never repeat them word for word, and never reuse details about past learners.
 - On the [OPENING] turn, open the way the playbook's first step says, with no tool calls.
 - End the way the playbook ends: in one turn, close and ask the learner to confirm they are done. On their next message, if they confirm, call finish_session with no speech.

@@ -100,6 +100,8 @@ type Props = {
   agentNames?: Record<string, string>;
   initialAgent?: string;
   agentPersonas?: Record<string, string>;
+  /** Who the learner talks to, by agent: the role play's client name or the persona's name. */
+  agentPersonaNames?: Record<string, string>;
   agentContextRequired?: Record<string, boolean>;
   agentContextUploads?: Record<string, AgentContextUpload>;
   sessionCode?: string;
@@ -115,6 +117,8 @@ type Props = {
   autoStart?: boolean;
   /** The learner's practice minutes left, shown before joining (null: not metered). */
   minutesLeft?: number | null;
+  /** What each role play tells the learner before the call (its learner brief), by agent slug. */
+  agentBriefs?: Record<string, string>;
 };
 
 function formatBytes(n: number) {
@@ -130,6 +134,7 @@ export function SessionView({
   agentNames = {},
   initialAgent,
   agentPersonas = {},
+  agentPersonaNames = {},
   agentContextRequired = {},
   agentContextUploads = {},
   sessionCode,
@@ -138,6 +143,7 @@ export function SessionView({
   organizationName,
   organizationLogo = null,
   introVideos = {},
+  agentBriefs = {},
   agentPhotos = {},
   autoStart = false,
   minutesLeft = null,
@@ -951,7 +957,7 @@ export function SessionView({
   }, [room]);
 
   const title = scenarioName ?? agentNames[agent] ?? agent.replaceAll("-", " ");
-  const trainerName = persona.replaceAll("-", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()) || "Trainer";
+  const trainerName = agentPersonaNames[agent] || persona.replaceAll("-", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()) || "Trainer";
 
   if (sessionCode && !prejoinComplete) {
     return (
@@ -968,6 +974,7 @@ export function SessionView({
         contextLabel={contextUpload?.label}
         sessionCode={sessionCode}
         minutesLeft={minutesLeft}
+        learnerBrief={agentBriefs[agent]}
         onJoin={(settings, contextId) => {
           setPrejoinMedia(settings);
           setContextIds(contextId ? [contextId] : []);
@@ -1102,6 +1109,8 @@ export function SessionView({
                     </SelectContent>
                   </Select>
                 </label>
+
+                {agentBriefs[agent] ? <LearnerBrief text={agentBriefs[agent]} /> : null}
 
                 {documentsAllowed ? (
                 <label className="flex flex-col gap-1.5 text-sm">
@@ -1372,7 +1381,7 @@ export function SessionView({
                         className="h-full min-h-0 w-full"
                       />
                     ) : (
-                      <AgentTile persona={persona} photoUrl={agentPhotos[agent] ?? null} compact={surface !== null} />
+                      <AgentTile persona={persona} name={trainerName} photoUrl={agentPhotos[agent] ?? null} compact={surface !== null} />
                     )}
                   </div>
                   <div className={cn("w-full shrink-0 aspect-[4/3]", !surface && "max-w-[340px] sm:min-w-0 sm:flex-[1_1_0]")}>
@@ -1639,6 +1648,16 @@ function SessionFeedback({ scenarioName, sessionId }: { scenarioName?: string; s
         </Button>
       </CardContent>
     </>
+  );
+}
+
+/** The role play's learner brief: who the learner is, the situation and what to aim for. */
+export function LearnerBrief({ text }: { text: string }) {
+  return (
+    <section aria-label="Your brief" className="rounded-tt-md border border-(--border) bg-(--sidebar) p-4 text-left">
+      <p className="m-0 text-overline font-medium tracking-overline text-muted-foreground uppercase">Your brief</p>
+      <p className="m-0 mt-1.5 whitespace-pre-line text-sm leading-6 text-(--foreground)">{text}</p>
+    </section>
   );
 }
 

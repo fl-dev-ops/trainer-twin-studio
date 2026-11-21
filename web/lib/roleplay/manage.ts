@@ -1,8 +1,10 @@
 import { type ToolSettings, toolSettings } from "@/lib/agent-tools";
 import { type BeforeSettings, beforeSettings } from "@/lib/context-upload";
 import { db, withLock } from "@/lib/db";
+import { ownershipLock, packageFieldsOmitted, skillOwnership } from "@/lib/skill-ownership";
 import { type RoleplayBuilder, roleplayBuilderFrom, roleplayBuilderSchema } from "@/lib/roleplay/skill";
 import { ROLEPLAY_SOURCE, saveRoleplay, ScenarioIngestError } from "@/lib/scenario-ingest";
+import { hydrateAgentSkill } from "@/lib/skill-history";
 
 /**
  * Changes a builder role play (copilot): any builder fields, Settings (Before) or Tools; missing ones keep their value.
@@ -15,7 +17,7 @@ export async function updateRoleplay(
   slug: string,
   patch: { builder?: Partial<RoleplayBuilder>; before?: Partial<BeforeSettings>; tools?: Partial<ToolSettings> },
 ) {
-  const agent = await db.agent.findFirst({ where: { orgId, slug, kind: "ROLEPLAY", archivedAt: null }, select: { id: true, data: true } });
+  const agent = await db.agent.findFirst({ where: { orgId, slug, kind: "ROLEPLAY", archivedAt: null }, select: { id: true, slug: true, version: true, primarySkillId: true, data: true } });
   if (!agent) throw new ScenarioIngestError(`Role play "${slug}" was not found`, 404);
   const before = { ...beforeSettings(agent.data), ...patch.before };
   const tools = { ...toolSettings(agent.data), ...patch.tools };
@@ -24,19 +26,21 @@ export async function updateRoleplay(
   if (data.source !== ROLEPLAY_SOURCE) {
     if (patch.builder) throw new ScenarioIngestError("This role play was built from recordings: update its skill instead of builder fields", 400);
     // Under the role play's save lock, reading its data again (practice rule 20), as the dashboard's settings save.
-    await withLock([`agent:${slug}`], async (tx) => {
-      const fresh = await tx.agent.findFirst({ where: { id: agent.id, archivedAt: null }, select: { data: true } });
+    await withLock([ownershipLock(orgId), `agent:${slug}`], async (tx) => {
+      const fresh = await tx.agent.findFirst({ where: { id: agent.id, archivedAt: null }, select: { data: true, primarySkillId: true } });
       if (!fresh) throw new ScenarioIngestError(`Role play "${slug}" was not found`, 404);
       const latest = (fresh.data && typeof fresh.data === "object" ? fresh.data : {}) as Record<string, unknown>;
+      const managed = fresh.primarySkillId && (await skillOwnership(orgId, tx)).mode === "managed";
       await tx.agent.update({
         where: { id: agent.id },
-        data: { data: { ...latest, before: { ...beforeSettings(fresh.data), ...patch.before }, tools: { ...toolSettings(fresh.data), ...patch.tools } } },
+        data: { data: { ...(managed ? packageFieldsOmitted(latest) : latest), before: { ...beforeSettings(fresh.data), ...patch.before }, tools: { ...toolSettings(fresh.data), ...patch.tools } } },
       });
     });
     return { slug, changed: true };
   }
 
-  const current = roleplayBuilderFrom(agent.data);
+  const hydrated = agent.primarySkillId ? await hydrateAgentSkill(orgId, agent) : agent;
+  const current = roleplayBuilderFrom(hydrated.data);
   if (!current) throw new ScenarioIngestError(`Role play "${slug}" has no builder fields`, 400);
   const parsed = roleplayBuilderSchema.safeParse({ ...current, ...patch.builder, situation: { ...current.situation, ...patch.builder?.situation } });
   if (!parsed.success) throw new ScenarioIngestError(parsed.error.issues[0]?.message ?? "Invalid role play", 400);

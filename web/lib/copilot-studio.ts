@@ -6,11 +6,14 @@ import { db } from "@/lib/db";
 import { updateRoleplay } from "@/lib/roleplay/manage";
 import { roleplayBuilderFrom } from "@/lib/roleplay/skill";
 import { getObjectText } from "@/lib/s3";
-import { ROLEPLAY_SOURCE, ScenarioIngestError, TWIN_SKILL_SOURCE } from "@/lib/scenario-ingest";
+import { publishRoleplayBrief, ROLEPLAY_SOURCE, ScenarioIngestError, TWIN_SKILL_SOURCE } from "@/lib/scenario-ingest";
+import { draftBrief } from "@/lib/roleplay/brief";
 import { runRoleplayAssign, runTwinAssign } from "@/lib/workflow-runs";
 import { accessUntilSchema, listTwinAssignments } from "@/lib/twin-access";
 import { updateTwin } from "@/lib/twin/manage";
 import { TWIN_SOURCE } from "@/lib/twins";
+import { readSkillPackage, skillRefusals } from "@/lib/skills";
+import { getMappedSkillPackage, hydrateAgentSkill } from "@/lib/skill-history";
 
 /**
  * What the copilot may read and change in the studio, for one org (plans/copilot-v2.md). Twins, twin skills and role
@@ -54,6 +57,11 @@ export const copilotStudioInput = z.discriminatedUnion("action", [
     minutes: z.number().int().min(1).max(10_000).optional(),
     accessUntil: accessUntilSchema,
   }).strict(),
+  // Role plays written from requirements (lib/roleplay/brief.ts): personas to play them, a draft (check + render, nothing
+  // saved), and publishing on the trainer's approval.
+  z.object({ action: z.literal("listPersonas") }).strict(),
+  z.object({ action: z.literal("draftRoleplay"), brief: z.unknown() }).strict(),
+  z.object({ action: z.literal("publishRoleplay"), persona: slug, brief: z.unknown() }).strict(),
   z.object({ action: z.literal("archive"), slug }).strict(),
   z.object({ action: z.literal("restore"), slug }).strict(),
 ]);
@@ -73,7 +81,7 @@ function emailsStatus<T extends { emailFailures: number; emailsQueued?: number; 
 }
 
 // Assigning goes through the assign-twin / assign-roleplay workflows (lib/workflow-runs.ts), as on the Assign pages.
-const defaultDeps = { db, getObjectText, assignTwinAndInvite: runTwinAssign, listTwinAssignments, inviteToRoleplay: runRoleplayAssign, updateTwin, updateRoleplay, resolveUpload };
+const defaultDeps = { db, getObjectText, assignTwinAndInvite: runTwinAssign, listTwinAssignments, inviteToRoleplay: runRoleplayAssign, updateTwin, updateRoleplay, resolveUpload, publishRoleplayBrief };
 export type CopilotStudioDeps = typeof defaultDeps;
 
 const asRecord = (value: unknown) => (value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {});
@@ -83,13 +91,14 @@ const text = (value: unknown) => (typeof value === "string" && value.trim() ? va
 function kindOf(agent: { kind: string; data: unknown }) {
   const source = asRecord(agent.data).source;
   if (agent.kind === "TWIN") return source === TWIN_SOURCE ? "main-twin" : source === TWIN_SKILL_SOURCE ? "twin-skill" : "twin-skill-legacy";
+  if (asRecord(agent.data).roleplayBrief) return "roleplay-brief";
   return source === ROLEPLAY_SOURCE ? "roleplay-builder" : "roleplay-recordings";
 }
 
 async function findAgent(d: CopilotStudioDeps, orgId: string, agentSlug: string, opts: { archived?: boolean } = {}) {
   const agent = await d.db.agent.findFirst({
     where: { orgId, slug: agentSlug, ...(opts.archived === undefined ? {} : { archivedAt: opts.archived ? { not: null } : null }) },
-    select: { id: true, slug: true, name: true, kind: true, version: true, data: true, archivedAt: true, updatedAt: true },
+    select: { id: true, slug: true, name: true, kind: true, version: true, primarySkillId: true, data: true, archivedAt: true, updatedAt: true },
   });
   if (!agent) throw new ScenarioIngestError(`"${agentSlug}" was not found${opts.archived ? " among archived items" : ""}`, 404);
   return agent;
@@ -113,10 +122,11 @@ export async function runCopilotStudio(actor: Actor, input: CopilotStudioInput, 
           ...(input.includeArchived ? {} : { archivedAt: null }),
         },
         orderBy: [{ kind: "asc" }, { name: "asc" }],
-        select: { slug: true, name: true, kind: true, version: true, data: true, archivedAt: true, updatedAt: true },
+        select: { id: true, primarySkillId: true, slug: true, name: true, kind: true, version: true, data: true, archivedAt: true, updatedAt: true },
       });
+      const hydrated = await Promise.all(agents.map((agent) => hydrateAgentSkill(orgId, agent, d.db)));
       return {
-        items: agents.map((agent) => ({
+        items: hydrated.map((agent) => ({
           slug: agent.slug,
           name: agent.name,
           kind: kindOf(agent),
@@ -131,10 +141,11 @@ export async function runCopilotStudio(actor: Actor, input: CopilotStudioInput, 
     }
 
     case "get": {
-      const agent = await findAgent(d, orgId, input.slug);
-      if (input.kind && (agent.kind === "TWIN") !== (input.kind === "twin")) {
-        throw new ScenarioIngestError(`"${input.slug}" is a ${agent.kind === "TWIN" ? "twin" : "role play"}, not a ${input.kind === "twin" ? "twin" : "role play"}`, 400);
+      const stored = await findAgent(d, orgId, input.slug);
+      if (input.kind && (stored.kind === "TWIN") !== (input.kind === "twin")) {
+        throw new ScenarioIngestError(`"${input.slug}" is a ${stored.kind === "TWIN" ? "twin" : "role play"}, not a ${input.kind === "twin" ? "twin" : "role play"}`, 400);
       }
+      const agent = await hydrateAgentSkill(orgId, stored, d.db);
       const kind = kindOf(agent);
       const base = {
         slug: agent.slug, name: agent.name, kind, version: agent.version, archived: agent.archivedAt !== null,
@@ -155,6 +166,8 @@ export async function runCopilotStudio(actor: Actor, input: CopilotStudioInput, 
         ...base,
         tools: toolSettings(agent.data),
         builder: kind === "roleplay-builder" ? roleplayBuilderFrom(agent.data) : null,
+        // A role play written from requirements: its brief, which an edit changes (then publishRoleplay again).
+        brief: kind === "roleplay-brief" ? asRecord(agent.data).roleplayBrief : null,
         learners: invites.map((row) => ({ email: row.member.user.email.toLowerCase(), status: row.status })),
       };
     }
@@ -163,27 +176,47 @@ export async function runCopilotStudio(actor: Actor, input: CopilotStudioInput, 
       // A published skill package (twin skill or role play): the baseline for an update, or an older version to restore.
       const agent = await findAgent(d, orgId, input.slug);
       const version = input.version ?? agent.version;
-      const data = version === agent.version
+      const mapped = await getMappedSkillPackage(orgId, agent.id, version, d.db, { verifyFiles: true });
+      const data = mapped ? {} : version === agent.version
         ? asRecord(agent.data)
         : asRecord((await d.db.specVersion.findFirst({ where: { orgId, entityType: "agents", entitySlug: agent.slug, version }, select: { data: true } }))?.data);
-      const artifacts = text(data.artifacts);
-      if (!artifacts || typeof data.skill !== "string") throw new ScenarioIngestError(`"${agent.slug}" v${version} has no published skill files`, 404);
+      const artifacts = mapped?.version.artifacts ?? text(data.artifacts);
+      const managed = mapped ?? (agent.primarySkillId && artifacts
+        ? await readSkillPackage(orgId, agent.slug, agent.primarySkillId, artifacts, d.db)
+        : null);
+      if (agent.primarySkillId && version === agent.version && !managed) throw skillRefusals.unavailable();
+      if (!managed && (!artifacts || typeof data.skill !== "string")) throw new ScenarioIngestError(`"${agent.slug}" v${version} has no published skill files`, 404);
+      const packageFiles = managed?.files;
+      if (managed && !packageFiles) throw skillRefusals.unavailable();
       const manifestFile = agent.kind === "TWIN" ? "skill.json" : "scenario.json";
       const read = (file: string) => d.getObjectText(`${artifacts}/${file}`).catch(() => null);
-      const [manifest, items, patterns] = await Promise.all([read(manifestFile), read("items.json"), read("patterns.md")]);
-      const versions = await d.db.specVersion.findMany({
-        where: { orgId, entityType: "agents", entitySlug: agent.slug },
-        orderBy: { version: "desc" },
-        select: { version: true, createdAt: true },
-      });
+      const [manifest, items, patterns] = packageFiles && managed
+        ? [packageFiles[managed.version.format === "twin" ? "skill.json" : "scenario.json"], packageFiles["items.json"], packageFiles["patterns.md"] ?? null]
+        : await Promise.all([read(manifestFile), read("items.json"), read("patterns.md")]);
+      const [versions, mappings] = await Promise.all([
+        d.db.specVersion.findMany({
+          where: { orgId, entityType: "agents", entitySlug: agent.slug },
+          orderBy: { version: "desc" },
+          select: { version: true, createdAt: true },
+        }),
+        d.db.agentSkillVersion.findMany({
+          where: { orgId, agentId: agent.id, agent: { orgId }, version: { skill: { orgId, ownerSlug: agent.slug } } },
+          select: { agentVersion: true, createdAt: true },
+        }),
+      ]);
+      const history = new Map(mappings.map((row) => [row.agentVersion, row.createdAt]));
+      for (const row of versions) history.set(row.version, row.createdAt);
+      history.delete(agent.version);
       return {
         slug: agent.slug,
-        kind: kindOf(agent),
+        kind: managed ? managed.version.format === "twin" ? "twin-skill"
+          : managed.version.format === "legacy-twin" ? "twin-skill-legacy"
+            : managed.version.format === "builder-roleplay" ? "roleplay-builder" : "roleplay-recordings" : kindOf(agent),
         name: agent.name,
         version,
         currentVersion: agent.version,
-        versions: [{ version: agent.version, current: true }, ...versions.map((row) => ({ version: row.version, savedAt: row.createdAt.toISOString() }))],
-        skill: data.skill,
+        versions: [{ version: agent.version, current: true }, ...[...history].sort(([a], [b]) => b - a).map(([version, createdAt]) => ({ version, savedAt: createdAt.toISOString() }))],
+        skill: managed?.version.skillText ?? data.skill,
         manifest: manifest ? JSON.parse(manifest) : asRecord(data.scenario),
         items: items ? JSON.parse(items) : [],
         patterns,
@@ -227,6 +260,37 @@ export async function runCopilotStudio(actor: Actor, input: CopilotStudioInput, 
         }));
       }
       return emailsStatus(await d.inviteToRoleplay({ org: actor.org, by: actor.user, agent, emails: input.emails }));
+    }
+
+    case "listPersonas": {
+      // Who can play a role play: the org's personas (personality and voice). The skill never redefines them.
+      const personas = await d.db.persona.findMany({
+        where: { orgId }, orderBy: [{ isOwn: "desc" }, { name: "asc" }],
+        select: { slug: true, name: true, isOwn: true, data: true, voice: { select: { name: true } }, _count: { select: { agents: { where: { archivedAt: null } } } } },
+      });
+      return {
+        personas: personas.map((p) => ({
+          slug: p.slug, name: p.name, own: p.isOwn,
+          role: text(asRecord(p.data).role) ?? null, about: text(asRecord(p.data).background) ?? null,
+          voice: p.voice?.name ?? null, usedBy: p._count.agents,
+        })),
+      };
+    }
+
+    case "draftRoleplay": {
+      const draft = draftBrief(input.brief);
+      return draft.ok
+        ? { ok: true, skill: draft.skill, learnerBrief: draft.brief.learnerBrief, items: draft.items.length, slug: `${actor.org.slug}-${draft.brief.id}` }
+        : { ok: false, reasons: draft.reasons, ...("skill" in draft ? { skill: draft.skill } : {}) };
+    }
+
+    case "publishRoleplay": {
+      const existing = await d.db.agent.findFirst({ where: { orgId, slug: `${actor.org.slug}-${asRecord(input.brief).id}` }, select: { kind: true, data: true } });
+      if (existing && (existing.kind !== "ROLEPLAY" || (!asRecord(existing.data).roleplayBrief && asRecord(existing.data).skill))) {
+        throw new ScenarioIngestError("A different role play or twin already uses this id; choose another brief id.", 409);
+      }
+      const published = await d.publishRoleplayBrief(orgId, { personaSlug: input.persona, brief: input.brief });
+      return { ok: true, slug: published.slug, name: published.name, version: published.version, created: published.created, items: published.items };
     }
 
     case "archive": {

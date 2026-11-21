@@ -1,33 +1,32 @@
 import { z } from "zod";
 import { orgPeople } from "@/lib/org-people";
 import { db } from "@/lib/db";
-import { loadLatestFidelityReport } from "@/lib/fidelity-report.server";
 import { listUsers } from "@/lib/learners";
 import { OrganizationKnowledgeService } from "@/lib/org-knowledge";
 import { isStudioRole, parseAccentColor } from "@/lib/org";
-import { getPersonaBaseline } from "@/lib/persona-baseline";
 import { agentPhotoUrls, pickableVoices } from "@/lib/persona-media";
 import { getPersona, listPersonas } from "@/lib/personas";
 import { loadSharedSession, loadTwinLink } from "@/lib/pages/learner";
 import { loadOrgHome } from "@/lib/pages/org-home";
-import { loadRolePlayPreview } from "@/lib/pages/role-play-preview";
 import { loadSessionDetail, loadSessionsList } from "@/lib/pages/sessions";
 import { loadSpecResource } from "@/lib/pages/spec-resource";
 import {
   agentDisplayName,
   listAgentContextRequired,
+  listAgentBriefs,
   listAgentContextUploads,
   listAgentNames,
+  listAgentPersonaNames,
   listAgentPersonas,
   listRunnableSpecs,
   listScenarioIntroVideos,
-  listSpecSummaries,
   listUploads,
 } from "@/lib/specs";
 import { refusals, toTRPCError } from "@/lib/errors";
 import { protectedProcedure, publicProcedure, studioProcedure, t } from "@/lib/trpc";
 import { startableAgentSlugs } from "@/lib/twin-access";
 import { avatarState, ownTwinPersona } from "@/lib/twin/avatar";
+import { listAvailableVoices } from "@/lib/voices";
 
 /**
  * Page loaders, mounted at /api/trpc under `page`: what each studio / learner page used to load while rendering on
@@ -81,15 +80,7 @@ export const pageRouter = t.router({
     return { initialDocs, initialStats };
   }),
 
-  // Role plays (scenarios), their specs and calibration.
-  agents: studioProcedure.query(({ ctx }) => listSpecSummaries("agents", ctx.user.orgId, "ROLEPLAY")),
-  rolePlayPreview: studioProcedure.input(slugInput).query(({ ctx, input }) => loadRolePlayPreview(ctx.user.orgId, input.slug)),
-  agentSpec: studioProcedure
-    .input(z.object({ slug: z.string().min(1).max(200), version: optional, isNew: z.boolean() }))
-    .query(({ ctx, input }) =>
-      loadSpecResource({ orgId: ctx.user.orgId, type: "agents", slug: input.slug, requestedVersion: input.version, isNew: input.isNew }),
-    ),
-
+  // Role-play calibration.
   /** The role play being calibrated and the persona it speaks as. */
   calibrationAgent: studioProcedure.input(slugInput).query(async ({ ctx, input }) => {
     const agent = await db.agent.findFirst({
@@ -98,17 +89,6 @@ export const pageRouter = t.router({
     });
     if (!agent) return notFound();
     return { slug: agent.slug, scenarioName: agentDisplayName(agent.slug, agent.name), twinName: agent.persona.name };
-  }),
-
-  fidelity: studioProcedure.query(async ({ ctx }) => {
-    const [report, scenarios] = await Promise.all([
-      loadLatestFidelityReport(ctx.user.orgId),
-      listSpecSummaries("agents", ctx.user.orgId),
-    ]);
-    const baseline = report?.scenarios[0]?.persona.slug
-      ? await getPersonaBaseline(ctx.user.orgId, report.scenarios[0].persona.slug)
-      : null;
-    return { report, scenarios: scenarios.map(({ slug, name, version }) => ({ slug, name, version })), baseline };
   }),
 
   users: studioProcedure.query(({ ctx }) => listUsers(ctx.user.orgId)),
@@ -128,9 +108,11 @@ export const pageRouter = t.router({
   personaEdit: studioProcedure.input(slugInput).query(async ({ ctx, input }) => {
     const item = await getPersona(ctx.user.orgId, input.slug);
     if (!item) return notFound();
-    // A role-play persona picks its voice from the voice library; the trainer's own uses their cloned voice.
-    return { item, voices: item.isOwn ? [] : await pickableVoices(ctx.user.orgId) };
+    return { item, voices: await pickableVoices(ctx.user.orgId) };
   }),
+
+  /** The create form's voice choices. */
+  personaNew: studioProcedure.query(async ({ ctx }) => ({ voices: await pickableVoices(ctx.user.orgId) })),
 
   // Sessions.
   sessions: studioProcedure
@@ -150,15 +132,19 @@ export const pageRouter = t.router({
     // Learners see role plays plus only the twins assigned to them; admin and team see every agent.
     const agents = await startableAgentSlugs(orgId, user, runnable, isStudioRole(ctx.user.role));
     const initialAgent = input.agent && agents.includes(input.agent) ? input.agent : agents[0];
-    const [agentNames, agentPersonas, introVideos, agentPhotos, agentContextRequired, agentContextUploads] = await Promise.all([
+    const [agentNames, agentPersonas, introVideos, agentPhotos, agentContextRequired, agentContextUploads, agentBriefs, agentPersonaNames] = await Promise.all([
       listAgentNames(orgId, agents),
       listAgentPersonas(orgId, agents),
       listScenarioIntroVideos(orgId, agents),
       agentPhotoUrls(orgId, agents),
       listAgentContextRequired(orgId, agents),
       listAgentContextUploads(orgId, agents),
+      listAgentBriefs(orgId, agents),
+      listAgentPersonaNames(orgId, agents),
     ]);
     return {
+      agentBriefs,
+      agentPersonaNames,
       personas,
       agents,
       agentNames,
@@ -200,12 +186,13 @@ export const pageRouter = t.router({
   }),
 
   voices: studioProcedure.query(async ({ ctx }) => {
-    const voices = await db.voice.findMany({
-      where: { OR: [{ orgId: ctx.user.orgId }, { orgId: null }] },
-      orderBy: { createdAt: "desc" },
-      select: { id: true, name: true, kind: true, status: true, createdAt: true },
-    });
-    const rows = voices.map((voice) => ({ ...voice, createdAt: voice.createdAt.toISOString() }));
+    const [available, deleting] = await Promise.all([
+      listAvailableVoices(ctx.user.orgId),
+      db.voice.findMany({ where: { orgId: ctx.user.orgId, kind: "cloned", status: "deleting" } }),
+    ]);
+    const rows = [...available, ...deleting].map((voice) => ({
+      id: voice.id, name: voice.name, kind: voice.kind, status: voice.status, createdAt: voice.createdAt.toISOString(),
+    }));
     return { mine: rows.filter((voice) => voice.kind === "cloned"), samples: rows.filter((voice) => voice.kind === "sample") };
   }),
 

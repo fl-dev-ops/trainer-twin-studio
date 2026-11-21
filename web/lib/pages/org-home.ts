@@ -77,7 +77,8 @@ export async function loadOrgHome(): Promise<OrgHomeView> {
       trainer,
       roleplays: roleplays.map((row) => ({
         name: row.deployment.agent.name,
-        description: text(record(row.deployment.agent.data).objective),
+        // What the learner is told before the call (a role play's learner brief), else the older objective.
+        description: text(record(record(row.deployment.agent.data).roleplayBrief).learnerBrief) ?? text(record(row.deployment.agent.data).objective),
         href: `/s/${encodeURIComponent(row.shareCode)}`,
         expiresAt: row.expiresAt.toISOString(),
       })),
