@@ -5,12 +5,12 @@ import { useVoiceAssistant } from "@livekit/components-react";
 import { cn } from "@/lib/utils";
 
 /** The trainer's tile (V2 prototype): the persona's photo, else an initial on the light wash; a status pill and a name tag. */
-export function AgentTile({ persona, photoUrl = null, compact = false }: { persona: string; photoUrl?: string | null; compact?: boolean }) {
+export function AgentTile({ persona, name: displayName, photoUrl = null, compact = false }: { persona: string; name?: string; photoUrl?: string | null; compact?: boolean }) {
   const { state } = useVoiceAssistant();
   const isSpeaking = state === "speaking";
   const isThinking = state === "thinking";
 
-  const name = persona.replaceAll("-", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()) || "Trainer";
+  const name = displayName?.trim() || persona.replaceAll("-", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()) || "Trainer";
 
   return (
     <div

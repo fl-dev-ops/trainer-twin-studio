@@ -100,6 +100,8 @@ type Props = {
   agentNames?: Record<string, string>;
   initialAgent?: string;
   agentPersonas?: Record<string, string>;
+  /** Who the learner talks to, by agent: the role play's client name or the persona's name. */
+  agentPersonaNames?: Record<string, string>;
   agentContextRequired?: Record<string, boolean>;
   agentContextUploads?: Record<string, AgentContextUpload>;
   sessionCode?: string;
@@ -132,6 +134,7 @@ export function SessionView({
   agentNames = {},
   initialAgent,
   agentPersonas = {},
+  agentPersonaNames = {},
   agentContextRequired = {},
   agentContextUploads = {},
   sessionCode,
@@ -954,7 +957,7 @@ export function SessionView({
   }, [room]);
 
   const title = scenarioName ?? agentNames[agent] ?? agent.replaceAll("-", " ");
-  const trainerName = persona.replaceAll("-", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()) || "Trainer";
+  const trainerName = agentPersonaNames[agent] || persona.replaceAll("-", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()) || "Trainer";
 
   if (sessionCode && !prejoinComplete) {
     return (
@@ -1378,7 +1381,7 @@ export function SessionView({
                         className="h-full min-h-0 w-full"
                       />
                     ) : (
-                      <AgentTile persona={persona} photoUrl={agentPhotos[agent] ?? null} compact={surface !== null} />
+                      <AgentTile persona={persona} name={trainerName} photoUrl={agentPhotos[agent] ?? null} compact={surface !== null} />
                     )}
                   </div>
                   <div className={cn("w-full shrink-0 aspect-[4/3]", !surface && "max-w-[340px] sm:min-w-0 sm:flex-[1_1_0]")}>

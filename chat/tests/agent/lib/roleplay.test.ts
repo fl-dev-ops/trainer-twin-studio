@@ -182,3 +182,34 @@ describe("ported interview (web/lib/interview-skill.ts): an authored skill where
     assert.equal(roleplaySkill("ROLEPLAY", { name: "Impact Check", stages: [] }), undefined);
   });
 });
+
+describe("knowledge search switch", () => {
+  const originalFetch = globalThis.fetch;
+  afterEach(() => { clearSessionModeCache(); globalThis.fetch = originalFetch; });
+
+  test("knowledge tools run in twins; in a role play only when its Knowledge search is on", async () => {
+    process.env.COPILOT_SERVICE_SECRET ??= "test-secret";
+    const { knowledgeGuard } = await import("../../../agent/lib/session-mode-lookup");
+    const ctx = (sessionId: string) => ({ session: { auth: { current: { principalId: "org1", attributes: { sessionId, agentSlug: "x" } } } } });
+    globalThis.fetch = (async (_url, init) => {
+      const body = JSON.parse(String(init?.body));
+      const on = body.sessionId === "rp-on";
+      return Response.json({ agent: { kind: "ROLEPLAY", data: { tools: { knowledge: on } } } });
+    }) as typeof fetch;
+    primeSessionMode("org1", "tw", "x", "twin");
+    primeSessionMode("org1", "rp-on", "x", "roleplay-client");
+    primeSessionMode("org1", "rp-off", "x", "roleplay-client");
+    assert.equal(await knowledgeGuard(ctx("tw")), null);
+    assert.equal(await knowledgeGuard(ctx("rp-on")), null);
+    assert.deepEqual(await knowledgeGuard(ctx("rp-off")), { disabled: true, reason: "Not available in skill-based role play. Follow the role play and use its enabled tools." });
+  });
+
+  test("the authored prompt tells the AI to search before judging only when the switch is on", () => {
+    const data = { source: "scenario-ingest", skill: "# Interview", scenario: { trainer_role: "Interviewer", learner_role: "Candidate" } };
+    const tools = { canvas: false, codeEditor: false, preview: false, choice: false };
+    const on = formatSessionSpec({ ...base, roleplay: roleplaySkill("ROLEPLAY", data), tools: { ...tools, knowledge: true } });
+    const off = formatSessionSpec({ ...base, roleplay: roleplaySkill("ROLEPLAY", data), tools });
+    assert.match(on, /Knowledge search is on: call search_knowledge before you judge/);
+    assert.doesNotMatch(off, /search_knowledge/);
+  });
+});

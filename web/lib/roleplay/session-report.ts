@@ -75,6 +75,11 @@ const practicePrompt = (aiRole: string, learnerRole: string) => CLIENT_PROMPT
 /** Client role plays (the default) keep the sales coach; others are judged as the practice they are. */
 const isClientRole = (aiRole: string) => /^(the )?client$/i.test(aiRole.trim());
 
+/** The report's system prompt for who the AI and the learner played. */
+export function reportSystemPrompt(aiRole = "Client", learnerRole = "Learner") {
+  return isClientRole(aiRole) ? CLIENT_PROMPT : practicePrompt(aiRole.trim(), learnerRole.trim() || "Learner");
+}
+
 export type RoleplayReportInput = RoleplayAfter & {
   /** Who the AI and the learner play (scenario.json); "Client" and "Learner" by default. */
   aiRole?: string;
@@ -226,7 +231,7 @@ ${input.rubric.map((row) => `- ${row.name} (max ${row.points})`).join("\n")}
 ${transcript}`;
   const content = await callReportModel({
     sessionId,
-    system: client ? CLIENT_PROMPT : practicePrompt(aiRole, input.learnerRole?.trim() || "Learner"),
+    system: reportSystemPrompt(aiRole, input.learnerRole ?? "Learner"),
     user,
     schemaName: "roleplay_session_report",
     schema: sessionReportJsonSchema({ rubric: input.rubric.length > 0, goals: input.goals.length > 0 }),

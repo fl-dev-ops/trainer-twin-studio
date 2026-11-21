@@ -16,6 +16,7 @@ import {
   listAgentBriefs,
   listAgentContextUploads,
   listAgentNames,
+  listAgentPersonaNames,
   listAgentPersonas,
   listRunnableSpecs,
   listScenarioIntroVideos,
@@ -131,7 +132,7 @@ export const pageRouter = t.router({
     // Learners see role plays plus only the twins assigned to them; admin and team see every agent.
     const agents = await startableAgentSlugs(orgId, user, runnable, isStudioRole(ctx.user.role));
     const initialAgent = input.agent && agents.includes(input.agent) ? input.agent : agents[0];
-    const [agentNames, agentPersonas, introVideos, agentPhotos, agentContextRequired, agentContextUploads, agentBriefs] = await Promise.all([
+    const [agentNames, agentPersonas, introVideos, agentPhotos, agentContextRequired, agentContextUploads, agentBriefs, agentPersonaNames] = await Promise.all([
       listAgentNames(orgId, agents),
       listAgentPersonas(orgId, agents),
       listScenarioIntroVideos(orgId, agents),
@@ -139,9 +140,11 @@ export const pageRouter = t.router({
       listAgentContextRequired(orgId, agents),
       listAgentContextUploads(orgId, agents),
       listAgentBriefs(orgId, agents),
+      listAgentPersonaNames(orgId, agents),
     ]);
     return {
       agentBriefs,
+      agentPersonaNames,
       personas,
       agents,
       agentNames,
