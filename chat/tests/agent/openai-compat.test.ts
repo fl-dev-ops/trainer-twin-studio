@@ -103,6 +103,28 @@ for (const [name, outcome, result, spoken, expected] of [
   });
 }
 
+for (const [name, facts] of [
+  ["provider fails before any reply", [
+    { type: "turn.settled", data: { turnId: "t1", outcome: "failed", error: { message: "private provider error" } } },
+    { type: "delivery.settled", data: { deliveryId: "d1", outcome: "handled" } },
+  ]],
+  ["stream breaks after partial text", [
+    { type: "content.delta", data: { partId: "p1", kind: "text", delta: "One moment" } },
+  ]],
+  ["turn produces only reasoning", [
+    { type: "content.delta", data: { partId: "p1", kind: "reasoning", delta: "private reasoning" } },
+    { type: "delivery.settled", data: { deliveryId: "d1", outcome: "handled" } },
+  ]],
+] satisfies [string, Fact[]][]) {
+  test(`a text client can retry when the ${name}`, async () => {
+    const { response, body } = await complete(undefined, [{ type: "turn.started", data: { turnId: "t1" } }, ...facts]);
+    assert.equal(response.status, 200);
+    assert.match(body, /"code":"chat_turn_failed"/);
+    assert.doesNotMatch(body, /"finish_reason":"stop"|private provider error|private reasoning/);
+    assert.ok(body.trimEnd().endsWith("data: [DONE]"));
+  });
+}
+
 test("rejects invalid thinking-budget headers without sending an Eve turn", async () => {
   for (const budget of ["invalid", "", "NaN", "Infinity", "1.5", "-2", "9007199254740992"]) {
     const { response, body, sentAttributes } = await complete(budget);

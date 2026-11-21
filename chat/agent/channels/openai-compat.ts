@@ -393,7 +393,8 @@ export default defineChannel({
         // "Why this answer" (twin sessions): the reply and each lookup's input and output, posted after the turn.
         let replyText = "";
         const evidenceCalls: { tool: string; input: unknown; output: unknown }[] = [];
-        const finishReason = () => "stop";
+        let settled = false;
+        const writeTurnFailure = () => writeChunk({ error: { code: "chat_turn_failed", message: "The reply could not be completed. Please try again." } });
 
         try {
           let streamDone = false;
@@ -530,6 +531,11 @@ export default defineChannel({
             }
 
             const terminal = ev.type === "terminal";
+            if (terminal && (ev.status.endsWith(".failed") || ev.status === "delivery.refused")) {
+              await writeTurnFailure();
+              settled = true;
+              break turnLoop;
+            }
             // The model hung up and never spoke in this turn (its goodbye may come in a later step): goodbye now.
             if (terminal && pendingGoodbye !== null && !textStarted) {
               console.warn("[openai-compat] end_call without goodbye; speaking fallback", { sessionId, mode, outcome: pendingGoodbye });
@@ -539,7 +545,8 @@ export default defineChannel({
               await writeText(END_CALL_FALLBACK_GOODBYE[pendingGoodbye] ?? END_CALL_FALLBACK_GOODBYE.declined);
             }
 
-            if (terminal && (sawActivity || sawTurnStarted)) {
+            if (terminal && (sawActivity || sawTurnStarted) && (textStarted || allToolsCalled.length > 0 || ev.status === "turn.cancelled")) {
+              settled = true;
               const wallMs = Date.now() - t_start;
               const lastToolEndMs = executedToolTimings.length > 0
                 ? Math.max(...executedToolTimings.map((t) => toolExecutionTimes[t.callId]?.end ?? t_start))
@@ -610,7 +617,7 @@ export default defineChannel({
                 object: "chat.completion.chunk",
                 created,
                 model,
-                choices: [{ index: 0, delta: {}, finish_reason: finishReason() }],
+                choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
                 tools_called: allToolsCalled,
                 retrieval_traces: retrievalTraces,
                 ttft_ms: ttftMs ?? wallMs,
@@ -639,9 +646,10 @@ export default defineChannel({
             }
             }
           }
-        } catch {
-          // Stream errors fall through to finally
+        } catch (error) {
+          if (!request.signal.aborted) console.error("[openai-compat] stream interrupted", { sessionId, type: error instanceof Error ? error.name : "unknown" });
         } finally {
+          if (!settled && !request.signal.aborted) await writeTurnFailure().catch(() => {});
           await writer.write(encoder.encode("data: [DONE]\n\n")).catch(() => {});
           await writer.close().catch(() => {});
           readAbort.abort();
