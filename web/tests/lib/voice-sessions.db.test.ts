@@ -14,9 +14,8 @@ import { getAgentConfigForAgent } from "@/lib/specs";
 import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "./minutes-test-db";
 import type { Prisma, Voice } from "@/lib/generated/prisma/client";
 
-const isolatedDatabase = "postgresql://surya@localhost:5432/trainertwin_shared_skills_test?host=/tmp";
 
-describe.skipIf(process.env.DATABASE_URL !== isolatedDatabase || !localMinutesDb)("Phase 1 native session voice pins (real Postgres)", () => {
+describe.skipIf(!localMinutesDb)("Phase 1 native session voice pins (real Postgres)", () => {
   let f: MinutesFixture;
   let other: MinutesFixture;
   let previousSecret: string | undefined;

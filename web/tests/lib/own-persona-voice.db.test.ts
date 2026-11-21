@@ -13,9 +13,8 @@ import { attachPersonaVoice } from "@/lib/voices";
 import { fundOrg } from "../setup/meteroid";
 import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "./minutes-test-db";
 
-const isolatedDatabase = "postgresql://surya@localhost:5432/trainertwin_shared_skills_test?host=/tmp";
 
-describe.skipIf(process.env.DATABASE_URL !== isolatedDatabase || !localMinutesDb)("own-persona voice selection and copied twin overrides (real Postgres)", () => {
+describe.skipIf(!localMinutesDb)("own-persona voice selection and copied twin overrides (real Postgres)", () => {
   let f: MinutesFixture;
   let secret: string | undefined;
   let oldVoiceId: string;

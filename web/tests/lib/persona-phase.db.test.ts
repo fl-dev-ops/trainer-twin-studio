@@ -13,10 +13,9 @@ import { deleteSpec } from "@/lib/specs";
 import { fundOrg } from "../setup/meteroid";
 import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "./minutes-test-db";
 
-const isolatedDatabase = "postgresql://surya@localhost:5432/trainertwin_shared_skills_test?host=/tmp";
 
 /** Persona phase 2 (plans/voice-persona-phases.md): one reusable definition, frozen per session. */
-describe.skipIf(process.env.DATABASE_URL !== isolatedDatabase || !localMinutesDb)("reusable persona with a short form (real Postgres)", () => {
+describe.skipIf(!localMinutesDb)("reusable persona with a short form (real Postgres)", () => {
   let f: MinutesFixture;
   let other: MinutesFixture;
   let previousSecret: string | undefined;

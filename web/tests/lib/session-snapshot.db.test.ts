@@ -4,9 +4,8 @@ import { skillPackageHash } from "@/lib/skills";
 import { activateSkillOwnership, skillOwnership } from "@/lib/skill-ownership";
 import { checkSkillMigrationCoverage } from "@/lib/skill-migration";
 import { MainCollectionService } from "@/lib/main-collection";
-import { db, minutesFixture, type MinutesFixture } from "./minutes-test-db";
+import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "./minutes-test-db";
 
-const isolatedDatabase = "postgresql://surya@localhost:5432/trainertwin_shared_skills_test?host=/tmp";
 const files = new Map<string, string>();
 const s3 = await import("@/lib/s3");
 const readFile = mock(async (key: string) => {
@@ -20,7 +19,7 @@ const readFile = mock(async (key: string) => {
 });
 mock.module("@/lib/s3", () => ({ ...s3, s3Configured: true, getObjectText: readFile }));
 
-describe.skipIf(process.env.DATABASE_URL !== isolatedDatabase)("historical lazy session snapshots (real Postgres)", () => {
+describe.skipIf(!localMinutesDb)("historical lazy session snapshots (real Postgres)", () => {
   let f: MinutesFixture;
   let personaId: string;
   let count: ReturnType<typeof spyOn<typeof MainCollectionService, "skillItemCount">>;

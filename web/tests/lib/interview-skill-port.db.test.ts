@@ -5,9 +5,8 @@ import { activateSession } from "@/lib/interview-sessions";
 import { buildSessionContext } from "@/lib/session-context";
 import { loadSessionSkills } from "@/lib/session-skills";
 import { interviewSkillPackage } from "@/lib/interview-skill";
-import { db, minutesFixture, type MinutesFixture } from "./minutes-test-db";
+import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "./minutes-test-db";
 
-const isolatedDatabase = "postgresql://surya@localhost:5432/trainertwin_shared_skills_test?host=/tmp";
 const files = new Map<string, string>();
 const s3 = await import("@/lib/s3");
 mock.module("@/lib/s3", () => ({
@@ -32,7 +31,7 @@ const interviewData = (instruction = "Challenge every quantified claim.") => ({
   stages: [{ id: "impact-validation", name: "Impact Validation", objective: "Validate claims.", config: { evidence: { keys: ["baseline"], completion_keys: ["baseline"] } } }],
 });
 
-describe.skipIf(process.env.DATABASE_URL !== isolatedDatabase)("interview → skill port (real Postgres)", () => {
+describe.skipIf(!localMinutesDb)("interview → skill port (real Postgres)", () => {
   let f: MinutesFixture;
   let secret: string | undefined;
   const spies: { mockRestore(): void }[] = [];

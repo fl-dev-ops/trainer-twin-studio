@@ -5,10 +5,12 @@ import { meteroidHandlers } from "../setup/meteroid";
 import { randomUUID } from "node:crypto";
 import { db } from "@/lib/db";
 import { voicePrefix } from "@/lib/s3";
+import { testDatabaseUrl } from "../setup/test-db-url";
 import type { Prisma } from "@/lib/generated/prisma/client";
 
 // Never use a remote database, or a fake left behind by another file's mock.module.
-const local = /@(localhost|127\.0\.0\.1)[:/]/.test(process.env.DATABASE_URL ?? "");
+const testUrl = testDatabaseUrl();
+const local = testUrl !== null && testUrl === process.env.DATABASE_URL;
 const realDb = typeof (db as { $transaction?: unknown }).$transaction === "function" && "minuteLedger" in db;
 export const localMinutesDb = local && realDb;
 export { db };

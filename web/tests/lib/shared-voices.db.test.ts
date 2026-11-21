@@ -4,10 +4,6 @@ import * as database from "@/lib/db";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import type { MinutesFixture } from "./minutes-test-db";
 
-const databaseUrl = process.env.DATABASE_URL ?? "";
-const isolatedDatabase = URL.canParse(databaseUrl)
-  && ["localhost", "127.0.0.1"].includes(new URL(databaseUrl).hostname)
-  && new URL(databaseUrl).pathname === "/trainertwin_shared_skills_test";
 let voiceFault: { orgId: string; operation: "retirement" | "finalization" | "ready-response" } | null = null;
 let faultHits = 0;
 const db = database.db.$extends({
@@ -65,7 +61,7 @@ mock.module("@/lib/s3", () => ({
   getObjectText: async (key: string) => { reads.push(key); return objects.get(key); },
 }));
 const fixtures = await import("./minutes-test-db");
-const { minutesFixture } = fixtures;
+const { localMinutesDb, minutesFixture } = fixtures;
 const { attachPersonaVoice, availableVoiceWhere, createVoice, deleteVoice, listAvailableVoices, renameVoice } = await import("@/lib/voices");
 
 function barrier() {
@@ -90,7 +86,7 @@ async function waitForBlockedBy(pid: number) {
 const referenceKinds = ["persona", "persona-json", "agent", "spec", "snapshot", "native-session"] as const;
 type ReferenceKind = typeof referenceKinds[number];
 
-describe.skipIf(!isolatedDatabase)("shared voice references (isolated real Postgres)", () => {
+describe.skipIf(!localMinutesDb)("shared voice references (isolated real Postgres)", () => {
   let f: MinutesFixture;
   let other: MinutesFixture;
   let personaId: string;

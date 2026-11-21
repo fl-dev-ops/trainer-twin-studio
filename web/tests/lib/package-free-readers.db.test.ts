@@ -8,9 +8,8 @@ import { buildSessionContext } from "@/lib/session-context";
 import { hydrateAgentSkill } from "@/lib/skill-history";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import type { RoleplayBuilder } from "@/lib/roleplay/skill";
-import { db, minutesFixture, type MinutesFixture } from "./minutes-test-db";
+import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "./minutes-test-db";
 
-const isolatedDatabase = "postgresql://surya@localhost:5432/trainertwin_shared_skills_test?host=/tmp";
 const files = new Map<string, string>();
 const s3 = await import("@/lib/s3");
 mock.module("@/lib/s3", () => ({
@@ -25,7 +24,7 @@ mock.module("@/lib/s3", () => ({
 const { saveRoleplay, ingestScenario } = await import("@/lib/scenario-ingest");
 const { POST } = await import("@/app/api/copilot/studio/route");
 
-describe.skipIf(process.env.DATABASE_URL !== isolatedDatabase)("Phase 5 package-free readers (real Postgres)", () => {
+describe.skipIf(!localMinutesDb)("Phase 5 package-free readers (real Postgres)", () => {
   let f: MinutesFixture;
   let secret: string | undefined;
   const spies: { mockRestore(): void }[] = [];

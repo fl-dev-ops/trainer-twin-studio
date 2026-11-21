@@ -4,9 +4,8 @@ import { MainCollectionService } from "@/lib/main-collection";
 import { activateSession } from "@/lib/interview-sessions";
 import { buildSessionContext } from "@/lib/session-context";
 import { briefFixtures } from "../fixtures/roleplay-briefs";
-import { db, minutesFixture, type MinutesFixture } from "./minutes-test-db";
+import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "./minutes-test-db";
 
-const isolatedDatabase = "postgresql://surya@localhost:5432/trainertwin_shared_skills_test?host=/tmp";
 const files = new Map<string, string>();
 const s3 = await import("@/lib/s3");
 mock.module("@/lib/s3", () => ({
@@ -22,7 +21,7 @@ const { runCopilotStudio } = await import("@/lib/copilot-studio");
 const { roleplayRouter } = await import("@/lib/roleplay/trpc");
 const { listAgentBriefs } = await import("@/lib/specs");
 
-describe.skipIf(process.env.DATABASE_URL !== isolatedDatabase)("role plays written from requirements, through the copilot's studio actions (real Postgres)", () => {
+describe.skipIf(!localMinutesDb)("role plays written from requirements, through the copilot's studio actions (real Postgres)", () => {
   let f: MinutesFixture;
   let secret: string | undefined;
   const spies: { mockRestore(): void }[] = [];

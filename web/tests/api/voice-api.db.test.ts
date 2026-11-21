@@ -16,9 +16,7 @@ import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "../lib/
 mock.module("server-only", () => ({}));
 const { pageRouter } = await import("@/lib/pages/router");
 
-const isolatedDatabase = "postgresql://surya@localhost:5432/trainertwin_shared_skills_test?host=/tmp";
-
-describe.skipIf(process.env.DATABASE_URL !== isolatedDatabase || !localMinutesDb)("Phase 1 voice API eligibility and trusted TTS protocol", () => {
+describe.skipIf(!localMinutesDb)("Phase 1 voice API eligibility and trusted TTS protocol", () => {
   let f: MinutesFixture;
   let other: MinutesFixture;
   const voices: string[] = [];
@@ -237,6 +235,25 @@ describe.skipIf(process.env.DATABASE_URL !== isolatedDatabase || !localMinutesDb
     expect((await speech(speechRequest(voice.id))).status).toBe(409);
     expect((await resolve(resolverRequest(), context(voice.id))).status).toBe(409);
     expect(fetching).not.toHaveBeenCalled(); expect(signing).not.toHaveBeenCalled();
+  });
+
+  test("stored references from an older storage base still work in the library, resolver and deletion", async () => {
+    const voice = await fixtureVoice();
+    const prefix = `old/trainertwin/kb/${f.org.id}/tts-voices/${voice.id}`;
+    const s3AudioKey = `${prefix}/reference.wav`;
+    const s3TranscriptKey = `${prefix}/transcript.txt`;
+    files.set(s3AudioKey, new Uint8Array([0, 0]));
+    files.set(s3TranscriptKey, "  Original reference text.\n");
+    await db.voice.update({ where: { id: voice.id }, data: { s3AudioKey, s3TranscriptKey } });
+
+    expect(await (await list()).json()).toMatchObject({ voices: expect.arrayContaining([expect.objectContaining({ id: voice.id })]) });
+    const reference = await resolve(resolverRequest(), context(voice.id));
+    expect(reference.status).toBe(200);
+    expect(await reference.json()).toMatchObject({ id: voice.id, audioUrl: `https://s3.test/${s3AudioKey}`, transcript: "Original reference text." });
+    expect(signing).toHaveBeenCalledWith(s3AudioKey, 600);
+    expect((await remove(resolverRequest(), context(voice.id))).status).toBe(204);
+    expect(deleting.mock.calls.map(([key]) => key).sort()).toEqual([s3AudioKey, s3TranscriptKey]);
+    expect(await db.voice.findUnique({ where: { id: voice.id } })).toBeNull();
   });
 
   test("library and picker listings exclude invalid object references", async () => {

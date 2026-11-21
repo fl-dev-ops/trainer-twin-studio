@@ -11,9 +11,8 @@ import { readSpec, readVersion } from "@/lib/specs";
 import { runCopilotStudio } from "@/lib/copilot-studio";
 import { ownershipLock, packageFieldsOmitted } from "@/lib/skill-ownership";
 import type { RoleplayBuilder } from "@/lib/roleplay/skill";
-import { db, minutesFixture, type MinutesFixture } from "./minutes-test-db";
+import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "./minutes-test-db";
 
-const isolatedDatabase = "postgresql://surya@localhost:5432/trainertwin_shared_skills_test?host=/tmp";
 const files = new Map<string, string>();
 let corruptRead = false;
 let failIndex = false;
@@ -38,7 +37,7 @@ function barrier() {
   return { promise, resolve };
 }
 
-describe.skipIf(process.env.DATABASE_URL !== isolatedDatabase)("managed-only skill publication (real Postgres)", () => {
+describe.skipIf(!localMinutesDb)("managed-only skill publication (real Postgres)", () => {
   let f: MinutesFixture;
   let documentId: string;
   let secret: string | undefined;

@@ -455,11 +455,6 @@ export default defineChannel({
                   allToolsCalled.push({ name: action.toolName, callId: action.callId, input: action.input });
                   toolExecutionTimes[action.callId] = { start: Date.now() };
                 }
-                // The browser disconnects ~5s after end_call: when the model hung up before speaking, a goodbye is
-                // spoken when the turn ends unless the model's own words follow first.
-                if (action.kind === "tool-call" && action.toolName === "end_call" && !textStarted) {
-                  pendingGoodbye = String((action.input as { outcome?: unknown } | null)?.outcome ?? "");
-                }
               }
               continue;
             }
@@ -467,6 +462,10 @@ export default defineChannel({
             if (ev.type === "action.result") {
               const result = ev.data.result;
               if (result?.kind === "tool-result") {
+                if (result.toolName === "end_call" && !result.isError && !textStarted) {
+                  const close = result.output as { status?: string; outcome?: string } | undefined;
+                  if (close?.status === "ended") pendingGoodbye = close.outcome ?? "";
+                }
                 const callId = result.callId ?? "";
                 const timing = toolExecutionTimes[callId];
                 if (timing) {

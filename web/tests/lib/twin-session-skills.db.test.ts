@@ -13,9 +13,8 @@ import { readAgentSkillVersion } from "@/lib/skill-history";
 import { scoreCalibrationOnce } from "@/lib/twin/calibration-score";
 import { endTwinSession } from "@/workflows/end-twin-session";
 import { skillRefusals } from "@/lib/skills";
-import { db, minutesFixture, type MinutesFixture } from "./minutes-test-db";
+import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "./minutes-test-db";
 
-const isolatedDatabase = "postgresql://surya@localhost:5432/trainertwin_shared_skills_test?host=/tmp";
 const files = new Map<string, string>();
 const s3 = await import("@/lib/s3");
 const readObject = mock(async (key: string) => {
@@ -32,7 +31,7 @@ mock.module("@/lib/s3", () => ({
 const { ingestTwinSkill, ingestScenario } = await import("@/lib/scenario-ingest");
 const { POST } = await import("@/app/api/copilot/studio/route");
 
-describe.skipIf(process.env.DATABASE_URL !== isolatedDatabase)("Phase 3 twin skill pins (real Postgres)", () => {
+describe.skipIf(!localMinutesDb)("Phase 3 twin skill pins (real Postgres)", () => {
   let f: MinutesFixture;
   let other: MinutesFixture;
   let secret: string | undefined;

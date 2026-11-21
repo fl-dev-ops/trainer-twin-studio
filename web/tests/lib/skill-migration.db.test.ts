@@ -1,11 +1,10 @@
 import { createHash } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
 import { MainCollectionService } from "@/lib/main-collection";
-import { db, minutesFixture, type MinutesFixture } from "./minutes-test-db";
+import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "./minutes-test-db";
 import { skillPackageHash, type SkillFormat } from "@/lib/skills";
 import type { Prisma } from "@/lib/generated/prisma/client";
 
-const isolatedDatabase = "postgresql://surya@localhost:5432/trainertwin_shared_skills_test?host=/tmp";
 const objects = new Map<string, string>();
 const s3 = await import("@/lib/s3");
 mock.module("@/lib/s3", () => ({
@@ -20,7 +19,7 @@ mock.module("@/lib/s3", () => ({
 }));
 const { migrateSkills, inventorySkills, checkSkillMigrationCoverage } = await import("@/lib/skill-migration");
 
-describe.skipIf(process.env.DATABASE_URL !== isolatedDatabase)("skill migration (real isolated Postgres)", () => {
+describe.skipIf(!localMinutesDb)("skill migration (real isolated Postgres)", () => {
   let f: MinutesFixture;
   const counts = new Map<string, number>();
   const spies: { mockRestore(): void }[] = [];

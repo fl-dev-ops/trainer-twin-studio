@@ -15,9 +15,8 @@ import { listRunnableSpecs } from "@/lib/specs";
 import { builtFrom } from "@/lib/skill-sources";
 import type { RoleplayBuilder } from "@/lib/roleplay/skill";
 import type { Prisma } from "@/lib/generated/prisma/client";
-import { db, minutesFixture, type MinutesFixture } from "./minutes-test-db";
+import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "./minutes-test-db";
 
-const isolatedDatabase = "postgresql://surya@localhost:5432/trainertwin_shared_skills_test?host=/tmp";
 const canaryReference = "isolated-test-attestation-not-live";
 const files = new Map<string, string>();
 const indexes = new Map<string, ScenarioExample[]>();
@@ -42,7 +41,7 @@ const formats = ["twin", "legacy-twin", "builder", "authored"] as const;
 type Format = typeof formats[number];
 const indexKey = (org: string, id: string, scope: string | number) => JSON.stringify([org, id, scope]);
 
-describe.skipIf(process.env.DATABASE_URL !== isolatedDatabase)("managed skill ownership lifecycle (real Postgres, boundary-mocked canary)", () => {
+describe.skipIf(!localMinutesDb)("managed skill ownership lifecycle (real Postgres, boundary-mocked canary)", () => {
   let f: MinutesFixture;
   let other: MinutesFixture;
   let secret: string | undefined;

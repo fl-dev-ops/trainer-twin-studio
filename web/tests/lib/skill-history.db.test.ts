@@ -2,11 +2,10 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { hydrateAgentSkill, getMappedSkillPackage, readAgentSkillVersion, carryAgentSkillVersion } from "@/lib/skill-history";
 import { builtFrom, usedIn } from "@/lib/skill-sources";
 import { skillPackageHash } from "@/lib/skills";
-import { db, minutesFixture, type MinutesFixture } from "./minutes-test-db";
+import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "./minutes-test-db";
 
-const isolatedDatabase = "postgresql://surya@localhost:5432/trainertwin_shared_skills_test?host=/tmp";
 
-describe.skipIf(process.env.DATABASE_URL !== isolatedDatabase)("Phase 4 exact Agent package history (real Postgres)", () => {
+describe.skipIf(!localMinutesDb)("Phase 4 exact Agent package history (real Postgres)", () => {
   let f: MinutesFixture;
   let other: MinutesFixture;
   let skillId: string;

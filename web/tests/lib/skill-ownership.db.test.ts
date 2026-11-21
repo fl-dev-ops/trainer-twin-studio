@@ -2,9 +2,8 @@ import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:
 import { db, withLock } from "@/lib/db";
 import { MainCollectionService } from "@/lib/main-collection";
 import { Prisma } from "@/lib/generated/prisma/client";
-import { minutesFixture, type MinutesFixture } from "./minutes-test-db";
+import { localMinutesDb, minutesFixture, type MinutesFixture } from "./minutes-test-db";
 
-const isolatedDatabase = "postgresql://surya@localhost:5432/trainertwin_shared_skills_test?host=/tmp";
 const objects = new Map<string, string>();
 const s3 = await import("@/lib/s3");
 mock.module("@/lib/s3", () => ({
@@ -35,7 +34,7 @@ test("package omission removes only four top-level fields without mutating setti
   expect(packageFieldsOmitted({})).toEqual({});
 });
 
-describe.skipIf(process.env.DATABASE_URL !== isolatedDatabase)("skill ownership (real isolated Postgres)", () => {
+describe.skipIf(!localMinutesDb)("skill ownership (real isolated Postgres)", () => {
   let f: MinutesFixture;
   const spies: { mockRestore(): void }[] = [];
   beforeEach(async () => {

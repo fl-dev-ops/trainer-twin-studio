@@ -3,14 +3,14 @@
  *
  * Unit tests cover the pure helpers. DB-backed tests cover claim ordering,
  * single-flight behavior, stale-row recovery, enqueue guards, and drain
- * semantics against the real local database (same setup as
- * lib/runtime/runtime-e2e.test.ts). analyzePersonaSource is stubbed via
- * mock.module so no OpenRouter/S3 calls are made.
+ * semantics against the local test database. analyzePersonaSource is stubbed
+ * so no model or storage calls are made.
  */
 
 import { describe, expect, it, beforeAll, afterAll, mock } from "bun:test";
-import { db } from "@/lib/db";
+import type { Prisma } from "@/lib/generated/prisma/client";
 import { randomBytes } from "node:crypto";
+import { db, localMinutesDb, minutesFixture } from "./minutes-test-db";
 import {
   MAX_PERSONA_ANALYSIS_ATTEMPTS,
   ACTIVE_ANALYSIS_TTL_MS,
@@ -67,12 +67,13 @@ describe("persona analysis queue helpers", () => {
   });
 });
 
-describe("persona analysis queue (DB)", () => {
-  let orgId = "";
+describe.skipIf(!localMinutesDb)("persona analysis queue (DB)", () => {
+  const fixture = minutesFixture();
+  const orgId = fixture.org.id;
   let personaId = "";
   const createdSourceIds: string[] = [];
 
-  const createSource = async (status: string, metadata: Record<string, unknown> = {}) => {
+  const createSource = async (status: string, metadata: Prisma.InputJsonObject = {}) => {
     const source = await db.personaSource.create({
       data: {
         personaId,
@@ -81,7 +82,7 @@ describe("persona analysis queue (DB)", () => {
         name: `src-${randomBytes(4).toString("hex")}.txt`,
         s3Key: "test/unused",
         status,
-        metadata: metadata as any,
+        metadata,
       },
     });
     createdSourceIds.push(source.id);
@@ -89,22 +90,14 @@ describe("persona analysis queue (DB)", () => {
   };
 
   beforeAll(async () => {
-    const member = await db.member.findFirstOrThrow();
-    orgId = member.organizationId;
-    const persona = await db.persona.create({
-      data: {
-        orgId,
-        slug: `test-queue-${randomBytes(4).toString("hex")}`,
-        name: "Queue Test Persona",
-        data: {},
-      },
-    });
+    await fixture.create();
+    const persona = await db.persona.findUniqueOrThrow({ where: { orgId_slug: { orgId, slug: fixture.org.slug } } });
     personaId = persona.id;
   });
 
   afterAll(async () => {
     await db.personaSource.deleteMany({ where: { id: { in: createdSourceIds } } });
-    await db.persona.deleteMany({ where: { id: personaId } });
+    await fixture.clean();
   });
 
   it("claims uploaded sources in createdAt order and increments attempts", async () => {
