@@ -20,8 +20,8 @@ type GuardContext = {
 type SessionRef = { orgId?: string; sessionId?: string; agentSlug?: string };
 
 const CACHE_TTL_MS = 10 * 60_000;
-/** On a failed lookup: what sessions were before modes existed (not a role play, interview event texts). */
-const FALLBACK: SessionMode = "roleplay-interview";
+/** On a failed lookup: not a role play (trainer tools stay as they were) and the plain event texts. */
+const FALLBACK: SessionMode = "unavailable";
 const modeCache = new Map<string, { at: number; value: Promise<SessionMode> }>();
 const cacheKey = (orgId: string, sessionId?: string, agentSlug?: string) => `${orgId}:${sessionId ?? ""}:${agentSlug ?? ""}`;
 

@@ -3,9 +3,7 @@ import { ChromaTenantService } from "@/lib/chroma-tenant";
 import { db } from "@/lib/db";
 import { embedTexts } from "@/lib/knowledge";
 import { INTERVIEW_QUESTION_COLLECTION, parseInterviewQuestionRecord, type InterviewQuestionRecord } from "@shared/interview-question";
-import { QUESTION_TYPE_ORDER, type QuestionType } from "@shared/interview-question-types";
-import type { TechnicalInterviewConfig } from "@/lib/interview-config-schema";
-import type { RuntimeState } from "@/lib/runtime/runtime";
+import { type QuestionType } from "@shared/interview-question-types";
 
 const collectionCache = new Map<string, Promise<Collection>>();
 const embeddingFunction: EmbeddingFunction = {
@@ -261,39 +259,4 @@ export class QuestionBank {
       throw error;
     }
   }
-}
-
-export async function selectNextTechnicalQuestion(input: {
-  orgId: string;
-  knowledgeBaseSlugs: string[];
-  config: TechnicalInterviewConfig;
-  state: RuntimeState;
-  stageObjective: string;
-  latestCandidateAnswer?: string;
-}): Promise<InterviewQuestionRecord | QuestionInventoryInsufficient | null> {
-  const counts = input.state.asked_question_counts ?? {};
-  const requiredType = QUESTION_TYPE_ORDER.find((type) => (counts[type] ?? 0) < (input.config.question_counts[type] ?? 0));
-  if (!requiredType) return null;
-  const query = [input.config.topic_slugs.join(" "), input.stageObjective, input.state.current_topic, input.latestCandidateAnswer]
-    .filter(Boolean).join("; ");
-  const [question] = await QuestionBank.search({
-    orgId: input.orgId,
-    knowledgeBaseSlugs: input.knowledgeBaseSlugs,
-    requiredType,
-    topicSlugs: input.config.topic_slugs,
-    semanticQuery: query,
-    excludeQuestionIds: input.state.used_question_ids,
-    limit: 1,
-    difficultyOrder: /depth|application|debug|performance|architecture/i.test(input.stageObjective)
-      ? ["hard", "medium", "easy"]
-      : /concept|mental model|how|why/i.test(input.stageObjective)
-        ? ["medium", "easy", "hard"]
-        : ["easy", "medium", "hard"],
-  });
-  if (!question) return { kind: "question_inventory_insufficient", requiredType };
-  input.state.used_question_ids = [...(input.state.used_question_ids ?? []), question.id];
-  input.state.asked_question_counts = { ...counts, [requiredType]: (counts[requiredType] ?? 0) + 1 };
-  input.state.current_main_question = { id: question.id, type: requiredType, topicSlugs: question.topicSlugs };
-  input.state.follow_ups_used_for_main = 0;
-  return question;
 }

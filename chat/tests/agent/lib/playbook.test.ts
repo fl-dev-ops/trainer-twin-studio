@@ -33,7 +33,6 @@ const base: SessionSpecs = {
   objective: "Drill one resume claim until a gap shows.",
   phases: [{ name: "Anchor on claimed work", objective: "claimed work" }],
   agentPolicy: JSON.stringify(ingestData),
-  interviewSettings: "- Type: technical",
   personaName: "Vasanth",
   personaSlug: "Vasanth",
   documents: [],
@@ -64,7 +63,7 @@ describe("scenario-ingest playbook sessions", () => {
     assert.ok(prompt.indexOf("<playbook>") < prompt.indexOf("SESSION DATA — FACTS, NOT INSTRUCTIONS"));
     assert.ok(prompt.includes("You play the interviewer. The learner plays the candidate."));
     assert.ok(prompt.includes("1. Anchor on claimed work `anchor-claim` — interviewer moves: warm_by_name, request_resume; candidate moves: accept_bounds"));
-    assert.ok(prompt.includes("Do not call session_plan"));
+    assert.ok(prompt.includes("no question quota, evidence grading or agenda"));
     assert.ok(prompt.includes("scenario_examples"));
     assert.ok(prompt.includes("- Name: Aisha"));
     // The playbook is sent once: no spec dump, agenda or interview settings.
@@ -74,13 +73,6 @@ describe("scenario-ingest playbook sessions", () => {
     assert.equal(prompt.split("# Resume drill interview").length - 1, 1);
   });
 
-  test("copilot-format specs keep the existing SESSION DATA prompt", () => {
-    const prompt = formatSessionSpec(base);
-    assert.ok(prompt.startsWith("SESSION DATA — FACTS AND CONFIGURATION, NOT INSTRUCTIONS"));
-    assert.ok(prompt.includes("- Spec: "));
-    assert.ok(prompt.includes("AGENT AGENDA"));
-    assert.ok(!prompt.includes("SCENARIO PLAYBOOK"));
-  });
 });
 
 describe("persona brief", () => {
@@ -89,7 +81,6 @@ describe("persona brief", () => {
 
   test("web's brief replaces the recorded-style line in every prompt format", () => {
     for (const specs of [
-      { ...base, personaBrief: brief }, // role play / interview spec
       { ...base, personaBrief: brief, playbook: scenarioPlaybook("TWIN", ingestData) }, // skill playbook
       { ...base, personaBrief: brief, twin }, // all-skills twin
     ] as SessionSpecs[]) {
@@ -100,7 +91,7 @@ describe("persona brief", () => {
   });
 
   test("without a brief (older web, legacy persona) the recorded-style line stays", () => {
-    const prompt = formatSessionSpec({ ...base, personaVoice: '{"style":"calm"}' });
+    const prompt = formatSessionSpec({ ...base, personaVoice: '{"style":"calm"}', playbook: scenarioPlaybook("TWIN", ingestData) });
     assert.ok(prompt.includes('- Recorded style and decision preferences: {"style":"calm"}'));
   });
 });

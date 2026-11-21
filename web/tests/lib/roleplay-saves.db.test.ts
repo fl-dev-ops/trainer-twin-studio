@@ -3,9 +3,6 @@ import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:
 import { MainCollectionService } from "@/lib/main-collection";
 import * as org from "@/lib/org";
 import * as database from "@/lib/db";
-import * as generation from "@/lib/spec-generation";
-import { DEFAULT_RESUME_INTERVIEW_CONFIG } from "@/lib/interview-config-schema";
-import { specDraftBundleSchema } from "@/lib/spec-draft-schema";
 import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "./minutes-test-db";
 
 // Real Postgres and advisory locks; only files, embeddings and the model boundary are replaced.
@@ -22,32 +19,17 @@ mock.module("@/lib/s3", () => ({
 }));
 const { saveRoleplay, ROLEPLAY_SOURCE } = await import("@/lib/scenario-ingest");
 const { saveSpec } = await import("@/lib/specs");
-const { saveSpecDraft, publishSpecDraft } = await import("@/lib/spec-drafts");
 const { roleplayRouter } = await import("@/lib/roleplay/trpc");
-const { POST: generate } = await import("@/app/api/agents/[slug]/generate/route");
 const rawBuilder: unknown = JSON.parse(readFileSync(new URL("../../data/roleplay/skills/wait-and-see-investor/builder.json", import.meta.url), "utf8"));
 const before = { preScreenshare: false, preUpload: true, duringUpload: false, uploadTitle: "Notes", uploadInstruction: "Bring notes" };
-
-function bundle(slug: string, personaSlug: string) {
-  return specDraftBundleSchema.parse({
-    slug, name: "Legacy role play", personaSlug, grounding: [], assumptions: [], gaps: [],
-    agent: {
-      id: slug, name: "Legacy role play", version: 1, objective: "Explain the decision", opening: "Hello", principles: ["Be precise"], classifications: {}, knowledge_bases: [],
-      config: { interview: DEFAULT_RESUME_INTERVIEW_CONFIG, claim_handling: "resume_evidence", context: { mode: "none", required: false }, scenario: {}, tools: [], actions: { allowed: ["ask_exact_example"], default: "ask_exact_example" }, evidence: { statuses: ["untested"] }, turns: { maximum: 10 }, rendering: { maximum_words: 80, maximum_question_marks: 1, one_focal_ask: true, deterministic_closing: true } },
-      stages: [{ id: "example", name: "Example", objective: "Explain", opening: "An example?", config: { knowledge: { tags: [] }, claim_handling: "resume_evidence", context: { mode: "none" }, evidence: { definitions: { example: "One example" }, keys: ["example"], completion_keys: ["example"] }, turns: { minimum: 1, maximum: 3 } } }],
-    },
-  });
-}
 
 describe.skipIf(!localMinutesDb)("Module 4 role-play saves (real Postgres locks)", () => {
   let f: MinutesFixture; let other: MinutesFixture;
   const spies: { mockRestore(): void }[] = [];
   const items = new Map<number, unknown[]>();
-  let model: ReturnType<typeof spyOn<typeof generation, "generateSpecBundle">>;
   beforeEach(async () => {
     f = minutesFixture(); other = minutesFixture(); await f.create(); await other.create(); files.clear(); items.clear();
-    model = spyOn(generation, "generateSpecBundle").mockRejectedValue(new Error("Model must not be called"));
-    spies.push(model, spyOn(MainCollectionService, "writeSkillItems").mockImplementation(async (_org, _version, _scenario, input) => input.length), spyOn(MainCollectionService, "writeScenarioItems").mockImplementation(async (_org, _slug, _scenario, version, input) => { items.set(version, input); return input.length; }), spyOn(MainCollectionService, "pruneScenarioItems").mockResolvedValue(undefined), spyOn(org, "studioOrRefusal").mockResolvedValue({ ...f.org, accentColor: null, role: "admin", user: f.trainer }));
+    spies.push(spyOn(MainCollectionService, "writeSkillItems").mockImplementation(async (_org, _version, _scenario, input) => input.length), spyOn(MainCollectionService, "writeScenarioItems").mockImplementation(async (_org, _slug, _scenario, version, input) => { items.set(version, input); return input.length; }), spyOn(MainCollectionService, "pruneScenarioItems").mockResolvedValue(undefined), spyOn(org, "studioOrRefusal").mockResolvedValue({ ...f.org, accentColor: null, role: "admin", user: f.trainer }));
   });
   afterEach(async () => {
     for (const spy of spies.splice(0).reverse()) spy.mockRestore();
@@ -67,7 +49,6 @@ describe.skipIf(!localMinutesDb)("Module 4 role-play saves (real Postgres locks)
   const caller = () => roleplayRouter.createCaller({ user: { ...f.trainer, orgId: f.org.id, orgSlug: f.org.slug, role: "admin" } });
   const row = () => db.agent.findUniqueOrThrow({ where: { id: f.roleplay.id } });
   const versions = () => db.specVersion.findMany({ where: { orgId: f.org.id, entitySlug: f.roleplay.slug }, orderBy: { version: "asc" } });
-  const generateRequest = (slug: string) => generate(new Request("https://test/api/agents/generate", { method: "POST", body: JSON.stringify({ instruction: "Practise decisions", name: "Role play", opening: "Hello", personaSlug: f.org.slug, interviewConfig: DEFAULT_RESUME_INTERVIEW_CONFIG }) }), { params: Promise.resolve({ slug }) });
 
   test("two concurrent identical storeSkillAgent saves bump once; files, examples and row agree on the version", async () => {
     const first = await saveRoleplay(f.org.id, builder(), f.roleplay.slug);
@@ -186,34 +167,6 @@ describe.skipIf(!localMinutesDb)("Module 4 role-play saves (real Postgres locks)
     expect(await db.specVersion.count({ where: { orgId: f.org.id } })).toBe(0); expect(files.size).toBe(0); expect(items.size).toBe(0);
   });
 
-  test("refuses invalid_input on publishSpecDraft for a builder role play; draft and published row stay untouched", async () => {
-    await db.agent.update({ where: { id: f.roleplay.id }, data: { data: { source: ROLEPLAY_SOURCE, skill: "Original" } } });
-    await saveSpecDraft(bundle(f.roleplay.slug, f.org.slug), f.org.id);
-    const original = await row(); const draft = await db.specDraft.findUniqueOrThrow({ where: { slug: f.roleplay.slug } });
-    await expect(publishSpecDraft(f.roleplay.slug, f.org.id)).rejects.toMatchObject({ code: "invalid_input", status: 400 });
-    expect(await row()).toEqual(original); expect(await db.specDraft.findUniqueOrThrow({ where: { id: draft.id } })).toEqual(draft);
-    expect(await versions()).toEqual([]); expect(files.size).toBe(0); expect(items.size).toBe(0);
-  });
-
-  test("publishSpecDraft on a twin must refuse invalid_input", async () => {
-    await saveSpecDraft(bundle(f.twin.slug, f.org.slug), f.org.id);
-    const original = await db.agent.findUniqueOrThrow({ where: { id: f.twin.id } }); const draft = await db.specDraft.findUniqueOrThrow({ where: { slug: f.twin.slug } });
-    const error: unknown = await publishSpecDraft(f.twin.slug, f.org.id).catch((error: unknown) => error);
-    expect(await db.agent.findUniqueOrThrow({ where: { id: f.twin.id } })).toEqual(original); expect(await db.specDraft.findUniqueOrThrow({ where: { id: draft.id } })).toEqual(draft);
-    expect(await db.specVersion.count({ where: { orgId: f.org.id } })).toBe(0); expect(files.size).toBe(0); expect(items.size).toBe(0);
-    expect(error).toMatchObject({ code: "invalid_input", status: 400 });
-  });
-
-  test("unchanged draft publish ignores jsonb key order and preserves the version and intro video", async () => {
-    const input = bundle(f.roleplay.slug, f.org.slug);
-    const data = { ...input.agent, knowledge_grounding: [], introVideo: "intro.mp4" };
-    await db.agent.update({ where: { id: f.roleplay.id }, data: { data: JSON.parse(JSON.stringify(Object.fromEntries(Object.entries(data).reverse()))) } });
-    await saveSpecDraft(input, f.org.id);
-    expect(await publishSpecDraft(f.roleplay.slug, f.org.id)).toMatchObject({ agentVersion: 1 });
-    expect(await publishSpecDraft(f.roleplay.slug, f.org.id)).toMatchObject({ agentVersion: 1 });
-    expect(await row()).toMatchObject({ version: 1, data }); expect(await versions()).toEqual([]);
-  });
-
   test("unchanged spec upload ignores jsonb key order and writes no snapshot", async () => {
     await db.agent.update({ where: { id: f.roleplay.id }, data: { data: { name: "Legacy", nested: { z: 1, a: 2 } } } });
     expect(await saveSpec("agents", f.roleplay.slug, 'agent:\n nested:\n  a: 2\n  z: 1\n name: "Legacy"\n', f.org.id)).toEqual({ created: false, versionBumped: false, version: 1 });
@@ -239,23 +192,5 @@ describe.skipIf(!localMinutesDb)("Module 4 role-play saves (real Postgres locks)
       return error && typeof error === "object" && "code" in error ? error.code : error;
     });
     expect(outcomes).toEqual([2, 2]);
-  });
-
-  test("refuses name_taken on generation before generateSpecBundle or any draft write", async () => {
-    const original = await db.agent.findUniqueOrThrow({ where: { id: other.roleplay.id } });
-    const response = await generateRequest(other.roleplay.slug); expect(response.status).toBe(409);
-    expect(await response.json()).toEqual({ code: "name_taken", error: "That name is used by another organization. Pick another." });
-    expect(model).not.toHaveBeenCalled(); expect(await db.specDraft.count({ where: { orgId: f.org.id } })).toBe(0);
-    expect(await db.agent.findUniqueOrThrow({ where: { id: original.id } })).toEqual(original);
-  });
-
-  test.each(["builder", "twin"] as const)("refuses invalid_input on generation for a %s before calling the model", async (kind) => {
-    const agent = kind === "builder" ? f.roleplay : f.twin;
-    if (kind === "builder") await db.agent.update({ where: { id: agent.id }, data: { data: { source: ROLEPLAY_SOURCE } } });
-    const original = await db.agent.findUniqueOrThrow({ where: { id: agent.id } });
-    const response = await generateRequest(agent.slug); expect(response.status).toBe(400);
-    expect(await response.json()).toMatchObject({ code: "invalid_input" }); expect(model).not.toHaveBeenCalled();
-    expect(await db.agent.findUniqueOrThrow({ where: { id: original.id } })).toEqual(original);
-    expect(await db.specDraft.count({ where: { orgId: f.org.id } })).toBe(0);
   });
 });

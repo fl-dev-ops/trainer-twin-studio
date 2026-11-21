@@ -5,7 +5,6 @@ import { practicePerson, practiceRefusals, startAllowance } from "@/lib/practice
 import { roleplayAccessByCode, roleplayRefusals } from "@/lib/roleplay-access";
 import { Prisma } from "@/lib/generated/prisma/client";
 import { ensureDeployment, type DeliveryMode } from "@/lib/deployments";
-import { initRuntimeState } from "@/lib/runtime/runtime";
 import { getAgentConfigForAgent } from "@/lib/specs";
 import { isStudioRole } from "@/lib/org";
 import { twinAccessByAgent, twinAccessByCode, twinRefusals, withinAccess } from "@/lib/twin-access";
@@ -442,7 +441,7 @@ export async function activateSession(input: {
         compiledSnapshot: storedSnapshot ? JSON.parse(JSON.stringify(storedSnapshot)) : undefined,
         skillPinsVersion: managed ? 1 : null,
         ...(pins.length ? { skillPins: { create: pins } } : {}),
-        runtimeState: JSON.parse(JSON.stringify(initRuntimeState())),
+        runtimeState: {},
         lastCompletion: Prisma.DbNull,
       },
     });

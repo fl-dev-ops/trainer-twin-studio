@@ -38,7 +38,11 @@ publish snapshots the old data as a SpecVersion), and `--rollback` restores it. 
 Redirects (`/agents/*` → `/roleplay/*`, `lib/agents-redirect.ts`), fix every link, delete `app/dash/agents/**`, agent editor,
 role-play preview, fidelity, their tRPC procedures and tests. Calibration moves under `/roleplay`.
 
-## Phase 4: retire the legacy interview runtime (separate PR)
+## Phase 4: retire the legacy interview runtime (done 2026-11-21)
 
-Once production has no legacy interviews: chat stage/phase path, `session_plan`, `roleplay-interview` mode,
-`lib/runtime/*`, live question-bank selection, `resume-claims`.
+Removed: chat `roleplay-interview` mode and its prompt (`prompts/base-instructions.md`), `session_plan`, the résumé-claim
+and style tools, the per-turn plan block and question bridge; web `lib/runtime/*`, `/api/v1/chat/completions`, live
+question-bank selection, résumé-claim extraction, the agent spec generate/draft APIs and their scripts. An agent with
+nothing to run now opens in the `unavailable` mode, which tells the learner the practice isn't ready.
+
+Deploy order: run `scripts/port-interviews.ts --apply` on production first, then deploy.

@@ -5,10 +5,8 @@ import { db } from "@/lib/db";
 import { embedTexts, searchKnowledge } from "@/lib/knowledge";
 import { MainCollectionService, type ScenarioScope, type ScenarioStep } from "@/lib/main-collection";
 import { type PinnedTwinSkill, TWIN_SOURCE, twinPlaybooks, sessionTwinPlaybooks, resolveTwinCatalog } from "@/lib/twins";
-import { redactLearnerNames } from "@/lib/persona-voice";
 import { enqueueWorkspaceCommand } from "@/lib/workspace-commands";
 import { buildSessionContext, getCachedSessionContext } from "@/lib/session-context";
-import { unusedResumeClaims } from "@/lib/resume-interview";
 import { recordTurnEvidence, recordTurnLines, turnEvidenceSchema } from "@/lib/twin/evidence";
 import { modelImage } from "@/lib/model-image";
 import { uploadBytes } from "@/lib/upload-bytes";
@@ -31,18 +29,6 @@ const requestSchema = z.discriminatedUnion("action", [
     query: z.string().trim().min(2).max(500),
     limit: z.number().int().min(1).max(8),
     topics: z.array(z.string().trim().min(1)).optional(),
-  }).strict(),
-  z.object({
-    action: z.literal("searchStyleEpisodes"),
-    personaSlug: slug,
-    query: z.string().trim().min(2).max(500),
-    sessionPhase: z.enum(["opening", "middle", "closing"]).optional(),
-    limit: z.number().int().min(1).max(10).optional(),
-    styleFilters: z.object({
-      usesLearnerName: z.boolean().optional(),
-      startsWithThanks: z.boolean().optional(),
-      hasDoubledAcknowledgement: z.boolean().optional(),
-    }).optional(),
   }).strict(),
   z.object({
     action: z.literal("searchScenarioItems"),
@@ -81,25 +67,6 @@ const requestSchema = z.discriminatedUnion("action", [
     sessionId: z.string().optional(),
     agentSlug: z.string().optional(),
     personaSlug: z.string().optional(),
-  }).strict(),
-  z.object({
-    action: z.literal("listResumeClaims"),
-    sessionId: z.string().trim().min(1),
-    cursor: z.number().int().min(0).optional(),
-  }).strict(),
-  z.object({
-    action: z.literal("getResumeClaim"),
-    sessionId: z.string().trim().min(1),
-    claimId: z.string().trim().min(1),
-  }).strict(),
-  z.object({
-    action: z.literal("resolvePendingResumeQuestion"),
-    sessionId: z.string().trim().min(1),
-    candidateLocated: z.boolean(),
-  }).strict(),
-  z.object({
-    action: z.literal("getPersonaStyleMoments"),
-    personaSlug: slug,
   }).strict(),
   z.object({
     action: z.literal("enqueueWorkspaceCommand"),
@@ -222,53 +189,6 @@ export async function POST(request: Request) {
     }
   }
 
-  if (input.action === "listResumeClaims") {
-    const claims = await unusedResumeClaims(orgId, input.sessionId);
-    const offset = input.cursor ?? 0;
-    const page = claims.slice(offset, offset + 20);
-    return Response.json({
-      claims: page.map((claim) => ({
-        claimId: claim.id,
-        section: claim.section,
-        kind: claim.kind,
-        summary: claim.text.slice(0, 300),
-        metric: claim.metric,
-      })),
-      nextCursor: offset + page.length < claims.length ? offset + page.length : null,
-    });
-  }
-
-  if (input.action === "getResumeClaim") {
-    const claim = (await unusedResumeClaims(orgId, input.sessionId)).find((item) => item.id === input.claimId);
-    if (!claim) return Response.json({ error: "Eligible resume claim not found" }, { status: 404 });
-    return Response.json({
-      claimId: claim.id,
-      section: claim.section,
-      kind: claim.kind,
-      text: claim.text.slice(0, 4_000),
-      metric: claim.metric,
-    });
-  }
-
-  if (input.action === "resolvePendingResumeQuestion") {
-    await unusedResumeClaims(orgId, input.sessionId);
-    const pending = await db.workspaceCommand.findFirst({
-      where: { sessionId: input.sessionId, tool: "start_resume_question", status: "completed" },
-      orderBy: { createdAt: "desc" },
-      select: { id: true, input: true, result: true },
-    });
-    const result = pending?.result as { status?: string } | null;
-    const question = (pending?.input as { question?: string } | null)?.question;
-    if (result?.status !== "not_found" || !question) {
-      return Response.json({ error: "No pending resume question" }, { status: 409 });
-    }
-    await db.workspaceCommand.update({
-      where: { id: pending!.id },
-      data: { result: { status: input.candidateLocated ? "located" : "claim_cancelled" } },
-    });
-    return Response.json({ status: input.candidateLocated ? "ready" : "claim_cancelled", question: input.candidateLocated ? question : null });
-  }
-
   if (input.action === "recordTurnEvidence") {
     return Response.json(await recordTurnEvidence(orgId, turnEvidenceSchema.parse(input)));
   }
@@ -289,16 +209,6 @@ export async function POST(request: Request) {
       tool: input.action === "finishSession" ? "finish_session" : input.tool,
       payload: input.action === "finishSession" ? {} : input.input,
     }));
-  }
-
-  if (input.action === "getPersonaStyleMoments") {
-    const persona = await db.persona.findFirst({
-      where: { slug: { equals: input.personaSlug, mode: "insensitive" }, orgId },
-      select: { id: true, name: true, slug: true },
-    });
-    if (!persona) return Response.json({ error: `No persona named "${input.personaSlug}"` });
-    const moments = await MainCollectionService.getRawStyleEpisodesForPersona(orgId, persona.id);
-    return Response.json({ personaSlug: persona.slug, personaName: persona.name, moments });
   }
 
   // Real lines from a scenario-ingest scenario (items.json), for the chat tool scenario_examples.
@@ -433,54 +343,6 @@ export async function POST(request: Request) {
     } catch (error) {
       return errorResponse(error);
     }
-  }
-
-  if (input.action === "searchStyleEpisodes") {
-    const persona = await db.persona.findFirst({
-      where: { slug: { equals: input.personaSlug, mode: "insensitive" }, orgId },
-      select: { id: true, name: true },
-    });
-    if (!persona) return Response.json({ error: `No persona named "${input.personaSlug}"` });
-
-    const [styleHits, episodeHits] = await Promise.all([
-      MainCollectionService.searchStyleEpisodes(orgId, input.query, {
-        personaId: persona.id,
-        sessionPhase: input.sessionPhase,
-        limit: input.limit,
-        diversify: true,
-        styleFilters: input.styleFilters,
-      }),
-      MainCollectionService.searchPersonaEpisodes(orgId, input.query, {
-        personaId: persona.id,
-        sessionPhase: input.sessionPhase,
-        limit: 2,
-        diversify: true,
-      }),
-    ]);
-
-    return Response.json({
-      query: input.query,
-      persona: persona.name,
-      pastExchanges: episodeHits.map((hit) => ({
-        exchange: redactLearnerNames(hit.text, []),
-        score: hit.score,
-      })),
-      phrasingStyle: styleHits.map((hit) => {
-        const pastName = hit.pastLearnerName;
-        return {
-          text: redactLearnerNames(hit.text, [pastName]),
-          score: hit.score,
-          metadata: {
-            sessionPhase: hit.sessionPhase,
-            styleFunction: redactLearnerNames(hit.styleFunction ?? "", [pastName]),
-            styleShape: redactLearnerNames(hit.styleShape ?? "", [pastName]),
-            usesLearnerName: hit.usesLearnerName,
-            startsWithThanks: hit.startsWithThanks,
-            hasDoubledAcknowledgement: hit.hasDoubledAcknowledgement,
-          },
-        };
-      }),
-    });
   }
 
   try {

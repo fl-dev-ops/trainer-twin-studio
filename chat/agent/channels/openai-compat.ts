@@ -5,8 +5,6 @@ import { createLegacyStream, type LegacyEvent } from "../lib/legacy-stream";
 import { fetchUpload, UPLOAD_POLICY, withAttachments } from "../lib/uploads";
 import { SPEAKING_MODEL, SPEAKING_ROUTE } from "../lib/models";
 import { studioPrincipal } from "../lib/auth";
-import { createQuestionBridge } from "../lib/question-bridge";
-import { followUpGradesFor } from "../lib/turn-grades";
 import { summarizeToolInput, summarizeToolOutput, withoutImageBytes } from "../lib/tool-trace";
 import { thinkingBudgetSchema } from "../lib/thinking-budget";
 import { CALIBRATION_FEEDBACK_EVENT, userInactiveEvent } from "../lib/session-mode";
@@ -14,7 +12,7 @@ import { sessionModeFor } from "../lib/session-mode-lookup";
 import { studioFetch } from "../lib/studio";
 
 /** Lookups shown in "Why this answer" (the web describes and resolves them; UI tools are left out). */
-const EVIDENCE_TOOLS = new Set(["scenario_examples", "search_knowledge", "read_knowledge_document", "search_style", "read_document", "eve__skill"]);
+const EVIDENCE_TOOLS = new Set(["scenario_examples", "search_knowledge", "read_knowledge_document", "read_document", "eve__skill"]);
 /** What "Heard" says for replies that don't answer a learner's words (the rest show the words themselves). */
 const EVIDENCE_HEARD: Record<string, string> = {
   opening: "",
@@ -23,17 +21,6 @@ const EVIDENCE_HEARD: Record<string, string> = {
   tool_result: "A result from the call screen",
 };
 
-/** Resume claims already highlighted per session, so the bridge never speaks a spent claim's question. */
-// ponytail: unbounded Map, one small Set per voice session; a process restart clears it.
-const usedClaimsBySession = new Map<string, Set<string>>();
-function usedClaimsFor(sessionId: string) {
-  let used = usedClaimsBySession.get(sessionId);
-  if (!used) {
-    used = new Set();
-    usedClaimsBySession.set(sessionId, used);
-  }
-  return used;
-}
 /**
  * OpenAI-compatible chat completions bridge. This endpoint allows LiveKit
  * (or any standard OpenAI client) to use the Eve agent as the conversational brain.
@@ -375,7 +362,6 @@ export default defineChannel({
           spoke?: boolean;
         }> = [];
         const totals = { inputTokens: 0, outputTokens: 0 };
-        const questionBridge = createQuestionBridge(mode, usedClaimsFor(sessionId), () => followUpGradesFor(sessionId));
         const markSpoken = () => {
           if (ttftMs === null) {
             ttftMs = Date.now() - t_start;
@@ -443,8 +429,7 @@ export default defineChannel({
             // Text deltas
             if (ev.type === "message.appended" && typeof ev.data.messageDelta === "string") {
               sawActivity = true;
-              let content = questionBridge.onModelText(ev.data.messageDelta);
-              if (content === null) continue;
+              let content: string = ev.data.messageDelta;
               if (!textStarted) {
                 content = content.trimStart();
                 if (!content) continue;
@@ -476,18 +461,11 @@ export default defineChannel({
                   pendingGoodbye = String((action.input as { outcome?: unknown } | null)?.outcome ?? "");
                 }
               }
-              const bridged = questionBridge.onToolCalls(ev.data.actions);
-              if (bridged) {
-                sawActivity = true;
-                markSpoken();
-                await writeText(bridged);
-              }
               continue;
             }
 
             if (ev.type === "action.result") {
               const result = ev.data.result;
-              if (result) questionBridge.onToolResult(result);
               if (result?.kind === "tool-result") {
                 const callId = result.callId ?? "";
                 const timing = toolExecutionTimes[callId];
@@ -581,7 +559,6 @@ export default defineChannel({
                 // The model Eve actually ran (locked in agent.ts), not the request label.
                 llm_model: SPEAKING_MODEL,
                 llm_route: SPEAKING_ROUTE,
-                ...questionBridge.trace(t_start),
                 started_at_ms: t_start,
                 status: ev.status,
                 input_kind: inputKind,

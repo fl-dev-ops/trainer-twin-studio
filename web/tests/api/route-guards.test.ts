@@ -7,8 +7,6 @@ type Guard = "public" | "signed_in" | "studio" | "internal/cron secret" | "api_k
 // Reviewed from route code, not inferred at test time. tRPC transports are public; each procedure guards itself.
 // TTS speech also accepts a service secret, and sessions/:id a browser token; code/run needs an enabled member of the org.
 const classification: Record<string, Guard> = {
-  "POST agents/[slug]/generate": "studio",
-  "POST agents/visibility": "studio",
   "GET auth/[...all]": "public",
   "POST auth/[...all]": "public",
   "PATCH auth/[...all]": "public",
@@ -117,10 +115,6 @@ const classification: Record<string, Guard> = {
   "DELETE spec/[type]/[[...id]]": "studio",
   "GET spec/[type]/[[...id]]": "studio",
   "PUT spec/[type]/[[...id]]": "studio",
-  "GET spec-drafts/[slug]/[type]": "studio",
-  "PATCH spec-drafts/[slug]/[type]": "studio",
-  "POST spec-drafts/[slug]/publish": "studio",
-  "GET spec-drafts/current": "studio",
   "GET trpc/[trpc]": "public",
   "POST trpc/[trpc]": "public",
   "GET tts/default-voice": "public",
@@ -149,7 +143,6 @@ const classification: Record<string, Guard> = {
   "PATCH v1/assignments/[id]": "api_key",
   "GET v1/assignments": "api_key",
   "POST v1/assignments": "api_key",
-  "POST v1/chat/completions": "api_key",
   "GET v1/credits": "api_key",
   "GET v1/users/[id]/credits": "api_key",
   "POST v1/users/[id]/credits": "api_key",

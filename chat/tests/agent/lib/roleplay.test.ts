@@ -126,7 +126,7 @@ describe("client role play (kind ROLEPLAY with a SKILL.md)", () => {
     assert.equal(calls[1].role, "learner");
   });
 
-  test("an authored practice can end as completed; legacy interviews still cannot use end_call", async () => {
+  test("an authored practice can end as completed; sessions that are not role plays still cannot use end_call", async () => {
     process.env.COPILOT_SERVICE_SECRET ??= "test-secret";
     const calls: Record<string, unknown>[] = [];
     globalThis.fetch = (async (_url, init) => {
@@ -142,7 +142,7 @@ describe("client role play (kind ROLEPLAY with a SKILL.md)", () => {
     primeSessionMode("org1", "call1", "acme-authored", "roleplay-client");
     assert.deepEqual(await endCall.execute!({ outcome: "completed" }, ctx), { status: "ended", outcome: "completed", instruction: "The call has ended. If you have not said goodbye yet, say one short goodbye in character; otherwise say nothing. Never mention the role play, the practice or the call having ended." });
     assert.deepEqual(calls, [{ action: "finishSession", sessionId: "call1" }]);
-    primeSessionMode("org1", "call1", "acme-authored", "roleplay-interview");
+    primeSessionMode("org1", "call1", "acme-authored", "unavailable");
     assert.deepEqual(await endCall.execute!({ outcome: "completed" }, ctx), { disabled: true, reason: "end_call is only for skill-based role play. Other sessions end with finish_session." });
     assert.equal(calls.length, 1);
   });
