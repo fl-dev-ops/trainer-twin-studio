@@ -33,11 +33,7 @@ const codeOf = (promise: Promise<unknown>) => promise.then(() => "OK", (error: {
 const studioOnly: Record<string, (c: Caller) => Promise<unknown>> = {
   ownTwinPersona: (c) => c.ownTwinPersona(),
   twinBrain: (c) => c.twinBrain(),
-  agents: (c) => c.agents(),
-  rolePlayPreview: (c) => c.rolePlayPreview({ slug: "x" }),
-  agentSpec: (c) => c.agentSpec({ slug: "x", isNew: false }),
   calibrationAgent: (c) => c.calibrationAgent({ slug: "x" }),
-  fidelity: (c) => c.fidelity(),
   users: (c) => c.users(),
   personas: (c) => c.personas(),
   persona: (c) => c.persona({ slug: "x", spec: false }),

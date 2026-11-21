@@ -124,7 +124,7 @@ describe.skipIf(process.env.DATABASE_URL !== isolatedDatabase)("role plays writt
     const fixture = briefFixtures["bevan-missed-deadlines"].brief;
 
     const card = (await caller.scenarios.list()).find((row) => row.slug === slug);
-    expect(card).toMatchObject({ interview: false, href: `/roleplay/${slug}`, description: fixture.learnerBrief, opening: fixture.start.openingLine });
+    expect(card).toMatchObject({ href: `/roleplay/${slug}`, description: fixture.learnerBrief, opening: fixture.start.openingLine });
 
     const detail = await caller.scenarios.get({ slug });
     expect(detail).toMatchObject({ situation: fixture.summary, learnerRole: fixture.learner.role, description: fixture.learnerBrief });
@@ -150,6 +150,27 @@ describe.skipIf(process.env.DATABASE_URL !== isolatedDatabase)("role plays writt
     await expect(caller.builder.saveBrief({ slug, persona: "nobody", title: "x", learnerBrief: "x", openingLine: "x", limit: "At most 3 minutes." })).rejects.toMatchObject({ code: "NOT_FOUND" });
     // The brief's own checks still apply: clearing the only ending is refused with the reason.
     await expect(caller.builder.saveBrief({ slug, persona: "chloe", title: "x", learnerBrief: "x", openingLine: "x", limit: "" })).rejects.toMatchObject({ code: "BAD_REQUEST", message: expect.stringContaining("Say when the conversation ends") });
+  });
+
+  test("a role play made in the older form opens the same simple edit page and saves its basics", async () => {
+    const { saveRoleplay } = await import("@/lib/scenario-ingest");
+    const made = await saveRoleplay(f.org.id, {
+      name: "Older practice", persona: "chloe", clientName: "Pinned buyer",
+      situation: { scenario: "Buyer is uncertain", learnerRole: "Advisor", hiddenTruth: "Worried about the mortgage" },
+      difficulty: "medium", opening: "I need more time", whatToExpect: "Find out why they are unsure.", exampleLines: ["Please explain"],
+      guardedIf: [], opensUpIf: [], learnerGoals: ["Understand the concern"], rubric: [{ name: "Understanding", points: 100 }],
+    });
+    const caller = roleplayRouter.createCaller({ user: { ...f.trainer, orgId: f.org.id, orgSlug: f.org.slug, role: "admin" } } as never);
+    const edit = await caller.builder.get({ slug: made.slug });
+    expect(edit.brief).toMatchObject({ kind: "builder", persona: "chloe", title: "Older practice", learnerBrief: "Find out why they are unsure.", openingLine: "I need more time" });
+    expect(edit.brief?.script).toMatchObject({ learnerRole: "Advisor", situation: ["Buyer is uncertain"], concerns: [{ concern: "Worried about the mortgage", hidden: true }] });
+    expect((await caller.scenarios.get({ slug: made.slug })).script).toMatchObject({ learnerRole: "Advisor" });
+
+    const saved = await caller.builder.saveBrief({ slug: made.slug, persona: "chloe", title: "Older practice, renamed", learnerBrief: "Find the real worry.", openingLine: "Not sure yet.", limit: "" });
+    expect(saved.changed).toBe(true);
+    const after = await caller.builder.get({ slug: made.slug });
+    // Basics changed; the rest of the form's fields kept (rubric, difficulty, example lines).
+    expect(after.builder).toMatchObject({ name: "Older practice, renamed", whatToExpect: "Find the real worry.", opening: "Not sure yet.", difficulty: "medium", exampleLines: ["Please explain"], rubric: [{ name: "Understanding", points: 100 }] });
   });
 
   test("refuses an incomplete brief, an unknown persona and an id another role play already owns", async () => {

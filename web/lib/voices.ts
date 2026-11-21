@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { db } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import type { Prisma, Voice } from "@/lib/generated/prisma/client";
-import { deleteObject, putObject, voicePrefix } from "@/lib/s3";
+import { deleteObject, putObject, sampleVoicePrefix, voicePrefix } from "@/lib/s3";
 
 const MB = 1024 * 1024;
 const AUDIO_EXTENSIONS = {
@@ -28,7 +28,7 @@ export function availableVoiceWhere(orgId: string | null): Prisma.VoiceWhereInpu
 
 export function hasValidVoiceObjectKeys(voice: Pick<Voice, "id" | "orgId" | "kind" | "s3AudioKey" | "s3TranscriptKey">) {
   const prefixes = voice.orgId === null
-    ? [`${voicePrefix(null, voice.id)}/`, ...(voice.kind === "sample" ? [`${voicePrefix("shared", voice.id)}/`] : [])]
+    ? [`${voicePrefix(null, voice.id)}/`, ...(voice.kind === "sample" ? [`${voicePrefix("shared", voice.id)}/`, `${sampleVoicePrefix(voice.id)}/`] : [])]
     : [`${voicePrefix(voice.orgId, voice.id)}/`];
   return [voice.s3AudioKey, ...(voice.s3TranscriptKey === null ? [] : [voice.s3TranscriptKey])].every((key) =>
     Boolean(key.trim())

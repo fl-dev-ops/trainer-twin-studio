@@ -243,7 +243,8 @@ export async function listAgentBriefs(orgId: string, slugs: string[]): Promise<R
   const agents = await db.agent.findMany({ where: { orgId, slug: { in: slugs }, kind: "ROLEPLAY" }, select: { slug: true, data: true } });
   const record = (value: unknown) => (value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {});
   return Object.fromEntries(agents.flatMap((agent) => {
-    const brief = record(record(agent.data).roleplayBrief).learnerBrief;
+    // A copilot brief's learner brief, else the one set on the edit page (authored role plays).
+    const brief = record(record(agent.data).roleplayBrief).learnerBrief ?? record(agent.data).learnerBrief;
     return typeof brief === "string" && brief.trim() ? [[agent.slug, brief.trim()]] : [];
   }));
 }

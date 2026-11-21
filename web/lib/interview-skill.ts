@@ -1,4 +1,5 @@
-import type { BeforeSettings } from "@/lib/context-upload";
+import { createHash } from "node:crypto";
+import { contextUploadFromAgentData, type BeforeSettings } from "@/lib/context-upload";
 import type { ToolSettings } from "@/lib/agent-tools";
 import { scenarioManifestSchema, type ScenarioItem, type ScenarioManifest } from "@/lib/scenario-ingest";
 
@@ -20,7 +21,7 @@ export type InterviewSkillPackage = {
   skill: string;
   items: ScenarioItem[];
   /** Agent.data settings published alongside the package (not package content). */
-  settings: { before?: BeforeSettings; tools: ToolSettings; voiceId?: string; introVideo?: string; portedFrom: { slug: string; version: number } };
+  settings: { before: BeforeSettings; tools: ToolSettings; after: { report: "roleplay"; goals: string[]; rubric: { name: string; points: number }[] }; learnerBrief: string; voiceId?: string; introVideo?: string; portedFrom: { slug: string; version: number } };
   notes: string[];
 };
 
@@ -41,7 +42,30 @@ const QUESTION_LABELS: Record<string, string> = {
   verbal: "verbal", mcq: "multiple-choice", coding: "coding", "code-output": "code-output", "system-design": "system-design", "machine-coding": "machine-coding",
 };
 
-export function interviewSkillPackage(agent: InterviewAgent): InterviewSkillPackage {
+/** Questions from the org's question bank the port writes into the skill (the legacy runtime picked them live). */
+export type BankQuestion = {
+  id: string; text: string; spokenText?: string; questionType: string; difficulty?: string; topicSlugs?: string[];
+  code?: { language: string; content: string }; options?: { id: string; text: string }[]; keyPoints?: string[];
+};
+
+/** A bank question as a role-play item the AI looks up with scenario_examples (its side, "trainer"). */
+export function questionItem(q: BankQuestion): ScenarioItem {
+  const body = [
+    q.spokenText && q.spokenText !== q.text ? `${q.text}\n\nSay it as: ${q.spokenText}` : q.text,
+    q.code ? `Code (${q.code.language}):\n${q.code.content}` : "",
+    q.options?.length ? `Options:\n${q.options.map((o) => `${o.id}) ${o.text}`).join("\n")}` : "",
+  ].filter(Boolean).join("\n\n");
+  const context = [
+    `${QUESTION_LABELS[q.questionType] ?? q.questionType} question`,
+    q.difficulty ? `${q.difficulty} difficulty` : "",
+    q.topicSlugs?.length ? `topics: ${q.topicSlugs.join(", ")}` : "",
+    q.keyPoints?.length ? `What a strong answer covers (for you only; never say it): ${q.keyPoints.join("; ")}` : "",
+  ].filter(Boolean).join(". ");
+  // Short, stable ids: the vector store caps ids (with their scope prefix) at 128 bytes.
+  return { id: `question-${createHash("sha256").update(q.id).digest("hex").slice(0, 16)}`, role: "trainer", context: context.slice(0, 2000), text: body.slice(0, 8000), metadata: { kind: "question", source: "question-bank" } };
+}
+
+export function interviewSkillPackage(agent: InterviewAgent, options: { questions?: BankQuestion[] } = {}): InterviewSkillPackage {
   const d = asRecord(agent.data);
   if (typeof d.skill === "string" && d.skill.trim()) throw new Error(`${agent.slug} already runs a skill`);
   const config = asRecord(d.config);
@@ -51,7 +75,7 @@ export function interviewSkillPackage(agent: InterviewAgent): InterviewSkillPack
   const stages = (Array.isArray(d.stages) ? d.stages : []).map(asRecord);
   if (!stages.length) throw new Error(`${agent.slug} has no stages`);
   const notes: string[] = [
-    "Runs as an authored skill role play: the legacy interview planner, question bank and résumé-claim tools are not used.",
+    "Runs as an authored skill role play: the question bank is copied into the role play's items; the legacy planner and résumé-claim tools are not used (the AI reads the résumé with read_document).",
   ];
 
   const name = text(d.name) || agent.name;
@@ -73,6 +97,13 @@ export function interviewSkillPackage(agent: InterviewAgent): InterviewSkillPack
     if (topics.length) plan.push(`- Draw questions only from these topics: ${topics.join(", ")}.`);
     else notes.push("No topics are selected; the interviewer chooses topics from the stage goals.");
   }
+  const kinds = new Set(Object.entries(counts).filter(([, n]) => typeof n === "number" && n > 0).map(([kind]) => kind));
+  const questions = (options.questions ?? []).filter((q) => !kinds.size || kinds.has(q.questionType));
+  if (type === "technical") {
+    plan.push(questions.length
+      ? "- In your first turn, after greeting the candidate, ask a main question from the question bank (see Questions) and state the problem plainly, so the candidate knows exactly what they are solving. Never ask them to design or answer before you have stated it."
+      : "- In your first turn, after greeting the candidate, state the exact problem they will work on. Never ask them to design or answer before you have stated it.");
+  }
   if (followUps !== undefined) plan.push(`- Up to ${followUps} follow-up ${followUps === 1 ? "question" : "questions"} per main question before moving on.`);
   if (typeof maxTurns === "number") plan.push(`- The whole session is at most ${maxTurns} of your turns.`);
 
@@ -81,6 +112,18 @@ export function interviewSkillPackage(agent: InterviewAgent): InterviewSkillPack
   const statuses = strings(asRecord(config.evidence).statuses);
   const grounding = (Array.isArray(d.knowledge_grounding) ? d.knowledge_grounding : []).map(asRecord);
   const maxWords = typeof rendering.maximum_words === "number" ? rendering.maximum_words : undefined;
+
+  // Report rubric: the stages' evidence items (★ required ones first, weighted double), at most 8, points summing to 100.
+  const evidenceRows = stages.flatMap((stage) => {
+    const evidence = asRecord(asRecord(stage.config).evidence);
+    const definitions = asRecord(evidence.definitions);
+    const required = new Set(strings(evidence.completion_keys));
+    return strings(evidence.keys).map((key) => ({ name: `${words(key)}${text(definitions[key]) ? `: ${text(definitions[key])}` : ""}`.slice(0, 200), weight: required.has(key) ? 2 : 1 }));
+  });
+  const picked = [...evidenceRows].sort((a, b) => b.weight - a.weight).filter((row, i, all) => all.findIndex((r) => r.name === row.name) === i).slice(0, 8);
+  const totalWeight = picked.reduce((sum, row) => sum + row.weight, 0);
+  const rubric = picked.map((row) => ({ name: row.name, points: Math.max(1, Math.floor((100 * row.weight) / totalWeight)) }));
+  if (rubric.length) rubric[0].points += 100 - rubric.reduce((sum, row) => sum + row.points, 0);
 
   const steps = stages.map((stage, index) => {
     const id = kebab(text(stage.id) || `stage-${index + 1}`) || `stage-${index + 1}`;
@@ -127,9 +170,18 @@ export function interviewSkillPackage(agent: InterviewAgent): InterviewSkillPack
   if (principles.length) sections.push("", "## Principles", "", ...principles.map((p) => `- ${p}`));
   if (text(d.opening)) sections.push("", "## Opening", "", `Begin with: ${text(d.opening)}`);
   if (plan.length) sections.push("", "## Interview plan", "", ...plan);
+  if (questions.length) {
+    const types = [...new Set(questions.map((q) => QUESTION_LABELS[q.questionType] ?? q.questionType))];
+    sections.push("", "## Questions", "",
+      `Your main questions come from the question bank (${questions.length} ${types.join(", ")} questions). Before each main question, call scenario_examples with a situation like "${types[0]} question about <topic>" to get candidates, choose one you have not asked this session (vary topics and difficulty), and ask it as written. A candidate's context tells you what a strong answer covers; use it to choose follow-ups, never say it.`);
+  }
+  if (kinds.has("system-design")) {
+    sections.push("", "## Whiteboard", "",
+      "Once you have stated the problem, open the whiteboard with surface({ action: \"open_whiteboard\" }) and ask the candidate to sketch the main components and how data flows between them. When they say they drew or changed something, read it with read_canvas_scene and ask about what is on it.");
+  }
   if (resumeMode || needsResume) {
     sections.push("", "## Résumé", "",
-      `${needsResume ? "The candidate attaches a résumé before the session." : "The candidate may attach a résumé."} Use read_document to read it before referring to it. Quote only what it says; never invent claims. If no résumé is attached, ask the candidate to describe one project or achievement instead.`);
+      `${needsResume ? "The candidate attaches a résumé before the session." : "The candidate may attach a résumé."} Use read_document to read it before referring to it. Quote only what it says; never invent claims. Compare the candidate's answers with it: when an answer goes beyond or against what it says, ask about the difference calmly and note it. If no résumé is attached, ask the candidate to describe one project or achievement instead.`);
   }
   sections.push("", "## Steps", "", ...steps.flatMap((step) => [step.block, ""]));
   if (classifications.length) {
@@ -162,7 +214,7 @@ export function interviewSkillPackage(agent: InterviewAgent): InterviewSkillPack
 
   const scenario = scenarioManifestSchema.parse({
     scenario: kebab(agent.slug),
-    name: `${name} (skill)`.slice(0, 200),
+    name: name.slice(0, 200),
     description: objective.slice(0, 1024),
     trainer_role: "Interviewer",
     learner_role: "Candidate",
@@ -170,31 +222,43 @@ export function interviewSkillPackage(agent: InterviewAgent): InterviewSkillPack
   });
 
   const label = text(context.label);
-  const before: BeforeSettings | undefined = resumeMode || needsResume
-    ? { preScreenshare: false, preUpload: true, duringUpload: false, uploadTitle: label || "Résumé", uploadInstruction: uploadPrompt(text(context.prompt)) }
-    : undefined;
-  if (needsResume) notes.push("The résumé upload is offered but no longer enforced as required (skill role plays have no required-upload setting).");
+  // What the session asked for before: the legacy rules (screen share, résumé upload), now as Settings-tab switches.
+  const legacy = contextUploadFromAgentData(d, "ROLEPLAY");
+  const before: BeforeSettings = {
+    preScreenshare: legacy.screenShare,
+    preUpload: legacy.offered || resumeMode || needsResume,
+    preUploadRequired: legacy.required || needsResume,
+    duringUpload: legacy.duringSession,
+    uploadTitle: label || (resumeMode || needsResume ? "Résumé" : ""),
+    uploadInstruction: uploadPrompt(text(context.prompt)),
+  };
   if (before && text(context.prompt) && before.uploadInstruction !== text(context.prompt)) notes.push("The upload prompt's retention promise was removed pending a retention review.");
 
-  const kinds = new Set(Object.entries(counts).filter(([, n]) => typeof n === "number" && n > 0).map(([kind]) => kind));
   const tools: ToolSettings = {
     codeEditor: kinds.has("coding") || kinds.has("code-output") || kinds.has("machine-coding") || stages.some((s) => strings(asRecord(asRecord(s.config).actions).allowed).includes("run_code")),
     choice: kinds.has("mcq"),
     canvas: kinds.has("system-design"),
     preview: resumeMode || needsResume,
+    knowledge: grounding.length > 0 || strings(d.knowledge_bases).length > 0 || Boolean(text(d.knowledgeBase)),
   };
   if (agent.slug === "full-mock-interview" || stages.length > 1) notes.push("Multi-stage: the skill lists every stage in order; quotas are session-wide, not per stage.");
 
   return {
     scenario,
     skill,
-    items: [],
+    items: questions.map(questionItem),
     settings: {
-      ...(before ? { before } : {}),
+      before,
       tools,
       ...(text(d.voiceId) ? { voiceId: text(d.voiceId) } : {}),
       ...(text(d.introVideo) ? { introVideo: text(d.introVideo) } : {}),
       portedFrom: { slug: agent.slug, version: agent.version },
+      after: { report: "roleplay", goals: [], rubric },
+      learnerBrief: [
+        `A mock interview: ${name}. You are the candidate; answer as you would in a real interview.`,
+        questions.length ? "The interviewer will give you a problem to work through; think out loud." : "",
+        needsResume ? "Attach your résumé before you start; the questions come from it." : resumeMode ? "You can attach your résumé before you start." : "",
+      ].filter(Boolean).join(" "),
     },
     notes,
   };

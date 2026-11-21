@@ -34,7 +34,7 @@ export default function DashboardPage() {
 
   const stats = [
     { label: "Personas", value: personas, href: "/personas", icon: UserRound },
-    { label: "Scenarios", value: agents, href: "/agents", icon: MessagesSquare },
+    { label: "Scenarios", value: agents, href: "/roleplay", icon: MessagesSquare },
     { label: "Knowledge bases", value: kbs, href: "/twin/knowledge", icon: BookOpen },
   ];
 

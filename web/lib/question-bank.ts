@@ -109,6 +109,31 @@ export class QuestionBank {
     }
   }
 
+  /** Every question in the org's knowledge bases (optionally of some types / topics), for porting into a skill. */
+  static async listQuestions(orgId: string, knowledgeBaseSlugs: string[], filter: { types?: string[]; topics?: string[] } = {}): Promise<InterviewQuestionRecord[]> {
+    const kbIds = await resolveKnowledgeBaseIds(orgId, knowledgeBaseSlugs);
+    if (!kbIds.length) return [];
+    const collection = await questionsCollection(orgId);
+    const records: InterviewQuestionRecord[] = [];
+    const pageSize = 250;
+    for (let offset = 0; ; offset += pageSize) {
+      const page = await collection.get({ where: { $and: [{ orgId }, knowledgeBaseFilter(kbIds)] } as Where, limit: pageSize, offset, include: ["metadatas"] });
+      for (const metadata of (page.metadatas ?? []) as Record<string, unknown>[]) {
+        try {
+          const raw = metadata.record_json;
+          const record = parseInterviewQuestionRecord(typeof raw === "string" ? JSON.parse(raw) : raw);
+          if (filter.types?.length && !filter.types.includes(record.questionType)) continue;
+          if (filter.topics?.length && !record.topicSlugs.some((topic) => filter.topics!.includes(topic))) continue;
+          records.push(record);
+        } catch {
+          // Malformed records are skipped, as at runtime.
+        }
+      }
+      if ((page.ids?.length ?? 0) < pageSize) break;
+    }
+    return records;
+  }
+
   static async getById(orgId: string, knowledgeBaseSlugs: string[], id: string): Promise<InterviewQuestionRecord | null> {
     try {
       const kbIds = await resolveKnowledgeBaseIds(orgId, knowledgeBaseSlugs);

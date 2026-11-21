@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { BarChart3, ExternalLink, Pencil, Play, Search, UserPlus } from "lucide-react";
+import { AudioLines, BarChart3, Pencil, Play, Search, UserPlus } from "lucide-react";
 import { RoleplayIcon } from "@/components/icons";
 import { DotsIcon, GRADIENTS, LearnerAvatars } from "@/components/library-card-parts";
 import {
@@ -20,12 +20,8 @@ import { Button } from "@/components/ui/button";
 
 type Scenario = RoleplayOutputs["scenarios"]["list"][number];
 
-/**
- * Actions of one role play (card menu and detail header share them). A v1 interview scenario (`interview`) is
- * configured, assigned and reviewed on its v1 pages, so its menu opens those.
- */
-export function RoleplayMenu({ slug, name, trigger, interview = false }: { slug: string; name: string; trigger?: "card" | "header"; interview?: boolean }) {
-  const v1 = `/agents/${encodeURIComponent(slug)}`;
+/** Actions of one role play (card menu and detail header share them). */
+export function RoleplayMenu({ slug, name, trigger }: { slug: string; name: string; trigger?: "card" | "header" }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -41,22 +37,6 @@ export function RoleplayMenu({ slug, name, trigger, interview = false }: { slug:
         <DotsIcon />
       </DropdownMenuTrigger>
       <DropdownMenuContent side="bottom" align="end" className="w-44">
-        {interview ? (
-          <DropdownMenuGroup>
-            <DropdownMenuItem render={<Link href={v1} />}>
-              <ExternalLink className="size-4" />
-              <span>Open</span>
-            </DropdownMenuItem>
-            <DropdownMenuItem render={<Link href={`${v1}/edit`} />}>
-              <Pencil className="size-4" />
-              <span>Edit</span>
-            </DropdownMenuItem>
-            <DropdownMenuItem render={<Link href={`/talk?agent=${encodeURIComponent(slug)}`} />}>
-              <Play className="size-4" />
-              <span>Try as learner</span>
-            </DropdownMenuItem>
-          </DropdownMenuGroup>
-        ) : (
           <DropdownMenuGroup>
             <DropdownMenuItem render={<Link href={`/roleplay/${slug}/edit`} />}>
               <Pencil className="size-4" />
@@ -74,8 +54,11 @@ export function RoleplayMenu({ slug, name, trigger, interview = false }: { slug:
               <BarChart3 className="size-4" />
               <span>Sessions</span>
             </DropdownMenuItem>
+            <DropdownMenuItem render={<Link href={`/roleplay/${slug}/calibrate`} />}>
+              <AudioLines className="size-4" />
+              <span>Calibrate</span>
+            </DropdownMenuItem>
           </DropdownMenuGroup>
-        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -113,7 +96,7 @@ function ScenarioCard({ scenario, index }: { scenario: Scenario; index: number }
       </Link>
       <div className="mt-auto flex items-center justify-between gap-2 px-4 pt-4 pb-4">
         <LearnerAvatars learners={scenario.learners} label="Learners assigned to this role play" />
-        <RoleplayMenu slug={scenario.slug} name={scenario.name} interview={scenario.interview} />
+        <RoleplayMenu slug={scenario.slug} name={scenario.name} />
       </div>
     </article>
   );
@@ -126,8 +109,7 @@ export function RoleplayLibraryPage({ scenarios }: { scenarios: Scenario[] }) {
   const shown = q
     ? scenarios.filter((s) => `${s.name} ${s.description ?? ""} ${s.client.name}`.toLowerCase().includes(q))
     : scenarios;
-  const created = shown.filter((s) => !s.interview);
-  const interviews = shown.filter((s) => s.interview);
+  const created = shown;
   return (
     <PageContainer>
       <header className="flex min-h-10 items-center justify-between gap-4">
@@ -175,17 +157,6 @@ export function RoleplayLibraryPage({ scenarios }: { scenarios: Scenario[] }) {
         </p>
       )}
 
-      {interviews.length ? (
-        <>
-          {/* v1 interview scenarios, as they were: they open (and are edited on) their v1 pages. */}
-          <h2 className="mt-12 text-section-title leading-6 font-semibold tracking-title">Interview scenarios</h2>
-          <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {interviews.map((scenario, i) => (
-              <ScenarioCard key={scenario.slug} scenario={scenario} index={i} />
-            ))}
-          </div>
-        </>
-      ) : null}
     </PageContainer>
   );
 }

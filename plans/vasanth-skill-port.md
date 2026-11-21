@@ -35,8 +35,8 @@ Format: `authored-roleplay` (trainer_role Interviewer, learner_role Candidate). 
 ## Commands (local only; refuses non-local DB, S3 or Chroma)
 
 ```sh
-bun scripts/port-vasanth-skills.ts --org careerwithvasanth            # dry run: plan + differences
-bun scripts/port-vasanth-skills.ts --org careerwithvasanth --apply    # publish; rerun is a no-op
+bun scripts/port-interviews.ts --org careerwithvasanth            # dry run (superseded: converts in place, plans/agents-to-roleplay.md)
+bun scripts/port-interviews.ts --org careerwithvasanth --apply    # convert in place
 bun scripts/interview-skill-chat-check.ts --org careerwithvasanth --turns 3 --apply            # real model turns
 bun scripts/interview-skill-chat-check.ts --org careerwithvasanth --turns 1 --originals --apply # originals still run
 ```

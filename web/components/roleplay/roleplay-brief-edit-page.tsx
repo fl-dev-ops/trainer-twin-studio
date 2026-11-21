@@ -76,18 +76,20 @@ export function ScriptView({ script }: { script: Script }) {
           </ul>
         </div>
       ) : null}
-      <div>
+      {script.steps.length ? <div>
         <p className={kicker}>How it goes</p>
         <ol className="m-0 mt-1 flex flex-col gap-2 pl-5">
           {script.steps.map((step) => (
             <li key={step.name}><span className="font-medium">{step.name}.</span> <span className="text-(--text-secondary)">{step.what}</span></li>
           ))}
         </ol>
-      </div>
-      <div>
-        <p className={kicker}>How it ends</p>
-        <p className="m-0 mt-1 text-(--text-secondary)">{[script.ending.limit, script.ending.good].filter(Boolean).join(" ")}</p>
-      </div>
+      </div> : null}
+      {script.ending.limit || script.ending.good ? (
+        <div>
+          <p className={kicker}>How it ends</p>
+          <p className="m-0 mt-1 text-(--text-secondary)">{[script.ending.limit, script.ending.good].filter(Boolean).join(" ")}</p>
+        </div>
+      ) : null}
       {script.items ? <p className="m-0 text-xs text-muted-foreground">{script.items} example lines the AI can draw on during the call.</p> : null}
     </div>
   );
@@ -114,6 +116,7 @@ export function RoleplayBriefEditPage({ slug, brief, before: initialBefore, tool
   const [tools, setTools] = useState(initialTools);
   const saved = useRef({ before: initialBefore, tools: initialTools });
   const queue = useRef(Promise.resolve());
+  const [savedPersona, setSavedPersona] = useState(brief.persona);
   const set = (key: keyof typeof form, value: string) => setForm((prev) => ({ ...prev, [key]: value }));
   const dirty = JSON.stringify(form) !== JSON.stringify({ persona: brief.persona, title: brief.title, learnerBrief: brief.learnerBrief, openingLine: brief.openingLine, limit: brief.limit });
 
@@ -128,6 +131,22 @@ export function RoleplayBriefEditPage({ slug, brief, before: initialBefore, tool
       toast.error(error instanceof Error ? error.message : "Could not save the role play");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function savePersona(next: string) {
+    if (next === savedPersona) return;
+    const previous = savedPersona;
+    setSavedPersona(next);
+    try {
+      // The saved basics, so unsaved General edits stay unsaved.
+      await roleplayClient.builder.saveBrief.mutate({ slug, persona: next, title: brief.title, learnerBrief: brief.learnerBrief, openingLine: brief.openingLine, limit: brief.limit });
+      setForm((prev) => ({ ...prev, persona: next }));
+      toast.success(`Now played by ${personas.find((p) => p.slug === next)?.name ?? next}`);
+      refresh();
+    } catch (error) {
+      setSavedPersona(previous);
+      toast.error(error instanceof Error ? error.message : "Could not change the persona");
     }
   }
 
@@ -170,6 +189,7 @@ export function RoleplayBriefEditPage({ slug, brief, before: initialBefore, tool
       <Tabs defaultValue="general" className="mt-6 gap-4">
         <TabsList>
           <TabsTrigger value="general">General</TabsTrigger>
+          <TabsTrigger value="persona">Persona</TabsTrigger>
           <TabsTrigger value="script">Script</TabsTrigger>
           <TabsTrigger value="settings">Settings</TabsTrigger>
         </TabsList>
@@ -179,12 +199,10 @@ export function RoleplayBriefEditPage({ slug, brief, before: initialBefore, tool
             <Field id="rp-title" label="Name">
               <input id="rp-title" maxLength={120} value={form.title} onChange={(e) => set("title", e.target.value)} className={cn(input, "h-10")} />
             </Field>
-            <Field label="Persona" hint="Who the learner talks to: their name, photo, voice and manner.">
-              <PersonaPicker personas={personas} value={form.persona} onChange={(slug) => set("persona", slug)} />
-            </Field>
             <Field id="rp-brief" label="Learner brief" hint="Shown to the learner before the call: who they are, the situation and what to aim for.">
               <textarea id="rp-brief" rows={4} maxLength={1000} value={form.learnerBrief} onChange={(e) => set("learnerBrief", e.target.value)} className={cn(input, "py-2.5")} />
             </Field>
+            {brief.kind !== "authored" ? <>
             <Field
               id="rp-opening"
               label={brief.aiStarts ? "Opening line" : "First reply"}
@@ -192,16 +210,30 @@ export function RoleplayBriefEditPage({ slug, brief, before: initialBefore, tool
             >
               <input id="rp-opening" maxLength={400} value={form.openingLine} onChange={(e) => set("openingLine", e.target.value)} className={cn(input, "h-10")} />
             </Field>
-            <Field id="rp-limit" label="Time limit" hint={'Optional, e.g. "At most 5 minutes."'}>
-              <input id="rp-limit" maxLength={200} value={form.limit} onChange={(e) => set("limit", e.target.value)} className={cn(input, "h-10")} />
-            </Field>
+            </> : null}
+            {brief.kind === "brief" ? (
+              <Field id="rp-limit" label="Time limit" hint={'Optional, e.g. "At most 5 minutes."'}>
+                <input id="rp-limit" maxLength={200} value={form.limit} onChange={(e) => set("limit", e.target.value)} className={cn(input, "h-10")} />
+              </Field>
+            ) : null}
           </article>
           <div className="flex items-center justify-end gap-3 pt-4">
             <Button variant="ghost" nativeButton={false} render={<Link href={`/roleplay/${slug}`} />}>Cancel</Button>
-            <Button variant="brand" disabled={saving || !dirty || !form.title.trim() || !form.learnerBrief.trim() || (brief.aiStarts && !form.openingLine.trim())} onClick={() => void save()}>
+            <Button variant="brand" disabled={saving || !dirty || !form.title.trim() || (brief.kind !== "authored" && (!form.learnerBrief.trim() || (brief.aiStarts && !form.openingLine.trim())))} onClick={() => void save()}>
               <Check data-icon="inline-start" /> {saving ? "Saving…" : "Save changes"}
             </Button>
           </div>
+        </TabsContent>
+
+        {/* Who plays it: saved as soon as one is picked (a new version of the role play). */}
+        <TabsContent value="persona">
+          <article className={card}>
+            <div>
+              <p className={kicker}>Who the learner talks to</p>
+              <p className="m-0 mt-1 text-xs text-muted-foreground">Their name, photo, voice and manner. The role play itself stays the same.</p>
+            </div>
+            <PersonaPicker personas={personas} value={savedPersona} onChange={(next) => void savePersona(next)} />
+          </article>
         </TabsContent>
 
         <TabsContent value="script" className="flex flex-col gap-4">
@@ -238,8 +270,15 @@ export function RoleplayBriefEditPage({ slug, brief, before: initialBefore, tool
               <SettingCard
                 title="Upload a file before the call"
                 description="Learners may add a file before the call starts, like a résumé or a brochure. A PDF or an image, up to 10 MB."
-                control={<SwitchToggle checked={before.preUpload} onChange={(on) => saveSettings({ before: { ...before, preUpload: on } }, `File upload before the call turned ${on ? "on" : "off"}`)} label="Upload a file before the call" />}
+                control={<SwitchToggle checked={before.preUpload} onChange={(on) => saveSettings({ before: { ...before, preUpload: on, preUploadRequired: on && before.preUploadRequired } }, `File upload before the call turned ${on ? "on" : "off"}`)} label="Upload a file before the call" />}
               />
+              {before.preUpload ? (
+                <SettingCard
+                  title="Required"
+                  description="The call can't start until the learner adds the file."
+                  control={<SwitchToggle checked={before.preUploadRequired === true} onChange={(on) => saveSettings({ before: { ...before, preUploadRequired: on } }, on ? "The file is now required" : "The file is now optional")} label="File required" />}
+                />
+              ) : null}
               <SettingCard
                 title="Attach during the call"
                 description="Learners can share an image or a PDF while they talk."
@@ -257,7 +296,7 @@ export function RoleplayBriefEditPage({ slug, brief, before: initialBefore, tool
                   key={row.key}
                   title={row.label}
                   description={row.description}
-                  control={<SwitchToggle checked={tools[row.key]} onChange={(on) => saveSettings({ tools: { ...tools, [row.key]: on } }, `${row.label} turned ${on ? "on" : "off"}`)} label={row.label} />}
+                  control={<SwitchToggle checked={tools[row.key] === true} onChange={(on) => saveSettings({ tools: { ...tools, [row.key]: on } }, `${row.label} turned ${on ? "on" : "off"}`)} label={row.label} />}
                 />
               ))}
             </SettingsSection>

@@ -89,6 +89,13 @@ export async function roleplayGuard(ctx: GuardContext): Promise<typeof ROLEPLAY_
   return (await isRoleplaySession(ctx)) ? ROLEPLAY_DISABLED : null;
 }
 
+/** Knowledge tools: off in role plays unless the role play switched knowledge search on. */
+export async function knowledgeGuard(ctx: GuardContext): Promise<typeof ROLEPLAY_DISABLED | null> {
+  if (!(await isRoleplaySession(ctx))) return null;
+  const { sessionToolSettings } = await import("./agent-tools");
+  return (await sessionToolSettings(ctx)).knowledge ? null : ROLEPLAY_DISABLED;
+}
+
 /** Test hook. */
 export function clearSessionModeCache() {
   modeCache.clear();

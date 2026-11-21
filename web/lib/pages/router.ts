@@ -1,16 +1,13 @@
 import { z } from "zod";
 import { orgPeople } from "@/lib/org-people";
 import { db } from "@/lib/db";
-import { loadLatestFidelityReport } from "@/lib/fidelity-report.server";
 import { listUsers } from "@/lib/learners";
 import { OrganizationKnowledgeService } from "@/lib/org-knowledge";
 import { isStudioRole, parseAccentColor } from "@/lib/org";
-import { getPersonaBaseline } from "@/lib/persona-baseline";
 import { agentPhotoUrls, pickableVoices } from "@/lib/persona-media";
 import { getPersona, listPersonas } from "@/lib/personas";
 import { loadSharedSession, loadTwinLink } from "@/lib/pages/learner";
 import { loadOrgHome } from "@/lib/pages/org-home";
-import { loadRolePlayPreview } from "@/lib/pages/role-play-preview";
 import { loadSessionDetail, loadSessionsList } from "@/lib/pages/sessions";
 import { loadSpecResource } from "@/lib/pages/spec-resource";
 import {
@@ -22,7 +19,6 @@ import {
   listAgentPersonas,
   listRunnableSpecs,
   listScenarioIntroVideos,
-  listSpecSummaries,
   listUploads,
 } from "@/lib/specs";
 import { refusals, toTRPCError } from "@/lib/errors";
@@ -83,15 +79,7 @@ export const pageRouter = t.router({
     return { initialDocs, initialStats };
   }),
 
-  // Role plays (scenarios), their specs and calibration.
-  agents: studioProcedure.query(({ ctx }) => listSpecSummaries("agents", ctx.user.orgId, "ROLEPLAY")),
-  rolePlayPreview: studioProcedure.input(slugInput).query(({ ctx, input }) => loadRolePlayPreview(ctx.user.orgId, input.slug)),
-  agentSpec: studioProcedure
-    .input(z.object({ slug: z.string().min(1).max(200), version: optional, isNew: z.boolean() }))
-    .query(({ ctx, input }) =>
-      loadSpecResource({ orgId: ctx.user.orgId, type: "agents", slug: input.slug, requestedVersion: input.version, isNew: input.isNew }),
-    ),
-
+  // Role-play calibration.
   /** The role play being calibrated and the persona it speaks as. */
   calibrationAgent: studioProcedure.input(slugInput).query(async ({ ctx, input }) => {
     const agent = await db.agent.findFirst({
@@ -100,17 +88,6 @@ export const pageRouter = t.router({
     });
     if (!agent) return notFound();
     return { slug: agent.slug, scenarioName: agentDisplayName(agent.slug, agent.name), twinName: agent.persona.name };
-  }),
-
-  fidelity: studioProcedure.query(async ({ ctx }) => {
-    const [report, scenarios] = await Promise.all([
-      loadLatestFidelityReport(ctx.user.orgId),
-      listSpecSummaries("agents", ctx.user.orgId),
-    ]);
-    const baseline = report?.scenarios[0]?.persona.slug
-      ? await getPersonaBaseline(ctx.user.orgId, report.scenarios[0].persona.slug)
-      : null;
-    return { report, scenarios: scenarios.map(({ slug, name, version }) => ({ slug, name, version })), baseline };
   }),
 
   users: studioProcedure.query(({ ctx }) => listUsers(ctx.user.orgId)),

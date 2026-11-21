@@ -11,11 +11,11 @@ import { orgPeople } from "@/lib/org-people";
 import { creditsLeftFor } from "@/lib/minutes";
 import { listPersonas } from "@/lib/personas";
 import { isSessionReport } from "@/lib/session-report";
-import { roleplayBuilderFrom, roleplayBuilderSchema } from "@/lib/roleplay/skill";
+import { type RoleplayBuilder, roleplayBuilderFrom, roleplayBuilderSchema } from "@/lib/roleplay/skill";
+import { updateRoleplay } from "@/lib/roleplay/manage";
 import { type RoleplayBrief, roleplayBriefSchema } from "@/lib/roleplay/brief";
 import { type RoleplayReport } from "@/lib/roleplay/session-report";
 import { publishRoleplayBrief, ROLEPLAY_SOURCE, saveRoleplay, ScenarioIngestError } from "@/lib/scenario-ingest";
-import { agentDisplayName } from "@/lib/specs";
 import { studioProcedure, t } from "@/lib/trpc";
 import { avatarPhotoUrl } from "@/lib/twin/avatar";
 import { durationSeconds, transcriptTurns } from "@/lib/twin/stats";
@@ -26,7 +26,7 @@ import { skillRefusals } from "@/lib/skills";
 /**
  * Role-play tRPC surface, mounted at /api/roleplay (the twin module's twin, plans/roleplay-skill.md step 6).
  * Studio members only; every query is scoped to their organization. Covers role plays built in the builder
- * (source "roleplay-skill"); older interview role plays stay on /agents.
+ * (source "roleplay-skill"), authored skills (ported interviews) and copilot briefs.
  */
 
 const slugInput = z.object({ slug: z.string().min(1).max(200) });
@@ -38,7 +38,12 @@ const roleplaysOf = (orgId: string): Prisma.AgentWhereInput => ({
   orgId,
   kind: "ROLEPLAY",
   // Builder role plays, and role plays the copilot wrote from requirements (a brief, lib/roleplay/brief.ts).
-  OR: [{ data: { path: ["source"], equals: ROLEPLAY_SOURCE } }, { data: { path: ["roleplayBrief", "id"], string_starts_with: "" } }],
+  // Also role plays with an authored skill (ported interviews, data.source "scenario-ingest").
+  OR: [
+    { data: { path: ["source"], equals: ROLEPLAY_SOURCE } },
+    { data: { path: ["roleplayBrief", "id"], string_starts_with: "" } },
+    { data: { path: ["source"], equals: AUTHORED_SOURCE } },
+  ],
 });
 
 /** A role play's brief, when the copilot wrote it from requirements. */
@@ -62,9 +67,46 @@ function scriptOf(brief: RoleplayBrief) {
     items: brief.items.length,
   };
 }
+
+const AUTHORED_SOURCE = "scenario-ingest";
+
+/** A role play with an authored skill (a ported interview): what its scenario.json says, for the script view. */
+function authoredScriptOf(data: unknown) {
+  const scenario = asRecord(asRecord(data).scenario);
+  const steps = Array.isArray(scenario.steps) ? scenario.steps.map(asRecord) : [];
+  return {
+    aiRole: text(scenario.trainer_role) ?? "Interviewer",
+    who: "Follows the role play's skill.",
+    learnerRole: text(scenario.learner_role) ?? "Learner",
+    learnerAim: "",
+    situation: [text(scenario.description)].filter((v): v is string => Boolean(v)),
+    wants: "",
+    concerns: [] as { concern: string; hidden: boolean }[],
+    steps: steps.map((step) => ({ name: text(step.name) ?? text(step.id) ?? "Step", what: "" })).filter((step) => step.name),
+    ending: { limit: null as string | null, good: "" },
+    items: 0,
+  };
+}
+
+/** The same reading of a role play made in the older form: its fields as the script view shows them. */
+function builderScriptOf(b: RoleplayBuilder) {
+  const lines = (...values: (string | undefined)[]) => values.map((v) => (v ?? "").trim()).filter(Boolean);
+  return {
+    aiRole: "Client",
+    who: lines(b.clientName ? `On this call your name is ${b.clientName}.` : "", b.howTheyTalk).join(" ") || "The persona, as they are.",
+    learnerRole: b.situation.learnerRole,
+    learnerAim: b.learnerGoals.join(" ") || "Get to a clear next step.",
+    situation: lines(b.situation.scenario),
+    wants: "",
+    concerns: lines(b.situation.hiddenTruth).map((concern) => ({ concern, hidden: true })),
+    steps: [] as { name: string; what: string }[],
+    ending: { limit: null as string | null, good: lines(b.situation.agreesWhen ? `Agrees when: ${b.situation.agreesWhen}` : "", b.situation.declinesWhen ? `Declines when: ${b.situation.declinesWhen}` : "").join(" ") },
+    items: b.exampleLines.length,
+  };
+}
 /**
  * Every role play of the org, for the library, sessions and users lists: builder role plays plus the v1 interview
- * scenarios (no builder source), which keep opening their v1 pages (/agents/<slug>, /sessions/<id>).
+ * scenarios (no builder source); their old sessions keep the interview report page (/sessions/<id>).
  */
 const anyRoleplayOf = (orgId: string): Prisma.AgentWhereInput => ({ orgId, kind: "ROLEPLAY" });
 
@@ -95,6 +137,9 @@ async function findRoleplay(orgId: string, slug: string) {
 /** A finished role-play session's report, once made. */
 const roleplayReport = (value: unknown): RoleplayReport | null =>
   isSessionReport(value) && asRecord(value).kind === "roleplay" ? (value as RoleplayReport) : null;
+
+/** A report written by the legacy interview runtime (any finished report that is not a role-play report). */
+const legacyReport = (value: unknown) => isSessionReport(value) && asRecord(value).kind !== "roleplay";
 
 /** Where a session's report stands, for quiet polling (the same states as twin: lib/report-model.ts). */
 export type RoleplayReportState = ReportState;
@@ -153,7 +198,7 @@ const scenariosRouter = t.router({
   list: studioProcedure.query(async ({ ctx }) => {
     const orgId = ctx.user.orgId;
     const rows = await db.agent.findMany({
-      where: { ...anyRoleplayOf(orgId), archivedAt: null },
+      where: { ...roleplaysOf(orgId), archivedAt: null },
       orderBy: [{ order: "asc" }, { updatedAt: "desc" }],
       select: { id: true, slug: true, version: true, primarySkillId: true, name: true, data: true, updatedAt: true, persona: { select: personaSelect } },
     });
@@ -167,16 +212,13 @@ const scenariosRouter = t.router({
     return agents.map((agent) => {
       const data = asRecord(agent.data);
       const scenario = asRecord(data.scenario);
-      // v1 interview scenarios: as in v1 (objective, opening, display name); they open their v1 page.
       const brief = briefOf(data);
-      const interview = data.source !== ROLEPLAY_SOURCE && !brief;
       return {
         slug: agent.slug,
-        name: interview ? agentDisplayName(agent.slug, agent.name) : agent.name,
-        interview,
-        href: interview ? `/agents/${encodeURIComponent(agent.slug)}` : `/roleplay/${agent.slug}`,
-        description: text(scenario.description) ?? (interview ? text(data.objective) : null),
-        opening: text(asRecord(scenario.roleplay).opening) ?? text(brief?.start.openingLine) ?? (interview ? text(data.opening) : null),
+        name: agent.name,
+        href: `/roleplay/${agent.slug}`,
+        description: text(scenario.description),
+        opening: text(asRecord(scenario.roleplay).opening) ?? text(brief?.start.openingLine),
         client: clientOf(agent.persona, agent.data),
         sessions: sessionsOf.get(agent.id) ?? 0,
         updatedAt: agent.updatedAt.toISOString(),
@@ -208,7 +250,7 @@ const scenariosRouter = t.router({
       situation: builder?.situation.scenario ?? brief?.summary ?? null,
       learnerRole: builder?.situation.learnerRole ?? brief?.learner.role ?? null,
       /** Written by the copilot: the script the trainer reads (changed through the copilot or the edit page's core fields). */
-      script: brief ? scriptOf(brief) : null,
+      script: brief ? scriptOf(brief) : builder ? builderScriptOf(builder) : authoredScriptOf(agent.data),
       difficulty: builder?.difficulty ?? null,
       client: clientOf(agent.persona, agent.data),
       stats: {
@@ -233,6 +275,7 @@ const scenariosRouter = t.router({
 const beforeInput = z.object({
   preScreenshare: z.boolean(),
   preUpload: z.boolean(),
+  preUploadRequired: z.boolean().optional(),
   duringUpload: z.boolean(),
   uploadTitle: z.string().trim().max(80),
   uploadInstruction: z.string().trim().max(300),
@@ -243,13 +286,15 @@ const builderRouter = t.router({
   get: studioProcedure.input(slugInput).query(async ({ ctx, input }) => {
     const agent = await findRoleplay(ctx.user.orgId, input.slug);
     const brief = briefOf(agent.data);
+    const builder = roleplayBuilderFrom(agent.data);
     return {
       slug: agent.slug,
-      builder: roleplayBuilderFrom(agent.data),
+      builder,
       before: beforeSettings(agent.data),
       tools: toolSettings(agent.data),
       // A role play the copilot wrote: its core fields (editable here) and its script (changed through the copilot).
       brief: brief ? {
+        kind: "brief" as const,
         persona: agent.persona.slug,
         title: brief.title,
         learnerBrief: brief.learnerBrief,
@@ -257,7 +302,27 @@ const builderRouter = t.router({
         openingLine: brief.start.openingLine ?? "",
         limit: brief.ending.limit ?? "",
         script: scriptOf(brief),
-      } : null,
+      } : builder ? {
+        // Made in the older form: the same simple page (no time limit; its script is changed through the copilot).
+        kind: "builder" as const,
+        persona: builder.persona,
+        title: builder.name,
+        learnerBrief: builder.whatToExpect ?? "",
+        aiStarts: true,
+        openingLine: builder.opening ?? "",
+        limit: "",
+        script: builderScriptOf(builder),
+      } : {
+        // An authored skill (a ported interview): name and persona here; the skill is changed through the copilot.
+        kind: "authored" as const,
+        persona: agent.persona.slug,
+        title: agent.name,
+        learnerBrief: text(asRecord(agent.data).learnerBrief) ?? "",
+        aiStarts: true,
+        openingLine: "",
+        limit: "",
+        script: authoredScriptOf(agent.data),
+      },
     };
   }),
 
@@ -270,14 +335,46 @@ const builderRouter = t.router({
     .input(slugInput.extend({
       persona: z.string().trim().min(1).max(200),
       title: z.string().trim().min(1).max(120),
-      learnerBrief: z.string().trim().min(1).max(1000),
+      learnerBrief: z.string().trim().max(1000),
       openingLine: z.string().trim().max(400),
       limit: z.string().trim().max(200),
     }))
     .mutation(async ({ ctx, input }) => {
       const agent = await findRoleplay(ctx.user.orgId, input.slug);
       const brief = briefOf(agent.data);
-      if (!brief) throw new TRPCError({ code: "BAD_REQUEST", message: "This role play was not written by the copilot" });
+      if (!brief && !roleplayBuilderFrom(agent.data)) {
+        // An authored skill: its name, persona and learner brief are edited here; the skill through the copilot.
+        const persona = await db.persona.findFirst({ where: { orgId: ctx.user.orgId, slug: { equals: input.persona, mode: "insensitive" } }, select: { id: true } });
+        if (!persona) throw new TRPCError({ code: "NOT_FOUND", message: `Persona "${input.persona}" was not found in this organization` });
+        let changed = false;
+        await withLock([ownershipLock(ctx.user.orgId), `agent:${agent.slug}`], async (tx) => {
+          const current = await tx.agent.findFirst({ where: { id: agent.id, archivedAt: null }, select: { name: true, personaId: true, data: true, primarySkillId: true } });
+          if (!current) throw refusals.notFound();
+          const data = (current.data && typeof current.data === "object" ? current.data : {}) as Record<string, unknown>;
+          const managed = current.primarySkillId && (await skillOwnership(ctx.user.orgId, tx)).mode === "managed";
+          changed = input.title !== current.name || persona.id !== current.personaId || (text(data.learnerBrief) ?? "") !== input.learnerBrief;
+          if (!changed) return;
+          const stored = managed ? packageFieldsOmitted(data) : data;
+          const rest = Object.fromEntries(Object.entries(stored).filter(([key]) => key !== "learnerBrief"));
+          await tx.agent.update({
+            where: { id: agent.id },
+            data: { name: input.title, personaId: persona.id, data: { ...rest, name: input.title, ...(input.learnerBrief ? { learnerBrief: input.learnerBrief } : {}) } as Prisma.InputJsonValue },
+          });
+        });
+        return { slug: agent.slug, version: agent.version, changed };
+      }
+      if (!input.learnerBrief) throw new TRPCError({ code: "BAD_REQUEST", message: "Write the learner brief" });
+      if (!brief) {
+        // Made in the older form: the same basics, saved through its builder fields.
+        if (!roleplayBuilderFrom(agent.data)) throw new TRPCError({ code: "BAD_REQUEST", message: "This role play can't be edited here" });
+        try {
+          const saved = await updateRoleplay(ctx.user.orgId, agent.slug, { builder: { name: input.title, persona: input.persona, whatToExpect: input.learnerBrief, opening: input.openingLine } });
+          return { slug: saved.slug, version: "version" in saved ? saved.version ?? agent.version : agent.version, changed: "version" in saved && saved.version !== agent.version };
+        } catch (error) {
+          if (error instanceof ScenarioIngestError) throw new TRPCError({ code: error.status === 404 ? "NOT_FOUND" : "BAD_REQUEST", message: error.message });
+          throw error;
+        }
+      }
       const next: RoleplayBrief = {
         ...brief,
         title: input.title,
@@ -363,8 +460,8 @@ const sessionsRouter = t.router({
       db.agent.findMany({ where: roleplaysOf(orgId), select: { id: true } }),
     ]);
     const builderIds = new Set(builder.map((agent) => agent.id));
-    // A v1 interview session opens its v1 page, where its interview report shows.
-    return rows.map((row) => ({ ...sessionItem(row), ...(builderIds.has(row.agentId) ? {} : { href: `/sessions/${row.id}` }) }));
+    // A session run by the legacy interview runtime (before its role play was converted) keeps its interview report page.
+    return rows.map((row) => ({ ...sessionItem(row), ...(builderIds.has(row.agentId) && !legacyReport(row.report) ? {} : { href: `/sessions/${row.id}` }) }));
   }),
 
   /** One session: learner, client, report (goals, rubric, notes) and transcript. */

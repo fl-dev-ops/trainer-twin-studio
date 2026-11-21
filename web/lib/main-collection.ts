@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { Collection, EmbeddingFunction, Where } from "chromadb";
 import { unstable_cache, revalidateTag } from "next/cache";
 import { ChromaTenantService } from "@/lib/chroma-tenant";
@@ -92,7 +93,15 @@ export function skillScopeWhere(scope: SkillIndexScope[]): Where {
   return pairs.length === 1 ? pairs[0] : { $or: pairs };
 }
 
-export const scenarioItemId = (agentSlug: string, agentVersion: number, index: number) => `scenario_item_${agentSlug}@v${agentVersion}#${index}`;
+/**
+ * One item's vector id. Chroma caps ids at 128 bytes; a long scope (a skill's artifacts path) is hashed so the id fits.
+ * Ids are only written, never looked up (reads and prunes filter on metadata), so short ids are unchanged.
+ */
+export const scenarioItemId = (agentSlug: string, agentVersion: number, index: number) => {
+  const id = `scenario_item_${agentSlug}@v${agentVersion}#${index}`;
+  if (Buffer.byteLength(id) <= 128) return id;
+  return `scenario_item_h${createHash("sha256").update(`${agentSlug}@v${agentVersion}`).digest("hex").slice(0, 40)}#${index}`;
+};
 
 /** Chroma filter for exactly these (slug, version) pairs. */
 export function scenarioScopeWhere(scope: ScenarioScope[]): Where {

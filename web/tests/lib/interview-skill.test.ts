@@ -42,7 +42,7 @@ test("a résumé interview ports verbatim into a valid authored skill with its u
   const pkg = interviewSkillPackage(resumeInterview);
   expect(scenarioManifestSchema.safeParse(pkg.scenario).success).toBe(true);
   expect(pkg.scenario).toMatchObject({
-    scenario: "impact-check", name: "Impact Check (skill)", trainer_role: "Interviewer", learner_role: "Candidate",
+    scenario: "impact-check", name: "Impact Check", trainer_role: "Interviewer", learner_role: "Candidate",
     steps: [{ id: "impact-validation", name: "Impact Validation", trainer_moves: ["probe_required_evidence", "narrow_hint"], learner_moves: [] }],
   });
   // Authored text is carried verbatim.
@@ -58,14 +58,18 @@ test("a résumé interview ports verbatim into a valid authored skill with its u
   // The step goal is readable the way the runtime reads authored skills.
   expect(stepGoal(skillBody(pkg.skill), "impact-validation")).toBe("Validate quantified claims.");
   expect(pkg.items).toEqual([]);
-  expect(pkg.settings).toEqual({
-    before: { preScreenshare: false, preUpload: true, duringUpload: false, uploadTitle: "Documents", uploadInstruction: "Upload your résumé. Then we begin." },
-    tools: { codeEditor: false, choice: false, canvas: false, preview: true },
-    voiceId: "voice-1", introVideo: "intros/impact.mp4", portedFrom: { slug: "impact-check", version: 7 },
-  });
-  expect(pkg.notes.join(" ")).toMatch(/planner, question bank and résumé-claim tools are not used/);
+  // The legacy session rules become Settings-tab switches: screen share and a required résumé, as before.
+  expect(pkg.settings.before).toEqual({ preScreenshare: true, preUpload: true, preUploadRequired: true, duringUpload: false, uploadTitle: "Documents", uploadInstruction: "Upload your résumé. Then we begin." });
+  expect(pkg.settings.tools).toEqual({ codeEditor: false, choice: false, canvas: false, preview: true, knowledge: true });
+  expect(pkg.settings).toMatchObject({ voiceId: "voice-1", introVideo: "intros/impact.mp4", portedFrom: { slug: "impact-check", version: 7 } });
+  expect(pkg.settings.learnerBrief).toMatch(/A mock interview: Impact Check\. .*Attach your résumé/);
+  // Stage evidence becomes the report rubric: required (★) items first and weighted double, 100 points in all.
+  expect(pkg.settings.after.report).toBe("roleplay");
+  expect(pkg.settings.after.rubric.map((r) => r.name)).toEqual(["baseline: Value before the change.", "causal link: Why the work caused it."]);
+  expect(pkg.settings.after.rubric.reduce((sum, r) => sum + r.points, 0)).toBe(100);
+  expect(pkg.settings.after.rubric[0].points).toBeGreaterThan(pkg.settings.after.rubric[1].points);
+  expect(pkg.notes.join(" ")).toMatch(/question bank is copied into the role play's items/);
   expect(pkg.notes.join(" ")).toMatch(/retention promise was removed/);
-  expect(pkg.notes.join(" ")).toMatch(/no longer enforced as required/);
 });
 
 test("a technical interview carries its question mix and topics, and switches on matching workspace tools", () => {
@@ -74,8 +78,29 @@ test("a technical interview carries its question mix and topics, and switches on
   expect(pkg.skill).toContain("Draw questions only from these topics: closures, event-loop.");
   expect(pkg.skill).toContain("Up to 3 follow-up questions per main question");
   expect(pkg.skill).not.toContain("## Résumé");
-  expect(pkg.settings.before).toBeUndefined();
-  expect(pkg.settings.tools).toEqual({ codeEditor: true, choice: true, canvas: false, preview: false });
+  expect(pkg.settings.before).toMatchObject({ preUpload: false, preUploadRequired: false });
+  expect(pkg.settings.tools).toEqual({ codeEditor: true, choice: true, canvas: false, preview: false, knowledge: false });
+  // No questions given: the AI still states the problem first.
+  expect(pkg.skill).toContain("state the exact problem they will work on");
+});
+
+test("bank questions become searchable items and the skill says to state the problem first; system design opens the whiteboard", () => {
+  const questions = [
+    { id: "q1", text: "Design a news feed.", spokenText: "Design a news feed system.", questionType: "system-design", difficulty: "hard", topicSlugs: ["system-design"], keyPoints: ["fan-out", "pagination"] },
+    { id: "q2", text: "What prints?", questionType: "code-output", code: { language: "js", content: "console.log(1)" } },
+  ];
+  const pkg = interviewSkillPackage({ ...technicalInterview, data: { ...technicalInterview.data, config: { interview: { type: "technical", topic_slugs: ["system-design"], question_counts: { "system-design": 1 } } } } }, { questions });
+  // Only questions of the interview's types are kept.
+  expect(pkg.items).toHaveLength(1);
+  expect(pkg.items[0]).toMatchObject({ id: expect.stringMatching(/^question-[0-9a-f]{16}$/), role: "trainer", metadata: { kind: "question", source: "question-bank" } });
+  expect(pkg.items[0].text).toContain("Say it as: Design a news feed system.");
+  expect(pkg.items[0].context).toMatch(/system-design question\. hard difficulty\. topics: system-design\. What a strong answer covers \(for you only; never say it\): fan-out; pagination/);
+  expect(pkg.skill).toContain("## Questions");
+  expect(pkg.skill).toContain("call scenario_examples");
+  expect(pkg.skill).toContain("state the problem plainly");
+  expect(pkg.skill).toContain("## Whiteboard");
+  expect(pkg.skill).toContain('surface({ action: "open_whiteboard" })');
+  expect(pkg.settings.tools.canvas).toBe(true);
 });
 
 test("multi-stage and topic-less interviews keep every stage in order and say what differs", () => {

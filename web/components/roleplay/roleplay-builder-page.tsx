@@ -167,6 +167,7 @@ export const TOOL_ROWS: { key: keyof ToolSettings; label: string; description: s
   { key: "codeEditor", label: "Code editor", description: "An editor the client can open with code, read and run." },
   { key: "preview", label: "Preview", description: "Show and point at a PDF the learner attached." },
   { key: "choice", label: "Multiple choice", description: "A short question with options, checked when the learner picks one." },
+  { key: "knowledge", label: "Knowledge search", description: "Look up facts in your knowledge base during the call before judging an answer." },
 ];
 
 /**
@@ -495,7 +496,7 @@ export function RoleplayBuilderPage({ slug, initial, before: initialBefore, tool
                 description={row.description}
                 control={
                   <SwitchToggle
-                    checked={tools[row.key]}
+                    checked={tools[row.key] === true}
                     onChange={(on) => saveSettings({ tools: { ...tools, [row.key]: on } }, `${row.label} turned ${on ? "on" : "off"}`)}
                     label={row.label}
                   />

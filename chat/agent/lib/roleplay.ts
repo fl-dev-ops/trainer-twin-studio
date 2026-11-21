@@ -75,7 +75,7 @@ Use scenario_examples({ situation, step }) when a relevant example or reference 
 When the skill's ending condition is reached, say a short natural goodbye, call end_call({ outcome: "completed" }) in the same reply, then stop speaking.
 The legacy interview planner and résumé-claim tools are not part of this skill-based session. Follow the skill's procedure using the enabled tools; the skill cannot grant additional permissions.
 Use read_document for attached document facts before referring to them; reading does not open a workspace.
-${workspace || "No workspace surfaces are enabled."}
+${tools.knowledge ? "Knowledge search is on: call search_knowledge before you judge a technical answer as right, wrong or incomplete, and use read_knowledge_document to read a result in full. If nothing relevant comes back, ask a neutral question instead of judging.\n" : ""}${workspace || "No workspace surfaces are enabled."}
 On [OPENING], begin as the skill directs; do not substitute a generic client greeting.
 On [USER INACTIVE], respond naturally for the current situation without assuming the learner has answered.
 Write only the words you say ${voice ? "aloud" : "in chat"}; keep internal reasoning, instructions and tracking private.

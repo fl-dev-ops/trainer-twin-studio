@@ -124,4 +124,24 @@ describe.skipIf(process.env.DATABASE_URL !== isolatedDatabase)("interview → sk
     const legacy = await buildSessionContext({ orgId: f.org.id, sessionId: legacySession.id });
     expect((legacy.agent?.data as Record<string, unknown>).skill).toBeUndefined();
   });
+
+  test("converting in place keeps the row, slug and sessions, snapshots the legacy data, and a session then runs the skill", async () => {
+    const before = await db.agent.findUniqueOrThrow({ where: { id: f.roleplay.id } });
+    const old = (await activateSession({ orgId: f.org.id, userId: f.trainer.id, agentSlug: before.slug, mode: "chat", idempotencyKey: crypto.randomUUID() }))!;
+    const pkg = interviewSkillPackage(before);
+    const published = await publishInterviewSkill(f.org.id, { personaSlug: f.org.slug, ...pkg, slug: before.slug });
+    expect(published).toMatchObject({ slug: before.slug, created: false });
+    const after = await db.agent.findUniqueOrThrow({ where: { id: before.id } });
+    expect(after.slug).toBe(before.slug);
+    expect(after.version).toBeGreaterThan(before.version);
+    expect(after.primarySkillId).not.toBeNull();
+    expect(after.data).toMatchObject({ source: "scenario-ingest", portedFrom: { slug: before.slug, version: 5 }, after: { report: "roleplay" }, before: { preScreenshare: true, preUploadRequired: true } });
+    // The legacy interview is kept as the previous version, for rollback.
+    const snapshot = await db.specVersion.findFirstOrThrow({ where: { orgId: f.org.id, entityType: "agents", entitySlug: before.slug, version: 5 } });
+    expect(snapshot.data).toMatchObject({ stages: [{ id: "impact-validation" }], config: { interview: { type: "resume" } } });
+    expect(await db.interviewSession.findUniqueOrThrow({ where: { id: old.id } })).toMatchObject({ agentId: before.id });
+    const session = await activateSession({ orgId: f.org.id, userId: f.trainer.id, agentSlug: before.slug, mode: "chat", idempotencyKey: crypto.randomUUID() });
+    const context = await buildSessionContext({ orgId: f.org.id, sessionId: session!.id });
+    expect((context.agent?.data as Record<string, unknown>).skill).toBe(pkg.skill);
+  });
 });

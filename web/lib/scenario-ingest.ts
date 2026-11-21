@@ -174,7 +174,7 @@ async function requireOrg(orgId: string) {
  * Data a During write carries over from the agent it replaces: Before and After belong to their own phases (configure
  * page, builder), and the intro video is provisioned separately. Without this a re-ingest dropped them.
  */
-const KEPT_ACROSS_DURING_WRITES = ["introVideo", "before", "twinSettings", "after", "tools"] as const;
+const KEPT_ACROSS_DURING_WRITES = ["introVideo", "before", "twinSettings", "after", "tools", "learnerBrief", "voiceId"] as const;
 
 /**
  * Writes a skill package as an Agent of `kind` (twin skill or role play): S3 files, then Chroma items, then the
@@ -199,11 +199,14 @@ async function storeSkillAgent(input: {
   /** Agent.data keys on top of the derived ones (role play: source, after). */
   data?: Record<string, unknown>;
   runId?: string | null;
+  /** Publish onto this existing slug instead of `<org>-<scenario>` (an interview converted in place keeps its slug). */
+  slug?: string;
 }) {
   const { org, kind } = input;
-  const pkg: SkillPackage = input.built ?? {
+  const built = input.built ?? {
     ...buildScenario(org.slug, input.manifest!, input.skill), scenarioId: input.manifest!.scenario, manifestFile: "scenario.json", manifest: input.manifest,
   };
+  const pkg: SkillPackage = input.slug ? { ...built, slug: input.slug, agentData: { ...built.agentData, id: input.slug } } : built;
   const { slug, agentData } = pkg;
   if (!validSlug(slug)) throw new ScenarioIngestError(`"${slug}" is not a valid scenario id`, 400);
 
@@ -378,6 +381,8 @@ export async function publishInterviewSkill(orgId: string, input: {
   skill: string;
   items: ScenarioItem[];
   settings: Record<string, unknown>;
+  /** Convert this existing agent in place (keeps its slug, assignments, links and sessions). */
+  slug?: string;
 }) {
   const [org, persona] = await Promise.all([
     requireOrg(orgId),
@@ -386,7 +391,7 @@ export async function publishInterviewSkill(orgId: string, input: {
   if (!persona) throw new ScenarioIngestError(`Persona "${input.personaSlug}" was not found in this organization`, 404);
   return storeSkillAgent({
     org, kind: "ROLEPLAY", personaId: persona.id, manifest: scenarioManifestSchema.parse(input.scenario), skill: input.skill, items: input.items,
-    data: input.settings,
+    data: input.settings, slug: input.slug,
   });
 }
 

@@ -5,18 +5,18 @@ import { CalibrationReview } from "@/components/calibration/calibration-review";
 import { DEMO_CALIBRATION } from "@/components/calibration/mock";
 import { api, pageNotFound, useApi } from "@/lib/api";
 
-export default function CalibrationPage() {
-  const { slug, id } = useParams<{ slug: string; id: string }>();
-  // shortcut: only the demo calibration exists until calibrations are stored.
-  if (id !== DEMO_CALIBRATION.id) pageNotFound();
-  return <DemoCalibration slug={slug} />;
+export default function RoleplayCalibrationPage() {
+  const { id, calibration } = useParams<{ id: string; calibration: string }>();
+  // shortcut: only the demo calibration exists until role-play calibrations are stored.
+  if (calibration !== DEMO_CALIBRATION.id) pageNotFound();
+  return <DemoCalibration slug={id} />;
 }
 
 function DemoCalibration({ slug }: { slug: string }) {
   const agent = useApi(["page.calibrationAgent", slug], () => api.page.calibrationAgent.query({ slug }));
   return (
     <CalibrationReview
-      backHref={`/agents/${encodeURIComponent(agent.slug)}`}
+      backHref={`/roleplay/${encodeURIComponent(agent.slug)}`}
       twinName={agent.twinName}
       startedAt={DEMO_CALIBRATION.startedAt}
       turns={DEMO_CALIBRATION.turns}

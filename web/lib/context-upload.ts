@@ -21,6 +21,8 @@ export type AgentContextUpload = {
 export type BeforeSettings = {
   preScreenshare: boolean;
   preUpload: boolean;
+  /** The learner must add the file before the call can start (only with preUpload). */
+  preUploadRequired?: boolean;
   duringUpload: boolean;
   uploadTitle: string;
   uploadInstruction: string;
@@ -154,14 +156,18 @@ const storedBefore = (data: unknown) => asRecord(asRecord(data)?.before) ?? asRe
 
 /** Twins always follow their before settings; any other agent only once it has a `before` block. */
 /** Twins, role plays with saved Before settings, and role plays the copilot wrote (all off until switched on). */
+// Skill role plays (builder "roleplay-skill", authored "scenario-ingest", copilot briefs) use the Settings tab: all off
+// unless saved. Only older interviews keep their legacy context config.
 export const usesBeforeSettings = (data: unknown, kind?: string | null) =>
-  kind === "TWIN" || asRecord(asRecord(data)?.before) !== null || asRecord(asRecord(data)?.roleplayBrief) !== null;
+  kind === "TWIN" || asRecord(asRecord(data)?.before) !== null || asRecord(asRecord(data)?.roleplayBrief) !== null
+  || ["roleplay-skill", "scenario-ingest"].includes(String(asRecord(data)?.source ?? ""));
 
 export function beforeSettings(data: unknown): BeforeSettings {
   const settings = storedBefore(data);
   return {
     preScreenshare: settings?.preScreenshare === true,
     preUpload: settings?.preUpload === true,
+    preUploadRequired: settings?.preUpload === true && settings?.preUploadRequired === true,
     duringUpload: settings?.duringUpload === true,
     uploadTitle: text(settings?.uploadTitle),
     uploadInstruction: text(settings?.uploadInstruction),
@@ -173,7 +179,7 @@ export function contextUploadFromAgentData(data: unknown, kind?: string | null):
   if (!usesBeforeSettings(data, kind)) return resolveContextUpload(contextConfigFromAgentData(data));
   const settings = beforeSettings(data);
   return {
-    required: false,
+    required: settings.preUploadRequired === true,
     prompt: settings.uploadInstruction,
     label: settings.uploadTitle || TWIN_UPLOAD_TITLE_DEFAULT,
     maxFiles: 1,

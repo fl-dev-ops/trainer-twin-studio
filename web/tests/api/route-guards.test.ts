@@ -43,7 +43,6 @@ const classification: Record<string, Guard> = {
   "GET internal/billing/check": "internal/cron secret",
   "POST internal/billing/check": "internal/cron secret",
   "POST internal/copilot-studio": "internal/cron secret",
-  "POST internal/fidelity": "internal/cron secret",
   "GET internal/ingestion/pump": "internal/cron secret",
   "POST internal/ingestion/pump": "internal/cron secret",
   "POST internal/ingestion/results": "internal/cron secret",

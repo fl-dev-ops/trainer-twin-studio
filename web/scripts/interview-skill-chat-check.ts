@@ -1,5 +1,5 @@
 /**
- * Real conversations with ported interview skills (scripts/port-vasanth-skills.ts) on the local copy: starts a chat
+ * Real conversations with ported interview skills (scripts/port-interviews.ts) on the local copy: starts a chat
  * session per ported role play through the app's own activation, then sends turns to a local chat service (real
  * model). Checks that the session is pinned to the published package, the AI speaks as the interviewer (asks, does
  * not answer for the candidate), respects the ported word limit, and that a republish does not change a running call.
@@ -14,7 +14,21 @@
  */
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { assertLocalPortEnvironment } from "./port-vasanth-skills";
+
+/** Local only: a local *_local/*_test database, local S3 with fake credentials and local Chroma. */
+export function assertLocalPortEnvironment(env: NodeJS.ProcessEnv) {
+  const url = new URL(env.DATABASE_URL ?? "postgresql://invalid");
+  if (!["localhost", "127.0.0.1"].includes(url.hostname) || !/_(local|test)$/.test(url.pathname.slice(1))) {
+    throw new Error("Port requires a local *_local or *_test database");
+  }
+  if (env.DATABASE_URL_UNPOOLED && env.DATABASE_URL_UNPOOLED !== env.DATABASE_URL) throw new Error("DATABASE_URL_UNPOOLED must equal DATABASE_URL");
+  if (!/^http:\/\/(127\.0\.0\.1|localhost):\d+$/.test(env.AWS_ENDPOINT_URL_S3 ?? "") || env.AWS_ACCESS_KEY_ID !== "S3RVER" || env.AWS_SECRET_ACCESS_KEY !== "S3RVER") {
+    throw new Error("Port requires local S3 with fake credentials");
+  }
+  if (!/^http:\/\/(127\.0\.0\.1|localhost):\d+$/.test(env.CHROMA_URL ?? "") || env.CHROMA_API_KEY) {
+    throw new Error("Port requires local Chroma without cloud credentials");
+  }
+}
 
 const argv = process.argv.slice(2);
 const option = (name: string) => argv.find((a) => a.startsWith(`--${name}=`))?.split("=").slice(1).join("=") ?? (argv.includes(`--${name}`) ? argv[argv.indexOf(`--${name}`) + 1] : undefined);
