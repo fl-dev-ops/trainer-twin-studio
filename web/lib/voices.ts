@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { db } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import type { Prisma, Voice } from "@/lib/generated/prisma/client";
-import { deleteObject, putObject, sampleVoicePrefix, voicePrefix } from "@/lib/s3";
+import { deleteObject, putObject, voicePrefix } from "@/lib/s3";
 
 const MB = 1024 * 1024;
 const AUDIO_EXTENSIONS = {
@@ -26,15 +26,23 @@ export function availableVoiceWhere(orgId: string | null): Prisma.VoiceWhereInpu
   };
 }
 
+/**
+ * A voice's files must live in that voice's own folder: `<base>/<org id>/tts-voices/<voice id>/<file>` for an org voice,
+ * `<base>/global/...` (or `<app>/shared/...` for a built-in sample) for a global one. The leading base is not checked:
+ * it differs by environment and has changed over time (trainertwin/kb, prod/trainertwin/kb, trainertwin-dev/kb), and
+ * rows keep the key they were written with. What matters is that a voice never points at another org's or another
+ * voice's files, and that no key escapes its folder.
+ */
 export function hasValidVoiceObjectKeys(voice: Pick<Voice, "id" | "orgId" | "kind" | "s3AudioKey" | "s3TranscriptKey">) {
-  const prefixes = voice.orgId === null
-    ? [`${voicePrefix(null, voice.id)}/`, ...(voice.kind === "sample" ? [`${voicePrefix("shared", voice.id)}/`, `${sampleVoicePrefix(voice.id)}/`] : [])]
-    : [`${voicePrefix(voice.orgId, voice.id)}/`];
-  return [voice.s3AudioKey, ...(voice.s3TranscriptKey === null ? [] : [voice.s3TranscriptKey])].every((key) =>
-    Boolean(key.trim())
-    && prefixes.some((prefix) => key.startsWith(prefix) && key.slice(prefix.length).trim().length > 0)
-    && !key.split("/").some((part) => part === "." || part === "..")
-    && !key.includes("\\"));
+  const scopes = voice.orgId === null ? ["global", ...(voice.kind === "sample" ? ["shared"] : [])] : [voice.orgId];
+  return [voice.s3AudioKey, ...(voice.s3TranscriptKey === null ? [] : [voice.s3TranscriptKey])].every((key) => {
+    if (!key.trim() || key.includes("\\") || key.startsWith("/")) return false;
+    const parts = key.split("/");
+    if (parts.some((part) => !part.trim() || part === "." || part === "..")) return false;
+    // ... <scope> / tts-voices / <voice id> / <file...>, with at least one base segment before the scope.
+    const at = parts.lastIndexOf("tts-voices");
+    return at >= 2 && parts[at + 1] === voice.id && parts.length > at + 2 && scopes.includes(parts[at - 1]);
+  });
 }
 
 export function assertVoiceObjectKeys(voice: Pick<Voice, "id" | "orgId" | "kind" | "s3AudioKey" | "s3TranscriptKey">) {
