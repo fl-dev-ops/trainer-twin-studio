@@ -310,9 +310,14 @@ export function SessionView({
             ? { shareCode: sessionCode, contextId: ids[0] || undefined, contextIds: ids, holdOpening: true }
             : { agentSlug: agent, contextId: ids[0] || undefined, contextIds: ids, holdOpening: true },
         ),
+      }).catch(() => {
+        throw new Error("Could not reach TrainerTwin. Check your connection and try again.");
       });
       const launch = await launchResponse.json().catch(() => ({}));
       if (!launchResponse.ok || !launch.session?.id || !launch.session?.runtimeToken) {
+        if (sessionCode && launch.code === "voice_unavailable") {
+          throw new Error("This role play’s voice is unavailable. Ask your trainer to check the voice settings.");
+        }
         throw new Error(launch.error ?? "Could not create session");
       }
       deadlineRef.current = typeof launch.session.secondsLeft === "number" ? Date.now() + launch.session.secondsLeft * 1000 : null;
@@ -945,10 +950,10 @@ export function SessionView({
   }, [room, connection, handleDisconnect, resetSessionState]);
 
   useEffect(() => {
-    if (!launched || ended) return;
+    if (!launched || !connected || ended) return;
     const timer = setInterval(() => setElapsed((s) => s + 1), 1000);
     return () => clearInterval(timer);
-  }, [launched, ended]);
+  }, [launched, connected, ended]);
 
   useEffect(() => {
     return () => {
@@ -1467,7 +1472,7 @@ export function SessionView({
               <Card size="lg" raised className="w-full max-w-md text-center">
                 <CardHeader>
                   <CardTitle>{saveFailed ? "Could not save session" : "Session problem"}</CardTitle>
-                  <CardDescription>{error}</CardDescription>
+                  <CardDescription role="alert">{error}</CardDescription>
                 </CardHeader>
                 <CardContent className="flex justify-center gap-2">
                   {!autoStart && (

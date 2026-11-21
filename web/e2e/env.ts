@@ -9,6 +9,10 @@ export const E2E_PORT = 3999;
 export const E2E_BASE = "trainertwin.localhost";
 export const e2eUrl = (host: string, path = "/") => `http://${host}.${E2E_BASE}:${E2E_PORT}${path}`;
 
+// Opt-in voice transport smoke test: start `livekit-server --dev` locally before running Playwright.
+export const localVoice = process.env.E2E_LOCAL_LIVEKIT === "1";
+export const localLiveKit = { url: "http://127.0.0.1:7880", key: "devkey", secret: "secret" };
+
 export function e2eServerEnv(): Record<string, string> {
   const db = testDatabaseUrl();
   if (!db) throw new Error("DATABASE_URL in web/.env must be a local database to derive the test one");
@@ -32,9 +36,12 @@ export function e2eServerEnv(): Record<string, string> {
     AI_GATEWAY_API_KEY: "",
     OPENROUTER_API_KEY: "",
     CEREBRAS_API_KEY: "",
-    LIVEKIT_URL: "wss://livekit.test",
-    NEXT_PUBLIC_LIVEKIT_URL: "wss://livekit.test",
-    CHAT_URL: "http://chat.test",
+    LIVEKIT_URL: localVoice ? localLiveKit.url.replace(/^http/, "ws") : "wss://livekit.test",
+    NEXT_PUBLIC_LIVEKIT_URL: localVoice ? localLiveKit.url.replace(/^http/, "ws") : "wss://livekit.test",
+    LIVEKIT_API_KEY: localVoice ? localLiveKit.key : "e2e-livekit-key",
+    LIVEKIT_API_SECRET: localVoice ? localLiveKit.secret : "e2e-only-livekit-secret-not-for-deploy",
+    CHAT_URL: localVoice ? "http://127.0.0.1:3996" : "http://chat.test",
+    COPILOT_SERVICE_SECRET: "e2e-only-chat-secret",
     METEROID_API_URL: "http://127.0.0.1:3998/api/v1",
     METEROID_API_KEY: "e2e-meteroid",
     METEROID_WEBHOOK_SECRET: "whsec_dGVzdC1tZXRlcm9pZC1zZWNyZXQ=",
