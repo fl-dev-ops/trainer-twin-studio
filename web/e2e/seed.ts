@@ -18,7 +18,8 @@ const person = (key: string, name: string) => ({ id: `e2e-${key}`, name, email: 
 const admin = person("admin", "Ada Admin");
 const learner = person("learner", "Lena Learner");
 const broke = person("broke", "Brook Broke");
-const more = Array.from({ length: 22 }, (_, i) => person(`learner-${String(i + 1).padStart(2, "0")}`, `Learner ${String(i + 1).padStart(2, "0")}`));
+const namePrompt = person("learner-22", "e2e-learner-22");
+const more = [...Array.from({ length: 21 }, (_, i) => person(`learner-${String(i + 1).padStart(2, "0")}`, `Learner ${String(i + 1).padStart(2, "0")}`)), namePrompt];
 const everyone = [admin, learner, broke, ...more];
 
 // Start clean: everything the last run made, children first (not all of it cascades from the org).
@@ -80,11 +81,11 @@ const codes = Object.fromEntries((await db.rolePlayAssignment.findMany({ where: 
 // Sign-in codes for the people the tests sign in as (server-only API; the setup signs in with them over HTTP, the way
 // a person does). Sign-in is Google or an email code: there are no passwords.
 const recipient = more[0];
-const otps = Object.fromEntries(await Promise.all([admin, learner, broke, recipient].map(async (p) =>
+const otps = Object.fromEntries(await Promise.all([admin, learner, broke, recipient, namePrompt].map(async (p) =>
   [p.id, await auth.api.createVerificationOTP({ body: { email: p.email, type: "sign-in" } })] as const)));
 mkdirSync(new URL("./.state", import.meta.url), { recursive: true });
 writeFileSync(new URL("./.state/seed.json", import.meta.url), JSON.stringify({
-  org: ORG, otps, admin, learner, broke, more, recipient,
+  org: ORG, otps, admin, learner, broke, more, recipient, namePrompt,
   roleplay: { slug: roleplay.slug }, twin: { slug: twin.slug },
   purchase: { id: purchase.id, razorpayId: purchase.razorpayId, paymentId: `pay_e2e_${purchase.id}`, refundId: `rfnd_e2e_${purchase.id}` },
   codes: { learner: codes[learner.email], broke: codes[broke.email] },

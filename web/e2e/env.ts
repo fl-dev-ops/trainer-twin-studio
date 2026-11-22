@@ -22,6 +22,8 @@ export function e2eServerEnv(): Record<string, string> {
     DATABASE_URL_UNPOOLED: db,
     NEXT_PUBLIC_BASE_DOMAIN: E2E_BASE,
     BETTER_AUTH_URL: e2eUrl("auth"),
+    // The test server uses HTTP; production only trusts HTTPS for these hosts.
+    BETTER_AUTH_TRUSTED_ORIGINS: `${e2eUrl("dash").slice(0, -1)},${e2eUrl("e2e").slice(0, -1)}`,
     RESEND_API_KEY: "",
     TTS_SERVICE_URL: "http://127.0.0.1:3997",
     TTS_SERVICE_KEY: "e2e-tts-service",

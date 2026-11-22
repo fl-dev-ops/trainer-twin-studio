@@ -5,10 +5,11 @@ const token = (claims: Record<string, unknown>) =>
   ["header", Buffer.from(JSON.stringify(claims)).toString("base64url"), "signature"].join(".");
 
 describe("user names made from an email", () => {
-  test("the placeholder is the email's local part, compared without case", () => {
+  test("the placeholder is the email's generated lowercase local part", () => {
     expect(emailPlaceholderName("priya.n@acme.com")).toBe("priya.n");
     expect(isPlaceholderName("priya.n", "priya.n@acme.com")).toBe(true);
-    expect(isPlaceholderName("Priya.N", "priya.n@acme.com")).toBe(true);
+    expect(isPlaceholderName("priya.n", "Priya.N@acme.com")).toBe(true);
+    expect(isPlaceholderName("Priya.N", "priya.n@acme.com")).toBe(false);
     expect(isPlaceholderName("", "priya.n@acme.com")).toBe(true);
     expect(isPlaceholderName(null, "priya.n@acme.com")).toBe(true);
     expect(isPlaceholderName("priya.n@acme.com", "priya.n@acme.com")).toBe(true);

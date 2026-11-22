@@ -14,7 +14,7 @@ setup("seed and sign in", async () => {
   const seed = JSON.parse(readFileSync("e2e/.state/seed.json", "utf8"));
   mkdirSync("e2e/.auth", { recursive: true });
   const signedIn: Record<string, string> = {};
-  for (const who of ["admin", "learner", "broke", "recipient"] as const) {
+  for (const who of ["admin", "learner", "broke", "recipient", "namePrompt"] as const) {
     const response = await fetch(e2eUrl("dash", "/api/auth/sign-in/email-otp"), {
       method: "POST",
       // A trusted origin (lib/auth.ts trustedOrigins); the request itself goes to the test server.

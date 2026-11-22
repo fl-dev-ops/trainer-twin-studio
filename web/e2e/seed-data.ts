@@ -5,4 +5,4 @@ type Person = { id: string; name: string; email: string };
 export function seed(): { org: { slug: string; name: string }; roleplay: { slug: string }; twin: { slug: string }; admin: Person; learner: Person; broke: Person; recipient: Person; more: Person[]; codes: { learner: string; broke: string }; purchase: { id: string; razorpayId: string; paymentId: string; refundId: string } } {
   return JSON.parse(readFileSync("e2e/.state/seed.json", "utf8"));
 }
-export const as = (who: "admin" | "learner" | "broke" | "recipient") => ({ storageState: `e2e/.auth/${who}.json` });
+export const as = (who: "admin" | "learner" | "broke" | "recipient" | "namePrompt") => ({ storageState: `e2e/.auth/${who}.json` });

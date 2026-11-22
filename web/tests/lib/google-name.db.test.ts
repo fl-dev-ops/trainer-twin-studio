@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { db, localMinutesDb } from "./minutes-test-db";
 import { fillNameFromGoogle } from "@/lib/auth";
@@ -40,6 +40,20 @@ describe.skipIf(!localMinutesDb)("Google sign-in fills a placeholder name (local
     await fillNameFromGoogle({ id: account.id });
     expect((await db.user.findUniqueOrThrow({ where: { id: user.id } })).name).toBe("Priya Nair");
   });
+  test("a name saved after Google reads the placeholder wins", async () => {
+    const user = await person("<prefix>");
+    const account = await link(user.id, { name: "Priya Nair" });
+    const before = await db.user.findUniqueOrThrow({ where: { id: user.id } });
+    await db.user.update({ where: { id: user.id }, data: { name: "Priya (chosen)" } });
+    const read = spyOn(db.user, "findUnique").mockResolvedValueOnce(before);
+    try {
+      await fillNameFromGoogle(account);
+    } finally {
+      read.mockRestore();
+    }
+    expect((await db.user.findUniqueOrThrow({ where: { id: user.id } })).name).toBe("Priya (chosen)");
+  });
+
   test("a name set on purpose, an existing photo and other providers are left alone", async () => {
     const named = await person("Priya N. (Sales)", "https://example.com/mine.png");
     await fillNameFromGoogle(await link(named.id, { name: "Priya Nair", picture: "https://lh3.googleusercontent.com/a/p" }));

@@ -1,7 +1,7 @@
 /**
  * People added by email get an account before they ever sign in (lib/org-people.ts), named after their email's local
  * part. That name is a placeholder: it is replaced by the name Google gives at sign-in, or by the one the person types
- * when asked (components/name-prompt.tsx). A name anyone set on purpose is never replaced.
+ * when asked (components/name-prompt.tsx).
  */
 
 export function emailPlaceholderName(email: string): string {
@@ -10,8 +10,10 @@ export function emailPlaceholderName(email: string): string {
 
 /** Still the name made from the email (or empty), so it may be filled in from a better source. */
 export function isPlaceholderName(name: string | null | undefined, email: string): boolean {
-  const current = (name ?? "").trim().toLowerCase();
-  return !current || current === emailPlaceholderName(email).toLowerCase() || current === email.toLowerCase();
+  const current = (name ?? "").trim();
+  // shortcut: an exact email-derived name is indistinguishable from a chosen one without tracking confirmation.
+  const normalizedEmail = email.toLowerCase();
+  return !current || current === emailPlaceholderName(normalizedEmail) || current === normalizedEmail;
 }
 
 /**

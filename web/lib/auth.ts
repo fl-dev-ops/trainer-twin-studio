@@ -2,6 +2,7 @@ import { apiKey } from "@better-auth/api-key";
 import { betterAuth } from "better-auth";
 import { APIError, createAuthMiddleware } from "better-auth/api";
 import { prismaAdapter } from "better-auth/adapters/prisma";
+import { expireCookie } from "better-auth/cookies";
 import { emailOTP, organization } from "better-auth/plugins";
 import { organizationAccess, organizationRoles } from "@/lib/auth-roles";
 import { nextCookies } from "better-auth/next-js";
@@ -15,7 +16,7 @@ import { googleProfile, isPlaceholderName } from "@/lib/user-name";
 
 /**
  * After a Google sign-in links or refreshes its account: give the user Google's name (and photo, if they have none)
- * while their name is still the placeholder made from their email (lib/user-name.ts). A name set on purpose stays.
+ * while their name still matches the placeholder made from their email (lib/user-name.ts).
  * Runs on every Google sign-in, so people added before this existed are fixed the next time they sign in.
  * Never blocks the sign-in.
  */
@@ -29,8 +30,8 @@ export async function fillNameFromGoogle(account: { id?: string; providerId?: st
     if (!profile.name) return;
     const user = await db.user.findUnique({ where: { id: row.userId }, select: { name: true, email: true, image: true } });
     if (!user || !isPlaceholderName(user.name, user.email)) return;
-    await db.user.update({
-      where: { id: row.userId },
+    await db.user.updateMany({
+      where: { id: row.userId, name: user.name, email: user.email, image: user.image },
       data: { name: profile.name, ...(!user.image && profile.picture ? { image: profile.picture } : {}) },
     });
   } catch (error) {
@@ -70,6 +71,12 @@ export const auth = betterAuth({
     : {},
   hooks: {
     after: createAuthMiddleware(async (ctx) => {
+      const signedIn = ctx.context.newSession?.user;
+      if (ctx.path === "/callback/:id" && ctx.params?.id === "google" && signedIn && isPlaceholderName(signedIn.name, signedIn.email)) {
+        // The callback cached the profile it read before the account hook ran. Let the first session read use Postgres.
+        expireCookie(ctx, ctx.context.authCookies.sessionData);
+        return;
+      }
       if (ctx.path !== "/email-otp/send-verification-otp" || ctx.body?.type !== "sign-in") return;
       const result = ctx.context.returned;
       if (!result || typeof result !== "object" || !("success" in result) || result.success !== true || typeof ctx.body.email !== "string") return;

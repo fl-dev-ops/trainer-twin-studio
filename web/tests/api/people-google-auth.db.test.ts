@@ -26,7 +26,8 @@ describe.skipIf(!localMinutesDb)("Google sign-in has no self-sign-up (local data
     f = minutesFixture(); await f.create(); state = undefined; address = `google-${f.org.id}@example.com`;
     const google = (await auth.$context).socialProviders.find((provider) => provider.id === "google")!;
     expect(google.options?.disableSignUp).toBe(true);
-    exchange = spyOn(google, "validateAuthorizationCode").mockResolvedValue({ accessToken: "verified-test-token", scopes: ["openid", "email", "profile"] });
+    const profile = Buffer.from(JSON.stringify({ name: "Google person", picture: "https://lh3.googleusercontent.com/a/test" })).toString("base64url");
+    exchange = spyOn(google, "validateAuthorizationCode").mockResolvedValue({ accessToken: "verified-test-token", idToken: `h.${profile}.s`, scopes: ["openid", "email", "profile"] });
     identity = spyOn(google, "getUserInfo").mockImplementation(async () => ({
       user: { id: `${f.org.id}-google`, name: "Google person", email: address, emailVerified: true },
       data: { sub: `${f.org.id}-google`, name: "Google person", email: address, email_verified: true },
@@ -45,6 +46,7 @@ describe.skipIf(!localMinutesDb)("Google sign-in has no self-sign-up (local data
     const authorization = new URL((await started.json()).url);
     state = authorization.searchParams.get("state")!;
     expect(state).toBeTruthy();
+    exchange.mockClear(); identity.mockClear();
     const cookie = started.headers.getSetCookie().map((header) => header.split(";")[0]).join("; ");
     const response = await auth.handler(request(`callback/google?state=${encodeURIComponent(state)}&code=test-code`, undefined, cookie));
     expect(exchange).toHaveBeenCalledTimes(1);
@@ -74,6 +76,20 @@ describe.skipIf(!localMinutesDb)("Google sign-in has no self-sign-up (local data
     expect(await db.account.findFirstOrThrow({ where: { userId: f.learner.id } })).toMatchObject({ providerId: "google", accountId: `${f.org.id}-google` });
     expect(await db.session.count({ where: { userId: f.learner.id } })).toBe(1);
     expect(await db.member.count({ where: { userId: f.learner.id } })).toBe(1);
+  });
+
+  test("the first session after linking or returning with Google has the updated profile", async () => {
+    address = f.learner.email;
+    const placeholder = address.split("@")[0];
+    for (const image of [null, "https://example.com/existing.png"]) {
+      await db.user.update({ where: { id: f.learner.id }, data: { name: placeholder, image } });
+      const { response, back } = await callback();
+      expect(response.headers.get("location")).toBe(back);
+      const cookie = response.headers.getSetCookie().filter((header) => !header.includes("Max-Age=0")).map((header) => header.split(";")[0]).join("; ");
+      const session = await auth.handler(request("get-session", undefined, cookie));
+      expect(session.status).toBe(200);
+      expect(await session.json()).toMatchObject({ user: { name: "Google person", image: image ?? "https://lh3.googleusercontent.com/a/test" } });
+    }
   });
 
   test("Google callback without an explicit error URL uses the app's sign-in page, not Better Auth's error page", async () => {
