@@ -24,7 +24,7 @@ test("only approved Studio and scoped draft/source tools are shipped", () => {
   const tools = readdirSync(new URL("../agent/tools/", import.meta.url)).filter((name) => name.endsWith(".ts")).map((name) => name.slice(0, -3));
   assert.deepEqual(tools.sort(), [
     "build_scenario", "build_twin_skill", "check", "create_persona", "create_twin", "draft_roleplay", "files",
-    "get_roleplay", "get_twin", "list_personas", "list_roleplays", "list_twins", "list_voices", "load_skill",
+    "get_roleplay", "get_twin", "list_personas", "list_roleplays", "list_twins", "list_users", "list_voices", "load_skill",
     "publish", "publish_roleplay", "publish_twin_skill", "read", "read_file", "read_method", "read_sessions",
     "search", "update_persona", "update_roleplay", "update_twin", "write",
   ]);

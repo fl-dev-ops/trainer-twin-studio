@@ -2,26 +2,39 @@ import assert from "node:assert/strict";
 import { defineEval } from "eve/evals";
 
 export default defineEval({
-  description: "A trainer can decline a new persona or approve it with their chosen voice",
+  description: "Studio Copilot reads the roster and knowledge, and saves approved persona, twin, and role-play changes",
   tags: ["live"],
   async test(t) {
     const url = process.env.STUDIO_URL;
     const org = process.env.PERSONA_QA_ORG;
     const user = process.env.PERSONA_QA_USER;
     const voiceId = process.env.PERSONA_QA_VOICE;
-    if (!url || !org || !user || !voiceId) return t.skip("Run against a prepared local studio fixture");
+    const phrase = process.env.PERSONA_QA_PHRASE;
+    if (!url || !org || !user || !voiceId || !phrase) return t.skip("Run against a prepared local studio fixture");
     assert(["localhost", "127.0.0.1"].includes(new URL(url).hostname));
     assert(org.startsWith("persona-qa-"));
     const headers = { authorization: `Basic ${Buffer.from(`${org}:${process.env.COPILOT_SERVICE_SECRET}`).toString("base64")}`, "x-trainertwin-user-id": user };
+    const studio = (body: Record<string, unknown>) => fetch(new URL("/api/internal/copilot-studio", url), {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${process.env.SCENARIO_INGEST_SECRET}`, "x-trainertwin-org-id": org, "x-trainertwin-user-id": user },
+      body: JSON.stringify(body),
+    });
     async function list() {
-      const res = await fetch(new URL("/api/internal/copilot-studio", url!), {
-        method: "POST",
-        headers: { "content-type": "application/json", authorization: `Bearer ${process.env.SCENARIO_INGEST_SECRET}`, "x-trainertwin-org-id": org!, "x-trainertwin-user-id": user! },
-        body: JSON.stringify({ action: "listPersonas" }),
-      });
+      const res = await studio({ action: "listPersonas" });
       assert.equal(res.status, 200);
       return (await res.json() as { personas: { slug: string }[] }).personas.map(({ slug }) => slug);
     }
+    const roster = await t.send("What is Riley Example's role in this organization, and which twin and role play are assigned to Riley now?", { headers });
+    roster.expectOk();
+    roster.calledTool("list_users");
+    const reply = roster.reply;
+    assert(reply, "Expected a roster reply");
+    for (const expected of [/Riley Example/i, /learner/i, /Silver Compass/i, /Orchard Follow-up/i]) assert.match(reply, expected);
+
+    const knowledge = await t.send("Read the Demo Playbook in our knowledge base. What exact fallback phrase does it specify for an unconfirmed demo?", { headers });
+    knowledge.expectOk();
+    assert(knowledge.reply?.includes(phrase), `Expected the phrase from the seeded document; got ${knowledge.reply}`);
+
     for (const optionId of ["deny", "approve"] as const) {
       const name = optionId === "deny" ? "Maya Denied" : "Maya Approved";
       const slug = name.toLowerCase().replace(" ", "-");
@@ -53,5 +66,36 @@ export default defineEval({
     const createdTwin = await twin.session.respond([{ interactionId: twinApproval.interactionId, optionId: "approve" }], { headers });
     createdTwin.expectOk();
     createdTwin.calledTool("create_twin", { count: 1 });
+
+    const approvalFor = async (ask: string, prefix: string) => {
+      const first = await t.send(ask, { headers });
+      const pending = first.interactions.length ? first : await first.session.send("Those details are final. Show me the approval card for this exact change.", { headers });
+      const card = pending.interactions.find((i) => i.request.prompt?.startsWith(prefix));
+      assert(card, `Expected ${prefix} approval: ${pending.reply}`);
+      return async (tool: string) => {
+        const result = await pending.session.respond([{ interactionId: card.interactionId, optionId: "approve" }], { headers });
+        result.expectOk();
+        result.calledTool(tool, { count: 1 });
+      };
+    };
+    const approveTwinEdit = await approvalFor("Rename the main twin for QA Trainer to Compass Trainer Twin. Don't change anything else.", "Change twin");
+    const unchangedTwin = await studio({ action: "get", kind: "twin", slug: `${org}-qa-trainer-twin` });
+    assert.equal(unchangedTwin.status, 200);
+    assert(!JSON.stringify(await unchangedTwin.json()).includes("Compass Trainer Twin"));
+    await approveTwinEdit("update_twin");
+
+    const approveRoleplay = await approvalFor(
+      'Create and publish a role play titled "Renewal Check-in", brief ID renewal-check-in, played by the persona Maya Approved. The learner is an account manager calling a buyer about renewal. The buyer needs a clear follow-up date before deciding. Have the learner start, then have the buyer ask about the timeline and agree only if the learner proposes a date. Show the learner their goal before practice. Use no example items. These are the final requirements; show me the draft before requesting approval.',
+      'Publish the role play "Renewal Check-in"',
+    );
+    const roleplaySlug = `${org}-renewal-check-in`;
+    assert.equal((await studio({ action: "get", kind: "roleplay", slug: roleplaySlug })).status, 404);
+    await approveRoleplay("publish_roleplay");
+
+    const approveRoleplayEdit = await approvalFor('Update the published Renewal Check-in role play: turn on optional file upload before the call. Keep all other settings and the brief unchanged.', "Change role play");
+    const unchangedRoleplay = await studio({ action: "get", kind: "roleplay", slug: roleplaySlug });
+    assert.equal(unchangedRoleplay.status, 200);
+    assert(!JSON.stringify(await unchangedRoleplay.json()).includes('"preUpload":true'));
+    await approveRoleplayEdit("update_roleplay");
   },
 });

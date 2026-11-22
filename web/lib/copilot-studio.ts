@@ -3,6 +3,7 @@ import { z } from "zod";
 import { toolSettings } from "@/lib/agent-tools";
 import { beforeSettings } from "@/lib/context-upload";
 import { db } from "@/lib/db";
+import { LEARNER, orgPeople } from "@/lib/org-people";
 import { updateRoleplay } from "@/lib/roleplay/manage";
 import { roleplayBuilderFrom } from "@/lib/roleplay/skill";
 import { getObjectText } from "@/lib/s3";
@@ -30,6 +31,7 @@ export const copilotStudioInput = z.discriminatedUnion("action", [
   z.object({ action: z.literal("get"), slug, kind: z.enum(["twin", "roleplay"]).optional() }).strict(),
   z.object({ action: z.literal("getSkill"), slug, version: z.number().int().positive().optional() }).strict(),
   z.object({ action: z.literal("listKnowledge") }).strict(),
+  z.object({ action: z.literal("listUsers"), name: z.string().trim().min(1).max(120).optional(), offset: z.number().int().nonnegative().max(2_147_483_647).optional() }).strict(),
   // The copilot channel's fetchFile (trainertwin-upload://<id>): a file this trainer attached in a copilot chat.
   z.object({ action: z.literal("resolveUpload"), documentId: z.string().trim().min(1).max(120) }).strict(),
   z.object({
@@ -188,6 +190,39 @@ export async function runCopilotStudio(actor: Actor, input: CopilotStudioInput, 
         manifest: manifest ? JSON.parse(manifest) : asRecord(data.scenario),
         items: items ? JSON.parse(items) : [],
         patterns,
+      };
+    }
+
+    case "listUsers": {
+      const limit = 25;
+      const offset = input.offset ?? 0;
+      const rows = await orgPeople(orgId, { includeDisabled: true, nameQuery: input.name, skip: offset, take: limit + 1 }, d.db);
+      const people = rows.slice(0, limit);
+      const learners = people.filter((person) => person.role === LEARNER && !person.disabled);
+      const live = { orgId, archivedAt: null };
+      const [twins, roleplays] = learners.length ? await Promise.all([
+        d.db.twinAssignment.findMany({
+          where: { orgId, userId: { in: learners.map((person) => person.userId) }, status: "active",
+            OR: [{ accessUntil: null }, { accessUntil: { gt: new Date() } }], agent: { ...live, kind: "TWIN" } },
+          select: { userId: true, agent: { select: { name: true, slug: true } } },
+          orderBy: [{ agent: { name: "asc" } }, { agent: { slug: "asc" } }],
+        }),
+        d.db.rolePlayAssignment.findMany({
+          where: { orgId, memberId: { in: learners.map((person) => person.memberId) }, status: { in: ["pending", "used"] },
+            deployment: { orgId, status: "active", agent: { ...live, kind: "ROLEPLAY" } } },
+          select: { memberId: true, deployment: { select: { agent: { select: { name: true, slug: true } } } } },
+          orderBy: [{ deployment: { agent: { name: "asc" } } }, { deployment: { agent: { slug: "asc" } } }],
+        }),
+      ]) : [[], []];
+      return {
+        users: people.map((person) => ({
+          name: person.name.trim().toLowerCase() === person.email ? "Unnamed user" : person.name,
+          role: person.role === LEARNER ? "learner" : person.role,
+          disabled: person.disabled,
+          twins: twins.filter((row) => row.userId === person.userId).map((row) => row.agent),
+          roleplays: roleplays.filter((row) => row.memberId === person.memberId).map((row) => row.deployment.agent),
+        })),
+        nextOffset: rows.length > limit ? offset + limit : null,
       };
     }
 

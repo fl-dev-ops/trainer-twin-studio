@@ -75,7 +75,7 @@ const toPerson = (row: Row): OrgPerson => ({
  */
 export async function orgPeople(
   orgId: string,
-  filter: { roles?: PersonRole[]; includeDisabled?: boolean; emails?: string[]; userIds?: string[]; memberIds?: string[] } = {},
+  filter: { roles?: PersonRole[]; includeDisabled?: boolean; emails?: string[]; userIds?: string[]; memberIds?: string[]; nameQuery?: string; skip?: number; take?: number } = {},
   tx: Db = db,
 ): Promise<OrgPerson[]> {
   const rows = await tx.member.findMany({
@@ -85,8 +85,14 @@ export async function orgPeople(
       ...(filter.includeDisabled ? {} : { disabledAt: null }),
       ...(filter.userIds ? { userId: { in: filter.userIds } } : {}),
       ...(filter.memberIds ? { id: { in: filter.memberIds } } : {}),
-      ...(filter.emails ? { user: { email: { in: [...new Set(filter.emails.map(lower))], mode: "insensitive" as const } } } : {}),
+      ...(filter.emails || filter.nameQuery ? { user: {
+        ...(filter.emails ? { email: { in: [...new Set(filter.emails.map(lower))], mode: "insensitive" as const } } : {}),
+        // Some email-only accounts store the email in the name column; don't match those in name searches.
+        ...(filter.nameQuery ? { name: { contains: filter.nameQuery.replace(/[\\%_]/g, "\\$&"), not: { contains: "@" }, mode: "insensitive" as const } } : {}),
+      } } : {}),
     },
+    skip: filter.skip,
+    take: filter.take,
     orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     select,
   });

@@ -83,6 +83,68 @@ describe.skipIf(!localMinutesDb)("Copilot least-privilege boundary (real Postgre
     expect(await db.persona.findUniqueOrThrow({ where: { id: row.id } })).toEqual(row);
   });
 
+  test("user list shows roles and only current assignments, without exposing account details or links", async () => {
+    const { learner, trainer } = org;
+    const memberId = `${learner.id}-member`;
+    const deployment = await db.deployment.create({ data: { orgId: org.org.id, agentId: org.roleplay.id, publicKey: `${org.org.id}-public` } });
+    const link = await db.rolePlayAssignment.create({ data: { orgId: org.org.id, deploymentId: deployment.id, memberId, assignedByUserId: trainer.id, shareCode: `${org.org.id}-roleplay-secret`, expiresAt: new Date("2099-01-01") } });
+    const twin = await db.twinAssignment.create({ data: { orgId: org.org.id, userId: learner.id, agentId: org.twin.id, shareCode: `${org.org.id}-twin-secret`, minutesLimit: 30 } });
+    const list = async (name?: string) => {
+      const res = await action("listUsers", name ? { name } : {});
+      expect(res.status).toBe(200);
+      return res.json();
+    };
+    const staff = { name: trainer.name, role: "admin", disabled: false, twins: [], roleplays: [] };
+    const active = { name: learner.name, role: "learner", disabled: false, twins: [{ name: org.twin.name, slug: org.twin.slug }], roleplays: [{ name: org.roleplay.name, slug: org.roleplay.slug }] };
+    const roster = await list() as { users: { name: string }[]; nextOffset: number | null };
+    expect(roster.users.sort((a, b) => a.name.localeCompare(b.name))).toEqual([active, staff]);
+    expect(roster.nextOffset).toBeNull();
+    expect(await list("learN")).toEqual({ users: [active], nextOffset: null });
+    expect(await list("%_")).toEqual({ users: [], nextOffset: null });
+    await db.rolePlayAssignment.update({ where: { id: link.id }, data: { status: "used", expiresAt: new Date(0) } });
+    expect(await list("Learner")).toEqual({ users: [active], nextOffset: null });
+    for (const header of [{ "x-trainertwin-user-id": learner.id }, { "x-trainertwin-org-id": other.org.id }]) {
+      expect((await call("studio", { action: "listUsers" }, header)).status).toBe(403);
+    }
+    expect((await action("listUsers", { orgId: other.org.id })).status).toBe(400);
+    expect((await action("listUsers", { offset: -1 })).status).toBe(400);
+    await db.twinAssignment.update({ where: { id: twin.id }, data: { accessUntil: new Date(0) } });
+    await db.deployment.update({ where: { id: deployment.id }, data: { status: "disabled" } });
+    const empty = { ...active, twins: [], roleplays: [] };
+    expect(await list("Learner")).toEqual({ users: [empty], nextOffset: null });
+    await db.twinAssignment.update({ where: { id: twin.id }, data: { accessUntil: null, status: "revoked" } });
+    await db.deployment.update({ where: { id: deployment.id }, data: { status: "active" } });
+    await db.rolePlayAssignment.update({ where: { id: link.id }, data: { status: "cancelled" } });
+    expect(await list("Learner")).toEqual({ users: [empty], nextOffset: null });
+    await db.twinAssignment.update({ where: { id: twin.id }, data: { status: "active" } });
+    await db.rolePlayAssignment.update({ where: { id: link.id }, data: { status: "used" } });
+    const agentIds = [org.twin.id, org.roleplay.id];
+    await db.agent.updateMany({ where: { id: { in: agentIds } }, data: { archivedAt: new Date() } });
+    expect(await list("Learner")).toEqual({ users: [empty], nextOffset: null });
+    await db.agent.updateMany({ where: { id: { in: agentIds } }, data: { archivedAt: null } });
+    await db.member.update({ where: { id: memberId }, data: { role: "team" } });
+    expect(await list("Learner")).toEqual({ users: [{ ...empty, role: "team" }], nextOffset: null });
+    await db.member.update({ where: { id: memberId }, data: { role: "user", disabledAt: new Date() } });
+    expect(await list("Learner")).toEqual({ users: [{ ...empty, disabled: true }], nextOffset: null });
+    await db.user.update({ where: { id: learner.id }, data: { name: learner.email } });
+    expect((await list()).users).toContainEqual({ ...empty, name: "Unnamed user", disabled: true });
+    expect(await list(learner.email)).toEqual({ users: [], nextOffset: null });
+  });
+
+  test("roster pages are bounded, stable, and keep the name filter", async () => {
+    const users = Array.from({ length: 26 }, (_, i) => ({
+      id: `${org.org.id}-roster-${i}`, email: `${org.org.id}-roster-${i}@example.com`, name: `Roster ${String(i).padStart(2, "0")}`,
+    }));
+    await db.$transaction([
+      db.user.createMany({ data: users }),
+      db.member.createMany({ data: users.map((person, i) => ({ id: `${person.id}-member`, userId: person.id, organizationId: org.org.id, role: "user", createdAt: new Date(1000 + i) })) }),
+    ]);
+    const first = await (await action("listUsers", { name: "roster" })).json() as { users: { name: string }[]; nextOffset: number };
+    expect(first.nextOffset).toBe(25);
+    expect(first.users.map(({ name }) => name)).toEqual(users.slice(0, 25).map(({ name }) => name));
+    expect(await (await action("listUsers", { name: "roster", offset: first.nextOffset })).json()).toEqual({ users: [{ name: "Roster 25", role: "learner", disabled: false, twins: [], roleplays: [] }], nextOffset: null });
+  });
+
   test("knowledge lists and signs only this org's files; no management actions are accepted", async () => {
     const doc = async (orgId: string, title: string, status = "indexed") => {
       const kb = await db.knowledgeBase.upsert({ where: { orgId_slug: { orgId, slug: "brain" } }, create: { orgId, slug: "brain", name: "Brain" }, update: {} });

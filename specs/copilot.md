@@ -1,6 +1,6 @@
 # Copilot
 
-> The Studio Copilot creates and updates twins, twin skills, role plays, and role-play personas with trainer approval. Knowledge access is read-only and scoped to its organization. Learner and team management, billing, archive/restore/delete, and a general shell are not available. The trainer's own persona is set up and edited in Personas, not Copilot.
+> The Studio Copilot creates and updates twins, twin skills, role plays, and role-play personas with trainer approval. Knowledge access is read-only and scoped to its organization. Enabled admins and team can also read their organization's user names, roles, disabled status, and current twin and role-play assignments (`list_users`). Contact emails, invite links, credits, and session history are not returned. Learner and team management, billing, archive/restore/delete, and a general shell are not available. The trainer's own persona is set up and edited in Personas, not Copilot.
 
 The permission policy above supersedes the older implementation notes below where they describe removed tools or legacy authorization.
 
