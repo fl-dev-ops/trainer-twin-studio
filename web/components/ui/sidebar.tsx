@@ -27,9 +27,9 @@ import { PanelLeftIcon, PanelRightIcon } from "lucide-react"
 
 const SIDEBAR_COOKIE_NAME = "sidebar_state"
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
-const SIDEBAR_WIDTH = "17.6rem"
-const SIDEBAR_WIDTH_MOBILE = "19.8rem"
-const SIDEBAR_WIDTH_ICON = "3.3rem"
+const SIDEBAR_WIDTH = "16rem"
+const SIDEBAR_WIDTH_MOBILE = "18rem"
+const SIDEBAR_WIDTH_ICON = "3rem"
 const SIDEBAR_KEYBOARD_SHORTCUT = "b"
 
 type SidebarSide = "left" | "right"
@@ -221,7 +221,7 @@ function Sidebar({
             data-sidebar="sidebar"
             data-slot="sidebar"
             data-mobile="true"
-            className="w-(--sidebar-width) bg-sidebar p-0 text-sidebar-foreground [&>button]:hidden"
+            className="w-(--sidebar-width) bg-sidebar p-0 text-sidebar-foreground data-[side=left]:w-(--sidebar-width) data-[side=right]:w-(--sidebar-width) [&>button]:hidden"
             style={{ "--sidebar-width": SIDEBAR_WIDTH_MOBILE, ...style } as React.CSSProperties}
             side={side}
           >
@@ -484,7 +484,7 @@ function SidebarGroupContent({
     <div
       data-slot="sidebar-group-content"
       data-sidebar="group-content"
-      className={cn("w-full text-sm", className)}
+      className={cn("w-full text-base", className)}
       {...props}
     />
   )
@@ -513,37 +513,33 @@ function SidebarMenuItem({ className, ...props }: React.ComponentProps<"li">) {
 }
 
 const sidebarMenuButtonVariants = cva(
-  "peer/menu-button group/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-open:hover:bg-sidebar-accent data-open:hover:text-sidebar-accent-foreground data-active:bg-sidebar-accent data-active:font-medium data-active:text-sidebar-accent-foreground [&_svg]:size-4 [&_svg]:shrink-0 [&>span:last-child]:truncate",
+  "peer/menu-button group/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-base ring-sidebar-ring outline-hidden transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-open:hover:bg-sidebar-accent data-open:hover:text-sidebar-accent-foreground data-active:bg-sidebar-accent data-active:font-medium data-active:text-sidebar-accent-foreground [&_svg]:size-4 [&_svg]:shrink-0 [&>span:last-child]:truncate",
   {
     variants: {
       variant: {
         default: "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
         outline:
           "bg-background shadow-[0_0_0_1px_var(--sidebar-border)] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:shadow-[0_0_0_1px_var(--sidebar-accent)]",
-        // The studio's primary navigation (design system §7): the active item is a white pill lifted with
-        // elevation-1, its icon in brand and its label in brand ink; collapsed, a 40px centered square.
+        // Active and hover share one quiet treatment; collapsed items remain 32px squares.
         nav: cn(
-          "min-h-8 px-2 text-sm font-normal text-(--text-secondary)",
+          "min-h-9 max-h-9 gap-3 rounded-[6px] px-2 py-1.5 font-normal text-(--text-secondary)",
           "hover:bg-(--tone-control) hover:text-foreground",
-          "[&_svg]:size-5 [&_svg]:shrink-0 [&_svg]:text-(--text-secondary) [&_svg]:transition-colors",
-          "data-active:bg-card data-active:font-medium data-active:text-primary data-active:shadow-elevation-1 data-active:hover:bg-card",
-          "data-active:[&_svg]:text-(--brand)",
-          "dark:data-active:text-foreground dark:data-active:[&_svg]:text-foreground",
-          "group-data-[collapsible=icon]:size-10! group-data-[collapsible=icon]:min-h-0! group-data-[collapsible=icon]:p-0!",
+          "[&_svg]:size-4.5 [&_svg]:shrink-0 [&_svg]:stroke-[1.5] [&_svg]:text-(--text-secondary) [&_svg]:transition-colors",
+          "data-active:bg-(--tone-control) data-active:font-normal data-active:text-foreground",
+          "group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:min-h-0! group-data-[collapsible=icon]:p-0!",
           "group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:[&>span]:hidden",
         ),
-        // The signed-in account at the foot of the rail: a 48px card (12px radius, card border, elevation-1, sunken
-        // on hover); collapsed, a bare 32px photo.
+        // A flat profile row; collapsed, only the 32px avatar remains.
         account: cn(
-          "h-12 gap-3 rounded-tt-md border border-card-border bg-card px-2 pr-3 text-sm shadow-elevation-1",
-          "hover:bg-(--sidebar) hover:text-foreground data-open:bg-card dark:data-open:bg-card",
-          "group-data-[collapsible=icon]:h-8! group-data-[collapsible=icon]:border-0 group-data-[collapsible=icon]:bg-transparent group-data-[collapsible=icon]:p-0! group-data-[collapsible=icon]:shadow-none",
+          "min-h-14 gap-3 rounded-[6px] bg-transparent px-2 py-2 text-foreground",
+          "hover:bg-(--tone-control) hover:text-foreground data-open:bg-transparent",
+          "group-data-[collapsible=icon]:min-h-0! group-data-[collapsible=icon]:h-8! group-data-[collapsible=icon]:p-0!",
         ),
       },
       size: {
-        default: "h-8 text-sm",
+        default: "h-8",
         sm: "h-7 text-xs",
-        lg: "h-12 text-sm group-data-[collapsible=icon]:p-0!",
+        lg: "h-12 group-data-[collapsible=icon]:p-0!",
       },
     },
     defaultVariants: {
@@ -736,7 +732,7 @@ function SidebarMenuSubButton({
     props: mergeProps<"a">(
       {
         className: cn(
-          "flex h-7 min-w-0 -translate-x-px items-center gap-2 overflow-hidden rounded-md px-2 text-sidebar-foreground ring-sidebar-ring outline-hidden group-data-[collapsible=icon]:hidden hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[size=md]:text-sm data-[size=sm]:text-xs data-active:bg-sidebar-accent data-active:text-sidebar-accent-foreground [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-sidebar-accent-foreground",
+          "flex h-7 min-w-0 -translate-x-px items-center gap-2 overflow-hidden rounded-md px-2 text-sidebar-foreground ring-sidebar-ring outline-hidden group-data-[collapsible=icon]:hidden hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[size=md]:text-base data-[size=sm]:text-xs data-active:bg-sidebar-accent data-active:text-sidebar-accent-foreground [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-sidebar-accent-foreground",
           className
         ),
       },

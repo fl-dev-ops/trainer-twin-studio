@@ -66,6 +66,18 @@ Lifecycles:
 5. A save publishes immediately; no builder `SpecDraft` or separate Publish button. `builder.saveSettings` takes the same `agent:<slug>` lock, re-reads data and archive state, then changes only supplied `data.before` / `data.tools`, with no version bump or script rewrite. An archived row at the locked read is `not_found`. Switches save immediately; upload-card text has its own Save. Failure shows an error and resets settings to the last saved values. (`web/components/roleplay/roleplay-builder-page.tsx`; `web/lib/roleplay/trpc.ts:255–271`.)
 6. Library cards include every unarchived org ROLEPLAY. Only `source = roleplay-skill` cards open `/roleplay/<slug>`; other sources open `/agents/<slug>`. Builder detail/edit queries accept only that builder source. (`web/lib/roleplay/trpc.ts` `anyRoleplayOf`, `roleplaysOf`, `scenarios.list`, `findRoleplay`.)
 
+### Authored role-play skill packages
+
+The existing recording-based copilot publisher sends `SKILL.md`, `scenario.json` and trainer/learner `items.json` to `/api/internal/scenarios` with `kind = ROLEPLAY`. These packages use `source = scenario-ingest`; their markdown is authoritative, not reconstructed from builder fields.
+
+- Publication reuses the same versioned S3/Postgres/Chroma writer. An authored role play may use any persona in its org; Twin ingestion still requires an own persona.
+- A nonempty skill plus objective makes this package runnable; no synthetic top-level `opening` field is required. No-skill Vasanth interviews retain their original runtime and composed prompt.
+- Chat loads the entire pinned skill, the actor/learner roles from its manifest, persona, and attached-document facts. The skill defines the interaction instead of the fixed sales-client/guard-level template. Existing builder packages keep that template for compatibility.
+- `scenario_examples` leaves its default side to the server: trainer for authored packages, client for builder packages. The single-skill session's saved package supplies the side and step mapping as well as the version, so later publication cannot change those choices mid-call. Explicit learner-side requests remain supported. Existing same-skill fallback to retained vector versions is unchanged.
+- Authored practice closes with `end_call({ outcome: "completed" })`; builder outcomes remain supported. Tool permissions still come from settings, not markdown. This path does not add the legacy interview planner or résumé-claim tools, migrate existing agents, or change report generation.
+
+Sources: `web/lib/scenario-ingest.ts` `ingestScenario`; `web/lib/specs.ts` `isRunnableAgentData`; `chat/agent/lib/roleplay.ts`; `chat/agent/tools/scenario_examples.ts`; `web/app/api/copilot/studio/route.ts` `searchScenarioItems`.
+
 ### Older interview specs, drafts and publishing
 
 1. `/agents/<slug>/edit` loads the working draft or current published spec; an explicit historical version opens the YAML reader. Invalid or missing requested versions are not found. (`web/lib/pages/spec-resource.ts` `loadSpecResource`.)
@@ -195,7 +207,7 @@ Call-wide end/disable/runtime gaps are owned by [Sessions — Mismatches](sessio
 
 ## Open questions
 
-- Should ingestion-created ROLEPLAY skills be first-class runnable role plays? `ingestScenario` writes `source = scenario-ingest` and requires an own persona; the runtime recognizes any ROLEPLAY with `data.skill`. But `isRunnableAgentData` recognizes skill-only role plays only for `roleplay-skill`, and the library routes every other source to the old interview editor. No `after.report = roleplay` is added by this ingest path. Pointers: `web/lib/scenario-ingest.ts` `ingestScenario`, `buildScenario`; `web/lib/specs.ts` `isRunnableAgentData`; `web/lib/roleplay/trpc.ts` `scenarios.list`; `chat/agent/lib/roleplay.ts` `roleplaySkill`; `web/lib/session-after.ts`.
+- Authored ROLEPLAY packages now run through the backend as described above. Frontend discovery/editing still routes non-builder sources through `/agents`, and authored ingestion does not add `after.report = roleplay`. Dedicated authoring UI and scenario-appropriate scoring remain separate work; do not migrate existing agents by adding a skill field.
 - None about `hideRoleplay` access: Practice 17 says it hides navigation, not links. Page/sidebar/home hide discovery; tRPC, assignment APIs and `/s/` do not revoke access. The public catalog is removed. (`web/lib/org.ts` `requireRoleplayOrg`; `web/lib/pages/org-home.ts`; `web/lib/roleplay/trpc.ts`; `web/lib/pages/learner.ts`.)
 - Should Roleplay users and detail member lists exclude cancelled/expired assignments and archived agents? The new `invitesFor` queries include them, whereas older `listSpecSummaries` counts only pending/used assignments. Pointers: `web/lib/roleplay/trpc.ts` `users.list`, `scenarios.get`, `invitesFor`; `web/lib/specs.ts` `listSpecSummaries`.
 

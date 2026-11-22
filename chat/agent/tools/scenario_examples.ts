@@ -1,6 +1,5 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
-import { isRoleplaySession } from "../lib/session-mode-lookup";
 import { studioFetch } from "../lib/studio";
 
 export default defineTool({
@@ -27,7 +26,7 @@ export default defineTool({
       agentSlug,
       query: input.situation,
       step: input.step,
-      role: input.role ?? ((await isRoleplaySession(ctx)) ? "client" : "trainer"),
+      role: input.role, // The server selects the AI's side from the pinned package when omitted.
       limit: input.limit,
       playbook: input.playbook,
       sessionId,

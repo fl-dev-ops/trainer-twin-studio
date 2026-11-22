@@ -44,7 +44,7 @@ afterEach(() => {
   else Object.assign(process.env, { NODE_ENV: originalNodeEnv });
 });
 
-test("email-first form keeps Google optional and codes private, complete and resendable", async () => {
+test("minimal sign-in keeps Google optional and codes private, complete and resendable", async () => {
   expect(find(render(() => SignInForm({ googleEnabled: false })), (el) => el.type === GoogleSignInButton)).toBeUndefined();
   expect(find(form(), (el) => el.type === GoogleSignInButton)).toBeDefined();
   find(form(), (el) => el.props.id === "email")!.props.onChange({ target: { value: "learner@example.com" } });
@@ -68,6 +68,19 @@ test("email-first form keeps Google optional and codes private, complete and res
   find(form(), (el) => el.props.id === "email")!.props.onChange({ target: { value: "other@example.com" } });
   expect(find(form(), (el) => el.props.id === "code")).toBeUndefined();
   expect(submit().props.disabled).toBe(false);
+});
+
+test("the orange primary action stays consistent, and code entry removes the competing Google action", async () => {
+  const first = form();
+  expect(find(first, el => el.props.type === "submit")!.props.variant).toBe("default");
+  expect(find(first, el => el.props.type === "submit")!.props.children).toContain("Continue");
+  expect(find(first, el => el.type === GoogleSignInButton)).toBeDefined();
+  find(first, el => el.props.id === "email")!.props.onChange({ target: { value: "learner@example.com" } });
+  await find(form(), el => el.type === "form")!.props.onSubmit({ preventDefault() {} });
+  const codeStep = form();
+  expect(find(codeStep, el => el.type === GoogleSignInButton)).toBeUndefined();
+  expect(find(codeStep, el => el.props.type === "submit")!.props.variant).toBe("default");
+  expect(find(codeStep, el => el.type === "h1")!.props.children).toBe("Enter your code");
 });
 
 test.each(["production", "development"])("code help is delivery-neutral in %s", async (nodeEnv) => {

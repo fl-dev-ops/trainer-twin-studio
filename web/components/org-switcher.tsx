@@ -48,7 +48,7 @@ export function OrgSwitcher({ orgs, orgId }: { orgs: SwitchableOrg[]; orgId: str
         <span className="min-w-0 flex-1 truncate">{switching ? "Switching…" : (current?.name ?? "Organization")}</span>
         <ChevronsUpDown className="ml-auto text-muted-foreground group-data-[collapsible=icon]:hidden" />
       </DropdownMenuTrigger>
-      <DropdownMenuContent side="top" align="start" sideOffset={8} className="min-w-56">
+      <DropdownMenuContent side="bottom" align="start" sideOffset={8} className="min-w-56">
         <DropdownMenuGroup>
           <DropdownMenuLabel>Organization</DropdownMenuLabel>
           <DropdownMenuRadioGroup value={orgId ?? ""} onValueChange={(value) => void switchOrg(String(value))}>

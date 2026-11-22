@@ -154,7 +154,7 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
   const [calibrationFailed, setCalibrationFailed] = useState(false);
   /** Rating saves still in flight; ending the call or leaving waits for them. */
   const pendingRatings = useRef(new Set<Promise<unknown>>());
-  const backHref = twin ? `/twin/${encodeURIComponent(slug)}/calibration` : "/agents";
+  const backHref = twin ? `/twin/${encodeURIComponent(slug)}/calibration` : `/roleplay/${encodeURIComponent(slug)}`;
   const connectionRef = useRef<Connection | null>(null);
   const startedRef = useRef(false);
   const endingRef = useRef(false);

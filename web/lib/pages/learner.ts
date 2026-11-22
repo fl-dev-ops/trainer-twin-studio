@@ -9,7 +9,7 @@ import { orgPerson } from "@/lib/org-people";
 import { agentPhotoUrls } from "@/lib/persona-media";
 import { presignedGetUrl } from "@/lib/s3";
 import { resolveSessionUser } from "@/lib/session-user";
-import { listAgentContextRequired, listAgentContextUploads, listScenarioIntroVideos } from "@/lib/specs";
+import { listAgentBriefs, listAgentContextRequired, listAgentContextUploads, listScenarioIntroVideos, personaNameOf } from "@/lib/specs";
 import { learnerBalance } from "@/lib/minutes";
 import { AppError } from "@/lib/errors";
 import { practicePerson, startAllowance } from "@/lib/practice";
@@ -30,7 +30,7 @@ const dataImage = (logo: string | null) => (/^data:image\/(?:png|jpeg|webp);base
 /** A twin opened from a learner link: the voice session screen started with that code. Minutes are enforced when the session starts. */
 async function twinSessionView(orgId: string, agentId: string, code: string, userName: string): Promise<SessionViewProps> {
   const [agent, organization] = await Promise.all([
-    db.agent.findFirstOrThrow({ where: { id: agentId, orgId }, select: { slug: true, name: true, persona: { select: { slug: true } } } }),
+    db.agent.findFirstOrThrow({ where: { id: agentId, orgId }, select: { slug: true, name: true, data: true, persona: { select: { slug: true, name: true } } } }),
     db.organization.findUniqueOrThrow({ where: { id: orgId }, select: { name: true, logo: true } }),
   ]);
   const [introVideos, agentPhotos, agentContextRequired, agentContextUploads] = await Promise.all([
@@ -47,6 +47,7 @@ async function twinSessionView(orgId: string, agentId: string, code: string, use
     organizationName: organization.name,
     organizationLogo: dataImage(organization.logo),
     agentPersonas: { [agent.slug]: agent.persona.slug },
+    agentPersonaNames: { [agent.slug]: personaNameOf(agent.data, agent.persona.name) },
     agentContextRequired,
     agentContextUploads,
     introVideos,
@@ -113,20 +114,22 @@ export async function loadSharedSession(code: string): Promise<SharedSessionView
   const assignment = await db.rolePlayAssignment.findUniqueOrThrow({
     where: { id: roleplay.assignmentId },
     select: {
-      deployment: { select: { agent: { select: { slug: true, name: true, persona: { select: { slug: true } } } } } },
+      deployment: { select: { agent: { select: { slug: true, name: true, data: true, persona: { select: { slug: true, name: true } } } } } },
       organization: { select: { name: true, logo: true } },
     },
   });
   const agent = assignment.deployment.agent;
-  const [introVideos, agentPhotos, agentContextRequired, agentContextUploads] = await Promise.all([
+  const [introVideos, agentPhotos, agentContextRequired, agentContextUploads, agentBriefs] = await Promise.all([
     listScenarioIntroVideos(org.id, [agent.slug]),
     agentPhotoUrls(org.id, [agent.slug]),
     listAgentContextRequired(org.id, [agent.slug]),
     listAgentContextUploads(org.id, [agent.slug]),
+    listAgentBriefs(org.id, [agent.slug]),
   ]);
   return {
     kind: "session",
     props: {
+      agentBriefs,
       personas: [agent.persona.slug],
       agents: [agent.slug],
       scenarioName: agent.name,
@@ -134,6 +137,7 @@ export async function loadSharedSession(code: string): Promise<SharedSessionView
       organizationName: assignment.organization.name,
       organizationLogo: dataImage(assignment.organization.logo),
       agentPersonas: { [agent.slug]: agent.persona.slug },
+    agentPersonaNames: { [agent.slug]: personaNameOf(agent.data, agent.persona.name) },
       agentContextRequired,
       agentContextUploads,
       introVideos,

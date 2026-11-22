@@ -142,7 +142,7 @@ export function TwinVoiceCapture({ personaName }: { personaName: string | null }
       const form = new FormData();
       form.set("audio", new File([await recordingToWav(take.audio)], "reference.wav", { type: "audio/wav" }));
       form.set("transcript", passage);
-      if (personaName) form.set("name", `${personaName}'s voice`);
+      if (personaName) form.set("name", `${personaName.slice(0, 52).trimEnd()}'s voice`);
       const cloned = await fetch("/api/tts/voices", { method: "POST", body: form });
       const body = await cloned.json().catch(() => ({}));
       if (!cloned.ok || !body.voice?.id) throw new Error(body.error ?? "Your voice could not be saved.");

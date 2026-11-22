@@ -1,6 +1,5 @@
 import { db } from "@/lib/db";
 import { closeInterviewSession } from "@/lib/session-lifecycle";
-import { resumeInterviewDocument, unusedResumeClaims } from "@/lib/resume-interview";
 import { stableJson } from "@/lib/stable-json";
 
 const COMMAND_LIFETIME_MS = 30_000;
@@ -32,56 +31,7 @@ export async function enqueueWorkspaceCommand(input: {
   });
   if (!session) throw new Error("Session not found");
 
-  const previous = await db.workspaceCommand.findUnique({ where: { id: input.callId } });
-  if (previous) {
-    const saved = object(previous.input);
-    const requested = object(input.payload);
-    const normalized = input.tool === "surface" && saved.action === "open_pdf" && object(saved.payload).resumeDocument === true
-      ? { action: requested.action, payload: { fileId: object(requested.payload).fileId, resumeDocument: true } }
-      : input.payload ?? {};
-    const sameInput = input.tool === "start_resume_question"
-      ? saved.question === (typeof requested.question === "string" ? requested.question.trim() : requested.question) && object(saved.payload).claimId === requested.claimId
-      : stableJson(previous.input) === stableJson(normalized);
-    if (previous.sessionId !== session.id || previous.tool !== input.tool || !sameInput) throw new Error("Workspace command identity conflict");
-  }
-  let payload = previous?.input ?? input.payload;
-  if (!previous && input.tool === "start_resume_question") {
-    const request = object(input.payload);
-    const claimId = typeof request.claimId === "string" ? request.claimId : "";
-    const question = typeof request.question === "string" ? request.question.trim() : "";
-    if (!question || question.length > 500 || (question.match(/\?/g) ?? []).length !== 1) {
-      throw new Error("Resume main question must contain one question and be at most 500 characters");
-    }
-    const claim = (await unusedResumeClaims(input.orgId, input.sessionId)).find((item) => item.id === claimId);
-    if (!claim) throw new Error("Eligible resume claim not found");
-    payload = {
-      action: "highlight_document",
-      question,
-      payload: {
-        fileId: claim.documentId,
-        claimId: claim.id,
-        highlightQuery: claim.anchor,
-        exactHighlight: true,
-        resumeDocument: true,
-      },
-    };
-  } else if (!previous && input.tool === "surface") {
-    const session = await resumeInterviewDocument(input.orgId, input.sessionId);
-    if (session.isResume) {
-      const request = object(input.payload);
-      const action = request.action;
-      if (action === "highlight_document" || action === "highlight_pdf") {
-        throw new Error("Resume highlights require start_resume_question with a claim ID");
-      }
-      if (action === "open_pdf") {
-        const surface = object(request.payload);
-        if (!session.documentId || surface.fileId !== session.documentId) {
-          throw new Error("Resume surface document does not match this session");
-        }
-        payload = { action, payload: { fileId: session.documentId, resumeDocument: true } };
-      }
-    }
-  }
+  const payload = input.payload;
 
   const stored = await db.workspaceCommand.upsert({
     where: { id: input.callId },

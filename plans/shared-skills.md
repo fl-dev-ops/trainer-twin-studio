@@ -1,0 +1,670 @@
+# Shared skills for twins and role plays
+
+Status: implementation authorized, 19 Nov 2026. Production operations remain unapproved.
+Grounded in the `v3` checkout at `659e99c`. Recheck the implementation and branch tip before starting each phase.
+
+## Execution ledger — resume here
+
+Working checkout: `application-v3`, branch `feat/shared-skills` from `origin/v3` at `659e99c`.
+The old checkout's `application/AGENTS.md` is not applicable after moving this session to this worktree.
+The durable plan is this file; do not delete it as a temporary planning artifact.
+
+### New local-content phase — 19 November 2026
+
+The user subsequently authorized Olga's local-only content port, with Vasanth conversion deferred.
+See `olga-local-phase-one.md` for isolated service destinations, checksum audits, managed restoration,
+verification results and the explicit historical-vector gap. All 11 current package owners are restored;
+the main twin aggregates the two skills. No production writes or ownership cutover were performed.
+Vasanth's existing ten interview roleplays are documented in `vasanth-roleplay-inventory.md` only.
+Stop for the user's Phase 2 direction before changing Vasanth.
+
+| Phase | Implementation | Verification / release |
+| --- | --- | --- |
+| 1 — Registry + publisher | Complete implementation/local verification | Live comparison deferred until all phases; not deployed |
+| 2 — Role-play runtime | Complete implementation/local verification | Exact pins, strict retrieval and recovery verified; live checks deferred |
+| 3 — Twin runtime | Complete implementation/local verification | Single/main/mixed/empty catalogs verified; live checks deferred |
+| 4 — Existing-data migration | Complete tooling/local verification | Production-copy rehearsal and production execution unapproved |
+| 5 — Sole package ownership | Complete gated implementation/local verification | Compatibility default; real-org cutover and live verification NOT performed |
+
+Current checkpoint: all five implementation phases are complete and locally verified. Role plays and twins use exact
+managed pins; explicit legacy readers remain. Verified migration and approved ownership-switch tooling are implemented.
+Partial real-provider/chat/voice verification now follows below and in `shared-skills-live-verification.md`.
+Organizations remain compatibility-default until explicitly approved; no real-org cutover or deployment was performed.
+Broad legacy runtime tests attempted AI Gateway requests with test-placeholder credentials and received 401; those
+are not successful live-provider tests.
+
+Implementation decisions:
+
+- Immutable package files include SKILL.md, the original-format manifest, items.json and optional patterns.md.
+  changes.json is provenance-only and does not force a content version.
+- Phase 1 retains original-byte file strings in SkillVersion.files as a durable retry/verification envelope, alongside
+  S3 copies. Runtime text/manifest are stored projections; none of these are independently editable.
+- Package hashes include format, sorted filenames and exact file strings, not operational generation/attempt fields.
+- Separate external namespaces prevent failed/superseded publishers overwriting a published package.
+- Review changed Phase 1 sequencing: while Agent-version compatibility indexes remain in use, provider writes stay
+  inside the existing bounded `agent:<slug>` finalization transaction. Otherwise an in-flight upload can collide with
+  a settings writer's next Agent version. Move provider work outside this lock only after managed runtime adoption
+  removes that collision. This is deliberate preservation of the existing lock, not a claim that the split is shipped.
+- Pending requests share a generation only if package AND full experience-publication intent match (including persona,
+  scoring and provenance). A true ready no-op is returned during reservation without advancing/cancelling another attempt.
+- Fresh version state is read under the final lock before external writes; a duplicate cannot rewrite a now-ready
+  namespace. Finalization's idempotent shortcut is also generation-qualified.
+- SQL timeout does not cancel in-flight JavaScript/provider work. Every physical finalization therefore writes into
+  a fresh `vN/attempt-<uuid>` S3/index namespace; its artifact pointer commits only together with readiness. A timed-out
+  callback can finish only in its abandoned namespace. Retry preserves SkillVersion identity, not physical attempt path.
+  Canonical Chroma scope is `(skillVersionId, skillIndexScope)`; indexScope is the ready version's artifacts prefix.
+  Future readers MUST filter both; version ID alone can include abandoned attempts.
+- Agent compatibility versions remain monotonically increasing but may have gaps after failed/superseded reservations.
+  Do not interpret a missing number as missing published history. Skill version and Agent version are not interchangeable.
+- Identical concurrent pending publication may share an attempt only when its recorded generation still owns the skill.
+- Concurrent settings/archive changes during upload cause a retryable publication refusal rather than stale restoration.
+- Installation: `bun install --frozen-lockfile` completed in web; generated Prisma client is ignored/uncommitted.
+- Test DB target is the new local-only `trainertwin_shared_skills_test`; existing dev/test DBs must not be reset.
+  Its TCP policy rejects connections; use `?host=/tmp` in the URL to connect through the local Unix socket.
+
+Before leaving any checkpoint: update phase statuses, exact commands/results, commit IDs, known failures and next action
+here. Do not mark live voice/external-service checks passed based on boundary-mocked tests.
+
+Owner follow-up: extensively test each phase, then continue automatically to the next phase without waiting for approval.
+The phase gate includes targeted success/refusal/concurrency/recovery cases, legacy regressions, the full local DB and
+flow suites, chat tests, typecheck, touched-file lint and build. Keep per-phase commits. Production operations remain
+unapproved; live-provider comparison remains deferred until all implementation phases. Phase 5 cutover must therefore
+be implemented with a compatibility default and explicit operator approval, not automatically activated.
+
+### Phase 1 verification — 19 Nov 2026
+
+Use `DATABASE_URL='postgresql://surya@localhost:5432/trainertwin_shared_skills_test?host=/tmp'` from `web/`.
+
+| Check | Result |
+| --- | --- |
+| Fresh isolated DB migrations | All baseline migrations + both shared-skill migrations applied successfully |
+| `bun test --parallel .db.test` | **780 pass, 0 fail** (44 files); real Postgres, provider boundaries replaced where appropriate |
+| Focused web suites listed below | **101 pass, 0 fail** (12 files) |
+| `bun test --parallel tests/flows` | **150 pass, 0 fail** (9 files); controlled external services, not real payment/provider checks |
+| `cd ../chat && bun test tests` | **125 pass, 0 fail** (19 files); chat source unchanged |
+| `bunx tsc --noEmit` | Pass |
+| ESLint on changed application/test files | Pass; `specs.ts` separately has 3 existing unused-import warnings |
+| Local `bun run build` | Pass after the framework's advisory acknowledgment; Next security issue remains unresolved |
+| Independent read-only publisher review | Concurrency/timeout findings addressed; no remaining introduced managed-publication blocker reported |
+| Real S3/Chroma/LiveKit voice canary | **Not run**; isolated provider/voice environment is not configured in this worktree |
+| Production-data migration rehearsal / production release | **Not run / not authorized** |
+
+Focused suites:
+
+```sh
+bun test --parallel tests/api/skills.test.ts tests/api/route-guards.test.ts \
+  tests/lib/shared-skill-files.test.ts tests/lib/scenario-item-versions.test.ts \
+  tests/lib/scenario-ingest.test.ts tests/lib/scenario-ingest-contract.test.ts \
+  tests/lib/twin-avatar.test.ts tests/lib/copilot-studio.test.ts tests/lib/skill-sources.test.ts \
+  tests/lib/roleplay-skill.test.ts tests/lib/runnable-agent.test.ts tests/lib/twin-playbooks.test.ts
+```
+
+For the local build, also set a disposable BETTER_AUTH_SECRET and BETTER_AUTH_URL=http://localhost:3000.
+Do not copy a production secret. The build-generated `next-env.d.ts` route imports were restored to the baseline.
+
+Broad unit command was attempted, not declared green: with a minimal local seed it returned **1124 pass / 6 fail**.
+Failures were two existing PDF-surface assertions, live-model-dependent document/deictic expectations with placeholder
+credentials, and a legacy snapshot test using the old agent-token contract. The empty unseeded DB initially caused
+additional seed-dependent setup failures. A no-DATABASE_URL run also fails existing env validation and is not a useful
+offline-test recipe. Do not weaken these tests or silently count them as passing.
+
+The important new regression uses a real 100ms transaction timeout: an old provider callback resumes after a retry is
+ready, but can write only to its abandoned S3 and Chroma physical scopes. It cannot change the winner's files,
+provenance, artifact pointer or readiness. Ordinary identical/different-intent races and settings serialization are
+tested separately.
+
+### Next action / completion boundary
+
+1. Phase 1 code/local-test checkpoint: **`0d974e0`**, `feat(skills): add managed package registry and publisher`.
+   Local branch only; not pushed, no PR opened. This ledger update follows in a documentation-only commit.
+2. Owner clarified the gates on 19 Nov: each phase must compile and pass local behavioral/integration checks. Real
+   provider/voice comparison is deferred until ALL phases are implemented; it does not block the next implementation
+   phase. Existing canary/release checklists remain deferred release evidence, not completed checks.
+3. All implementation phases now have separate local checkpoints below. Next configure isolated providers and perform
+   final live/performance comparison, then rehearse migration on an explicitly approved production-data copy.
+4. Bounded publication transactions remain because compatibility indexes still serve explicit legacy readers.
+   Automatic scenario-index pruning is disabled in Phase 5; retirement requires a separately audited operation.
+
+### Phase 2 checkpoint — 19 Nov 2026
+
+Implemented:
+
+- Additive `SessionSkill` pins and nullable `InterviewSession.skillPinsVersion` marker. Null explicitly means legacy;
+  existing sessions are not retroactively repinned. Managed role-play activation captures package, Agent settings,
+  persona and scoring together. Resume retains the existing session and pin.
+- PostgreSQL guards enforce org/format/readiness, pin completeness and immutable managed identity/snapshot sections.
+  Attachment metadata remains mutable. Cascading parent-session deletion still works.
+- Lightweight runtime projections exclude package files/transcript and avoid per-turn S3 reads or package hashing.
+  Cache v2 validates pins before using cached context. Unknown/wrong-org/wrong-agent sessions refuse explicitly.
+- Managed example retrieval uses both version ID and committed artifact scope, checks expected cardinality, and
+  broadens a step miss only within those pins. Missing/partial indexes return 503, never another package's examples.
+  Builder/authored formats and their client/trainer roles remain distinct.
+- Index recovery verifies original S3 bytes, rebuilds the same immutable package, and fences state updates with
+  `indexGeneration` CAS. A stale recovery cannot downgrade a newer recovery. CLI requires explicit `--apply`;
+  remote-database operation additionally requires `--production`. No remote operation was run.
+
+Concurrency decision: managed activation uses Agent `FOR KEY SHARE`, not `FOR SHARE`. Publisher non-key Agent updates
+must proceed to avoid the Skill→Agent / Agent→Skill lock cycle. The exact package is resolved from the captured
+`primarySkillId` and artifact pointer, not mutable `currentVersionId`.
+
+Local migration `20261119130000_session_skill_pins` was applied only to `trainertwin_shared_skills_test`.
+Use the same socket DATABASE_URL as Phase 1 for the following commands, from `web/`:
+
+| Check | Result |
+| --- | --- |
+| `bun test --parallel .db.test` | **804 pass, 0 fail**, 46 files |
+| Phase 1 focused command above plus `tests/lib/roleplay-report.test.ts tests/lib/interview-sessions.test.ts` | **113 pass, 0 fail**, 14 files |
+| `bun test --parallel tests/flows` | **150 pass, 0 fail**, 9 files |
+| `bun test tests` from `chat/` | **125 pass, 0 fail**, 19 files |
+| TypeScript / ESLint on touched files | Pass; same 3 existing unused-import warnings in `specs.ts` |
+| `bun run build` with disposable local Better Auth configuration | Pass on retry; existing Next.js security advisory remains unresolved |
+
+The new session-pin suite contributes 19 tests / 106 assertions, including publication during activation, successive
+publications preserving old context/search/scoring, resume, archive, unavailable indexes, immutable snapshots and
+permitted attachment updates. Recovery tests cover corrupted S3, provider retry and stale worker failure.
+
+Verification gotchas:
+
+- The SQL twin-access fixture now runs deferred constraints before disabling triggers. Without that, PostgreSQL
+  correctly refuses ALTER TABLE with pending trigger events; the fix preserves the new invariant checks.
+- One full run concurrent with the flow suite hit a billing mock's unexpected Meteroid subscription request. A fresh
+  standalone full DB run passed all 804 tests. Do not treat the transient run as green or weaken billing assertions.
+- Chroma `count()` cannot filter metadata in this SDK. Exact scope cardinality uses paginated ID-only reads (300/page).
+  Measure this overhead in final performance/live testing after all implementation phases.
+- The broad legacy unit failures recorded under Phase 1 remain outside this checkpoint; no claim that suite is green.
+- Build-generated `next-env.d.ts` imports were restored to baseline. No dependency/security upgrade was included.
+
+Resume: inspect `git log` for `feat(skills): pin managed roleplay session packages` (Phase 2 local checkpoint), then
+implement Phase 3 from the detailed phase section below. Phases 3–5 and final real-provider/voice comparison remain
+unimplemented/unrun. No push, production migration, data backfill or deployment is authorized by this checkpoint.
+
+### Phase 3 checkpoint — 19 Nov 2026
+
+Phase 2 commit: `93173f8`. Phase 3 commit subject: `feat(skills): adopt managed twin session catalogs`.
+
+Single-skill twins now use exact package pins. Main twins capture an ordered, same-persona catalog with managed package
+IDs distinguished from legacy slug/version entries. Empty catalogs stay empty for the call; republish, new skills and
+archive do not change an existing managed catalog. The generalized session resolver validates all managed pins before
+cache v3 reads. Search accepts only the session owner or a recorded catalog alias; managed and legacy lookup paths are
+partitioned. History reads use verified format-specific managed package files and do not require a ready example index.
+No per-turn S3 fetch or package-file hashing was introduced.
+
+The new PostgreSQL twin suite has **23 tests / 146 assertions**, covering single/current and legacy formats, mixed and
+empty catalogs, ordering/persona isolation, successive publication/new skill/archive, calibration, reconnect, invalid
+aliases, unavailable indexes and immutable SQL catalog checks. It found a mixed-search issue, fixed before checkpoint.
+Twin new-start semantics remain unchanged (a new start is not a role-play-style idempotent resume).
+
+| Check | Result |
+| --- | --- |
+| Completed-phase DB suite | **827 pass, 0 fail**, 47 files |
+| Twin/history/search/activation focused suites | **53 pass, 0 fail**, 6 existing matching files |
+| `bun test --parallel tests/flows` | **150 pass, 0 fail**, 9 files |
+| `bun test tests` from `chat/` | **125 pass, 0 fail**, 19 files |
+| TypeScript and Phase 3 touched-file ESLint | Pass |
+| Local build | Pass after advisory retry; existing Next.js security warning unresolved |
+
+DB command: `bun test --parallel --path-ignore-patterns='**/skill-history*.db.test.ts'
+--path-ignore-patterns='**/skill-migration*.db.test.ts' .db.test`. Future Phase 4 test files were excluded until that
+phase's schema was applied; no completed-phase tests were excluded. Run suites sequentially against this database:
+concurrent DB/flow runs can hit the previously recorded billing mock teardown race. Standalone full DB rerun passed.
+Only additive `20261119150000_twin_skill_pins` was applied at this gate, to the isolated test DB.
+
+See `shared-skills-phase-3-release.md` for the behavior matrix and deferred live/performance comparison.
+Next: complete verified history import/mapping/provenance tooling and its isolated migration rehearsals (Phase 4), then
+implement the explicitly gated ownership switch (Phase 5). No production-copy rehearsal or live canary is claimed.
+
+### Phase 4 checkpoint — 19 Nov 2026
+
+Phase 3 commit: `4cc3a09`. Phase 4 commit subject: `feat(skills): import verified package history and provenance`.
+
+Added immutable Agent-version mappings and package-owned source links. Publications/no-ops record exact mappings;
+settings/avatar version changes carry the existing mapping. Managed runtime and copilot/spec/history readers resolve
+the exact mapping first, with lightweight projections (no per-turn package files or hashing). Legacy unmapped history
+retains its explicit artifact decoder.
+
+The org-scoped migration defaults to dry-run and supports apply/check, bounded resumable cursors and a full coverage
+hash. It inventories current/archived/history/session-only references, verifies original format-specific S3 bytes and
+hashes, preserves deleted-document source titles and maps identical settings versions without merging owners.
+Missing/corrupt/conflicting data is actionable, not fabricated. Managed indexes are verified/rebuilt with fenced claims.
+No session snapshots, assignments, balances, personas or reports are rewritten.
+
+Review caught two additional cases, now tested: package-free mapped history must remain verifiable; and deduplicated
+original prefixes plus a subsequently hydrated session snapshot must be accepted only after independent byte-identical
+S3 verification. The migration suite has **27 tests / 138 assertions**, including actual activation after import.
+History mappings require ready content, not a currently ready index; new session pins still require both.
+
+| Check | Result |
+| --- | --- |
+| Completed-phase DB suite | **891 pass, 0 fail**, 51 files / 4552 assertions |
+| Publisher/copilot/source/twin/runnable focused suites | **82 pass, 0 fail**, 7 files |
+| Web flows | **150 pass, 0 fail**, 9 files |
+| Chat tests | **125 pass, 0 fail**, 19 files |
+| TypeScript / touched-file ESLint | Pass; 3 existing `specs.ts` warnings |
+| Local build | Pass after security-advisory retry; advisory unresolved |
+
+DB command excludes only future-phase files: `bun test --parallel
+--path-ignore-patterns='**/skill-ownership*.db.test.ts'
+--path-ignore-patterns='**/package-free-readers.db.test.ts' .db.test`.
+New restrictive references required dependency-correct fixture cleanup; assertions and production constraints remain.
+An intermediate run hit an existing assignment/role-change race returning not_found instead of its expected conflict;
+it was not counted green or weakened. Standalone rerun passed all tests.
+
+Only isolated local DB migrations were used. The Phase 5 ownership table was also prepared there, default compatibility;
+its initial uncommitted FK named `Organization` instead of mapped `organization`, caught on apply and corrected.
+The failed local statement created no table; it was marked rolled back and reapplied successfully. No real org was
+activated and no production migration ran.
+
+See `shared-skills-migration.md` for commands/safety/rollback. Next automatically finish Phase 5 package-free
+publication and reader/approval/rollback tests; leave real-org activation disabled pending final live verification.
+
+### Phase 5 checkpoint — 19 Nov 2026
+
+Phase 4 commit: `a3252b8`. Phase 5 commit subject: `feat(skills): gate managed package ownership cutover`.
+
+Implemented compatibility-default, per-org ownership state with SQL approval guards. Cutover requires explicit apply,
+fresh complete inventory/hash and a recorded canary attestation; local tests use clearly identified test attestations,
+not live approval. This implementation conservatively blocks ALL historical gaps, including optional historical gaps.
+Actual production activation remains unapproved and unperformed.
+
+After approved managed activation, publication stops copying `skill`, `scenario`, `artifacts`, `filesHash` into
+Agent/SpecVersion and stops generating legacy SkillSource rows. Experience fields/settings/scoring stay separate.
+Exact mappings, package-owned provenance and lightweight read-time hydration preserve public/editor/runtime shapes.
+Publication, migration, recovery claims, settings and legacy backfill coordinate with the ownership lock before Agent
+locks. Compatibility Chroma writes and bounded finalization remain while old readers can exist.
+
+Review-driven fixes:
+
+- All automatic scenario-index pruning is disabled, including compatibility publications. A deferred external DELETE
+  could otherwise finish after cutover or SQL timeout; merely checking state under a lock cannot fence that callback.
+  Retain records until separately approved, drained-caller/rollback-window retention. This deliberately increases storage.
+- All three lazy legacy snapshot paths now resolve saved Agent/persona versions and original settings, never today's
+  package onto yesterday's version. Missing managed snapshots or unrecoverable history return 503. Historical no-skill
+  interviews do not inherit today's package ownership. SQL/JSON-null package sessions are included in required coverage.
+- Builder manifests validate only published during-call fields: goals/rubrics belong to experience `after` settings,
+  not the immutable package. Actual rendered builder-package lifecycle tests caught and verified this boundary.
+- Legacy source backfill rereads mode/current Agent inside ownership/Agent locks; it cannot race new compatibility
+  writes after cutover. Original artifact org ownership is checked.
+
+New extensive suites include 24 managed-publication tests, 28 approved-ownership lifecycle tests / 682 assertions,
+20 approval/SQL/race tests / 100 assertions, package-free reader tests and saved historical snapshot tests.
+They exercise all four package formats, publish/no-op/retry/history, source links, settings, old/new calls, preview
+retrieval, empty/mixed catalogs, missing approval/stale coverage, index rebuild races and missing historical versions.
+
+| Check | Result |
+| --- | --- |
+| `bun test --parallel .db.test` | **974 pass, 0 fail**, 56 files / 5706 assertions |
+| Expanded focused web command | **155 pass, 0 fail**, 16 files |
+| `bun test --parallel tests/flows` | **150 pass, 0 fail**, 9 files |
+| `bun test tests` from `chat/` | **125 pass, 0 fail**, 19 files |
+| `bunx tsc --noEmit` | Pass |
+| ESLint on every changed/new TypeScript file | Pass, 0 errors; 9 existing unused warnings in `specs.ts` / `runtime/openai.ts` |
+| Local `bun run build` | Pass on security-advisory retry; existing Next.js advisory remains unresolved |
+| Fresh install in `trainertwin_shared_skills_install_test_20261119` | All **75 migrations** applied; no existing DB reset |
+| Fresh-DB Prisma schema diff | **No difference detected** |
+
+Focused command is Phase 1's listed command plus `tests/lib/roleplay-report.test.ts`,
+`tests/lib/interview-sessions.test.ts`, `tests/lib/session-snapshot.test.ts`, and
+`tests/lib/runtime/runtime-check.test.ts`. Runtime changes exposed one existing `prefer-const` error; the declaration
+was changed to const without behavioral change. Build-generated Next environment imports were restored to baseline.
+The broad legacy live-model/PDF failures recorded above were not relabeled green; that whole unit suite is not claimed.
+
+### Phase 5 handoff state before owner supplied local setup
+
+All implementation phases are locally checkpointed, not deployed. Inspect `git log` and the runbooks before proceeding.
+No push or real-org ownership activation has occurred. Local test approvals exist only in disposable fixtures.
+
+The checkout has `.env.example` / `.env.test`, not an isolated live environment. Sanitized configuration checks confirm
+S3 bucket/AWS credentials, Chroma key, LiveKit URL/key/secret, AI Gateway key and chat URL are absent. Final real S3,
+Chroma, chat/LiveKit multi-turn comparison and latency/strict-cardinality measurements therefore remain NOT RUN.
+Provide explicitly isolated destinations/credentials; do not reuse production resources by assumption.
+
+Then run builder/authored role plays, single/main/calibration twins, no-skill/mixed catalogs and source/history/report
+flows, including publication/archive mid-call and index recovery. Compare activation/context/retrieval latency. Rehearse
+org migration on an explicitly approved production-data copy. Only after coverage and live approval may an operator
+activate managed ownership. Legacy index retirement, production migration, deployment and security dependency upgrades
+each remain separate explicit operations.
+
+### Latest: copied local setup and partial live verification
+
+Owner authorized copying the runnable local setup from `../application` and trying the remaining checks. Ignored
+credential files were copied without editing that checkout; isolated web/chat/Chroma ports, local databases, S3 prefix,
+synthetic orgs and unique voice worker were used. See `shared-skills-live-verification.md` for exact results and gates.
+
+**Important disclosed incident:** the first implicit Prisma command read the copied base `.env` and applied the eight
+additive shared-skill migrations to the original LOCAL `trainertwin` DB. No rollback/reset was attempted. Read-only checks
+found zero registry/version/pin/mapping/cutover rows, so no backfill or ownership activation occurred. Subsequent commands
+explicitly pinned the isolated DB. This is not described as “original local DB untouched.”
+
+Real results: **12/12** S3/embedding/self-hosted-Chroma checks; **10** chat turns across five session types; a real
+two-turn twin voice pipeline through LiveKit/Deepgram/model/VoxCPM2; persisted transcript and validated completed report,
+with v1 pin retained against current v3. Cloud quota blocks creating an isolated Cloud database; no existing org database
+was reused/deleted. Provisioning now preserves the actual quota/auth/network error rather than masking it with 404.
+
+Remaining gates are NOT green: latest broad web run **1160 pass / 2 intermittent document-grounding failures**; builder
+voice, calibration, substantive voice retrieval quality, business voice/credit activation, recording, real baseline
+latency comparison, and approved production-copy migration rehearsal. Agent suite **44/44**, controlled-provider DB
+regressions **974/974**, focused stale-contract suites **29/29**, new Chroma checks **21/21**, typecheck and build pass.
+The existing Next.js security advisory remains unresolved.
+
+Next resume here: review the live-verification report, resolve provider quota / model-grounding reliability, and finish
+the listed live gates. Raw reports have private synthetic session tokens; never commit them or reuse completed tokens.
+The detailed report records the initial broad-wrapper billing-config/MSW safety finding as well as the database incident.
+
+### Latest: Vasanth port, local Chroma, full suite and rehearsal — 20 Nov 2026
+
+- Vasanth's ten interviews ported to skill role plays beside the originals: `vasanth-skill-port.md`.
+- Local self-hosted Chroma: real provider check 12/12; `.env.test` blanks `CHROMA_API_KEY` so tests never create
+  Chroma Cloud databases (a test run had hit the cloud quota).
+- Fixed: runtime replies cut mid-sentence — reasoning tokens consumed the 500-token cap (`finish_reason: length`).
+  Caps are now the visible budget plus `REASONING_TOKEN_ALLOWANCE` (2048), and a truncated reply is logged.
+  The two document-grounding tests were failing because of this (plus spoken number/acronym forms); 5/5 runs green.
+- Fixed stale tests: org-people member order (same-millisecond fixture), Usage pagination and twin-users locators,
+  sign-in measurement before the entrance animation settled.
+- Results: DB 1,087/1,087; unit incl. real-model 1,316/1,316; flows 150/150; chat 127/127; Python agent 44/44;
+  Playwright 36/36; typecheck, lint (0 errors) and build pass.
+- Migration rehearsal on a production copy: `shared-skills-rehearsal.md`.
+
+## Goal
+
+Give published skill packages their own identity and lifecycle. Twins and role plays reference those packages rather
+than owning separate copies of storage, indexing and version-management logic.
+
+Every phase must be a usable release. If work stops after a phase, trainers can still author, publish and run calls.
+An empty schema, an unconnected API, or a partially migrated runtime is not a phase.
+
+This establishes a consistent data/backend foundation, not a UI redesign or identical conversation behavior.
+
+## The billing precedent
+
+Reviewed:
+
+- [PR #15](https://github.com/fl-dev-ops/trainer-twin-studio/pull/15): working org credits and spending through Meteroid,
+  with Razorpay disabled. It delivered value without online payments.
+- [PR #18](https://github.com/fl-dev-ops/trainer-twin-studio/pull/18): billing phases 2 and 3.
+  Phase 2 made plans, invoices and packs work with payments recorded by hand; phase 3 automated collection through
+  Razorpay without replacing the invoice/credit foundation. These phases ultimately shipped together.
+- `plans/phase1-release.md`, `plans/billing-phase-2.md`, `plans/billing-phase-3.md`.
+
+Apply the same pattern: ship a useful shared foundation first, adopt it for each experience, migrate existing data,
+then retire the old representation. Do not make a large rewrite the prerequisite for the first working release.
+
+## What exists today
+
+| Concern | Current implementation |
+| --- | --- |
+| Twin / role-play identity | Both are `Agent` rows, distinguished by immutable `kind`; `web/prisma/schema.prisma` |
+| Package publishing | `storeSkillAgent` in `web/lib/scenario-ingest.ts` already shares S3, Chroma and DB writes |
+| Skill content and manifest | `Agent.data.skill`, `.scenario`, `.artifacts`, `.filesHash`; previous data in `SpecVersion` |
+| S3 files | Versioned `SKILL.md`, `skill.json` or `scenario.json`, `items.json`, optional evidence/change files |
+| Examples | Org main Chroma collection; `scenario_item` entries scoped by `agentSlug` + `agentVersion` |
+| Source provenance | `SkillSource`, keyed by agent/version/document; `web/lib/skill-sources.ts` |
+| Single-skill sessions | Agent/persona snapshots in `InterviewSession.compiledSnapshot`; `web/lib/interview-sessions.ts` |
+| Main-twin skill selection | Live skill agents of the same org/persona, pinned as slug/version; `web/lib/twins.ts` |
+| Runtime reads | `web/lib/session-context.ts`, studio `searchScenarioItems` action, `chat/agent/lib/brain.ts` |
+| Skill history reads | Copilot `readSkill` path in `web/lib/copilot-studio.ts` reads Agent/SpecVersion and S3 |
+
+Important existing behavior:
+
+- Agent versions currently mix package changes and some experience/persona/settings changes. They cannot simply become
+  skill version numbers.
+- Main twins aggregate skills; they do not have a single SKILL.md of their own.
+- Builder role plays use client/learner examples and fixed client rules. Authored role plays use their published
+  procedure and trainer/learner examples. Twins have both current and legacy manifest shapes.
+- Chroma prunes older than the current and previous Agent version. A missing pinned version may fall back to examples
+  from other retained versions of the same agent. The new model must not promise exact pins while retaining this behavior.
+- Publication currently holds `agent:<slug>` while writing external artifacts. External writes are not rolled back if
+  the DB transaction fails. Reuse the existing entry point, but explicitly address these publication boundaries.
+
+## Proposed ownership and model
+
+Keep `Agent` as the experience record. Do not create separate Twin/Roleplay tables in this project.
+
+```text
+Agent (TWIN or ROLEPLAY)
+  persona, access, before/tools/after settings, existing identity/version
+       |
+       +-- primarySkillId --> Skill
+                                |
+                                +-- currentVersionId --> SkillVersion
+                                                          |
+                                                          +-- S3 package
+                                                          +-- Chroma index scope
+                                                          +-- source provenance
+
+Main twin --> existing same-persona skill selection --> several Skills
+Session   --> SessionSkill pins --> exact SkillVersions
+```
+
+### Initial tables and fields
+
+Names are proposed; the implementation rule spec must settle exact columns, constraints and refusal contracts.
+
+| Record | Responsibility |
+| --- | --- |
+| `Skill` | Stable ID, required org ownership, name, timestamps, nullable current-ready-version reference |
+| `SkillVersion` | Skill ID, monotonic package version, format discriminator, lifecycle state, package hash, immutable skill text/manifest, S3 file references, index scope and expected item count |
+| `Agent.primarySkillId` | Optional reference for a skill-bearing Agent. Main twins and no-skill legacy interviews need no primary skill |
+| `SessionSkill` | Introduced with runtime adoption: session ID, skill-version ID, stable lookup alias and ordering; supports one or many pins |
+| Source references | Move provenance ownership to SkillVersion during migration; preserve saved titles for deleted documents |
+
+Constraints:
+
+- Unique `(skillId, version)`; currentVersion must belong to the same Skill and be ready.
+- Agent/Skill links, session pins and source references cannot cross organizations.
+- Initially one Skill per skill-bearing Agent. No cross-agent sharing/editor is introduced; do not accidentally bind
+  different existing skills because their names or hashes match.
+- Keep explicit format distinctions: twin skill, legacy scenario-shaped twin, builder role play and authored role play.
+  A common storage envelope does not require rewriting all manifests or treating instruction packages interchangeably.
+- `Agent.version` remains the experience/spec version; `SkillVersion.version` advances only for package changes.
+- A persona, access or scoring-only change does not make a new SkillVersion. A builder edit that changes rendered
+  instructions/examples does. Identity and scoring history continue to use existing Agent/session mechanisms.
+
+### Storage contract
+
+- S3 is the durable original package, preserving manifest filename, optional files and original bytes.
+- SkillVersion holds immutable validated skill text/manifest for runtime reads, verified against the package at
+  publication. Runtime calls do not download SKILL.md from S3 on every turn. This is a deliberate stored projection,
+  not a second editable source.
+- Chroma is a rebuildable index of items.json, not the only copy of examples.
+- New index entries use `skillVersionId` plus `skillIndexScope` (the committed artifact prefix) within the existing org
+  collection, with role/step metadata preserved. The pair excludes abandoned/expired physical attempts of the same package.
+  No collection per skill; knowledge/persona entries in the same collection are unaffected.
+- Existing S3 keys do not need moving. The registry can reference verified existing paths.
+
+### Publication contract
+
+`pending -> ready` or `pending -> failed`; failed attempts can be retried under the same attempt identity.
+Published package content is immutable; index availability/rebuild state is tracked separately from content.
+
+1. Validate org, experience kind, persona, package format and permissions at existing boundaries.
+2. Under the owning agent/skill locks in a documented order, reserve a pending version. Same-package retries reuse its
+   identity; every physical write attempt has an isolated namespace. Changed content cannot overwrite a ready version.
+3. Write/verify S3 files and index examples outside a long-running DB transaction.
+4. Atomically mark ready and switch Skill.currentVersion plus the Agent compatibility projection, after checking the
+   expected publication generation. A superseded publisher cannot replace a newer committed publication.
+5. Failure keeps the previous ready version current. Zero examples is valid and distinguishable from a failed index.
+
+Package hashing includes file names and bytes for all versioned content; operational attempt IDs/timestamps do not
+force content versions. Define evidence/change-file treatment explicitly instead of inheriting today's partial hash.
+Persist visible bounded failure details for operators; retries/reconciliation must not hide failed publication.
+
+The sequence above is the target after runtime adoption. Phase 1 reserves pending state separately but retains the
+existing bounded final save transaction around external writes and compatibility activation. Do not prematurely split
+it while legacy readers can confuse an unpublished Agent-version index with settings versions.
+
+## Phase 1 — Working skill registry and shared publisher
+
+**Product:** every new or updated twin skill and role play has a managed, inspectable package. Existing calls and
+editors keep working through their current contracts.
+
+Build:
+
+- Add Skill/SkillVersion and nullable Agent reference, with additive constraints/migrations.
+- Extract the package lifecycle behind `storeSkillAgent`; route twin ingestion, authored-role-play ingestion and
+  builder saves through it. Preserve route payloads, return shapes, permissions and immediate builder publication.
+- Persist reservations/failure state separately; retain the bounded existing save lock for external writes until
+  runtime adoption makes stable skill-version scope authoritative. Include this limitation in release review.
+- Keep Agent.data/SpecVersion as a generated compatibility representation, written only through the shared publisher.
+  Existing Agent-only settings writers remain scoped to their settings and cannot replace the package projection.
+- During this phase, publish legacy Chroma metadata as required by existing runtime readers as well as the new stable
+  skill-version scope. Keep compatibility versions separate from package version numbers.
+- Provide an authenticated studio/copilot read path for package versions/state and an operator check command.
+  No new skill-library UI is required.
+- Ensure existing restore/read, archive/restore and settings paths do not bypass or corrupt the registry.
+
+**Demo:** create a builder role play and a copilot twin skill; inspect their managed files, versions and item counts;
+run both through existing voice flows. Change examples, republish and see one new package version.
+
+**Release gate:** unchanged publication is idempotent; scoring/persona-only changes do not bump package versions;
+concurrent and interrupted publication leave a usable prior version; failures are inspectable/retryable; existing
+builder, copilot read/history, source display and no-skill interview flows pass.
+
+**Stop here:** useful registry/publishing management is live; runtime still consumes the compatible Agent representation.
+Unedited historical agents continue working without an eager backfill.
+
+**Rollback:** old-compatible application can use the generated representation. Leave additive tables in place.
+Drain publishers before switching writer versions; reconcile publications before returning to new writers.
+
+## Phase 2 — Role plays run on exact managed skill versions
+
+**Product:** newly managed role plays use the registry end to end. Publishing again cannot change an existing call's
+instructions or examples.
+
+Build:
+
+- Add SessionSkill pins at activation for managed builder and authored role plays, in the session-creation transaction.
+- Resolve instructions/manifest/source references through SkillVersion; keep chat's external session-context shape
+  stable where possible. Preserve authored versus builder prompts, tool permissions, example roles and endings.
+- Search examples by the authorized session's exact SkillVersion AND its committed skillIndexScope, never a
+  model-supplied arbitrary version ID or an unqualified version-ID filter.
+- Remove cross-version example fallback for new pins. A valid empty/no-match result returns no examples; a missing or
+  corrupt index is an explicit operational failure, not permission to search another version.
+- Add idempotent reindex-from-S3/check tooling and protect live-session pins from index pruning. Verify index readiness
+  before starting a new managed call; do not silently fall back to Agent data if a managed reference is broken.
+- Keep old snapshots/unmanaged role plays on an explicit legacy reader. Preserve scoring snapshots and public APIs.
+
+**Demo:** start a role play on v1; publish v2 and v3 during that call; the existing call retrieves only v1 examples,
+and a new call uses v3. Both finish and produce the expected rubric report.
+
+**Release gate:** real multi-turn builder and authored calls; retry/resume keeps original pins; tool execution and
+reporting remain unchanged; cross-org and wrong-session lookup refuses; failed reindex leaves no false-ready index.
+
+**Stop here:** role plays have fully managed packages; twins still use Phase 1's working compatibility representation.
+
+**Rollback:** keep generating old snapshots/Agent projections and legacy retrieval metadata until migration closes.
+Drain active calls before rolling runtime readers back; never assume old readers understand new pins.
+
+## Phase 3 — Twins use the same managed skill runtime
+
+**Product:** single-skill and all-skills twins run through the same package/version mechanism as role plays.
+
+Build:
+
+- Pin one managed version for a single-skill twin and the selected versions for a main twin.
+- Preserve existing same-org/same-persona selection, ordering, supported legacy formats, lookup aliases, source display
+  and inline-versus-Eve-skill behavior. No new manual skill-assignment UI or selection policy.
+- Preserve main twins with no skills as valid empty catalogs; do not create an artificial SKILL.md for them.
+- Route instructions, examples and copilot package-history reads through the shared resolver.
+- Preserve coaching/decline rules, calibration feedback/evidence, permitted tools and after-call reporting.
+- During transition, keep unmanaged historical skills explicitly on the legacy path; mixed catalogs may have managed
+  version pins and legacy slug/version pins, recorded distinctly rather than pretending they are all managed.
+- Prevent archive/republish from removing a ready package already pinned to a live session.
+
+**Demo:** run a main twin with two managed skills; publish a revision and a third skill during the call. That call keeps
+its original catalog; the next call gets the updated one. Repeat a single-skill and calibration call.
+
+**Release gate:** multi-turn retrieval across topics, no-skill decline, calibration ratings/report, archive during
+active call, same-persona isolation and mixed legacy/managed catalogs all work. Measure context/lookup latency against
+the baseline; no per-turn S3 download.
+
+**Stop here:** all newly published skill-based experiences use the common foundation end to end.
+
+**Rollback:** retain compatibility writes; drain active calls and roll web/chat contracts back together if necessary.
+
+## Phase 4 — Bring existing published skills and history into the registry
+
+**Product:** existing trainers gain the same package/history guarantees without recreating their twins or role plays.
+
+Build:
+
+- Add dry-run/apply/check migration tooling scoped by org and resumable in batches. Rehearse on a fresh production-data
+  copy with isolated S3/Chroma destinations before any approved production run.
+- Inventory current Agent data, historical SpecVersion rows, S3 artifacts, Chroma versions and SkillSource links.
+  Include archived skills and package versions referenced by supported sessions; do not rewrite historical snapshots.
+- Import verified packages with an explicit `(agentId, agentVersion) -> skillVersionId` mapping. Multiple Agent versions
+  may map to one package version when only settings changed.
+- Verify files/hashes/manifest format, source provenance and item counts. Rebuild pruned indexes from items.json where
+  needed; missing files become actionable migration failures, never fabricated packages or false-ready versions.
+- Cut over an org only after every current eligible package and required pin is verified. Unrecoverable historical
+  packages remain explicitly legacy/unavailable with a documented report; no destructive cleanup while gaps remain.
+- Retain existing slugs, IDs, assignments, deployment links, persona relationships, session/report data and API shapes.
+
+**Demo:** migrate an org with builder/authored role plays, single/main twins, archived skills and historical versions;
+open history, start all call types, and rerun the migration with no duplicate rows or versions.
+
+**Release gate:** before/after inventory and hash/count comparison; unchanged memberships, credits, assignments and
+reports; rerun/interruption safety; backfill-versus-live-publication race tests; full voice canary for the migrated org.
+
+**Stop here:** current and recoverable historical packages are managed; explicit legacy history remains readable.
+
+**Rollback:** stop cutover, retain legacy records and compatibility writes, return affected org readers to the legacy
+path only after verification/draining. A code rollback does not undo data changes.
+
+## Phase 5 — Make managed skills the sole package owner
+
+**Product:** one authoritative package model for both experiences, with fewer divergent writes and simpler maintenance.
+
+Build only after the migration report and production canary establish coverage:
+
+- Stop generating duplicate package fields in Agent.data for managed agents. Agent owns experience settings;
+  SkillVersion owns instructions, manifests, artifacts, hashes, indexes and source links.
+- Stop writing package history into SpecVersion; retain it for persona/experience history and explicit legacy readers.
+- Remove legacy package publication/search branches only where all writers/readers have migrated. Retain any historical
+  decoder needed for saved sessions; no forced conversion of no-skill interview agents.
+- Retire compatibility Chroma records only after old callers/live pins are absent and rollback retention has elapsed.
+- Document index retention: current packages and live-session pins stay indexed; older indexes can be explicitly
+  restored from verified S3 packages. Restoring/reindexing does not mutate published package content.
+- Update module specs, authoring/publishing docs and operating checks. Do not hard-delete old files/history in this PR.
+
+**Demo:** publish/update both experiences without package copies in Agent.data; run both, inspect history/source links,
+and restore/reindex an older package through the same services.
+
+**Release gate:** no remaining managed-package readers/writers depend on removed fields; clean install/migrations,
+all relevant tests and real voice canaries pass; operational rebuild and publication recovery demonstrated.
+
+**Rollback boundary:** this closes backward compatibility. Once legacy projections stop being written, a pre-cutover
+binary is not a safe rollback target. Use the last managed-compatible release; regenerating legacy projections requires
+a separately rehearsed recovery operation.
+
+## Verification and release discipline for every phase
+
+1. Write agreed package rules/refusals before implementation; test the rules, not just table CRUD.
+2. Unit/DB tests for constraints, tenant isolation, publication races, idempotency, hash/bytes consistency, zero items,
+   source provenance and correct version resolution. Use isolated DB/S3/Chroma resources.
+3. Flow/browser tests for builder and copilot authoring, publish/update/history/settings, assignments, start/resume,
+   enabled workspaces, finish/transcript/report and calibration where affected.
+4. Real multi-turn voice checks with LiveKit/chat/agent and actual S3/Chroma, including publish during an active call.
+   Report controlled tests separately from live-provider evidence.
+5. Type-check/build/lint affected services with Bun; measure activation/context/retrieval latency before and after.
+6. Each phase gets its own release scope, migration/runbook, rehearsal results, canary and rollback target. Record which
+   services deploy; the Python voice transport need not change unless tracing proves a contract change.
+7. Production backfills, migrations, releases and destructive cleanup require explicit approval. Review the automatic
+   migrate-on-build behavior in `web/scripts/vercel-build.sh`; a failed build does not reverse applied migrations.
+
+## Explicitly deferred
+
+- Splitting/renaming Agent, moving assignments, changing billing or public API resource names.
+- A generic Active Storage clone or registry for every S3 upload in the application.
+- Shared skill marketplace, cross-org reuse, arbitrary many-to-many attachments or a new skill editor/library UI.
+- Rewriting all manifests to one schema, changing conversation prompts, or converting no-skill interviews to skills.
+- Changing twin selection/access policy, report semantics, copilot approval/authority or user-visible conversation design.
+
+## Authorization and implementation order
+
+Ownership/phase boundaries are approved. Keep the rule spec current with exact publication concurrency, retry/refusal
+and retention contracts. Implement and extensively verify each phase before checkpointing it, then continue to the next
+phase automatically. Final live comparison follows all implementation phases; it is not an intermediate code gate.
+
+The active worktree/session is `application-v3`; implementation branch is `feat/shared-skills` from `origin/v3`.
+The previous checkout's AGENTS instructions ceased applying when the session moved here. No remote branch or PR has
+been created; confirm release/PR destination before publishing work.

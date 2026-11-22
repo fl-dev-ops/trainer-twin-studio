@@ -22,7 +22,7 @@ describe.skipIf(!localMinutesDb)("flow: buy credits → assign → practise → 
 
   beforeAll(async () => {
     outside.start();
-    await f.create(false);
+    await f.create({ learnerMember: false, voice: true });
     await fundOrg({ orgId: f.org.id, minutes: 0 });
   });
   afterAll(async () => {

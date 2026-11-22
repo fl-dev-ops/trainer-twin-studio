@@ -23,7 +23,7 @@ describe.skipIf(!localMinutesDb)("Module 2 atomic start/end/assignment scenarios
   let fetching: ReturnType<typeof spyOn<typeof globalThis, "fetch">>;
   const spies: { mockRestore(): void }[] = [];
   beforeEach(async () => {
-    f = minutesFixture(); await f.create();
+    f = minutesFixture(); await f.create({ voice: true });
     secret = process.env.COPILOT_SERVICE_SECRET; process.env.COPILOT_SERVICE_SECRET = "practice-secret";
     assignment = await db.twinAssignment.create({ data: { orgId: f.org.id, agentId: f.twin.id, userId: f.learner.id, shareCode: `${f.org.id}-personal`, minutesLimit: 30 } });
     ending = spyOn(end, "startSessionEnd").mockResolvedValue(undefined);

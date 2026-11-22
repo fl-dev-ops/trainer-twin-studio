@@ -19,7 +19,7 @@ describe.skipIf(!localMinutesDb)("Module 3 calibration (real PostgreSQL)", () =>
   let chat: ReturnType<typeof spyOn<typeof globalThis, "fetch">>;
   const spies: { mockRestore(): void }[] = [];
   beforeEach(async () => {
-    f = minutesFixture(); await f.create();
+    f = minutesFixture(); await f.create({ voice: true });
     secret = process.env.COPILOT_SERVICE_SECRET; process.env.COPILOT_SERVICE_SECRET = "calibration-test-secret";
     model = spyOn(jev, "decide").mockResolvedValue({});
     const fetch = globalThis.fetch;

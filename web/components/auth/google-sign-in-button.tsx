@@ -67,7 +67,7 @@ export function GoogleSignInButton({ label = "Continue with Google", callbackURL
         disabled={busy}
         className={className ?? "w-full"}
       >
-        {busy ? <Spinner data-icon="inline-start" /> : <GoogleIcon data-icon="inline-start" />}
+        {busy ? <Spinner data-icon="inline-start" /> : <GoogleIcon data-icon="inline-start" aria-hidden="true" />}
         {busy ? "Connecting to Google…" : label}
       </Button>
       {error ? (

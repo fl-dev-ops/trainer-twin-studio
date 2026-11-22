@@ -1,6 +1,6 @@
 import { BEFORE_UPLOAD_REFUSED } from "@/lib/context-upload";
-import { db } from "@/lib/db";
-import { activateSession } from "@/lib/interview-sessions";
+import { db, withLock } from "@/lib/db";
+import { activateSession, resolveVoiceForSession } from "@/lib/interview-sessions";
 import { activateLiveKitSession, closeLiveKitSession } from "@/lib/livekit";
 import { AppError, refusals } from "@/lib/errors";
 import { MinutesError } from "@/lib/minutes";
@@ -69,11 +69,15 @@ export async function startSessionNow(input: StartSessionInput): Promise<Session
 
 /** Step 2 (voice): the session's LiveKit room, the agent's dispatch and the recording. Failed: the session is closed. */
 export async function connectVoice(input: StartSessionInput, session: OpenedSession): Promise<{ participantToken: string; room: string }> {
-  const row = await db.interviewSession.findUniqueOrThrow({
-    where: { id: session.id },
+  requireVoiceMode(input.mode);
+  const row = await db.interviewSession.findFirst({
+    where: { id: session.id, orgId: input.orgId, userId: input.userId },
     select: {
       id: true,
+      mode: true,
       agentSlug: true,
+      resolvedVoiceId: true,
+      compiledSnapshot: true,
       agent: { select: { data: true, kind: true, persona: { select: { voiceId: true } } } },
       livekitRoom: true,
       livekitDispatchId: true,
@@ -81,22 +85,41 @@ export async function connectVoice(input: StartSessionInput, session: OpenedSess
       videoEgressId: true,
     },
   });
+  if (!row) throw refusals.notFound();
+  requireVoiceMode(row.mode);
   const agentData = row.agent.data as { introVideo?: unknown; voiceId?: unknown } | null;
-  // The agent's own voice (an explicit override) wins; otherwise the voice its persona owns.
-  const configuredVoiceId = typeof agentData?.voiceId === "string" && agentData.voiceId ? agentData.voiceId : row.agent.persona.voiceId ?? "";
-  const configuredVoice = configuredVoiceId
-    ? await db.voice.findFirst({
-        where: { id: configuredVoiceId, status: "ready", OR: [{ orgId: input.orgId }, { orgId: null }] },
-        select: { id: true },
-      })
-    : null;
-  const sharedDefault = configuredVoice ? null : await db.voice.findFirst({
-    where: { status: "ready", orgId: null },
-    orderBy: { name: "asc" },
-    select: { id: true },
-  });
 
   try {
+    const voiceId = await withLock([`session-voice:${session.id}`], async (tx) => {
+      const current = await tx.interviewSession.findFirst({
+        where: { id: session.id, orgId: input.orgId, userId: input.userId },
+        select: { resolvedVoiceId: true, mode: true },
+      });
+      if (!current) throw refusals.notFound();
+      requireVoiceMode(current.mode);
+      let configuredVoiceId = current.resolvedVoiceId;
+      if (!configuredVoiceId) {
+        const snapshot = record(row.compiledSnapshot);
+        const snapshotAgent = record(record(snapshot.agent).data);
+        const snapshotPersona = record(snapshot.persona);
+        const recordedVoiceId = [snapshot.voiceId, snapshotAgent.voiceId, snapshotPersona.voiceId, record(snapshotPersona.data).voiceId]
+          .find((value) => value != null && value !== "");
+        if (recordedVoiceId != null && typeof recordedVoiceId !== "string") {
+          throw refusals.invalidInput("The recorded voice is invalid. Choose a ready voice before starting a new voice session.");
+        }
+        if (recordedVoiceId == null && agentData?.voiceId != null && agentData.voiceId !== "" && typeof agentData.voiceId !== "string") {
+          throw refusals.invalidInput("The selected voice is invalid. Choose a ready voice before starting a voice session.");
+        }
+        // NULL legacy rows have no historical pin: record the compatibility resolution now, not as their original voice.
+        configuredVoiceId = recordedVoiceId
+          ?? (typeof agentData?.voiceId === "string" && agentData.voiceId ? agentData.voiceId : row.agent.persona.voiceId);
+      }
+      const resolved = await resolveVoiceForSession(input.orgId, configuredVoiceId, tx);
+      if (!current.resolvedVoiceId) {
+        await tx.interviewSession.update({ where: { id: session.id }, data: { resolvedVoiceId: resolved } });
+      }
+      return resolved;
+    });
     const livekit = await activateLiveKitSession({
       sessionId: session.id,
       userId: input.userId,
@@ -105,7 +128,7 @@ export async function connectVoice(input: StartSessionInput, session: OpenedSess
       orgId: input.orgId,
       agentSlug: row.agentSlug,
       holdOpening: Boolean(agentData?.introVideo) || Boolean(input.holdOpening),
-      voice: configuredVoice?.id ?? sharedDefault?.id,
+      voice: voiceId,
       // Learner minutes: the voice agent ends the call at this moment (absolute, so agent and web count the same span).
       endsAt: "secondsLeft" in session && session.secondsLeft != null
         ? Math.floor(Date.now() / 1000) + session.secondsLeft
@@ -129,6 +152,7 @@ export async function connectVoice(input: StartSessionInput, session: OpenedSess
     });
     return { participantToken: livekit.token, room: livekit.room };
   } catch (error) {
+    if (error instanceof AppError && error.code === "session_mode_mismatch") throw error;
     // Joining a live call (a resume) failing never fails that call (specs/practice.md rule 18).
     if ("resumed" in session && session.resumed) throw error;
     await closeLiveKitSession({
@@ -142,4 +166,12 @@ export async function connectVoice(input: StartSessionInput, session: OpenedSess
     });
     throw error;
   }
+}
+
+function requireVoiceMode(mode: string) {
+  if (mode !== "voice") throw new AppError("session_mode_mismatch", "Voice connections require voice mode.", 409);
+}
+
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }

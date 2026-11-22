@@ -5,40 +5,6 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* The studio's scale. The UI was designed at a 110% root font size; instead of scaling the root, Tailwind's rem
-   defaults are 1.1x here (16px root): spacing, type, containers, radii. Breakpoints are untouched (media queries
-   ignore the root font size). Hard-coded rem values in the app are written at this scale too. */
-@theme {
-  --spacing: 0.275rem;
-  --container-3xs: 17.6rem;
-  --container-2xs: 19.8rem;
-  --container-xs: 22rem;
-  --container-sm: 26.4rem;
-  --container-md: 30.8rem;
-  --container-lg: 35.2rem;
-  --container-xl: 39.6rem;
-  --container-2xl: 46.2rem;
-  --container-3xl: 52.8rem;
-  --container-4xl: 61.6rem;
-  --container-5xl: 70.4rem;
-  --container-6xl: 79.2rem;
-  --container-7xl: 88rem;
-  --text-xs: 0.825rem;
-  --text-sm: 0.9625rem;
-  --text-base: 1.1rem;
-  --text-lg: 1.2375rem;
-  --text-xl: 1.375rem;
-  --text-2xl: 1.65rem;
-  --text-3xl: 2.0625rem;
-  --text-4xl: 2.475rem;
-  --text-5xl: 3.3rem;
-  --text-6xl: 4.125rem;
-  --text-7xl: 4.95rem;
-  --text-8xl: 6.6rem;
-  --text-9xl: 8.8rem;
-  --radius-xs: 0.1375rem;
-}
-
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -315,11 +281,11 @@
   }
   body {
     @apply bg-background text-foreground;
-    /* Unstyled text: 17.6px, the studio's base (was inherited from a 110% root). */
     font-size: var(--text-base);
   }
   html {
     @apply font-sans;
+    font-size: 100%;
   }
   svg {
     color: currentColor;

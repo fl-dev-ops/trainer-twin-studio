@@ -1,6 +1,15 @@
 import { beforeEach, expect, mock, test } from "bun:test";
 
 type Row = Record<string, unknown>;
+type SkillRow = Row & { id: string; nextVersion: number; generation: number; currentVersionId: string | null };
+type SkillVersionRow = Row & { id: string; skillId: string; version: number; contentHash: string; status: string };
+const skills: SkillRow[] = [];
+const skillVersions: SkillVersionRow[] = [];
+type MappingRow = { agentId: string; agentVersion: number; orgId: string; skillVersionId: string };
+type SourceRow = { skillVersionId: string; orgId: string; documentId: string; title: string; items: number };
+const mappings: MappingRow[] = [];
+const packageSources: SourceRow[] = [];
+const skillItems = new Map<string, unknown[]>();
 const log: string[] = [];
 let agents: Row[] = [];
 let domains: Row[] = [];
@@ -17,23 +26,84 @@ const fakeDb = {
       ({ org1: { id: "org1", slug: "acme" }, org2: { id: "org2", slug: "other" } })[where.id] ?? null,
   },
   persona: {
-    // Skill twin: only the org's own persona (case-insensitive). Role play: any persona of the org, by exact slug.
     findFirst: async ({ where }: { where: { orgId: string; isOwn?: boolean; slug: string | { equals: string; mode: string } } }) => {
-      if (typeof where.slug === "string") return where.orgId === "org1" && where.slug === "rohan" ? { id: "p-rohan", data: { role: "Prospect" } } : null;
-      return where.orgId === "org1" && where.isOwn === true && where.slug.mode === "insensitive" && where.slug.equals.toLowerCase() === "vasanth" ? { id: "p1" } : null;
+      if (where.orgId !== "org1") return null;
+      const slug = typeof where.slug === "string" ? where.slug : where.slug.equals.toLowerCase();
+      const persona = [{ slug: "vasanth", id: "p1", isOwn: true }, { slug: "rohan", id: "p-rohan", isOwn: false, data: { role: "Prospect" } }].find(persona => persona.slug === slug);
+      return persona && (where.isOwn === undefined || persona.isOwn === where.isOwn) ? persona : null;
     },
   },
   agent: {
-    findUnique: async ({ where }: { where: { slug: string } }) => agents.find((a) => a.slug === where.slug) ?? null,
+    findUnique: async ({ where }: { where: { slug: string } }) => {
+      const row = agents.find((a) => a.slug === where.slug);
+      return row ? { ...row } : null;
+    },
     create: async ({ data }: { data: Row }) => {
       log.push("agent.create");
-      const row = { id: `a${agents.length + 1}`, ...data };
+      const row = { id: crypto.randomUUID(), updatedAt: new Date(), ...data };
       agents.push(row);
       return row;
     },
     update: async ({ where, data }: { where: { id: string }; data: Row }) => {
       log.push("agent.update");
-      Object.assign(agents.find((a) => a.id === where.id)!, data);
+      const row = agents.find((a) => a.id === where.id)!;
+      Object.assign(row, data, { updatedAt: new Date() });
+      return { ...row };
+    },
+  },
+  skill: {
+    updateMany: async ({ where, data }: { where: { id: string; generation: number }; data: Row }) => {
+      const rows = skills.filter(skill => skill.id === where.id && skill.generation === where.generation);
+      rows.forEach(row => Object.assign(row, data));
+      return { count: rows.length };
+    },
+    upsert: async ({ where, create, update }: { where: { orgId_ownerSlug: { orgId: string; ownerSlug: string } }; create: Row; update: Row }) => {
+      let row = skills.find(skill => skill.orgId === where.orgId_ownerSlug.orgId && skill.ownerSlug === where.orgId_ownerSlug.ownerSlug);
+      if (!row) {
+        row = { id: crypto.randomUUID(), nextVersion: 1, generation: 0, currentVersionId: null, ...create };
+        skills.push(row);
+      } else Object.assign(row, update);
+      return { ...row };
+    },
+    findUniqueOrThrow: async ({ where, include }: { where: { id: string }; include?: { currentVersion: boolean } }) => {
+      const row = skills.find(skill => skill.id === where.id);
+      if (!row) throw new Error(`Missing skill ${where.id}`);
+      return { ...row, ...(include?.currentVersion ? { currentVersion: skillVersions.find(version => version.id === row.currentVersionId) ?? null } : {}) };
+    },
+    update: async ({ where, data }: { where: { id: string }; data: Row & { nextVersion?: { increment: number } } }) => {
+      const row = skills.find(skill => skill.id === where.id)!;
+      const nextVersion = data.nextVersion ? row.nextVersion + data.nextVersion.increment : row.nextVersion;
+      Object.assign(row, data, { nextVersion });
+      return { ...row };
+    },
+  },
+  skillVersion: {
+    findMany: async ({ where }: { where: { skillId: string; artifacts: string; status: string; skill: { orgId: string; ownerSlug: string } } }) =>
+      skillVersions.filter(version => version.skillId === where.skillId && version.artifacts === where.artifacts && version.status === where.status
+        && skills.some(skill => skill.id === version.skillId && skill.orgId === where.skill.orgId && skill.ownerSlug === where.skill.ownerSlug)).map(row => ({ ...row })),
+    findUniqueOrThrow: async ({ where }: { where: { id: string } }) => {
+      const row = skillVersions.find(version => version.id === where.id);
+      if (!row) throw new Error(`Missing skill version ${where.id}`);
+      return { ...row };
+    },
+    findFirst: async ({ where }: { where: { skillId: string; contentHash: string; status: { in: string[] } } }) => {
+      const row = skillVersions.filter(version => version.skillId === where.skillId && version.contentHash === where.contentHash && where.status.in.includes(version.status)).sort((a, b) => b.version - a.version)[0];
+      return row ? { ...row } : null;
+    },
+    create: async ({ data }: { data: Row & { skillId: string; version: number; contentHash: string } }) => {
+      const row = { ...data, id: crypto.randomUUID(), status: "pending", indexStatus: "pending", failure: null, updatedAt: new Date() };
+      skillVersions.push(row);
+      return { ...row };
+    },
+    update: async ({ where, data }: { where: { id: string }; data: Row }) => {
+      const row = skillVersions.find(version => version.id === where.id)!;
+      Object.assign(row, data, { updatedAt: new Date() });
+      return { ...row };
+    },
+    updateMany: async ({ where, data }: { where: { id: string; status: string }; data: Row }) => {
+      const rows = skillVersions.filter(version => version.id === where.id && version.status === where.status);
+      rows.forEach(row => Object.assign(row, data, { updatedAt: new Date() }));
+      return { count: rows.length };
     },
   },
   domain: {
@@ -48,12 +118,67 @@ const fakeDb = {
     findMany: async ({ where }: { where: { id: { in: string[] }; kb: { orgId: string } } }) =>
       where.kb.orgId === "org1" ? [{ id: "abc", title: "Session 3 · Osama" }].filter((doc) => where.id.in.includes(doc.id)) : [],
   },
-  skillSource: { createMany: async ({ data }: { data: Row[] }) => void skillSources.push(...data) },
+  agentSkillVersion: {
+    findUnique: async ({ where }: { where: { agentId_agentVersion: { agentId: string; agentVersion: number } } }) =>
+      mappings.find(row => row.agentId === where.agentId_agentVersion.agentId && row.agentVersion === where.agentId_agentVersion.agentVersion) ?? null,
+    findUniqueOrThrow: async ({ where }: { where: { agentId_agentVersion: { agentId: string; agentVersion: number } } }) => {
+      const row = mappings.find(row => row.agentId === where.agentId_agentVersion.agentId && row.agentVersion === where.agentId_agentVersion.agentVersion);
+      if (!row) throw new Error("Missing mapping");
+      return { ...row };
+    },
+    createMany: async ({ data, skipDuplicates }: { data: MappingRow[]; skipDuplicates: boolean }) => {
+      let count = 0;
+      for (const row of data) {
+        const agent = agents.find(agent => agent.id === row.agentId);
+        const version = skillVersions.find(version => version.id === row.skillVersionId);
+        const skill = skills.find(skill => skill.id === version?.skillId);
+        if (!agent || agent.orgId !== row.orgId || skill?.orgId !== row.orgId || skill.ownerSlug !== agent.slug || version?.status !== "ready" || row.agentVersion <= 0) throw new Error("Invalid history mapping");
+        if (mappings.some(saved => saved.agentId === row.agentId && saved.agentVersion === row.agentVersion)) {
+          if (!skipDuplicates) throw new Error("Duplicate history mapping");
+          continue;
+        }
+        mappings.push({ ...row }); count++;
+      }
+      return { count };
+    },
+  },
+  skillVersionSource: {
+    findMany: async ({ where }: { where: { skillVersionId: string } }) =>
+      packageSources.filter(row => row.skillVersionId === where.skillVersionId).map(row => ({ ...row })),
+    createMany: async ({ data, skipDuplicates }: { data: SourceRow[]; skipDuplicates: boolean }) => {
+      let count = 0;
+      for (const row of data) {
+        const version = skillVersions.find(version => version.id === row.skillVersionId);
+        if (!skills.some(skill => skill.id === version?.skillId && skill.orgId === row.orgId) || row.items < 0) throw new Error("Invalid package source");
+        if (packageSources.some(saved => saved.skillVersionId === row.skillVersionId && saved.documentId === row.documentId)) {
+          if (!skipDuplicates) throw new Error("Duplicate package source");
+          continue;
+        }
+        packageSources.push({ ...row }); count++;
+      }
+      return { count };
+    },
+  },
+  skillSource: {
+    findMany: async ({ where }: { where: Row }) => skillSources.filter(row => Object.entries(where).every(([key, value]) => row[key] === value)),
+    createMany: async ({ data, skipDuplicates }: { data: Row[]; skipDuplicates: boolean }) => {
+      for (const row of data) {
+        if (skillSources.some(saved => saved.agentId === row.agentId && saved.version === row.version && saved.documentId === row.documentId)) {
+          if (!skipDuplicates) throw new Error("Duplicate legacy source");
+          continue;
+        }
+        skillSources.push({ ...row });
+      }
+    },
+  },
   $transaction: async (fn: (tx: unknown) => unknown) => fn(fakeDb),
+  $queryRaw: async () => [],
 };
 mock.module("@/lib/db", () => ({
   withLock: async (keys: string[], work: (tx: typeof fakeDb) => Promise<unknown>) => {
-    expect(keys).toHaveLength(1); expect(keys[0]).toMatch(/^agent:/);
+    expect(keys).toHaveLength(2);
+    expect(keys[0]).toMatch(/^skill-ownership:/);
+    expect(keys[1]).toMatch(/^agent:/);
     return work(fakeDb);
   },
   isUniqueViolation: (error: unknown) => typeof error === "object" && error !== null && "code" in error && error.code === "P2002", db: fakeDb }));
@@ -68,7 +193,11 @@ mock.module("@/lib/s3", () => ({
     s3.set(key, body);
   },
   deletePrefix: async () => {},
-  getObjectText: async () => "",
+  getObjectText: async (key: string) => {
+    const text = s3.get(key);
+    if (text === undefined) throw new Error(`Missing S3 object ${key}`);
+    return text;
+  },
   kbPrefix: () => "",
   presignedGetUrl: async () => "",
 }));
@@ -76,6 +205,12 @@ mock.module("@/lib/main-collection", () => ({
   invalidateCollectionCache: () => {},
   invalidatePersonaStyleCache: () => {},
   MainCollectionService: {
+    writeSkillItems: async (orgId: string, skillVersionId: string, _scenarioId: string, items: unknown[], indexScope = skillVersionId) => {
+      if (failItems) throw new Error("embedding failed");
+      skillItems.set(`${orgId}/${skillVersionId}/${indexScope}`, items);
+      return items.length;
+    },
+    skillItemCount: async (orgId: string, skillVersionId: string, indexScope = skillVersionId) => skillItems.get(`${orgId}/${skillVersionId}/${indexScope}`)?.length ?? 0,
     writeScenarioItems: async (orgId: string, agentSlug: string, _scenarioId: string, version: number, items: unknown[]) => {
       if (failItems) throw new Error("embedding failed");
       log.push("chroma");
@@ -90,8 +225,11 @@ mock.module("@/lib/main-collection", () => ({
 }));
 
 const { buildScenario, fileText, ingestScenario, ROLEPLAY_SOURCE, saveRoleplay, scenarioIngestSchema, skillBody, stepGoal } = await import("@/lib/scenario-ingest");
+const { orgPrefix } = await import("@/lib/s3");
 const { readFileSync } = await import("node:fs");
 const roleplayBuilder = { ...JSON.parse(readFileSync(new URL("../../data/roleplay/skills/wait-and-see-investor/builder.json", import.meta.url), "utf8")), persona: "rohan" };
+const people = await import("@/lib/org-people");
+mock.module("@/lib/org-people", () => ({ ...people, orgPerson: async () => ({ role: "admin", disabled: false, name: "Trainer" }) }));
 const { POST } = await import("@/app/api/internal/scenarios/route");
 const { POST: POST_RUN } = await import("@/app/api/internal/scenario-runs/route");
 
@@ -137,6 +275,11 @@ const input = (extra: Row = {}) => scenarioIngestSchema.parse({ personaSlug: "Va
 beforeEach(() => {
   log.length = 0;
   agents = [];
+  skills.length = 0;
+  skillVersions.length = 0;
+  mappings.length = 0;
+  packageSources.length = 0;
+  skillItems.clear();
   domains = [];
   specVersions = [];
   storedItems = null;
@@ -184,7 +327,9 @@ test("builds an org-prefixed agent the runtime can read", () => {
 test("first ingest creates the agent (no domain) after storing items (duplicate item ids allowed)", async () => {
   // The agent sends its source folder name; the persona is "Vasanth".
   const result = await ingestScenario("org1", input({ personaSlug: "vasanth", patterns: "# Patterns\n", runId: "run-1" }));
-  const prefix = "p/org1/scenario-ingest/scenarios/acme-fundamental-depth/v1";
+  const prefix = result.artifacts;
+  expect(prefix.startsWith(`${orgPrefix("org1")}/skills/${skills[0].id}/v1/attempt-`)).toBe(true);
+  expect(prefix).toMatch(/\/attempt-[0-9a-f-]{36}$/);
   expect(result).toEqual({ slug: "acme-fundamental-depth", name: "Fundamental depth", version: 1, created: true, items: 2, artifacts: prefix, runId: "run-1" });
   // Files, then items, then the rows.
   expect(log).toEqual(["s3", "chroma", "agent.create"]);
@@ -196,6 +341,12 @@ test("first ingest creates the agent (no domain) after storing items (duplicate 
   expect(storedItems).toEqual({ orgId: "org1", agentSlug: "acme-fundamental-depth", version: 1, count: 2 });
   expect(domains).toHaveLength(0);
   expect(agents[0]).toMatchObject({ personaId: "p1", orgId: "org1", kind: "TWIN" });
+  expect(agents[0].primarySkillId).toBe(skills[0].id);
+  expect(skills[0].currentVersionId).toBe(skillVersions[0].id);
+  expect(skillVersions[0]).toMatchObject({ status: "ready", indexStatus: "ready", itemCount: 2 });
+  expect(skillItems.get(`org1/${skillVersions[0].id}/${prefix}`)).toEqual([item("x#1"), item("x#1")]);
+  expect(mappings).toEqual([{ agentId: agents[0].id, agentVersion: 1, orgId: "org1", skillVersionId: skillVersions[0].id }]);
+  expect(packageSources).toEqual([{ skillVersionId: skillVersions[0].id, orgId: "org1", documentId: "abc", title: "Session 3 · Osama", items: 2 }]);
   expect("domainSlug" in agents[0]).toBe(false);
 });
 
@@ -211,11 +362,26 @@ test("re-ingest is a no-op when unchanged, and versions the spec when changed", 
   expect(log.filter((entry) => entry === "agent.update")).toHaveLength(0);
 
   const changed = await ingestScenario("org1", input({ scenario: { ...scenario, name: "Depth drill" } }));
-  expect(changed).toMatchObject({ version: 2, created: false, name: "Depth drill", artifacts: "p/org1/scenario-ingest/scenarios/acme-fundamental-depth/v2" });
-  expect(s3.has("p/org1/scenario-ingest/scenarios/acme-fundamental-depth/v2/scenario.json")).toBe(true);
-  expect((agents[0].data as Row).artifacts).toBe("p/org1/scenario-ingest/scenarios/acme-fundamental-depth/v2");
+  expect(changed).toMatchObject({ version: 2, created: false, name: "Depth drill" });
+  expect(changed.artifacts.startsWith(`${orgPrefix("org1")}/skills/${skills[0].id}/v2/attempt-`)).toBe(true);
+  expect(changed.artifacts).toMatch(/\/attempt-[0-9a-f-]{36}$/);
+  expect(s3.get(`${changed.artifacts}/scenario.json`)).toBe(fileText.scenario({ ...scenario, name: "Depth drill" }));
+  expect((agents[0].data as Row).artifacts).toBe(changed.artifacts);
   expect(specVersions).toEqual([expect.objectContaining({ entityType: "agents", entitySlug: "acme-fundamental-depth", version: 1 })]);
   expect((agents[0].data as Row).introVideo).toBe("intro.mp4");
+  expect(mappings.map(({ agentVersion, skillVersionId }) => [agentVersion, skillVersionId])).toEqual([
+    [1, skillVersions[0].id], [2, skillVersions[1].id],
+  ]);
+});
+
+test("ready no-op refuses a conflicting immutable history mapping", async () => {
+  await ingestScenario("org1", input());
+  mappings[0].skillVersionId = "another-package";
+  const originalFiles = new Map(s3);
+  await expect(ingestScenario("org1", input())).rejects.toMatchObject({ code: "skill_package_unavailable" });
+  expect(s3).toEqual(originalFiles);
+  expect(specVersions).toHaveLength(0);
+  expect(mappings[0].skillVersionId).toBe("another-package");
 });
 
 test("refuses unknown personas and another org's scenario without writing anything", async () => {
@@ -235,16 +401,19 @@ test("route: secret, org header and payload are checked before ingesting", async
   process.env.SCENARIO_INGEST_SECRET = "s3cret";
   const call = (headers: Record<string, string>, body: unknown) =>
     POST(new Request("http://x/api/internal/scenarios", { method: "POST", headers, body: JSON.stringify(body) }));
-  const body = { personaSlug: "Vasanth", skill: SKILL, scenario, items: [item("x#1")] };
+  const body = { personaSlug: "Vasanth", kind: "ROLEPLAY", skill: SKILL, scenario, items: [item("x#1")] };
+  const auth = { authorization: "Bearer s3cret", "x-trainertwin-org-id": "org1", "x-trainertwin-user-id": "trainer" };
 
   expect((await call({ authorization: "Bearer wrong", "x-trainertwin-org-id": "org1" }, body)).status).toBe(401);
   expect((await call({ authorization: "Bearer s3cret" }, body)).status).toBe(400);
-  expect((await call({ authorization: "Bearer s3cret", "x-trainertwin-org-id": "org1" }, { ...body, scenario: { name: "x" } })).status).toBe(400);
-  const ok = await call({ authorization: "Bearer s3cret", "x-trainertwin-org-id": "org1" }, body);
+  expect((await call(auth, { ...body, scenario: { name: "x" } })).status).toBe(400);
+  expect((await call(auth, { ...body, kind: "TWIN" })).status).toBe(400);
+  const ok = await call(auth, body);
   expect(ok.status).toBe(201);
+  const response = await ok.json();
   // items.json is archived with keys in the order ingest wrote them (scenario_id first), byte for byte.
-  expect(s3.get("p/org1/scenario-ingest/scenarios/acme-fundamental-depth/v1/items.json")).toBe(`${JSON.stringify(body.items, null, 1)}\n`);
-  expect(await ok.json()).toMatchObject({ ok: true, scenario: { slug: "acme-fundamental-depth", items: 1 } });
+  expect(s3.get(`${response.scenario.artifacts}/items.json`)).toBe(`${JSON.stringify(body.items, null, 1)}\n`);
+  expect(response).toMatchObject({ ok: true, scenario: { slug: "acme-fundamental-depth", items: 1 } });
 });
 
 test("run route: archives plan.json, report.md and specs as ingest wrote them", async () => {
@@ -253,7 +422,7 @@ test("run route: archives plan.json, report.md and specs as ingest wrote them", 
     POST_RUN(new Request("http://x/api/internal/scenario-runs", { method: "POST", headers, body: JSON.stringify(body) }));
   const plan = { scenarios: [{ id: "fundamental-depth", sessions: [] }] };
   const body = { runId: "run-1", plan, report: "# Report\n", specs: { "fundamental-depth": "# Spec\n" } };
-  const auth = { authorization: "Bearer s3cret", "x-trainertwin-org-id": "org1" };
+  const auth = { authorization: "Bearer s3cret", "x-trainertwin-org-id": "org1", "x-trainertwin-user-id": "trainer" };
 
   expect((await call({ ...auth, authorization: "Bearer no" }, body)).status).toBe(401);
   expect((await call(auth, { ...body, runId: "../escape" })).status).toBe(400);
@@ -313,6 +482,16 @@ test("the copilot's roleplay-creator publishes a ROLEPLAY (same package, kind RO
   expect(() => input({ kind: "DOMAIN" })).toThrow();
 });
 
+test("authored role plays accept org characters, but twins and other orgs cannot use them", async () => {
+  const saved = await ingestScenario("org1", input({ kind: "ROLEPLAY", personaSlug: "Rohan" }));
+  expect(saved.created).toBe(true);
+  expect(agents[0]).toMatchObject({ kind: "ROLEPLAY", personaId: "p-rohan" });
+  log.length = 0;
+  await expect(ingestScenario("org1", input({ personaSlug: "Rohan" }))).rejects.toThrow("was not found");
+  await expect(ingestScenario("org2", input({ kind: "ROLEPLAY", personaSlug: "Rohan" }))).rejects.toThrow("was not found");
+  expect(log).toEqual([]);
+});
+
 test("publishing onto an archived skill brings it back, whether or not its content changed", async () => {
   await ingestScenario("org1", input());
   agents[0].archivedAt = new Date(); // deleted in the studio (archive is a soft delete; the slug stays taken)
@@ -324,14 +503,14 @@ test("publishing onto an archived skill brings it back, whether or not its conte
   expect(agents[0].archivedAt).toBeNull();
 });
 
-test("a new version's items go in before the row switches to it; versions before the previous one are pruned after", async () => {
+test("a new version's items precede activation and old indexes await audited retention", async () => {
   await ingestScenario("org1", input());
   expect(pruned).toEqual([]); // a first publish has nothing to prune
   log.length = 0;
   await ingestScenario("org1", input({ scenario: { ...scenario, name: "Depth drill" } }));
   expect(storedItems).toMatchObject({ version: 2 });
-  expect(log).toEqual(["s3", "chroma", "agent.update", "prune"]);
-  expect(pruned).toEqual([{ agentSlug: "acme-fundamental-depth", keepFrom: 1 }]); // keeps v2 (live) and v1 (previous)
+  expect(log).toEqual(["s3", "chroma", "agent.update"]);
+  expect(pruned).toEqual([]);
   log.length = 0;
   await ingestScenario("org1", input({ scenario: { ...scenario, name: "Depth drill" } })); // unchanged
   expect(log).not.toContain("prune");
@@ -343,15 +522,23 @@ test("a failed item write leaves the live version untouched", async () => {
   await expect(ingestScenario("org1", input({ scenario: { ...scenario, name: "Depth drill" } }))).rejects.toThrow(/embedding failed/);
   expect(agents[0]).toMatchObject({ version: 1, name: "Fundamental depth" });
   expect(specVersions).toHaveLength(0);
+  expect(skills[0].currentVersionId).toBe(skillVersions[0].id);
+  expect(skillVersions[0]).toMatchObject({ status: "ready", indexStatus: "ready" });
+  expect(skillVersions[1]).toMatchObject({
+    status: "failed",
+    indexStatus: "failed",
+    failure: "Skill publication failed before activation. Retry the original package; inspect server logs for provider details.",
+  });
 });
 
 test("changing only items.json (or patterns.md) makes a new version instead of overwriting this one's files", async () => {
-  await ingestScenario("org1", input());
-  const v1Items = s3.get("p/org1/scenario-ingest/scenarios/acme-fundamental-depth/v1/items.json");
+  const first = await ingestScenario("org1", input());
+  const v1Items = s3.get(`${first.artifacts}/items.json`);
+  expect(v1Items).toBe(fileText.items(input().items));
   const changed = await ingestScenario("org1", input({ items: [item("x#2")] }));
   expect(changed).toMatchObject({ version: 2 });
-  expect(s3.get("p/org1/scenario-ingest/scenarios/acme-fundamental-depth/v1/items.json")).toBe(v1Items); // the backup stays
-  expect(JSON.parse(s3.get("p/org1/scenario-ingest/scenarios/acme-fundamental-depth/v2/items.json")!)).toEqual([item("x#2")]);
+  expect(s3.get(`${first.artifacts}/items.json`)).toBe(v1Items); // the backup stays
+  expect(s3.get(`${changed.artifacts}/items.json`)).toBe(fileText.items(input({ items: [item("x#2")] }).items));
   const patterns = await ingestScenario("org1", input({ items: [item("x#2")], patterns: "# New evidence\n" }));
   expect(patterns).toMatchObject({ version: 3 });
 });
@@ -359,7 +546,7 @@ test("changing only items.json (or patterns.md) makes a new version instead of o
 test("each published version records which knowledge base documents built it (items per document)", async () => {
   await ingestScenario("org1", input({ items: [item("x#1"), item("x#2"), { ...item("x#3"), metadata: { ...item("x#3").metadata, source: "not-in-the-kb" } }] }));
   // Only the org's KB documents; the unknown source gets no row.
-  expect(skillSources).toEqual([{ agentId: "a1", version: 1, documentId: "abc", orgId: "org1", title: "Session 3 · Osama", items: 2 }]);
+  expect(skillSources).toEqual([{ agentId: agents[0].id, version: 1, documentId: "abc", orgId: "org1", title: "Session 3 · Osama", items: 2 }]);
   await ingestScenario("org1", input({ scenario: { ...scenario, name: "Depth drill" } }));
   expect(skillSources.map((row) => row.version)).toEqual([1, 2]);
   await ingestScenario("org1", input({ scenario: { ...scenario, name: "Depth drill" } })); // unchanged: no new rows

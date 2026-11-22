@@ -19,10 +19,9 @@ model Persona {
   // The user's own persona (a real person: recordings, style, cloned voice). Never true for a
   // global persona (orgId null). Immutable; twins require it (DB triggers, see migration split_twin_roleplay).
   isOwn     Boolean         @default(false)
-  // Persona = voice + avatar + prompt fields (data) + program settings. It owns its voice and avatar
-  // (unique); both share its org (trigger, migration persona_media).
-  voiceId   String?         @unique
-  voice     Voice?          @relation(fields: [voiceId], references: [id], onDelete: SetNull)
+  // Voices are reusable within an org; global samples are shared read-only. Avatars remain owned.
+  voiceId   String?
+  voice     Voice?          @relation(fields: [voiceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   avatarId  String?         @unique
   avatar    Avatar?         @relation(fields: [avatarId], references: [id], onDelete: SetNull)
   // Program settings: runtime behaviour the agent never reads (e.g. { pace }). JSON object (CHECK).
@@ -34,6 +33,7 @@ model Persona {
 
   @@unique([orgId, slug])
   @@index([orgId])
+  @@index([voiceId])
 }
 
 /// Which module an agent belongs to. Immutable once set (DB trigger).
@@ -63,14 +63,94 @@ model Agent {
   updatedAt       DateTime           @updatedAt
   deployments     Deployment[]
   skillSources    SkillSource[]
+  skillVersions   AgentSkillVersion[]
   sessions        InterviewSession[]
   twinAssignments TwinAssignment[]
   twinShareLinks  TwinShareLink[]
+  primarySkillId  String?
+  primarySkill    Skill?             @relation(fields: [primarySkillId, orgId], references: [id, orgId], onDelete: Restrict, onUpdate: Restrict)
 
   @@index([orgId])
+  @@index([primarySkillId, orgId])
   @@index([personaId])
   @@index([orgId, kind])
   @@index([personaId, kind])
+}
+
+model Skill {
+  id               String         @id @default(cuid())
+  orgId            String
+  ownerSlug        String
+  name             String
+  nextVersion      Int            @default(1)
+  generation       Int            @default(0)
+  publicationHash  String?
+  currentVersionId String?
+  organization     Organization   @relation(fields: [orgId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  versions         SkillVersion[] @relation("SkillVersions")
+  agents           Agent[]
+  currentVersion   SkillVersion?  @relation("SkillCurrentVersion", fields: [currentVersionId, id], references: [id, skillId], onDelete: Restrict, onUpdate: Restrict)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  @@unique([orgId, ownerSlug])
+  @@unique([id, orgId])
+  @@index([currentVersionId, id])
+}
+
+model SkillVersion {
+  id                    String   @id @default(cuid())
+  skillId               String
+  version               Int
+  format                String
+  status                String   @default("pending")
+  indexStatus           String   @default("pending")
+  indexGeneration       Int      @default(0)
+  publicationGeneration Int      @default(0)
+  contentHash           String
+  skillText             String
+  manifest              Json
+  files                 Json
+  artifacts             String
+  itemCount             Int
+  failure               String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  skill                 Skill    @relation("SkillVersions", fields: [skillId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  currentForSkills      Skill[]  @relation("SkillCurrentVersion")
+  sessionPins           SessionSkill[]
+  agentVersions         AgentSkillVersion[]
+  sources               SkillVersionSource[]
+
+  @@unique([skillId, version])
+  @@unique([id, skillId])
+}
+
+model AgentSkillVersion {
+  agentId        String
+  agentVersion   Int
+  orgId          String
+  skillVersionId String
+  createdAt      DateTime     @default(now())
+  agent          Agent        @relation(fields: [agentId], references: [id], onDelete: Cascade, onUpdate: Restrict)
+  version        SkillVersion @relation(fields: [skillVersionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@id([agentId, agentVersion])
+  @@index([skillVersionId])
+  @@index([orgId])
+}
+
+model SkillVersionSource {
+  skillVersionId String
+  orgId          String
+  documentId     String
+  title          String
+  items          Int
+  createdAt      DateTime     @default(now())
+  version        SkillVersion @relation(fields: [skillVersionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@id([skillVersionId, documentId])
+  @@index([orgId, documentId])
 }
 
 // Immutable snapshot taken on every changed save. entityData in {persona|agent}
@@ -197,12 +277,13 @@ model Voice {
   id              String   @id @default(cuid())
   name            String
   kind            String   @default("cloned") // sample | cloned
-  status          String   @default("ready") // ready | failed
+  status          String   @default("ready") // pending | ready | failed | deleting
   s3AudioKey      String
   s3TranscriptKey String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
-  persona         Persona?
+  personas        Persona[]
+  sessions        InterviewSession[]
 
   @@index([orgId])
 }
@@ -339,6 +420,7 @@ model InterviewSession {
   personaVersion      Int
   agentSlug           String
   agentVersion        Int
+  skillPinsVersion    Int?
   status              String    @default("assigned") // assigned | activating | active | closing | completed | abandoned | revoked | failed
   contextId           String?
   contextName         String?
@@ -353,6 +435,8 @@ model InterviewSession {
   feedbackNote        String?
   attempt             Int       @default(1)
   compiledSnapshot    Json?
+  resolvedVoiceId     String?
+  resolvedVoice       Voice?    @relation(fields: [resolvedVoiceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   runtimeState        Json?
   warmOpening         Json?
   runtimeRevision     Int       @default(0)
@@ -370,6 +454,7 @@ model InterviewSession {
   agent             Agent                      @relation(fields: [agentId], references: [id], onDelete: Restrict)
   context           ContextDocument?           @relation(fields: [contextId], references: [id], onDelete: SetNull)
   documents         InterviewSessionDocument[]
+  skillPins         SessionSkill[]
   commands          WorkspaceCommand[]
   deploymentId      String?
   assignmentId      String?
@@ -395,11 +480,28 @@ model InterviewSession {
   twinCalibration  TwinCalibration?
   turnEvidence     TwinTurnEvidence[]
 
+  @@unique([id, orgId])
   @@index([orgId, userId])
   @@index([agentId])
+  @@index([resolvedVoiceId])
   @@index([deploymentId])
   @@index([assignmentId])
   @@index([twinAssignmentId])
+}
+
+model SessionSkill {
+  sessionId      String
+  orgId          String
+  skillVersionId String
+  alias          String
+  position       Int              @default(0)
+  createdAt      DateTime         @default(now())
+  session        InterviewSession @relation(fields: [sessionId, orgId], references: [id, orgId], onDelete: Cascade, onUpdate: Restrict)
+  version        SkillVersion     @relation(fields: [skillVersionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@id([sessionId, alias])
+  @@unique([sessionId, position])
+  @@index([skillVersionId])
 }
 
 model User {
@@ -537,9 +639,22 @@ model Organization {
   minuteLedger       MinuteLedger[]
   creditPurchases    CreditPurchase[]
   billing            OrgBilling?
+  skills             Skill[]
+  skillOwnership     SkillOwnership?
 
   @@unique([slug])
   @@map("organization")
+}
+
+model SkillOwnership {
+  orgId           String       @id
+  mode            String       @default("compatibility")
+  inventoryHash   String?
+  verifiedAt      DateTime?
+  approvedAt      DateTime?
+  canaryReference String?
+  updatedAt       DateTime     @default(now())
+  org             Organization @relation(fields: [orgId], references: [id], onDelete: Cascade, onUpdate: Cascade)
 }
 
 model Member {
