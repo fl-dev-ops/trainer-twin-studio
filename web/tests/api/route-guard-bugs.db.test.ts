@@ -8,6 +8,7 @@ import * as specs from "@/lib/specs";
 import { POST as speech } from "@/app/api/tts/speech/route";
 import { GET as version } from "@/app/api/version/[type]/[id]/route";
 import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "../lib/minutes-test-db";
+import { voicePrefix } from "@/lib/s3";
 
 describe.skipIf(!localMinutesDb)("route inventory guard regressions", () => {
   let f: MinutesFixture;
@@ -56,14 +57,19 @@ describe.skipIf(!localMinutesDb)("route inventory guard regressions", () => {
     process.env.TTS_SERVICE_KEY = "module-one-service-key"; process.env.TTS_SERVICE_URL = "https://tts.test/";
     const session = spyOn(auth.api, "getSession").mockResolvedValue(null); spies.push(session);
     const fetch = spyOn(globalThis, "fetch").mockResolvedValue(new Response("pcm-data", { headers: { "content-type": "audio/pcm", "x-sample-rate": "16000" } })); spies.push(fetch);
+    const voiceId = `${f.org.id}-voice`;
+    const voice = await db.voice.create({ data: { id: voiceId, orgId: f.org.id, name: "Service voice", s3AudioKey: `${voicePrefix(f.org.id, voiceId)}/reference.wav` } });
     try {
-      const response = await speech(new NextRequest("https://dash.test/api/tts/speech", { method: "POST", headers: { authorization: "Bearer module-one-service-key" }, body: JSON.stringify({ input: "Hello" }) }));
+      const response = await speech(new NextRequest("https://dash.test/api/tts/speech", { method: "POST", headers: { authorization: "Bearer module-one-service-key" }, body: JSON.stringify({ voice: voice.id, input: "Hello" }) }));
       expect(response.status).toBe(200); expect(await response.text()).toBe("pcm-data");
       expect(response.headers.get("x-sample-rate")).toBe("16000"); expect(response.headers.get("cache-control")).toBe("no-store");
       expect(session).not.toHaveBeenCalled();
-      expect(fetch).toHaveBeenCalledWith("https://tts.test/v1/audio/speech", expect.objectContaining({ method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer module-one-service-key" }, body: JSON.stringify({ model: "voxcpm2", response_format: "pcm", stream: true, input: "Hello" }) }));
+      expect(fetch).toHaveBeenCalledWith("https://tts.test/v1/audio/speech", expect.objectContaining({ method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer module-one-service-key" }, body: JSON.stringify({ model: "voxcpm2", voice: voice.id, input: "Hello", stream: true, response_format: "pcm" }) }));
       expect(response.headers.has("authorization")).toBe(false);
-    } finally { for (const [key, value] of Object.entries(previous)) if (value === undefined) delete process.env[key]; else process.env[key] = value; }
+    } finally {
+      await db.voice.delete({ where: { id: voice.id } });
+      for (const [key, value] of Object.entries(previous)) if (value === undefined) delete process.env[key]; else process.env[key] = value;
+    }
   });
   test("the unguarded internal Chroma tenant and copilot document routes are gone (nothing called them)", async () => {
     for (const path of ["internal/orgs/[orgId]/chroma-tenant", "copilot/document"]) expect(await Bun.file(`app/api/${path}/route.ts`).exists()).toBe(false);

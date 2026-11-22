@@ -32,6 +32,7 @@ export function VoiceRecorder({
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startedAtRef = useRef(0);
   const finishingRef = useRef(false);
+  const captureRef = useRef(0);
   // LiveWaveform re-runs its mic effect whenever callback props change
   // identity, which tears down the stream every render — keep these stable.
   const finishRef = useRef<() => void>(() => {});
@@ -60,7 +61,10 @@ export function VoiceRecorder({
     setPhase("idle");
   }, []);
 
-  useEffect(() => () => stopEverything(), []);
+  useEffect(() => () => {
+    captureRef.current++;
+    stopEverything();
+  }, []);
 
   function stopEverything() {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -70,6 +74,7 @@ export function VoiceRecorder({
   }
 
   function start() {
+    captureRef.current++;
     setError(undefined);
     finishingRef.current = false;
     setSeconds(0);
@@ -89,18 +94,21 @@ export function VoiceRecorder({
     }
     finishingRef.current = true;
     if (timerRef.current) clearInterval(timerRef.current);
+    const capture = captureRef.current;
 
     recorder.onstop = async () => {
+      if (capture !== captureRef.current) return;
       const webm = new Blob(chunksRef.current, { type: recorder.mimeType });
       stopEverything();
       try {
-        onFinished(await recordingToWav(webm));
+        const wav = await recordingToWav(webm);
+        if (capture === captureRef.current) onFinished(wav);
       } catch {
-        toast.error(
-          "That recording could not be processed. Please record again.",
-        );
+        if (capture === captureRef.current) {
+          toast.error("That recording could not be processed. Please record again.");
+        }
       } finally {
-        setPhase("idle");
+        if (capture === captureRef.current) setPhase("idle");
       }
     };
     recorder.stop();
@@ -109,6 +117,7 @@ export function VoiceRecorder({
   finishRef.current = finish;
 
   function cancel() {
+    captureRef.current++;
     stopEverything();
     setPhase("idle");
     setSeconds(0);

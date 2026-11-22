@@ -25,6 +25,9 @@ export async function executeWorkspaceTool(input: unknown, ctx: any) {
   const sessionId = String(ctx.session.auth.current?.attributes?.sessionId ?? "");
   if (!orgId || !sessionId) throw new Error("No session attached to this conversation");
   if (ctx.toolName === "finish_session") {
+    // Role plays hang up with end_call (it speaks the goodbye and closes the call); finish_session is the twins'.
+    const { isRoleplaySession } = await import("./session-mode-lookup");
+    if (await isRoleplaySession(ctx)) return { disabled: true, reason: "Role plays end with end_call." };
     return studioFetch(orgId, { action: "finishSession", sessionId });
   }
   // Only what the agent's Tools settings switch on (the tool list already omits the rest; this covers replays and the

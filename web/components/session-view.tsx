@@ -12,6 +12,7 @@ import "@livekit/components-styles";
 import {
   RoomAudioRenderer,
   RoomContext,
+  useConnectionState,
 } from "@livekit/components-react";
 import {
   ParticipantKind,
@@ -21,6 +22,7 @@ import {
   type RemoteParticipant,
   type TranscriptionSegment,
   DisconnectReason,
+  ConnectionState,
 } from "livekit-client";
 import { Button } from "@/components/ui/button";
 import {
@@ -100,6 +102,8 @@ type Props = {
   agentNames?: Record<string, string>;
   initialAgent?: string;
   agentPersonas?: Record<string, string>;
+  /** Who the learner talks to, by agent: the role play's client name or the persona's name. */
+  agentPersonaNames?: Record<string, string>;
   agentContextRequired?: Record<string, boolean>;
   agentContextUploads?: Record<string, AgentContextUpload>;
   sessionCode?: string;
@@ -115,6 +119,8 @@ type Props = {
   autoStart?: boolean;
   /** The learner's practice minutes left, shown before joining (null: not metered). */
   minutesLeft?: number | null;
+  /** What each role play tells the learner before the call (its learner brief), by agent slug. */
+  agentBriefs?: Record<string, string>;
 };
 
 function formatBytes(n: number) {
@@ -130,6 +136,7 @@ export function SessionView({
   agentNames = {},
   initialAgent,
   agentPersonas = {},
+  agentPersonaNames = {},
   agentContextRequired = {},
   agentContextUploads = {},
   sessionCode,
@@ -138,6 +145,7 @@ export function SessionView({
   organizationName,
   organizationLogo = null,
   introVideos = {},
+  agentBriefs = {},
   agentPhotos = {},
   autoStart = false,
   minutesLeft = null,
@@ -156,6 +164,8 @@ export function SessionView({
     [],
   );
 
+  const roomState = useConnectionState(room);
+  const workspaceConnected = roomState === ConnectionState.Connected;
   const [agent, setAgent] = useState(initialAgent ?? agents[0] ?? "");
   const persona = agentPersonas[agent] ?? personas[0] ?? "";
   const [contextIds, setContextIds] = useState<string[]>([]);
@@ -212,6 +222,7 @@ export function SessionView({
   const coverageRef = useRef<Coverage>({});
   const finalizedRef = useRef(false);
   const surfaceKeyRef = useRef<string | null>(null);
+  const uiReportRevisionRef = useRef(0);
   const surfaceRevisionRef = useRef(0);
   const lastSurfaceStatePublishedAtRef = useRef(0);
   const whiteboardAcknowledgementsRef = useRef(
@@ -284,8 +295,8 @@ export function SessionView({
   );
   const isContextRequired = Boolean(contextUpload?.required ?? agentContextRequired[agent]);
   const documentLabel = contextUpload?.label || "Documents";
-  // Role-play defaults when the agent has no resolved settings: whole screen shared, documents accepted, no mid-call attach.
-  const screenShareRequired = contextUpload?.screenShare ?? true;
+  // Without resolved settings everything is off (as on the Settings tab), except a document the agent requires.
+  const screenShareRequired = contextUpload?.screenShare ?? false;
   const documentsAllowed = contextUpload?.allowed ?? true;
   const attachDuringSession = contextUpload?.duringSession ?? false;
 
@@ -304,9 +315,14 @@ export function SessionView({
             ? { shareCode: sessionCode, contextId: ids[0] || undefined, contextIds: ids, holdOpening: true }
             : { agentSlug: agent, contextId: ids[0] || undefined, contextIds: ids, holdOpening: true },
         ),
+      }).catch(() => {
+        throw new Error("Could not reach TrainerTwin. Check your connection and try again.");
       });
       const launch = await launchResponse.json().catch(() => ({}));
       if (!launchResponse.ok || !launch.session?.id || !launch.session?.runtimeToken) {
+        if (sessionCode && launch.code === "voice_unavailable") {
+          throw new Error("This role play’s voice is unavailable. Ask your trainer to check the voice settings.");
+        }
         throw new Error(launch.error ?? "Could not create session");
       }
       deadlineRef.current = typeof launch.session.secondsLeft === "number" ? Date.now() + launch.session.secondsLeft * 1000 : null;
@@ -668,24 +684,32 @@ export function SessionView({
   // Browser-confirmed screen state is durable session truth; the brain reads it
   // through getSessionContext instead of inferring it from LiveKit RPC history.
   useEffect(() => {
-    if (!connection || ended) return;
+    if (!connection || ended || !workspaceConnected) return;
     const controller = new AbortController();
+    uiReportRevisionRef.current = Math.max(Date.now(), uiReportRevisionRef.current + 1);
+    const revision = uiReportRevisionRef.current;
     const timer = setTimeout(() => {
-      fetch(`/api/sessions/${connection.sessionId}/ui-state`, {
+      void (async () => {
+        for (let attempt = 0; attempt < 3 && !controller.signal.aborted; attempt++) {
+          const response = await fetch(`/api/sessions/${connection.sessionId}/ui-state`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${connection.runtimeToken}`,
         },
-        body: JSON.stringify(surface ? { active: surface.tool, key: surface.key } : { active: null }),
+        body: JSON.stringify({ active: surface?.tool ?? null, key: surface?.key ?? null, revision }),
         signal: controller.signal,
-      }).catch(() => {});
+          }).catch(() => null);
+          if (response?.ok) return;
+          await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
+        }
+      })();
     }, 400);
     return () => {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [connection, ended, surface]);
+  }, [connection, ended, surface, workspaceConnected]);
 
   const handleChoiceSubmission = useCallback(async (option: { id: string; text: string }) => {
     if (surface?.tool !== "choice") return;
@@ -939,10 +963,10 @@ export function SessionView({
   }, [room, connection, handleDisconnect, resetSessionState]);
 
   useEffect(() => {
-    if (!launched || ended) return;
+    if (!launched || !connected || ended) return;
     const timer = setInterval(() => setElapsed((s) => s + 1), 1000);
     return () => clearInterval(timer);
-  }, [launched, ended]);
+  }, [launched, connected, ended]);
 
   useEffect(() => {
     return () => {
@@ -951,7 +975,7 @@ export function SessionView({
   }, [room]);
 
   const title = scenarioName ?? agentNames[agent] ?? agent.replaceAll("-", " ");
-  const trainerName = persona.replaceAll("-", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()) || "Trainer";
+  const trainerName = agentPersonaNames[agent] || persona.replaceAll("-", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()) || "Trainer";
 
   if (sessionCode && !prejoinComplete) {
     return (
@@ -968,6 +992,7 @@ export function SessionView({
         contextLabel={contextUpload?.label}
         sessionCode={sessionCode}
         minutesLeft={minutesLeft}
+        learnerBrief={agentBriefs[agent]}
         onJoin={(settings, contextId) => {
           setPrejoinMedia(settings);
           setContextIds(contextId ? [contextId] : []);
@@ -1103,6 +1128,8 @@ export function SessionView({
                   </Select>
                 </label>
 
+                {agentBriefs[agent] ? <LearnerBrief text={agentBriefs[agent]} /> : null}
+
                 {documentsAllowed ? (
                 <label className="flex flex-col gap-1.5 text-sm">
                   <div className="flex items-center justify-between">
@@ -1208,7 +1235,7 @@ export function SessionView({
           runtimeToken={connection?.runtimeToken}
           onSurface={handleSurface}
           onEndSession={() => void handleDisconnect("completed")}
-          active={introSrc ? introDone : true}
+          active={workspaceConnected && (introSrc ? introDone : true)}
         >
           <SessionHeader title={title} linkHome={!sessionCode}>
             {isScreenSharing && (
@@ -1372,7 +1399,7 @@ export function SessionView({
                         className="h-full min-h-0 w-full"
                       />
                     ) : (
-                      <AgentTile persona={persona} photoUrl={agentPhotos[agent] ?? null} compact={surface !== null} />
+                      <AgentTile persona={persona} name={trainerName} photoUrl={agentPhotos[agent] ?? null} compact={surface !== null} />
                     )}
                   </div>
                   <div className={cn("w-full shrink-0 aspect-[4/3]", !surface && "max-w-[340px] sm:min-w-0 sm:flex-[1_1_0]")}>
@@ -1458,7 +1485,7 @@ export function SessionView({
               <Card size="lg" raised className="w-full max-w-md text-center">
                 <CardHeader>
                   <CardTitle>{saveFailed ? "Could not save session" : "Session problem"}</CardTitle>
-                  <CardDescription>{error}</CardDescription>
+                  <CardDescription role="alert">{error}</CardDescription>
                 </CardHeader>
                 <CardContent className="flex justify-center gap-2">
                   {!autoStart && (
@@ -1639,6 +1666,16 @@ function SessionFeedback({ scenarioName, sessionId }: { scenarioName?: string; s
         </Button>
       </CardContent>
     </>
+  );
+}
+
+/** The role play's learner brief: who the learner is, the situation and what to aim for. */
+export function LearnerBrief({ text }: { text: string }) {
+  return (
+    <section aria-label="Your brief" className="rounded-tt-md border border-(--border) bg-(--sidebar) p-4 text-left">
+      <p className="m-0 text-overline font-medium tracking-overline text-muted-foreground uppercase">Your brief</p>
+      <p className="m-0 mt-1.5 whitespace-pre-line text-sm leading-6 text-(--foreground)">{text}</p>
+    </section>
   );
 }
 

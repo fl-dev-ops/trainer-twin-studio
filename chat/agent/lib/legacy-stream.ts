@@ -97,7 +97,7 @@ export function createLegacyStream(deliveryId: string) {
         out.push({ type: "terminal", status: `session.${data.outcome ?? "ended"}` });
         break;
       case "turn.settled":
-        if (data.outcome === "cancelled") out.push({ type: "terminal", status: "turn.cancelled" });
+        if (data.outcome === "failed" || data.outcome === "cancelled") out.push({ type: "terminal", status: `turn.${data.outcome}` });
         break;
     }
     return out;

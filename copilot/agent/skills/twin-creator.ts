@@ -14,10 +14,10 @@ Do all the work yourself. Plan the whole run before reading anything.
 
 1. **Understand the topic.** Restate it in one line, and name ${TWIN.situations.min} to ${TWIN.situations.max} situations a learner would bring about it
    (e.g. "the buyer wants to wait for prices to drop"). Write this to \`specs/<id>.md\`.
-2. **Find the trainer's material.** Call \`files\`, then at most 3 \`search\` calls. Pick at least 3 sources where the
+2. **Find the trainer's material.** Call \`knowledge_list\`, then at most 3 \`knowledge_search\` calls. Pick at least 3 sources where the
    trainer explains, decides or handles this topic: coaching sessions, solo lessons, method docs, posts. In a two-person
    recording, note which speaker label is the trainer.
-3. **Read once.** One \`read\` of the parts that matter. Collect the trainer's own words for every situation, with about
+3. **Read once.** One \`knowledge_read\` of the parts that matter. Collect the trainer's own words for every situation, with about
    20% to spare. Never take a learner's or client's words as the trainer's.
 4. **Prepare everything, then build.** Write the items (each: situation, kind, context), \`patterns\` (the evidence notes,
    citing [[file#turn]]), and the SKILL.md \`body\` in the first person, as the trainer:
@@ -28,11 +28,11 @@ Do all the work yourself. Plan the whole run before reading anything.
    - **My approach**: how the trainer handles it, as a way of working, not a script.
    - **What I say**: how the trainer phrases things.
    - **Gaps**: what the material does not cover.
-   Then call \`build_twin_skill\` once.
+   Then call \`twin_skill_build\` once.
 5. **Fix, don't restart.** It returns the rejected items or the check reasons. Fix every listed reason in the next call,
-   all at once. At most 3 \`build_twin_skill\` calls. If the third still fails, write \`report.md\` with the open reasons and
+   all at once. At most 3 \`twin_skill_build\` calls. If the third still fails, write \`report.md\` with the open reasons and
    stop without publishing.
-6. **Finish.** When the check passes, write \`report.md\` and call \`publish_twin_skill\`. It becomes a skill of the
+6. **Finish.** When the check passes, write \`report.md\` and call \`twin_skill_publish\`. It becomes a skill of the
    trainer's twin.
 
 If fewer than 3 sources show the trainer's thinking on this topic, report that and stop. Never invent what the trainer
@@ -40,24 +40,24 @@ knows, decides or says, and never expose personal details.
 
 # Update an existing twin skill
 
-When the skill already exists (check \`list_twins\`: a \`twin-skill\` with this topic), update it; never rebuild it from
+When the skill already exists (check \`twin_list\`: a \`twin-skill\` with this topic), update it; never rebuild it from
 scratch and never create a second skill on the same topic.
 
-1. **Load it.** \`load_skill\` with its slug. You get its situations, every item (id, situation, kind, source, text),
-   its sources, body and patterns. build_twin_skill is now in update mode for that skill id.
-2. **Find what's new.** The files the trainer picked (\`<selected-files>\`) first; otherwise sources from \`files\`
+1. **Load it.** \`twin_skill_load\` with its slug. You get its situations, every item (id, situation, kind, source, text),
+   its sources, body and patterns. twin_skill_build is now in update mode for that skill id.
+2. **Find what's new.** The files the trainer picked (\`<selected-files>\`) first; otherwise sources from \`knowledge_list\`
    that the loaded items don't use. Read only those, and the loaded items they change.
-3. **Build the update.** One \`build_twin_skill\` with the same \`skill\` (id, situations; add or rename a situation only
+3. **Build the update.** One \`twin_skill_build\` with the same \`skill\` (id, situations; add or rename a situation only
    when the new material needs it), only the **new** items, \`remove\` for loaded items that no longer hold (each with a
    reason: superseded, outdated, wrong situation), and \`edits\` for SKILL.md and patterns.md: each a \`find\` copied
    exactly from the loaded text (found once), its \`replace\`, and \`why\`. Change only what the new material changes;
    never send \`body\` or \`patterns\` whole in an update (they are refused). Cite the new sources in patterns.md with
    an edit. Edits apply to the published text, so a rebuild sends all of them again. Prefer whole turns; use \`start\`/\`end\`
-   only to cut a long turn, copied from \`read\`. If an item is rejected again after one fix, drop it: the update
+   only to cut a long turn, copied from \`knowledge_read\`. If an item is rejected again after one fix, drop it: the update
    still saves with the rest. Builds are scarce (at most ${TWIN.maxBuilds}).
 4. **Show the changes.** Tell the trainer what changed: items added and removed per situation (with reasons), the
-   edits (what and why), new sources. Then \`publish_twin_skill\`; the trainer approves it on the card. It becomes the next
-   version; the previous version stays and can be loaded again (\`load_skill\` with \`version\`) to restore it.
+   edits (what and why), new sources. Then \`twin_skill_publish\`; the trainer approves it on the card. It becomes the next
+   version; the previous version stays and can be loaded again (\`twin_skill_load\` with \`version\`) to restore it.
 `;
 
 export default defineSkill({

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { Collection, EmbeddingFunction, Where } from "chromadb";
 import { unstable_cache, revalidateTag } from "next/cache";
 import { ChromaTenantService } from "@/lib/chroma-tenant";
@@ -5,6 +6,7 @@ import { embedTexts } from "@/lib/knowledge";
 import type { PersonaVoiceMoment } from "@/lib/persona-voice";
 import type { RoleplayItem } from "@/lib/roleplay/skill";
 import type { ScenarioItem } from "@/lib/scenario-ingest";
+import { skillRefusals } from "@/lib/skills";
 
 /** Item roles depend on the kind: twin skills trainer | learner, role plays client | learner. */
 export type ScenarioItemRole = "trainer" | "learner" | "client";
@@ -76,8 +78,30 @@ export type MainCollectionMetadata = KnowledgeMetadata | PersonaVoiceMetadata | 
 
 /** Which skill (agent) versions a search reads: the live version, or the ones a call pinned when it started. */
 export type ScenarioScope = { slug: string; version: number };
+export type SkillIndexScope = { skillVersionId: string; indexScope: string; itemCount: number };
+export type ScenarioSearchOptions = {
+  step?: string;
+  role?: ScenarioItemRole;
+  limit?: number;
+  steps?: ScenarioStep[];
+  queryEmbedding?: Promise<number[]>;
+};
+export type ScenarioExample = { text: string; context: string; step?: string; move?: string; role: string; score: number; scenario: string; source?: string };
 
-export const scenarioItemId = (agentSlug: string, agentVersion: number, index: number) => `scenario_item_${agentSlug}@v${agentVersion}#${index}`;
+export function skillScopeWhere(scope: SkillIndexScope[]): Where {
+  const pairs = scope.map(({ skillVersionId, indexScope }) => ({ $and: [{ skillVersionId }, { skillIndexScope: indexScope }] }) as Where);
+  return pairs.length === 1 ? pairs[0] : { $or: pairs };
+}
+
+/**
+ * One item's vector id. Chroma caps ids at 128 bytes; a long scope (a skill's artifacts path) is hashed so the id fits.
+ * Ids are only written, never looked up (reads and prunes filter on metadata), so short ids are unchanged.
+ */
+export const scenarioItemId = (agentSlug: string, agentVersion: number, index: number) => {
+  const id = `scenario_item_${agentSlug}@v${agentVersion}#${index}`;
+  if (Buffer.byteLength(id) <= 128) return id;
+  return `scenario_item_h${createHash("sha256").update(`${agentSlug}@v${agentVersion}`).digest("hex").slice(0, 40)}#${index}`;
+};
 
 /** Chroma filter for exactly these (slug, version) pairs. */
 export function scenarioScopeWhere(scope: ScenarioScope[]): Where {
@@ -492,11 +516,18 @@ export class MainCollectionService {
    * the Agent row points at the new version). Idempotent: re-sending the same version writes the same records. Embeds
    * the situation with the line, so retrieval can match "what just happened" to "what the trainer said next".
    */
-  static async writeScenarioItems(orgId: string, agentSlug: string, scenarioId: string, agentVersion: number, items: (ScenarioItem | RoleplayItem)[]): Promise<number> {
+  static async writeScenarioItems(orgId: string, agentSlug: string, scenarioId: string, agentVersion: number, items: (ScenarioItem | RoleplayItem)[], skillVersionId?: string, skillIndexScope?: string, importedEmbeddings?: number[][]): Promise<number> {
+    if (importedEmbeddings !== undefined) {
+      const dimension = importedEmbeddings[0]?.length;
+      if (importedEmbeddings.length !== items.length || importedEmbeddings.some((vector) =>
+        !vector.length || vector.length !== dimension || !vector.every(Number.isFinite))) {
+        throw new Error("Imported embeddings must match every item with finite, equal-dimension vectors");
+      }
+    }
     if (items.length === 0) return 0;
     const collection = await this.getCollection(orgId);
 
-    const embeddings = await embedTexts(items.map((item) => (item.context ? `${item.context}\n${item.text}` : item.text)));
+    const embeddings = importedEmbeddings ?? await embedTexts(items.map((item) => (item.context ? `${item.context}\n${item.text}` : item.text)));
     for (let i = 0; i < items.length; i += 5000) {
       const batch = items.slice(i, i + 5000);
       await collection.upsert({
@@ -514,7 +545,9 @@ export class MainCollectionService {
           type: "scenario_item",
           orgId,
           agentSlug,
-          agentVersion,
+           agentVersion,
+          skillVersionId: skillVersionId ?? "",
+          skillIndexScope: skillIndexScope ?? "",
           scenarioId,
           itemId: item.id,
           itemIndex: i + j,
@@ -524,6 +557,28 @@ export class MainCollectionService {
       });
     }
     return items.length;
+  }
+
+  static async writeSkillItems(orgId: string, skillVersionId: string, scenarioId: string, items: (ScenarioItem | RoleplayItem)[], indexScope: string, imported?: { embeddings: number[][] }) {
+    const count = imported
+      ? await this.writeScenarioItems(orgId, `skill:${indexScope}`, scenarioId, 1, items, skillVersionId, indexScope, imported.embeddings)
+      : await this.writeScenarioItems(orgId, `skill:${indexScope}`, scenarioId, 1, items, skillVersionId, indexScope);
+    const indexed = await this.skillItemCount(orgId, skillVersionId, indexScope);
+    if (indexed !== count) throw new Error(`Skill index count mismatch: expected ${count}, found ${indexed}`);
+    return count;
+  }
+
+  static async skillItemCount(orgId: string, skillVersionId: string, indexScope: string) {
+    const collection = await this.getCollection(orgId);
+    let count = 0;
+    for (;;) {
+      const page = await collection.get({
+        where: { $and: [{ type: "scenario_item" }, { orgId }, { skillVersionId }, { skillIndexScope: indexScope }] } as Where,
+        include: [], limit: 300, offset: count,
+      });
+      count += page.ids.length;
+      if (page.ids.length < 300) return count;
+    }
   }
 
   /**
@@ -571,21 +626,37 @@ export class MainCollectionService {
     /** One scenario and version, or several (a twin searches all of its persona's playbooks, at the versions its call pinned). */
     scope: ScenarioScope[],
     query: string,
-    options: {
-      step?: string;
-      role?: ScenarioItemRole;
-      limit?: number;
-      steps?: ScenarioStep[];
-      /** The query's embedding, when the caller started it early (in parallel with its own lookups). */
-      queryEmbedding?: Promise<number[]>;
-    } = {},
-  ): Promise<{ text: string; context: string; step?: string; move?: string; role: string; score: number; scenario: string; source?: string }[]> {
-    if (scope.length === 0) return [];
+    options: ScenarioSearchOptions = {},
+  ): Promise<ScenarioExample[]> {
+    return this.searchItems(orgId, scope, query, options);
+  }
+
+  static async searchSkillItems(orgId: string, scope: SkillIndexScope[], query: string, options: ScenarioSearchOptions = {}): Promise<ScenarioExample[]> {
+    if (!scope.length) return [];
+    try {
+      await Promise.all(scope.map(async (entry) => {
+        if (!entry.skillVersionId || !entry.indexScope || !Number.isSafeInteger(entry.itemCount) || entry.itemCount < 0
+          || await this.skillItemCount(orgId, entry.skillVersionId, entry.indexScope) !== entry.itemCount) {
+          throw skillRefusals.unavailable();
+        }
+      }));
+      if (scope.every((entry) => entry.itemCount === 0)) return [];
+      return await this.searchItems(orgId, [], query, options, scope);
+    } catch (error) {
+      console.error("[skills] managed example lookup failed", error);
+      throw skillRefusals.unavailable();
+    }
+  }
+
+  private static async searchItems(orgId: string, scope: ScenarioScope[], query: string, options: ScenarioSearchOptions, managed?: SkillIndexScope[]): Promise<ScenarioExample[]> {
+    if (!scope.length && !managed?.length) return [];
     const collection = await this.getCollection(orgId);
     const queryEmbedding = await (options.queryEmbedding ?? embedTexts([query]).then(([embedding]) => embedding));
     const index = scenarioStepIndex(options.steps ?? []);
     const run = async (step: string | undefined, versioned: boolean) => {
-      const conditions: Where[] = [{ type: "scenario_item" }, versioned ? scenarioScopeWhere(scope) : scenarioSlugsWhere(scope)];
+      const conditions: Where[] = managed
+        ? [{ type: "scenario_item" }, { orgId }, skillScopeWhere(managed)]
+        : [{ type: "scenario_item" }, versioned ? scenarioScopeWhere(scope) : scenarioSlugsWhere(scope)];
       if (step) {
         const moves = index.movesOf(step);
         conditions.push(moves.length ? { $or: [{ step }, { move: { $in: moves } }, { action: { $in: moves } }] } as Where : { step });
@@ -624,7 +695,7 @@ export class MainCollectionService {
     const hits = await search(true);
     // Nothing at the versions asked for (items from before versioning not tagged yet, or a pinned version pruned since):
     // the skill's items of any version kept, rather than no examples at all.
-    return hits.length > 0 ? hits : search(false);
+    return managed || hits.length > 0 ? hits : search(false);
   }
 
   /**

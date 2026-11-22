@@ -25,7 +25,7 @@ export const TWIN = {
   maxWords: { skill: 2000, patterns: 2000, context: 25 },
   minFirstPerson: 8, // "I", "my", "me" in SKILL.md: it is written as the trainer
   minDecisionRules: 3, // rules under "## How I decide"
-  maxBuilds: 3, // build_twin_skill calls per skill per session; then report and stop instead of looping
+  maxBuilds: 3, // twin_skill_build calls per skill per session; then report and stop instead of looping
 } as const;
 export const TWIN_SKILL_SECTIONS = ["## Topic", "## What I know", "## How I decide", "## Patterns I see", "## My approach", "## What I say", "## Gaps"];
 export const TWIN_PATTERN_SECTIONS = ["## What I know", "## How I decide", "## Patterns I see", "## My approach", "## What I say", "## Gaps"];
@@ -49,7 +49,7 @@ export const twinSkillHead = z.object({
 export type TwinSkillHead = z.infer<typeof twinSkillHead>;
 
 export const twinItemInput = z.object({
-  source: z.string().describe("File id from `files`."),
+  source: z.string().describe("File id from `knowledge_list`."),
   n: z.number().int().optional().describe("Turn number, for recordings."),
   quote: z.string().optional().describe("Exact text copied from a doc or post."),
   start: z.string().optional().describe("Optional exact first words of the relevant part of the turn."),
@@ -193,7 +193,7 @@ export async function checkTwinSkill(io: Io, user: string, id: string) {
   if (new Set(ids).size !== ids.length) reasons.push("situation ids must be unique");
 
   // SKILL.md: the trainer's judgment on one topic, in their own voice; nothing of a role play.
-  if (!text!.startsWith(twinSkillHeader(head))) reasons.push("SKILL.md needs the name/description header build_twin_skill generates, matching skill.json");
+  if (!text!.startsWith(twinSkillHeader(head))) reasons.push("SKILL.md needs the name/description header twin_skill_build generates, matching skill.json");
   const body = text!.slice(twinSkillHeader(head).length);
   reasons.push(...TWIN_SKILL_SECTIONS.filter((h) => !body.includes(h)).map((h) => `SKILL.md: missing section "${h}"`));
   const marker = ROLEPLAY_MARKERS.filter((m) => body.includes(m));
@@ -272,7 +272,7 @@ export const twinBuildInput = z.object({
   skill: twinSkillHead,
   trainer: trainerLabels.default({}).describe("For each two-person recording you take items from: the speaker labels that are the trainer."),
   names: z.array(z.string()).default([]).describe("Names of people and companies you saw, to redact."),
-  items: z.array(twinItemInput).default([]).describe("New items. In update mode (after load_skill) only the ones to add; the loaded items are kept."),
+  items: z.array(twinItemInput).default([]).describe("New items. In update mode (after twin_skill_load) only the ones to add; the loaded items are kept."),
   remove: z.array(z.object({ id: z.string(), reason: z.string().min(3) })).default([])
     .describe("Update mode only: loaded items to drop, each with why (outdated, wrong situation, superseded by a new source)."),
   patterns: z.string().min(1).optional().describe("New skill only: patterns.md, the evidence notes, with every section and [[file#turn]] / [[file]] refs."),
@@ -283,7 +283,7 @@ export const twinBuildInput = z.object({
     replace: z.string().describe("What it becomes (empty to delete it)."),
     why: z.string().min(3).describe("Why this changes: the new source, what was outdated."),
   })).default([]).describe(
-    "Update mode only (after load_skill): the changes to SKILL.md and patterns.md as find/replace on the LOADED (published) text, never the whole files. Send every edit of this update each time you build; they apply to the published text, not to an earlier attempt.",
+    "Update mode only (after twin_skill_load): the changes to SKILL.md and patterns.md as find/replace on the LOADED (published) text, never the whole files. Send every edit of this update each time you build; they apply to the published text, not to an earlier attempt.",
   ),
 });
 
@@ -311,7 +311,7 @@ export async function saveTwinSkill(io: Io, user: string, input: z.infer<typeof 
   const { skill: head, names = [], items: picks = [], remove = [], edits = [] } = input;
   const dir = twinDir(head.skill);
   const base = await readJson<TwinBase | null>(io, user, `${dir}/base.json`, null);
-  if (!base && remove.length) return { saved: false, rejected: ["remove is only for updates: call load_skill first, or leave remove empty for a new skill"] };
+  if (!base && remove.length) return { saved: false, rejected: ["remove is only for updates: call twin_skill_load first, or leave remove empty for a new skill"] };
   if (!base && !picks.length) return { saved: false, rejected: ["a new skill needs items"] };
   // A new skill sends its texts whole; an update changes the published texts with edits only, so every change is
   // explicit and recorded (changes.json, published with the version for debugging).
@@ -321,7 +321,7 @@ export async function saveTwinSkill(io: Io, user: string, input: z.infer<typeof 
     if (body !== undefined || patterns !== undefined) {
       return { saved: false, rejected: ["This is an update: change SKILL.md and patterns.md with `edits` (find/replace on the loaded text), not by sending them whole."] };
     }
-    if (base.body === undefined || base.patterns === undefined) return { saved: false, rejected: ["The loaded skill has no texts to edit: call load_skill again."] };
+    if (base.body === undefined || base.patterns === undefined) return { saved: false, rejected: ["The loaded skill has no texts to edit: call twin_skill_load again."] };
     const skillEdits = applyEdits(base.body, edits.filter((e) => e.file === "SKILL.md"));
     const patternEdits = applyEdits(base.patterns, edits.filter((e) => e.file === "patterns.md"));
     const editErrors = [...("rejected" in skillEdits ? skillEdits.rejected : []), ...("rejected" in patternEdits ? patternEdits.rejected : [])];
@@ -329,7 +329,7 @@ export async function saveTwinSkill(io: Io, user: string, input: z.infer<typeof 
     body = (skillEdits as { text: string }).text;
     patterns = (patternEdits as { text: string }).text;
   } else {
-    if (edits.length) return { saved: false, rejected: ["edits are for updates (after load_skill); a new skill sends body and patterns whole"] };
+    if (edits.length) return { saved: false, rejected: ["edits are for updates (after twin_skill_load); a new skill sends body and patterns whole"] };
     if (!body || !patterns) return { saved: false, rejected: ["a new skill needs body and patterns"] };
   }
   // Update mode keeps the trainer labels worked out from the loaded items (sources.json) and adds the new ones.
@@ -362,7 +362,7 @@ export async function saveTwinSkill(io: Io, user: string, input: z.infer<typeof 
   return { saved: true, ...(changes ? { changes } : {}), check: await checkTwinSkill(io, user, head.skill) };
 }
 
-// ---- Update mode: a published skill loaded as the baseline (load_skill) ----
+// ---- Update mode: a published skill loaded as the baseline (twin_skill_load) ----
 
 /**
  * The published version an update builds on (output/<user>/twin-skills/<id>/base.json): its items, and its SKILL.md body
@@ -437,7 +437,7 @@ export const skillBodyOf = (skillMd: string) => skillMd.replace(/^---[\s\S]*?---
  * After a successful publish, what was just published becomes the baseline (base.json) of the next build in this
  * conversation: a follow-up "also add X" then merges onto the new version. Without it, a follow-up merged onto the
  * version loaded earlier and dropped the first update's items, and one right after a new skill rebuilt it from X alone.
- * The change record is cleared and the build budget starts again, as after load_skill.
+ * The change record is cleared and the build budget starts again, as after twin_skill_load.
  */
 export async function rebaseAfterPublish(io: Io, user: string, skillId: string, published: { slug: string; version: number }) {
   const dir = twinDir(skillId);
@@ -503,7 +503,7 @@ export async function prepareTwinPublication(io: Io, user: string, id: string) {
 }
 
 export function twinRequirementsText() {
-  return `# Requirements build_twin_skill and publish_twin_skill enforce
+  return `# Requirements twin_skill_build and twin_skill_publish enforce
 
 Know these before you read anything. Every number is a hard limit in code.
 
@@ -518,7 +518,7 @@ Know these before you read anything. Every number is a hard limit in code.
 - At least ${TWIN.minSources} different sources. ${TWIN.minItemsPerSituation} to ${TWIN.maxItemsPerSituation} items per situation. At least ${TWIN.minDecisions} \`decision\` items.
 
 ## Builds
-- At most ${TWIN.maxBuilds} \`build_twin_skill\` calls per skill. After that the tool refuses: write report.md with the open reasons and stop.
+- At most ${TWIN.maxBuilds} \`twin_skill_build\` calls per skill. After that the tool refuses: write report.md with the open reasons and stop.
 
 ## patterns.md
 - Every section: ${TWIN_PATTERN_SECTIONS.join(", ")}. At most ${TWIN.maxWords.patterns} words, refs not counted.

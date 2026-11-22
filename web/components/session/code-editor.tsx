@@ -165,6 +165,9 @@ export function CodeEditor({
       }
       const payload = parsed.payload ?? {};
 
+      if (parsed.action === "run") {
+        return JSON.stringify({ ok: true, result: await handleRun() });
+      }
       if (parsed.action === "get_state") {
         const selection = mountedEditor.getSelection();
         return JSON.stringify({
@@ -254,7 +257,7 @@ export function CodeEditor({
         mountedEditor.revealRangeInCenter(range);
       });
       return JSON.stringify({ ok: true });
-    }));
+    }, () => Boolean(editorRef.current?.getModel())));
 
   // Opening highlight from the surface payload (starter surface can carry a range).
   function applyInitialHighlight(instance: editor.IStandaloneCodeEditor) {
@@ -338,7 +341,9 @@ export function CodeEditor({
   }, []);
 
   async function handleRun() {
-    if (!code.trim() || isRunning) return;
+    const currentCode = editorRef.current?.getModel()?.getValue() ?? code;
+    if (!currentCode.trim()) throw new Error("Write code before running it");
+    if (runAbortControllerRef.current) throw new Error("Code is already running");
     const abortController = new AbortController();
     runAbortControllerRef.current = abortController;
     setIsRunning(true);
@@ -350,7 +355,7 @@ export function CodeEditor({
       const response = await fetch("/api/code/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ language, code }),
+        body: JSON.stringify({ language, code: currentCode }),
         signal: abortController.signal,
       });
       if (!response.ok) {
@@ -370,11 +375,13 @@ export function CodeEditor({
             : null;
         setRunResult(result);
       }
+      return result;
     } catch (error) {
-      if (abortController.signal.aborted) return;
+      if (abortController.signal.aborted) throw error;
       console.error(error);
       setActiveTab("code");
       toast.error(error instanceof Error ? error.message : "Code execution failed.");
+      throw error;
     } finally {
       if (runAbortControllerRef.current === abortController) {
         runAbortControllerRef.current = null;
@@ -454,7 +461,7 @@ export function CodeEditor({
           ) : null}
           <button
             type="button"
-            onClick={handleRun}
+            onClick={() => void handleRun().catch(() => {})}
             disabled={!code.trim() || isRunning || isSubmitting}
             className="flex items-center gap-1.5 rounded-md border border-white/10 bg-on-night/5 px-3 py-1 text-xs font-medium text-foreground transition-[background-color,scale] hover:bg-on-night/10 active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-50"
           >

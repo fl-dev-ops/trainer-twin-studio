@@ -15,7 +15,8 @@ export function knowledgeBaseFor(principal: Principal, env = process.env): Knowl
   if (principal?.principalType !== "organization") return null;
   const url = env.STUDIO_URL;
   const secret = env.SCENARIO_INGEST_SECRET;
-  return url && secret ? { url, secret, orgId: principal.principalId } : "unconfigured";
+  const user = principal.attributes?.userId;
+  return url && secret && typeof user === "string" && user ? { url, secret, orgId: principal.principalId, userId: user } : "unconfigured";
 }
 
 // The knowledge fingerprint is checked at most this often per org (tools run many times per turn).
@@ -23,13 +24,15 @@ const VERSION_TTL_MS = 20_000;
 const versions = new Map<string, { at: number; value: Promise<string> }>();
 
 function cachedVersion(kb: KnowledgeBaseSource) {
-  const hit = versions.get(kb.orgId);
+  const key = JSON.stringify([kb.orgId, kb.userId]);
+  const hit = versions.get(key);
   if (hit && Date.now() - hit.at < VERSION_TTL_MS) return hit.value;
   const value = knowledgeBaseVersion(kb).catch((error) => {
-    versions.delete(kb.orgId);
+    versions.delete(key);
     throw error;
   });
-  versions.set(kb.orgId, { at: Date.now(), value });
+  if (versions.size >= 500) versions.clear();
+  versions.set(key, { at: Date.now(), value });
   return value;
 }
 
@@ -38,7 +41,7 @@ export async function sessionIo(ctx: SessionCtx): Promise<Io> {
   const kb = knowledgeBaseFor(sessionPrincipal(ctx));
   if (kb === null) return io;
   const configured = () => {
-    if (kb === "unconfigured") throw new Error("STUDIO_URL or SCENARIO_INGEST_SECRET is not configured, so the organization's knowledge base cannot be read.");
+    if (kb === "unconfigured") throw new Error("Knowledge access requires a signed-in trainer and a configured studio.");
     return kb;
   };
   return {

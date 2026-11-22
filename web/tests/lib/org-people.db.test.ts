@@ -122,6 +122,9 @@ describe.skipIf(!localMinutesDb)("org-people (local database)", () => {
   });
 
   test("orgPeople lists members oldest first, hides disabled unless asked, and filters by role, email, user and member", async () => {
+    // The fixture creates both members in one go (same or adjacent millisecond): pin who joined first.
+    await db.member.update({ where: { id: `${f.learner.id}-member` }, data: { createdAt: new Date(Date.now() - 2000) } });
+    await db.member.update({ where: { id: `${f.trainer.id}-member` }, data: { createdAt: new Date(Date.now() - 1000) } });
     await add([email("team")], "team");
     await db.member.update({ where: { id: `${f.learner.id}-member` }, data: { disabledAt: new Date() } });
     const all = await orgPeople(f.org.id, { includeDisabled: true });

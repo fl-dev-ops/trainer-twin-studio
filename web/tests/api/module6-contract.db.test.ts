@@ -17,7 +17,15 @@ import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "../lib/
 // Real services and advisory locks; only external storage and vector indexing are replaced.
 const files = new Map<string, string>();
 const s3 = await import("@/lib/s3");
-mock.module("@/lib/s3", () => ({ ...s3, s3Configured: true, putObject: async (key: string, body: string) => { files.set(key, body); } }));
+mock.module("@/lib/s3", () => ({
+  ...s3, s3Configured: true,
+  putObject: async (key: string, body: string) => { files.set(key, body); },
+  getObjectText: async (key: string) => {
+    const body = files.get(key);
+    if (body === undefined) throw new Error(`Missing test object: ${key}`);
+    return body;
+  },
+}));
 const { ingestScenario } = await import("@/lib/scenario-ingest");
 const { runCopilotStudio } = await import("@/lib/copilot-studio");
 const { updateRoleplay } = await import("@/lib/roleplay/manage");
@@ -30,6 +38,7 @@ describe.skipIf(!localMinutesDb)("Module 6 REST retries, account ownership and c
     spies.push(
       spyOn(externalApi, "requireExternalApi").mockResolvedValue({ org: f.org, trainer: { memberId: `${f.trainer.id}-member`, userId: f.trainer.id, ...f.trainer, image: null, role: "admin", disabled: false, disabledAt: null, addedAt: new Date() }, actorUserId: f.trainer.id, keyId: "test-key" }),
       spyOn(org, "studioOrRefusal").mockResolvedValue({ ...f.org, accentColor: null, role: "admin", user: f.trainer }),
+      spyOn(MainCollectionService, "writeSkillItems").mockImplementation(async (_org, _version, _scenario, items) => items.length),
       spyOn(MainCollectionService, "writeScenarioItems").mockImplementation(async (_org, _slug, _scenario, _version, items) => items.length),
       spyOn(MainCollectionService, "pruneScenarioItems").mockResolvedValue(undefined),
     );
@@ -37,6 +46,12 @@ describe.skipIf(!localMinutesDb)("Module 6 REST retries, account ownership and c
   afterEach(async () => {
     for (const spy of spies.splice(0).reverse()) spy.mockRestore();
     for (const fixture of [other, f]) {
+      await db.agent.updateMany({ where: { orgId: fixture.org.id }, data: { primarySkillId: null } });
+      await db.skill.updateMany({ where: { orgId: fixture.org.id }, data: { currentVersionId: null } });
+      await db.agentSkillVersion.deleteMany({ where: { orgId: fixture.org.id } });
+      await db.skillVersionSource.deleteMany({ where: { orgId: fixture.org.id } });
+      await db.skillVersion.deleteMany({ where: { skill: { orgId: fixture.org.id } } });
+      await db.skill.deleteMany({ where: { orgId: fixture.org.id } });
       await db.apikey.deleteMany({ where: { referenceId: fixture.org.id } });
       await db.specVersion.deleteMany({ where: { orgId: fixture.org.id } });
       await fixture.clean();
@@ -146,18 +161,55 @@ describe.skipIf(!localMinutesDb)("Module 6 REST retries, account ownership and c
     const lock = database.withLock; let arrivals = 0; let entered!: () => void; let release!: () => void;
     const writing = new Promise<void>((resolve) => { entered = resolve; }); const proceed = new Promise<void>((resolve) => { release = resolve; });
     spies.push(spyOn(database, "withLock").mockImplementation((keys, work, options) => {
-      expect(keys).toEqual([`agent:${slug}`]); const first = ++arrivals === 1;
+      expect(keys).toEqual([`skill-ownership:${f.org.id}`, `agent:${slug}`]); const first = ++arrivals === 1;
       if (!first) release();
       return lock(keys, async (tx) => { if (first) { entered(); await proceed; } return work(tx); }, options);
     }));
     return writing;
   };
   const recording = (skill: string) => ingestScenario(f.org.id, { kind: "ROLEPLAY", personaSlug: f.org.slug, skill, items: [], scenario: { scenario: "rp", name: "Recorded role play", description: "Explain a decision", trainer_role: "Trainer", learner_role: "Learner", steps: [{ id: "explain", name: "Explain", trainer_moves: [], learner_moves: [] }] } });
-  test("copilot updateRoleplay concurrent with recordings skill save keeps both changes, script/files and one skill version bump", async () => {
-    const original = await recording("# Old script"); const oldFiles = new Map(files); const writing = gate(f.roleplay.slug);
-    const save = recording("# New script"); await writing;
-    const [saved, settings] = await Promise.all([save, runCopilotStudio({ org: f.org, user: f.trainer }, { action: "updateRoleplay", slug: f.roleplay.slug, before: { preUpload: true }, tools: { canvas: true } })]);
-    expect(saved.version).toBe(original.version + 1); expect(settings).toMatchObject({ changed: true });
+  test("copilot settings changed during recordings publication survive refusal and retry with one new skill package", async () => {
+    const original = await recording("# Old script"); const oldFiles = new Map(files);
+    let entered!: () => void; let release!: () => void;
+    const writing = new Promise<void>((resolve) => { entered = resolve; });
+    const proceed = new Promise<void>((resolve) => { release = resolve; });
+    const lock = database.withLock;
+    let calls = 0;
+    spies.push(spyOn(database, "withLock").mockImplementation(async (keys, work, options) => {
+      expect(keys).toEqual([`skill-ownership:${f.org.id}`, `agent:${f.roleplay.slug}`]);
+      if (++calls === 2) { entered(); await proceed; }
+      return lock(keys, work, options);
+    }));
+    const save = Promise.allSettled([recording("# New script")]);
+    try {
+      await writing;
+      const settings = await runCopilotStudio({ org: f.org, user: f.trainer }, { action: "updateRoleplay", slug: f.roleplay.slug, before: { preUpload: true }, tools: { canvas: true } });
+      expect(settings).toMatchObject({ changed: true });
+      expect(await db.agent.findUniqueOrThrow({ where: { id: f.roleplay.id } })).toMatchObject({
+        version: original.version, data: { skill: "# Old script", artifacts: original.artifacts, before: { preUpload: true }, tools: { canvas: true } },
+      });
+    } finally {
+      release();
+    }
+    const [outcome] = await save;
+    expect(outcome.status).toBe("rejected");
+    if (outcome.status === "rejected") {
+      const error: unknown = outcome.reason;
+      expect(error).toMatchObject({ code: "skill_publication_superseded", status: 409 });
+    }
+    const skill = await db.skill.findUniqueOrThrow({
+      where: { orgId_ownerSlug: { orgId: f.org.id, ownerSlug: f.roleplay.slug } },
+      include: { versions: { orderBy: { version: "desc" } } },
+    });
+    expect(skill.versions).toHaveLength(2);
+    const failed = skill.versions[0];
+    expect(failed).toMatchObject({ status: "failed", skillText: "# New script" });
+    const saved = await recording("# New script");
+    expect(saved.version).toBeGreaterThan(original.version);
+    expect(saved.artifacts).not.toBe(failed.artifacts);
+    expect(saved.artifacts.startsWith(`${failed.artifacts}/attempt-`)).toBe(true);
+    expect((await db.skill.findUniqueOrThrow({ where: { id: skill.id } })).currentVersionId).toBe(failed.id);
+    expect(await db.skillVersion.count({ where: { skillId: skill.id } })).toBe(2);
     const current = await db.agent.findUniqueOrThrow({ where: { id: f.roleplay.id } }); expect(current.version).toBe(saved.version);
     expect(current.data).toMatchObject({ skill: "# New script", artifacts: saved.artifacts, before: { preUpload: true }, tools: { canvas: true } });
     expect(files.get(`${saved.artifacts}/SKILL.md`)).toBe("# New script"); expect(JSON.parse(files.get(`${saved.artifacts}/items.json`)!)).toEqual([]);

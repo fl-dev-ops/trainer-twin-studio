@@ -3,14 +3,14 @@ import { createHmac } from "node:crypto";
 
 let status = "used";
 let deploymentStatus = "active";
-let existing: { id: string; status: string; userId: string; agentSlug: string; mode: string; activationKey: string; allowedSeconds: number; startedAt: Date } | null = null;
+let existing: { id: string; orgId: string; agentId: string; status: string; userId: string; agentSlug: string; mode: string; activationKey: string; allowedSeconds: number; startedAt: Date } | null = null;
 let updatedStatus = "";
 
 mock.module("@/lib/db", () => ({
   withLock: async (keys: string[], work: (tx: { interviewSession: { updateMany: (args: unknown) => Promise<{ count: number }> } }) => Promise<unknown>) => {
     expect(keys).toEqual(["minutes:org"]);
     return work({ interviewSession: { updateMany: async (args) => {
-      expect(args).toMatchObject({ where: { id: "session", status: { in: ["activating", "active"] } }, data: { runtimeTokenHash: expect.any(String) } });
+      expect(args).toMatchObject({ where: { id: "session", orgId: "org", userId: "learner", agentId: "agent", mode: "voice", status: { in: ["activating", "active"] } }, data: { runtimeTokenHash: expect.any(String) } });
       return { count: 1 };
     } } });
   },
@@ -40,7 +40,7 @@ const input = { orgId: "org", userId: "learner", userEmail: "learner@example.com
 
 test.each(["activating", "active"])("used assignments with a past expiry resume their %s session with its remaining seconds", async (sessionStatus) => {
   status = "used";
-  existing = { id: "session", status: sessionStatus, userId: "learner", agentSlug: "agent", mode: "voice", activationKey: "assignment:assignment:original", allowedSeconds: 120, startedAt: new Date(Date.now() - 30_000) };
+  existing = { id: "session", orgId: "org", agentId: "agent", status: sessionStatus, userId: "learner", agentSlug: "agent", mode: "voice", activationKey: "assignment:assignment:original", allowedSeconds: 120, startedAt: new Date(Date.now() - 30_000) };
   const previousSecret = process.env.COPILOT_SERVICE_SECRET;
   process.env.COPILOT_SERVICE_SECRET = "test-only-secret";
   try {

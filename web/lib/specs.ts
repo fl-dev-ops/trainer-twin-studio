@@ -20,6 +20,9 @@ import { enqueueIngestionWork } from "@/lib/ingestion-queue";
 import { type DocumentManifest } from "@/lib/context-document-service";
 import { saveUploadToS3 } from "@/lib/uploads";
 import { contextUploadFromAgentData, type AgentContextUpload } from "@/lib/context-upload";
+import { hydrateAgentSkill, readAgentSkillVersion } from "@/lib/skill-history";
+import { skillRefusals } from "@/lib/skills";
+import { assertVoiceObjectKeys, availableVoiceWhere } from "@/lib/voices";
 
 export type SpecType = "personas" | "agents";
 
@@ -179,7 +182,8 @@ export async function listRunnableSpecs(type: "personas" | "agents", orgId: stri
       .filter(({ data }) => isRecord(data) && isRecord(data.style) && isRecord(data.decision_preferences))
       .map(({ slug }) => slug);
   }
-  const agents = await db.agent.findMany({ where: { orgId }, orderBy: [{ order: "asc" }, { name: "asc" }], select: { slug: true, data: true, personaId: true, kind: true } });
+  const rows = await db.agent.findMany({ where: { orgId }, orderBy: [{ order: "asc" }, { name: "asc" }], select: { id: true, slug: true, version: true, primarySkillId: true, data: true, personaId: true, kind: true } });
+  const agents = await Promise.all(rows.map((agent) => agent.primarySkillId ? hydrateAgentSkill(orgId, agent) : agent));
   return agents
     .filter((agent) => isRecord(agent.data) && Boolean(agent.personaId) && isRunnableAgentData(agent.kind, agent.data))
     .map(({ slug }) => slug);
@@ -223,6 +227,19 @@ export async function listAgentPersonas(orgId: string, slugs: string[]) {
   return Object.fromEntries(agents.map((agent) => [agent.slug, agent.persona.slug]));
 }
 
+/** Who the learner talks to on each agent: the role play's own client name, else the persona's display name. */
+export async function listAgentPersonaNames(orgId: string, slugs: string[]): Promise<Record<string, string>> {
+  if (slugs.length === 0) return {};
+  const agents = await db.agent.findMany({ where: { orgId, slug: { in: slugs } }, select: { slug: true, data: true, persona: { select: { name: true } } } });
+  return Object.fromEntries(agents.map((agent) => [agent.slug, personaNameOf(agent.data, agent.persona.name)]));
+}
+
+export function personaNameOf(agentData: unknown, personaName: string) {
+  const record = (value: unknown) => (value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {});
+  const client = record(record(record(agentData).scenario).roleplay).clientName;
+  return typeof client === "string" && client.trim() ? client.trim() : personaName;
+}
+
 export async function listAgentNames(orgId: string, slugs: string[]) {
   const agents = await db.agent.findMany({
     where: { orgId, slug: { in: slugs } },
@@ -231,6 +248,18 @@ export async function listAgentNames(orgId: string, slugs: string[]) {
   return Object.fromEntries(
     agents.map((agent) => [agent.slug, agentDisplayName(agent.slug, agent.name)]),
   );
+}
+
+/** What each role play tells the learner before the call (the learner brief of one the copilot wrote). */
+export async function listAgentBriefs(orgId: string, slugs: string[]): Promise<Record<string, string>> {
+  if (slugs.length === 0) return {};
+  const agents = await db.agent.findMany({ where: { orgId, slug: { in: slugs }, kind: "ROLEPLAY" }, select: { slug: true, data: true } });
+  const record = (value: unknown) => (value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {});
+  return Object.fromEntries(agents.flatMap((agent) => {
+    // A copilot brief's learner brief, else the one set on the edit page (authored role plays).
+    const brief = record(record(agent.data).roleplayBrief).learnerBrief ?? record(agent.data).learnerBrief;
+    return typeof brief === "string" && brief.trim() ? [[agent.slug, brief.trim()]] : [];
+  }));
 }
 
 export async function listAgentContextUploads(orgId: string, slugs: string[]): Promise<Record<string, AgentContextUpload>> {
@@ -274,12 +303,15 @@ export async function listScenarioIntroVideos(orgId: string, slugs: string[]) {
 
 export async function readSpec(type: SpecType, slug: string, orgId: string) {
   if (!validSlug(slug)) throw new Error(`Invalid id: ${slug}`);
-  const row: SpecRow | null = type === "personas"
+  const row: (SpecRow & { primarySkillId?: string | null }) | null = type === "personas"
     ? await db.persona.findUnique({ where: { orgId_slug: { orgId, slug } } })
     : await modelFor(type).findUnique({ where: { slug } });
   if (!row || row.orgId !== orgId) return null;
-  const doc = { schema_version: 1, kind: ENTITY_KEY[type], [ENTITY_KEY[type]]: row.data };
-  return { text: yaml.dump(doc, { lineWidth: -1 }), doc: row.data as Record<string, unknown>, version: row.version };
+  const resolved = type === "agents" && row.primarySkillId && row.id
+    ? await hydrateAgentSkill(orgId, { ...row, id: row.id })
+    : row;
+  const doc = { schema_version: 1, kind: ENTITY_KEY[type], [ENTITY_KEY[type]]: resolved.data };
+  return { text: yaml.dump(doc, { lineWidth: -1 }), doc: resolved.data as Record<string, unknown>, version: row.version };
 }
 
 export type SaveResult = {
@@ -296,9 +328,9 @@ export type SaveResult = {
  * Spec uploads and draft publishes rewrite an agent's whole data and bump its version with no files or examples: only
  * for older spec-built role plays. Builder role plays and twins are refused (specs/practice.md rule 20).
  */
-export function assertSpecBuilt(agent: { kind?: AgentKind; data: unknown }) {
+export function assertSpecBuilt(agent: { kind?: AgentKind; primarySkillId?: string | null; data: unknown }) {
   const data = (agent.data && typeof agent.data === "object" ? agent.data : {}) as Record<string, unknown>;
-  if (agent.kind === "TWIN" || data.source === ROLEPLAY_SOURCE || typeof data.skill === "string") {
+  if (agent.kind === "TWIN" || agent.primarySkillId || data.source === ROLEPLAY_SOURCE || data.source === "scenario-ingest" || typeof data.skill === "string") {
     throw refusals.invalidInput("Edit this one in its builder: spec uploads only change older spec-built role plays.");
   }
 }
@@ -315,18 +347,9 @@ export async function saveSpec(type: SpecType, slug: string, text: string, orgId
   }
   const data = entity as Prisma.InputJsonValue & Record<string, unknown>;
   const name = typeof data.name === "string" ? data.name : slug;
+  const voiceId = type === "agents" && typeof data.voiceId === "string" && data.voiceId ? data.voiceId : null;
   if (type === "agents") {
-    if (typeof data.voiceId === "string" && data.voiceId) {
-      const voice = await db.voice.findFirst({
-        where: {
-          id: data.voiceId,
-          status: "ready",
-          OR: [{ orgId }, { orgId: null }],
-        },
-        select: { id: true },
-      });
-      if (!voice) throw new Error(`Voice "${data.voiceId}" is not available`);
-    }
+    if (data.voiceId != null && typeof data.voiceId !== "string") throw new Error("Voice must be selected by its ID");
     if (typeof data.knowledgeBase === "string" && data.knowledgeBase) {
       const knowledge = await db.knowledgeBase.findFirst({
         where: { slug: data.knowledgeBase, orgId },
@@ -357,6 +380,13 @@ export async function saveSpec(type: SpecType, slug: string, text: string, orgId
       ? await tx.persona.findUnique({ where: { orgId_slug: { orgId, slug } } })
       : await tx.agent.findUnique({ where: { slug } });
     if (!current || current.orgId !== orgId) throw new Error("Not found");
+    if (type === "agents") assertSpecBuilt(current as { kind?: AgentKind; data: unknown });
+    if (voiceId) {
+      await tx.$queryRaw`SELECT id FROM "Voice" WHERE id = ${voiceId} FOR SHARE`;
+      const voice = await tx.voice.findFirst({ where: { id: voiceId, AND: [availableVoiceWhere(orgId)] } });
+      if (!voice) throw new Error(`Voice "${voiceId}" is not available`);
+      assertVoiceObjectKeys(voice);
+    }
     if (stableJson(current.data) === stableJson(data)) return { created: false, versionBumped: false, version: current.version };
     const nextVersion = current.version + 1;
     await tx.specVersion.create({
@@ -382,18 +412,13 @@ export async function deleteSpec(type: SpecType, slug: string, orgId: string) {
     await db.agent.update({ where: { slug }, data: { archivedAt: new Date() } });
     return;
   }
-  await db.specVersion.deleteMany({ where: { entityType: type, entitySlug: slug, orgId } });
-  const personaId = row.id;
-  if (!personaId) throw new Error("Persona identity missing");
-  const sources = await db.personaSource.findMany({
-    where: { personaId, orgId },
-    select: { id: true, s3Key: true },
-  });
+  // Refused while any agent uses it (PersonaInUseError); the row and its history go in one locked transaction, files after.
+  const { removePersonaRecord } = await import("@/lib/personas");
+  const removed = await removePersonaRecord(orgId, slug);
   await Promise.all([
-    ...sources.map((source) => deletePrefix(source.s3Key)),
-    MainCollectionService.removePersona(orgId, personaId),
+    ...removed.sourceKeys.map((key) => deletePrefix(key)),
+    MainCollectionService.removePersona(orgId, removed.personaId),
   ]);
-  await db.persona.delete({ where: { orgId_slug: { orgId, slug } } });
 }
 
 export async function listVersions(type: SpecType, slug: string, orgId: string) {
@@ -414,8 +439,14 @@ export async function readVersion(type: SpecType, slug: string, version: number,
     where: { orgId_entityType_entitySlug_version: { orgId, entityType: type, entitySlug: slug, version } },
   });
   if (!row) return null;
-  const doc = { schema_version: 1, kind: ENTITY_KEY[type], [ENTITY_KEY[type]]: row.data };
-  return { text: yaml.dump(doc, { lineWidth: -1 }), data: row.data };
+  const agent = type === "agents"
+    ? await db.agent.findFirst({ where: { slug, orgId }, select: { id: true, slug: true, primarySkillId: true } })
+    : null;
+  const resolved = agent?.primarySkillId
+    ? await hydrateAgentSkill(orgId, { ...agent, version, data: row.data })
+    : row;
+  const doc = { schema_version: 1, kind: ENTITY_KEY[type], [ENTITY_KEY[type]]: resolved.data };
+  return { text: yaml.dump(doc, { lineWidth: -1 }), data: resolved.data };
 }
 
 // ---- Knowledge bases (S3 + ChromaDB) ----
@@ -648,19 +679,59 @@ export function documentManifestOf(doc: { id: string; name: string; kind: string
   };
 }
 
-export async function getAgentConfigForAgent(agentId: string, orgId: string, contextId?: string, contextIds?: string[]) {
-  const agent = await db.agent.findFirst({
+export async function getAgentConfigForAgent(
+  agentId: string,
+  orgId: string,
+  contextId?: string,
+  contextIds?: string[],
+  client: Prisma.TransactionClient = db,
+  identity?: { agentVersion: number; personaSlug: string; personaVersion: number },
+) {
+  const savedAgent = await client.agent.findFirst({
     where: {
       OR: [{ id: agentId }, { slug: agentId }],
       orgId,
     },
     include: { persona: true },
   });
-  if (!agent) return null;
+  if (!savedAgent) return null;
+  const agentHistory = identity && savedAgent.version !== identity.agentVersion
+    ? await client.specVersion.findUnique({
+        where: { orgId_entityType_entitySlug_version: { orgId, entityType: "agents", entitySlug: savedAgent.slug, version: identity.agentVersion } },
+      })
+    : null;
+  if (identity && savedAgent.version !== identity.agentVersion && !isRecord(agentHistory?.data)) throw skillRefusals.unavailable();
+  const savedPersona = !identity || savedAgent.persona.slug === identity.personaSlug
+    ? savedAgent.persona
+    : await client.persona.findFirst({
+        where: { slug: identity.personaSlug, OR: [{ orgId }, { orgId: null }] },
+        orderBy: { orgId: { sort: "asc", nulls: "last" } },
+      });
+  if (!savedPersona) throw skillRefusals.unavailable();
+  const personaHistory = identity && savedPersona.version !== identity.personaVersion
+    ? await client.specVersion.findUnique({
+        where: { orgId_entityType_entitySlug_version: { orgId, entityType: "personas", entitySlug: identity.personaSlug, version: identity.personaVersion } },
+      })
+    : null;
+  if (identity && savedPersona.version !== identity.personaVersion && !isRecord(personaHistory?.data)) throw skillRefusals.unavailable();
+  const historicalMapping = identity && savedAgent.version !== identity.agentVersion
+    ? await readAgentSkillVersion(orgId, savedAgent.id, identity.agentVersion, client)
+    : null;
+  const historicalData = isRecord(agentHistory?.data) ? agentHistory.data : {};
+  const historicalPackage = typeof historicalData.skill === "string"
+    || ["scenario-ingest", "roleplay-skill", "twin-creator"].includes(String(historicalData.source));
+  const versioned = {
+    ...savedAgent,
+    primarySkillId: agentHistory ? historicalMapping?.skillId ?? (historicalPackage ? savedAgent.primarySkillId : null) : savedAgent.primarySkillId,
+    version: identity?.agentVersion ?? savedAgent.version,
+    data: agentHistory?.data ?? savedAgent.data,
+    persona: { ...savedPersona, version: identity?.personaVersion ?? savedPersona.version, data: personaHistory?.data ?? savedPersona.data },
+  };
+  const agent = versioned.primarySkillId || identity ? await hydrateAgentSkill(orgId, versioned, client) : versioned;
 
   const docIds = Array.from(new Set([...(contextIds ?? []), ...(contextId ? [contextId] : [])])).filter(Boolean);
   const contextDocs = docIds.length
-    ? await db.contextDocument.findMany({
+    ? await client.contextDocument.findMany({
         where: { id: { in: docIds }, orgId },
         select: { id: true, name: true, mimeType: true, kind: true, size: true, manifest: true },
       })
@@ -668,7 +739,7 @@ export async function getAgentConfigForAgent(agentId: string, orgId: string, con
   const persona = agent.persona;
 
   // An agent attachment narrows retrieval to exactly one collection; otherwise the agent's selected collections
-  // (data.knowledge_bases, carried over from its former domain).
+  // (data.knowledge_bases).
   const attachedKnowledge = isRecord(agent.data) && typeof agent.data.knowledgeBase === "string"
     ? [agent.data.knowledgeBase]
     : [];
@@ -676,7 +747,7 @@ export async function getAgentConfigForAgent(agentId: string, orgId: string, con
     ? agent.data.knowledge_bases.filter((value): value is string => typeof value === "string")
     : [];
   const configuredKnowledge = attachedKnowledge.length ? attachedKnowledge : selectedKnowledge;
-  const indexed = await db.knowledgeDocument.findMany({
+  const indexed = await client.knowledgeDocument.findMany({
     where: {
       status: "indexed",
       kb: {
@@ -688,7 +759,7 @@ export async function getAgentConfigForAgent(agentId: string, orgId: string, con
     distinct: ["kbId"],
   });
   const knowledgeBases = indexed.map((row) => row.kb.slug);
-  const personaVoiceSources = await db.personaSource.findMany({
+  const personaVoiceSources = await client.personaSource.findMany({
     where: { personaId: persona.id, orgId, status: { in: ["analyzed", "compiling"] } },
     select: { metadata: true },
   });
@@ -706,7 +777,7 @@ export async function getAgentConfigForAgent(agentId: string, orgId: string, con
 
   return {
     persona: { id: persona.id, slug: persona.slug, version: persona.version, data: persona.data },
-    agent: { id: agent.id, slug: agent.slug, version: agent.version, data: agent.data },
+    agent: { id: agent.id, slug: agent.slug, version: agent.version, kind: agent.kind, primarySkillId: agent.primarySkillId, archivedAt: agent.archivedAt, data: agent.data },
     knowledgeBases,
     personaVoiceAvailable,
     personaVoiceCoverage,
@@ -735,4 +806,3 @@ export async function listSessions(orgId: string) {
     take: 50,
   });
 }
-

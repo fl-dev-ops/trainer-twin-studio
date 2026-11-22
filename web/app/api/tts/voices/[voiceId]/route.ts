@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { db } from "@/lib/db";
+import { errorResponse, refusals } from "@/lib/errors";
 import { studioOrRefusal } from "@/lib/org";
-import { deletePrefix, getObjectText, presignedGetUrl, voicePrefix } from "@/lib/s3";
+import { getObjectText, presignedGetUrl } from "@/lib/s3";
+import { deleteVoice, findAvailableVoice, renameVoice } from "@/lib/voices";
+
+const renameFields = z.strictObject({ name: z.string().trim().min(1).max(60) });
 
 /**
  * Voice resolver for the TTS service (server-to-server).
@@ -17,24 +22,29 @@ export async function GET(
 ) {
   const expected = process.env.TTS_APP_KEY;
   if (!expected) return NextResponse.json({ error: "TTS_APP_KEY is not configured" }, { status: 500 });
-  const token = (request.headers.get("authorization") ?? "").replace("Bearer ", "");
-  if (token !== expected) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (request.headers.get("authorization") !== `Bearer ${expected}`) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const { voiceId } = await params;
-  const voice = await db.voice.findUnique({ where: { id: voiceId } });
-  if (!voice || !voice.s3AudioKey) return NextResponse.json({ error: "voice not found" }, { status: 404 });
+  // TTS resolves by ID with its server credential, not a browser-supplied organization.
+  const identity = await db.voice.findUnique({ where: { id: voiceId }, select: { orgId: true } });
+  if (!identity) return NextResponse.json({ error: "voice not found" }, { status: 404 });
+  try {
+    const voice = await findAvailableVoice(identity.orgId, voiceId);
 
-  const transcript = voice.s3TranscriptKey
-    ? ((await getObjectText(voice.s3TranscriptKey).catch(() => "")) || "").trim()
-    : "";
+    const transcript = voice.s3TranscriptKey
+      ? ((await getObjectText(voice.s3TranscriptKey)) || "").trim()
+      : "";
 
-  return NextResponse.json({
-    id: voice.id,
-    name: voice.name,
-    version: voice.updatedAt.toISOString(),
-    audioUrl: await presignedGetUrl(voice.s3AudioKey, 600),
-    transcript: transcript || null,
-  });
+    return NextResponse.json({
+      id: voice.id,
+      name: voice.name,
+      version: voice.updatedAt.toISOString(),
+      audioUrl: await presignedGetUrl(voice.s3AudioKey, 600),
+      transcript: transcript || null,
+    });
+  } catch (error) {
+    return errorResponse(error);
+  }
 }
 
 /** Rename a user-cloned voice from the voice library. */
@@ -44,21 +54,22 @@ export async function PATCH(
 ) {
   const org = await studioOrRefusal();
   if (org instanceof Response) return org;
-  const name = String((await request.json()).name ?? "").trim();
-  if (!name) return NextResponse.json({ error: "name is required" }, { status: 400 });
-  if (name.length > 60) return NextResponse.json({ error: "name must be 60 characters or fewer" }, { status: 400 });
-
-  const { voiceId } = await params;
-  const voice = await db.voice.findFirst({ where: { id: voiceId, orgId: org.id }, select: { kind: true } });
-  if (!voice) return NextResponse.json({ error: "voice not found" }, { status: 404 });
-  if (voice.kind !== "cloned") return NextResponse.json({ error: "sample voices cannot be renamed" }, { status: 403 });
-
-  const updated = await db.voice.update({
-    where: { id: voiceId },
-    data: { name },
-    select: { id: true, name: true },
-  });
-  return NextResponse.json({ voice: updated });
+  try {
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch (error) {
+      if (error instanceof SyntaxError) throw refusals.invalidInput("A JSON voice name is required.");
+      throw error;
+    }
+    const fields = renameFields.safeParse(body);
+    if (!fields.success) throw refusals.invalidInput("name must be between 1 and 60 characters");
+    const { voiceId } = await params;
+    const voice = await renameVoice(org.id, voiceId, fields.data.name);
+    return NextResponse.json({ voice });
+  } catch (error) {
+    return errorResponse(error);
+  }
 }
 
 /** Delete a cloned voice and its stored reference files. */
@@ -69,11 +80,10 @@ export async function DELETE(
   const org = await studioOrRefusal();
   if (org instanceof Response) return org;
   const { voiceId } = await params;
-  const voice = await db.voice.findFirst({ where: { id: voiceId, orgId: org.id }, select: { kind: true } });
-  if (!voice) return NextResponse.json({ error: "voice not found" }, { status: 404 });
-  if (voice.kind !== "cloned") return NextResponse.json({ error: "sample voices cannot be deleted" }, { status: 403 });
-
-  await deletePrefix(voicePrefix(org.id, voiceId));
-  await db.voice.delete({ where: { id: voiceId } });
-  return new Response(null, { status: 204 });
+  try {
+    await deleteVoice(org.id, voiceId);
+    return new Response(null, { status: 204 });
+  } catch (error) {
+    return errorResponse(error);
+  }
 }

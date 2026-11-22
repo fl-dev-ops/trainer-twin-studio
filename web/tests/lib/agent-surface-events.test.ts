@@ -20,6 +20,7 @@ describe("session document surfaces", () => {
         fileName: "Vasanth Resume.pdf",
         page: 2,
         highlightQuery: "40%",
+        resumeDocument: false,
       },
     });
   });
@@ -38,6 +39,59 @@ describe("session document surfaces", () => {
         fileId: "doc-123",
         page: undefined,
         highlightQuery: "Redis",
+        claimId: undefined,
+        searchRequestId: undefined,
+        exactHighlight: false,
+        resumeDocument: false,
+      },
+    });
+  });
+
+  it("preserves an explicit resume flag when opening a PDF", () => {
+    expect(parseAgentSurfaceMessage({
+      type: "open_pdf",
+      eventId: "event-resume",
+      fileId: "doc-123",
+      fileName: "Vasanth Resume.pdf",
+      page: 2,
+      highlightQuery: "40%",
+      resumeDocument: true,
+    })).toEqual({
+      surface: {
+        key: "agent-pdf-event-resume",
+        tool: "pdf",
+        sourceUrl: "/api/documents/doc-123/raw",
+        fileId: "doc-123",
+        fileName: "Vasanth Resume.pdf",
+        page: 2,
+        highlightQuery: "40%",
+        resumeDocument: true,
+      },
+    });
+  });
+
+  it("preserves explicit claim, search and exact resume-highlight fields", () => {
+    expect(parseAgentSurfaceMessage({
+      type: "highlight_document",
+      eventId: "event-claim",
+      fileId: "doc-123",
+      query: "Redis",
+      claimId: "claim-1",
+      commandId: "search-1",
+      exactHighlight: true,
+      resumeDocument: true,
+    })).toEqual({
+      surface: {
+        key: "agent-pdf-event-claim",
+        tool: "pdf",
+        sourceUrl: "/api/documents/doc-123/raw",
+        fileId: "doc-123",
+        page: undefined,
+        highlightQuery: "Redis",
+        claimId: "claim-1",
+        searchRequestId: "search-1",
+        exactHighlight: true,
+        resumeDocument: true,
       },
     });
   });
@@ -256,6 +310,23 @@ describe("session document surfaces", () => {
     expect(openSurface?.surface?.key).toBe("agent-pdf-doc_resume_abc");
     expect(hlSurface?.surface?.key).toBe("agent-pdf-doc_resume_abc");
     expect(openSurface?.surface?.key).toEqual(hlSurface?.surface?.key);
+  });
+
+  it("uses distinct command identities for new whiteboard and choice questions", () => {
+    for (const action of ["open_whiteboard", "open_choice"]) {
+      const payload = action === "open_choice" ? { options: [{ id: "A", text: "Yes" }, { id: "B", text: "No" }] } : {};
+      const first = parseWorkspaceCommandSurface({ id: "question-one", tool: "surface", input: { action, payload } });
+      const second = parseWorkspaceCommandSurface({ id: "question-two", tool: "surface", input: { action, payload } });
+      expect(first?.surface?.key).not.toBe(second?.surface?.key);
+    }
+  });
+
+  it("rejects unknown surface commands and missing or unsafe file sources", () => {
+    for (const action of ["invented", "open_pdf", "highlight_document", "open_image"]) {
+      expect(parseWorkspaceCommandSurface({ id: "invalid", tool: "surface", input: { action } })).toBeNull();
+    }
+    expect(parseWorkspaceCommandSurface({ id: "unsafe", tool: "surface", input: { action: "open_image", payload: { sourceUrl: "javascript:alert(1)" } } })).toBeNull();
+    expect(parseWorkspaceCommandSurface({ id: "empty-choice", tool: "surface", input: { action: "open_choice", payload: { options: [] } } })).toBeNull();
   });
 
   it("parses close_surface workspace command to surface null so UI panel closes", () => {

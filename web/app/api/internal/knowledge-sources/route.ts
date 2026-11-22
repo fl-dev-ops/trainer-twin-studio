@@ -1,7 +1,7 @@
+import { copilotActor } from "@/lib/copilot-actor";
 import { createHash } from "node:crypto";
 import { db } from "@/lib/db";
 import { presignedGetUrl } from "@/lib/s3";
-import { ingestAuthorized } from "@/lib/scenario-ingest";
 
 export const runtime = "nodejs";
 
@@ -12,9 +12,9 @@ export const runtime = "nodejs";
  * Failed uploads are left out; a deleted document is gone (its skills stay, they live elsewhere).
  */
 export async function GET(request: Request) {
-  if (!ingestAuthorized(request)) return Response.json({ error: "Unauthorized" }, { status: 401 });
-  const orgId = request.headers.get("x-trainertwin-org-id")?.trim();
-  if (!orgId) return Response.json({ error: "Organization is required" }, { status: 400 });
+  const actor = await copilotActor(request);
+  if (actor instanceof Response) return actor;
+  const orgId = actor.org.id;
 
   const docs = await db.knowledgeDocument.findMany({
     where: { kb: { orgId }, s3MarkdownKey: { not: null }, status: { not: "failed" } },

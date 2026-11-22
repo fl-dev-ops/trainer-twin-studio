@@ -1,4 +1,4 @@
-import { AdminClient, AdminCloudClient, ChromaClient, CloudClient } from "chromadb";
+import { AdminClient, AdminCloudClient, ChromaClient, ChromaNotFoundError, ChromaUniqueError, CloudClient } from "chromadb";
 import { db } from "@/lib/db";
 import { invalidateCollectionCache } from "@/lib/main-collection";
 import { interviewQuestionOrgDatabaseName } from "@shared/interview-question";
@@ -48,10 +48,12 @@ export class ChromaTenantService {
     const admin = getAdminClient();
     try {
       await admin.getDatabase({ name: database, tenant: CHROMA_TENANT });
-    } catch {
+    } catch (error) {
+      if (!(error instanceof ChromaNotFoundError)) throw error;
       try {
         await admin.createDatabase({ name: database, tenant: CHROMA_TENANT });
-      } catch {
+      } catch (error) {
+        if (!(error instanceof ChromaUniqueError)) throw error;
         // A concurrent request may have created it after the lookup.
         await admin.getDatabase({ name: database, tenant: CHROMA_TENANT });
       }

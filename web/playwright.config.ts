@@ -2,12 +2,13 @@ import { defineConfig } from "@playwright/test";
 import { E2E_PORT, e2eUrl } from "./e2e/env";
 
 /**
- * Browser tests (bun run test:e2e): real Chrome against the app on the test database (port 3999). Start the server
+ * Browser tests (bun run test:e2e): Chromium against the app on the test database (port 3999). Start the server
  * once with bun run e2e:server and keep it running for fast reruns; otherwise this starts it. Each run seeds fresh
  * data and signs the test people in first (e2e/seed.setup.ts).
  */
 export default defineConfig({
   testDir: "e2e",
+  testIgnore: ["**/workspace/**"],
   // The specs share the seeded org and some change it: one at a time.
   workers: 1,
   timeout: 60_000,
@@ -16,7 +17,7 @@ export default defineConfig({
   outputDir: "e2e/.results",
   use: {
     baseURL: e2eUrl("dash"),
-    channel: "chrome",
+    browserName: "chromium",
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
   },

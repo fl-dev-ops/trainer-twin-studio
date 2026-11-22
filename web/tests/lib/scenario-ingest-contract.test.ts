@@ -3,6 +3,16 @@ import { expect, mock, test } from "bun:test";
 // Contract: the copilot (scenario-ingest agent) publisher against the real web routes.
 // Postgres, S3 and Chroma are faked; everything between them is the production code of both services.
 type Row = Record<string, unknown>;
+type SkillRow = Row & { id: string; nextVersion: number; generation: number; currentVersionId: string | null };
+type SkillVersionRow = Row & { id: string; skillId: string; version: number; contentHash: string; status: string };
+const skills: SkillRow[] = [];
+const skillVersions: SkillVersionRow[] = [];
+type MappingRow = { agentId: string; agentVersion: number; orgId: string; skillVersionId: string };
+type SourceRow = { skillVersionId: string; orgId: string; documentId: string; title: string; items: number };
+const mappings: MappingRow[] = [];
+const packageSources: SourceRow[] = [];
+const legacySources: Row[] = [];
+const skillItems = new Map<string, unknown[]>();
 const agents: Row[] = [];
 const s3 = new Map<string, string>();
 let chroma: { agentSlug: string; count: number } | null = null;
@@ -10,6 +20,7 @@ let knowledgeWhere: Row | null = null;
 let personaWhere: Row | null = null;
 let savedSession: Row | null = null;
 const searches: { orgId: string; scope: { slug: string; version: number }[]; options: { role?: string; steps?: unknown[] } }[] = [];
+const managedSearches: { orgId: string; scope: { skillVersionId: string; indexScope: string; itemCount: number }[]; options: { role?: string; steps?: unknown[] } }[] = [];
 const vectors: { orgId: string; slug: string; version: number; items: unknown[] }[] = [];
 const knowledgeDocs: { id: string; title: string; s3MarkdownKey: string; updatedAt: Date }[] = [];
 
@@ -25,17 +36,131 @@ const fakeDb = {
   knowledgeBase: { findFirst: async () => null },
   agent: {
     findFirst: async ({ where }: { where: { orgId: string; slug: string | { equals: string } } }) => agents.find(agent => agent.orgId === where.orgId && agent.slug === (typeof where.slug === "string" ? where.slug : where.slug.equals)) ?? null,
-    findUnique: async ({ where }: { where: { slug: string } }) => agents.find((a) => a.slug === where.slug) ?? null,
+    findUnique: async ({ where }: { where: { slug: string } }) => {
+      const row = agents.find((a) => a.slug === where.slug);
+      return row ? { ...row } : null;
+    },
     create: async ({ data }: { data: Row }) => {
-      const row = { id: "a1", ...data };
+      const row = { id: crypto.randomUUID(), updatedAt: new Date(), ...data };
       agents.push(row);
       return row;
     },
-    update: async () => {},
+    update: async ({ where, data }: { where: { id: string }; data: Row }) => {
+      const row = agents.find(agent => agent.id === where.id)!;
+      Object.assign(row, data, { updatedAt: new Date() });
+      return { ...row };
+    },
+  },
+  skill: {
+    updateMany: async ({ where, data }: { where: { id: string; generation: number }; data: Row }) => {
+      const rows = skills.filter(skill => skill.id === where.id && skill.generation === where.generation);
+      rows.forEach(row => Object.assign(row, data));
+      return { count: rows.length };
+    },
+    upsert: async ({ where, create, update }: { where: { orgId_ownerSlug: { orgId: string; ownerSlug: string } }; create: Row; update: Row }) => {
+      let row = skills.find(skill => skill.orgId === where.orgId_ownerSlug.orgId && skill.ownerSlug === where.orgId_ownerSlug.ownerSlug);
+      if (!row) {
+        row = { id: crypto.randomUUID(), nextVersion: 1, generation: 0, currentVersionId: null, ...create };
+        skills.push(row);
+      } else Object.assign(row, update);
+      return { ...row };
+    },
+    findUniqueOrThrow: async ({ where, include }: { where: { id: string }; include?: { currentVersion: boolean } }) => {
+      const row = skills.find(skill => skill.id === where.id);
+      if (!row) throw new Error(`Missing skill ${where.id}`);
+      return { ...row, ...(include?.currentVersion ? { currentVersion: skillVersions.find(version => version.id === row.currentVersionId) ?? null } : {}) };
+    },
+    update: async ({ where, data }: { where: { id: string }; data: Row & { nextVersion?: { increment: number } } }) => {
+      const row = skills.find(skill => skill.id === where.id)!;
+      const nextVersion = data.nextVersion ? row.nextVersion + data.nextVersion.increment : row.nextVersion;
+      Object.assign(row, data, { nextVersion });
+      return { ...row };
+    },
+  },
+  skillVersion: {
+    findMany: async ({ where }: { where: { skillId: string; artifacts: string; status: string; skill: { orgId: string; ownerSlug: string } } }) =>
+      skillVersions.filter(version => version.skillId === where.skillId && version.artifacts === where.artifacts && version.status === where.status
+        && skills.some(skill => skill.id === version.skillId && skill.orgId === where.skill.orgId && skill.ownerSlug === where.skill.ownerSlug)).map(row => ({ ...row })),
+    findUniqueOrThrow: async ({ where }: { where: { id: string } }) => {
+      const row = skillVersions.find(version => version.id === where.id);
+      if (!row) throw new Error(`Missing skill version ${where.id}`);
+      return { ...row };
+    },
+    findFirst: async ({ where }: { where: { skillId: string; contentHash: string; status: { in: string[] } } }) => {
+      const row = skillVersions.filter(version => version.skillId === where.skillId && version.contentHash === where.contentHash && where.status.in.includes(version.status)).sort((a, b) => b.version - a.version)[0];
+      return row ? { ...row } : null;
+    },
+    create: async ({ data }: { data: Row & { skillId: string; version: number; contentHash: string } }) => {
+      const row = { ...data, id: crypto.randomUUID(), status: "pending", indexStatus: "pending", failure: null, updatedAt: new Date() };
+      skillVersions.push(row);
+      return { ...row };
+    },
+    update: async ({ where, data }: { where: { id: string }; data: Row }) => {
+      const row = skillVersions.find(version => version.id === where.id)!;
+      Object.assign(row, data, { updatedAt: new Date() });
+      return { ...row };
+    },
+    updateMany: async ({ where, data }: { where: { id: string; status: string }; data: Row }) => {
+      const rows = skillVersions.filter(version => version.id === where.id && version.status === where.status);
+      rows.forEach(row => Object.assign(row, data, { updatedAt: new Date() }));
+      return { count: rows.length };
+    },
   },
   domain: { findUnique: async () => null, create: async () => {} },
   specVersion: { create: async () => {} },
-  skillSource: { createMany: async () => ({ count: 0 }) },
+  agentSkillVersion: {
+    findUnique: async ({ where }: { where: { agentId_agentVersion: { agentId: string; agentVersion: number } } }) =>
+      mappings.find(row => row.agentId === where.agentId_agentVersion.agentId && row.agentVersion === where.agentId_agentVersion.agentVersion) ?? null,
+    findUniqueOrThrow: async ({ where }: { where: { agentId_agentVersion: { agentId: string; agentVersion: number } } }) => {
+      const row = mappings.find(row => row.agentId === where.agentId_agentVersion.agentId && row.agentVersion === where.agentId_agentVersion.agentVersion);
+      if (!row) throw new Error("Missing mapping");
+      return { ...row };
+    },
+    createMany: async ({ data, skipDuplicates }: { data: MappingRow[]; skipDuplicates: boolean }) => {
+      let count = 0;
+      for (const row of data) {
+        const agent = agents.find(agent => agent.id === row.agentId);
+        const version = skillVersions.find(version => version.id === row.skillVersionId);
+        const skill = skills.find(skill => skill.id === version?.skillId);
+        if (!agent || agent.orgId !== row.orgId || skill?.orgId !== row.orgId || skill.ownerSlug !== agent.slug || version?.status !== "ready" || row.agentVersion <= 0) throw new Error("Invalid history mapping");
+        if (mappings.some(saved => saved.agentId === row.agentId && saved.agentVersion === row.agentVersion)) {
+          if (!skipDuplicates) throw new Error("Duplicate history mapping");
+          continue;
+        }
+        mappings.push({ ...row }); count++;
+      }
+      return { count };
+    },
+  },
+  skillVersionSource: {
+    findMany: async ({ where }: { where: { skillVersionId: string } }) =>
+      packageSources.filter(row => row.skillVersionId === where.skillVersionId).map(row => ({ ...row })),
+    createMany: async ({ data, skipDuplicates }: { data: SourceRow[]; skipDuplicates: boolean }) => {
+      let count = 0;
+      for (const row of data) {
+        const version = skillVersions.find(version => version.id === row.skillVersionId);
+        if (!skills.some(skill => skill.id === version?.skillId && skill.orgId === row.orgId) || row.items < 0) throw new Error("Invalid package source");
+        if (packageSources.some(saved => saved.skillVersionId === row.skillVersionId && saved.documentId === row.documentId)) {
+          if (!skipDuplicates) throw new Error("Duplicate package source");
+          continue;
+        }
+        packageSources.push({ ...row }); count++;
+      }
+      return { count };
+    },
+  },
+  skillSource: {
+    findMany: async ({ where }: { where: Row }) => legacySources.filter(row => Object.entries(where).every(([key, value]) => row[key] === value)),
+    createMany: async ({ data, skipDuplicates }: { data: Row[]; skipDuplicates: boolean }) => {
+      for (const row of data) {
+        if (legacySources.some(saved => saved.agentId === row.agentId && saved.version === row.version && saved.documentId === row.documentId)) {
+          if (!skipDuplicates) throw new Error("Duplicate legacy source");
+          continue;
+        }
+        legacySources.push({ ...row });
+      }
+    },
+  },
   knowledgeDocument: {
     findMany: async (args: { where: Row }) => {
       knowledgeWhere = args.where;
@@ -43,10 +168,13 @@ const fakeDb = {
     },
   },
   $transaction: async (fn: (tx: unknown) => unknown) => fn(fakeDb),
+  $queryRaw: async () => [],
 };
 mock.module("@/lib/db", () => ({
   withLock: async (keys: string[], work: (tx: typeof fakeDb) => Promise<unknown>) => {
-    expect(keys).toHaveLength(1); expect(keys[0]).toMatch(/^agent:/);
+    expect(keys).toHaveLength(2);
+    expect(keys[0]).toMatch(/^skill-ownership:/);
+    expect(keys[1]).toMatch(/^agent:/);
     return work(fakeDb);
   },
   isUniqueViolation: (error: unknown) => typeof error === "object" && error !== null && "code" in error && error.code === "P2002", db: fakeDb }));
@@ -58,7 +186,11 @@ mock.module("@/lib/s3", () => ({
   scenarioRunPrefix: (orgId: string, runId: string) => `p/${orgId}/runs/${runId}`,
   putObject: async (key: string, body: string) => void s3.set(key, body),
   deletePrefix: async () => {},
-  getObjectText: async () => "",
+  getObjectText: async (key: string) => {
+    const text = s3.get(key);
+    if (text === undefined) throw new Error(`Missing S3 object ${key}`);
+    return text;
+  },
   kbPrefix: () => "",
   presignedGetUrl: async (key: string) => `https://s3.test/${key}`,
 }));
@@ -66,6 +198,11 @@ mock.module("@/lib/main-collection", () => ({
   invalidateCollectionCache: () => {},
   invalidatePersonaStyleCache: () => {},
   MainCollectionService: {
+    writeSkillItems: async (orgId: string, skillVersionId: string, _scenarioId: string, items: unknown[], indexScope = skillVersionId) => {
+      skillItems.set(`${orgId}/${skillVersionId}/${indexScope}`, items);
+      return items.length;
+    },
+    skillItemCount: async (orgId: string, skillVersionId: string, indexScope = skillVersionId) => skillItems.get(`${orgId}/${skillVersionId}/${indexScope}`)?.length ?? 0,
     writeScenarioItems: async (orgId: string, agentSlug: string, _id: string, version: number, items: unknown[]) => {
       chroma = { agentSlug, count: items.length };
       vectors.push({ orgId, slug: agentSlug, version, items });
@@ -74,7 +211,15 @@ mock.module("@/lib/main-collection", () => ({
     searchScenarioItems: async (orgId: string, scope: { slug: string; version: number }[], _query: string, options: { role?: string; steps?: unknown[] }) => {
       searches.push({ orgId, scope, options });
       return vectors.filter(vector => vector.orgId === orgId && scope.some(entry => entry.slug === vector.slug && entry.version === vector.version))
-        .flatMap(vector => vector.items as { role: string; text: string }[]).filter(item => item.role === options.role);
+         .flatMap(vector => vector.items as { role: string; text: string }[]).filter(item => item.role === options.role);
+    },
+    searchSkillItems: async (orgId: string, scope: { skillVersionId: string; indexScope: string; itemCount: number }[], _query: string, options: { role?: string; steps?: unknown[] }) => {
+      managedSearches.push({ orgId, scope, options });
+      return scope.flatMap(entry => {
+        const items = skillItems.get(`${orgId}/${entry.skillVersionId}/${entry.indexScope}`);
+        if (!items || items.length !== entry.itemCount) throw new Error("Unavailable managed index");
+        return items as { role: string; text: string }[];
+      }).filter(item => item.role === options.role);
     },
     pruneScenarioItems: async () => {},
   },
@@ -87,6 +232,8 @@ mock.module("next/cache", () => ({ ...realCache, unstable_cache: <A extends unkn
 const { POST: studio } = await import("@/app/api/copilot/studio/route");
 const { roleplaySkill, formatRoleplaySession } = await import("../../../chat/agent/lib/roleplay");
 const { isRunnableAgentData } = await import("@/lib/specs");
+const people = await import("@/lib/org-people");
+mock.module("@/lib/org-people", () => ({ ...people, orgPerson: async () => ({ role: "admin", disabled: false, name: "Trainer" }) }));
 const { POST: scenarios } = await import("@/app/api/internal/scenarios/route");
 const { POST: runs } = await import("@/app/api/internal/scenario-runs/route");
 const { publishToStudio, runIdFor } = await import("../../../copilot/agent/lib/studio-publish");
@@ -129,7 +276,7 @@ const files = [
 
 test("an ingest publication lands in S3, Chroma and Postgres, files byte for byte", async () => {
   process.env.SCENARIO_INGEST_SECRET = "s3cret";
-  const target = { url: "http://web", secret: "s3cret", orgId: "org1", persona: "vasanth", runId: runIdFor("sess:01/abc") };
+  const target = { url: "http://web", secret: "s3cret", orgId: "org1", userId: "trainer", persona: "vasanth", runId: runIdFor("sess:01/abc") };
   expect(target.runId).toBe("sess-01-abc");
 
   const result = await publishToStudio(target, files, fetcher);
@@ -138,7 +285,9 @@ test("an ingest publication lands in S3, Chroma and Postgres, files byte for byt
     scenarios: [{ id: "fundamental-depth", ok: true, slug: "acme-fundamental-depth", version: 1, created: true, items: 1 }],
   });
 
-  const v1 = "p/org1/scenarios/acme-fundamental-depth/v1";
+  const v1 = (agents[0].data as { artifacts: string }).artifacts;
+  expect(v1.startsWith(`${realS3.orgPrefix("org1")}/skills/${skills[0].id}/v1/attempt-`)).toBe(true);
+  expect(v1).toMatch(/\/attempt-[0-9a-f-]{36}$/);
   for (const [name, path] of [["SKILL.md", "fundamental-depth/SKILL.md"], ["scenario.json", "fundamental-depth/scenario.json"], ["items.json", "fundamental-depth/items.json"], ["patterns.md", "fundamental-depth/patterns.md"]]) {
     expect(s3.get(`${v1}/${name}`)).toBe(files.find((f) => f.path === path)!.text);
   }
@@ -148,13 +297,18 @@ test("an ingest publication lands in S3, Chroma and Postgres, files byte for byt
   expect(chroma).toEqual({ agentSlug: "acme-fundamental-depth", count: 1 });
   // The copilot's roleplay-creator publishes role plays, never twin skills.
   expect(agents[0]).toMatchObject({ slug: "acme-fundamental-depth", personaId: "p1", orgId: "org1", kind: "ROLEPLAY" });
+  expect(agents[0].primarySkillId).toBe(skills[0].id);
+  expect(skills[0].currentVersionId).toBe(skillVersions[0].id);
+  expect(skillVersions[0]).toMatchObject({ status: "ready", indexStatus: "ready", itemCount: 1 });
+  expect(skillItems.get(`org1/${skillVersions[0].id}/${v1}`)).toEqual(items);
+  expect(mappings).toEqual([{ agentId: agents[0].id, agentVersion: 1, orgId: "org1", skillVersionId: skillVersions[0].id }]);
   const published = agents[0].data as Row;
   expect(published.skill).toBe(skill);
   expect(isRunnableAgentData("ROLEPLAY", published)).toBe(true);
   expect(personaWhere).not.toHaveProperty("isOwn");
 
-  // A real-shaped Start snapshot; mutate the live package afterwards to exercise the pinned read path.
-  savedSession = { id: "call1", orgId: "org1", agentSlug: "acme-fundamental-depth", personaSlug: "vasanth", agentVersion: 1, context: null, documents: [], compiledSnapshot: { agent: { slug: "acme-fundamental-depth", version: 1, data: published } } };
+  // A pre-managed session keeps its legacy snapshot/search scope after publication.
+  savedSession = { id: "call1", orgId: "org1", agentSlug: "acme-fundamental-depth", personaSlug: "vasanth", agentVersion: 1, skillPinsVersion: null, context: null, documents: [], compiledSnapshot: { agent: { slug: "acme-fundamental-depth", version: 1, data: published } } };
   agents[0] = { ...agents[0], version: 2, data: { ...published, source: "roleplay-skill", skill: "# Changed live skill", scenario: { roleplay: { clientName: "Changed client" }, steps: [] } } };
   process.env.COPILOT_SERVICE_SECRET = "studio-test-secret";
   const request = (body: Row, orgId = "org1") => studio(new Request("https://studio.test/api/copilot/studio", { method: "POST", headers: { authorization: "Bearer studio-test-secret", "content-type": "application/json", "x-trainertwin-org-id": orgId }, body: JSON.stringify(body) }));
@@ -173,21 +327,26 @@ test("an ingest publication lands in S3, Chroma and Postgres, files byte for byt
   const results = await (await request(search)).json();
   expect(results.examples.map((item: { text: string }) => item.text)).toEqual([items[0].text]);
   expect(searches.at(-1)).toMatchObject({ orgId: "org1", scope: [{ slug: "acme-fundamental-depth", version: 1 }], options: { role: "trainer", steps: scenarioJson.steps } });
-  expect((await (await request(search, "other-org")).json()).examples).toEqual([]);
+  const wrongOrg = await request(search, "other-org");
+  expect(wrongOrg.status).toBe(404);
+  expect(await wrongOrg.json()).toMatchObject({ code: "not_found" });
   await request({ ...search, sessionId: undefined });
-  expect(searches.at(-1)).toMatchObject({ scope: [{ slug: "acme-fundamental-depth", version: 2 }], options: { role: "client" } });
+  expect(managedSearches.at(-1)).toMatchObject({
+    orgId: "org1", scope: [{ skillVersionId: skillVersions[0].id, indexScope: v1, itemCount: 1 }],
+    options: { role: "trainer", steps: scenarioJson.steps },
+  });
   await request({ ...search, role: "learner" });
   expect(searches.at(-1)?.options.role).toBe("learner");
   savedSession = null;
 });
 
 test("failures come back per call instead of throwing", async () => {
-  const result = await publishToStudio({ url: "http://web", secret: "wrong", orgId: "org1", persona: "vasanth", runId: "r1" }, files, fetcher);
+  const result = await publishToStudio({ url: "http://web", secret: "wrong", orgId: "org1", userId: "trainer", persona: "vasanth", runId: "r1" }, files, fetcher);
   expect(result.run).toEqual({ ok: false, error: "Unauthorized" });
   expect(result.scenarios).toEqual([{ id: "fundamental-depth", ok: false, error: "Unauthorized" }]);
 
   process.env.SCENARIO_INGEST_SECRET = "s3cret";
-  const unknown = await publishToStudio({ url: "http://web", secret: "s3cret", orgId: "org1", persona: "nobody", runId: "r1" }, files, fetcher);
+  const unknown = await publishToStudio({ url: "http://web", secret: "s3cret", orgId: "org1", userId: "trainer", persona: "nobody", runId: "r1" }, files, fetcher);
   expect(unknown.scenarios[0]).toMatchObject({ ok: false, error: expect.stringContaining("Persona") });
 });
 
@@ -206,7 +365,7 @@ const kbFetch = async (url: string, init?: RequestInit) => {
   }
   return knowledgeSources(new Request(url, init));
 };
-const kb = { url: "https://dash.test", secret: "s3cret", orgId: "org1" };
+const kb = { url: "https://dash.test", secret: "s3cret", orgId: "org1", userId: "trainer" };
 const session = (n: number) => Array.from({ length: n }, (_, i) => (i % 2 ? "speaker_2: Fine, the viewing went well and the client liked it a lot." : "speaker_1: So what did the client say after the viewing?")).join("\n");
 
 test("the copilot pulls every Markdown copy in the org's knowledge base into its sandbox", async () => {
@@ -245,8 +404,8 @@ test("knowledge sources: secret and org required; a failed download fails the pu
 });
 
 test("only studio (organization) sessions read the knowledge base, and never fall back to the users folder", () => {
-  const org = { principalId: "org1", principalType: "organization" };
-  expect(knowledgeBaseFor(org, { STUDIO_URL: "https://dash.test", SCENARIO_INGEST_SECRET: "s" })).toEqual({ url: "https://dash.test", secret: "s", orgId: "org1" });
+  const org = { principalId: "org1", principalType: "organization", attributes: { userId: "trainer" } };
+  expect(knowledgeBaseFor(org, { STUDIO_URL: "https://dash.test", SCENARIO_INGEST_SECRET: "s" })).toEqual({ url: "https://dash.test", secret: "s", orgId: "org1", userId: "trainer" });
   expect(knowledgeBaseFor(org, {})).toBe("unconfigured");
   expect(knowledgeBaseFor({ principalId: "me", principalType: "user" }, {})).toBeNull();
   expect(knowledgeBaseFor(null, {})).toBeNull();
@@ -326,7 +485,7 @@ test("twin-creator: builds a twin skill from the trainer's own words, and publis
   expect(rejected).toEqual([]);
   agents.length = 0;
   const fetcher = async (url: string, init: RequestInit) => twinSkills(new Request(url, init));
-  const result = await publishTwinSkillToStudio({ url: "https://dash.test", secret: "s3cret", orgId: "org1", persona: "vasanth", runId: "run-twin" }, "off-plan-waiting", files, fetcher);
+  const result = await publishTwinSkillToStudio({ url: "https://dash.test", secret: "s3cret", orgId: "org1", userId: "trainer", persona: "vasanth", runId: "run-twin" }, "off-plan-waiting", files, fetcher);
   expect(result).toMatchObject({ ok: true, slug: "acme-off-plan-waiting", created: true, items: 8 });
   const agent = agents[0];
   expect(agent).toMatchObject({ kind: "TWIN", personaId: "p1", slug: "acme-off-plan-waiting" });
@@ -334,7 +493,13 @@ test("twin-creator: builds a twin skill from the trainer's own words, and publis
   expect(data.source).toBe("twin-creator");
   expect((data.scenario as Row).situations).toEqual(twinHead.situations);
   expect(data.stages).toEqual([{ id: "buyer-waits", name: "Buyer waits for prices", objective: "Buyer waits for prices" }, { id: "wants-cashback", name: "Buyer asks for cashback", objective: "Buyer asks for cashback" }]);
-  expect([...s3.keys()].some((k) => k.endsWith("acme-off-plan-waiting/v1/skill.json"))).toBe(true);
+  const artifacts = (agent.data as { artifacts: string }).artifacts;
+  const managedSkill = skills.find(entry => entry.id === agent.primarySkillId)!;
+  expect(artifacts.startsWith(`${realS3.orgPrefix("org1")}/skills/${managedSkill.id}/v1/attempt-`)).toBe(true);
+  expect(artifacts).toMatch(/\/attempt-[0-9a-f-]{36}$/);
+  for (const name of ["SKILL.md", "skill.json", "items.json", "patterns.md"]) {
+    expect(s3.get(`${artifacts}/${name}`)).toBe(files.find(file => file.path.endsWith(`/${name}`))!.text);
+  }
   expect(chroma).toEqual({ agentSlug: "acme-off-plan-waiting", count: 8 });
 });
 
@@ -403,7 +568,7 @@ test("twin-creator: a 4th build of the same skill is refused, so the copilot rep
 
 test("twin skills endpoint: secret, org, and the trainer's words only", async () => {
   process.env.SCENARIO_INGEST_SECRET = "s3cret";
-  const post = (body: unknown, headers: Record<string, string> = { authorization: "Bearer s3cret", "x-trainertwin-org-id": "org1" }) =>
+  const post = (body: unknown, headers: Record<string, string> = { authorization: "Bearer s3cret", "x-trainertwin-org-id": "org1", "x-trainertwin-user-id": "trainer" }) =>
     twinSkills(new Request("https://dash.test/api/internal/twin-skills", { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) }));
   expect((await post({}, { authorization: "Bearer wrong", "x-trainertwin-org-id": "org1" })).status).toBe(401);
   expect((await post({}, { authorization: "Bearer s3cret" })).status).toBe(400);

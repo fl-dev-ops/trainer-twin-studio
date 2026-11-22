@@ -1,4 +1,3 @@
-import { getSessionCookie } from "better-auth/cookies";
 import { db } from "@/lib/db";
 import { getTrainerOrg, type TrainerOrg } from "@/lib/org";
 
@@ -7,25 +6,7 @@ export const runtime = "nodejs";
 
 type Params = { params: Promise<{ path?: string[] }> };
 
-// One copilot turn makes several proxied requests (send, stream, reconnects): reuse the signed-in org briefly. Keyed by
-// the session cookie AND the tab's pinned org (lib/org-pin.ts): one person in two orgs gets each tab's own org.
-// shortcut: per-instance memory, so a role change or disable reaches the copilot proxy within ORG_TTL_MS; use a shared cache if that matters.
-const ORG_TTL_MS = 30_000;
-/** The tab's pinned org (lib/org-pin.ts ORG_PIN_HEADER, multi-org); absent before that lands, so the key is the cookie. */
-const ORG_PIN_HEADER = "x-trainertwin-org";
-const orgCache = new Map<string, { org: TrainerOrg; until: number }>();
-async function trainerOrgFor(request: Request) {
-  const token = getSessionCookie(request);
-  const key = token ? `${token}:${request.headers.get(ORG_PIN_HEADER) ?? ""}` : null;
-  const hit = key ? orgCache.get(key) : undefined;
-  if (hit && hit.until > Date.now()) return hit.org;
-  const org = await getTrainerOrg();
-  if (key && org) {
-    if (orgCache.size > 1000) orgCache.clear();
-    orgCache.set(key, { org, until: Date.now() + ORG_TTL_MS });
-  }
-  return org;
-}
+import { ORG_PIN_HEADER } from "@/lib/org-pin";
 
 const notFound = () => Response.json({ ok: false, error: "Session not found." }, { status: 404 });
 
@@ -58,7 +39,7 @@ async function proxy(request: Request, { params }: Params) {
   const origin = process.env.EVE_ORIGIN;
   const secret = process.env.COPILOT_SERVICE_SECRET;
   if (!origin || !secret) return Response.json({ error: "Copilot is not configured" }, { status: 503 });
-  const org = await trainerOrgFor(request);
+  const org = await getTrainerOrg();
   if (!org) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
   const segments = (await params).path ?? [];

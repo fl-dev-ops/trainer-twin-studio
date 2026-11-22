@@ -41,7 +41,7 @@ describe.skipIf(!localMinutesDb)("Module 2 page-vs-Start parity (real PostgreSQL
   let who: ReturnType<typeof spyOn<typeof identity, "resolveSessionUser">>;
   let secret: string | undefined;
   beforeEach(async () => {
-    f = minutesFixture(); await f.create();
+    f = minutesFixture(); await f.create({ voice: true });
     other = minutesFixture(); await other.create();
     secret = process.env.COPILOT_SERVICE_SECRET; process.env.COPILOT_SERVICE_SECRET = "parity-secret";
     who = spyOn(identity, "resolveSessionUser").mockResolvedValue({ org: { ...f.org, accentColor: null }, user: f.learner, signInUrl: "/sign-in" });
@@ -201,7 +201,7 @@ describe.skipIf(!localMinutesDb)("Module 4 role-play page-vs-Start parity (real 
   let who: ReturnType<typeof spyOn<typeof identity, "resolveSessionUser">>;
   let secret: string | undefined;
   beforeEach(async () => {
-    f = minutesFixture(); other = minutesFixture(); await f.create(); await other.create();
+    f = minutesFixture(); other = minutesFixture(); await f.create({ voice: true }); await other.create();
     secret = process.env.COPILOT_SERVICE_SECRET; process.env.COPILOT_SERVICE_SECRET = "roleplay-parity";
     who = spyOn(identity, "resolveSessionUser").mockResolvedValue({ org: { ...f.org, accentColor: null }, user: f.learner, signInUrl: "/sign-in" });
     const fetch = globalThis.fetch;

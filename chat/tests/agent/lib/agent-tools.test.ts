@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, test } from "node:test";
-import { formatWorkspaceBlock, NO_TOOLS, toolSettings, workspaceAllowed, type ToolSettings } from "../../../agent/lib/agent-tools";
+import { callSettings, formatCallBlock, formatWorkspaceBlock, NO_CALL_SETTINGS, NO_TOOLS, toolSettings, workspaceAllowed, type CallSettings, type ToolSettings } from "../../../agent/lib/agent-tools";
 import { formatRoleplaySession, type RoleplaySkill } from "../../../agent/lib/roleplay";
 import workspace from "../../../agent/tools/workspace";
+import { executeWorkspaceTool } from "../../../agent/lib/workspace-tools";
 
 process.env.COPILOT_SERVICE_SECRET ??= "test-secret";
 const realFetch = globalThis.fetch;
@@ -33,6 +34,26 @@ describe("tool settings", () => {
     assert.deepEqual(toolSettings(undefined), NO_TOOLS);
     assert.deepEqual(toolSettings({ tools: { codeEditor: true, canvas: "yes" } }), on({ codeEditor: true }));
   });
+
+});
+
+describe("call settings", () => {
+  test("saved Before settings override older twin settings, including explicit off; invalid blocks fall back", () => {
+    const twinSettings = { preScreenshare: true, preUpload: true, duringUpload: true };
+    assert.deepEqual(callSettings({ twinSettings, before: { preUpload: false } }), NO_CALL_SETTINGS);
+    for (const before of [undefined, null, [], "old value"]) {
+      assert.deepEqual(callSettings({ twinSettings, before }), { screenShare: true, preUpload: true, duringUpload: true });
+    }
+    assert.deepEqual(callSettings({ before: { preScreenshare: "true", preUpload: 1, duringUpload: "true" } }), NO_CALL_SETTINGS);
+  });
+
+  test("files attached before the call can be read without asking for another mid-call", () => {
+    const beforeOnly = { ...NO_CALL_SETTINGS, preUpload: true };
+    assert.match(formatCallBlock(beforeOnly, NO_TOOLS), /none attached yet.*[Nn]ever ask.*during the call/);
+    assert.match(formatCallBlock(beforeOnly, NO_TOOLS, { attached: 1 }), /ATTACHED ARTIFACTS.*read_document.*[Nn]ever ask.*during the call/);
+    assert.match(formatCallBlock({ ...beforeOnly, duringUpload: true }, NO_TOOLS), /may also attach one during the call/);
+    assert.match(formatCallBlock(NO_CALL_SETTINGS, NO_TOOLS, { attached: 1 }), /read_document/);
+  });
 });
 
 describe("workspace tools resolver: a session gets only its switched-on tools", () => {
@@ -46,10 +67,10 @@ describe("workspace tools resolver: a session gets only its switched-on tools", 
   test("multiple choice", async () => {
     assert.deepEqual(await resolve({ choice: true }), [...shared, "get_choice_state", "highlight_choice"].sort());
   });
-  test("preview (PDF) opens through surface only; no slide tools are ever offered", async () => {
-    assert.deepEqual(await resolve({ preview: true }), shared.sort());
-    const all = await resolve({ canvas: true, codeEditor: true, preview: true, choice: true });
-    assert.equal(all?.some((name) => name.includes("presentation")), false);
+  test("preview enables PDF/image/presentation surfaces and slide navigation", async () => {
+    assert.deepEqual(await resolve({ preview: true }), [...shared, "get_presentation_state", "set_presentation_slide", "next_presentation_slide", "previous_presentation_slide"].sort());
+    const withoutPreview = await resolve({ canvas: true, codeEditor: true, choice: true });
+    assert.equal(withoutPreview?.some((name) => name.includes("presentation")), false);
   });
   test("nothing on, no settings, or a failed lookup: no workspace tools", async () => {
     assert.equal(await resolve({ canvas: false }), null);
@@ -71,39 +92,42 @@ describe("backstop: a call is allowed only when its switch is on", () => {
     assert.equal(workspaceAllowed(pdf, "surface", { action: "open_pdf" }), true);
     assert.equal(workspaceAllowed(pdf, "surface", { action: "highlight_document" }), true);
     assert.equal(workspaceAllowed(pdf, "surface", { action: "open_whiteboard" }), false);
-    assert.equal(workspaceAllowed(pdf, "surface", { action: "open_image" }), false);
-    assert.equal(workspaceAllowed(pdf, "surface", { action: "open_presentation" }), false);
+    assert.equal(workspaceAllowed(pdf, "surface", { action: "open_image" }), true);
+    assert.equal(workspaceAllowed(pdf, "surface", { action: "open_presentation" }), true);
     assert.equal(workspaceAllowed(pdf, "surface", { action: "close_surface" }), true);
     assert.equal(workspaceAllowed(NO_TOOLS, "surface", { action: "close_surface" }), false);
     assert.equal(workspaceAllowed(pdf, "surface", { action: "something_new" }), false);
   });
-  test("workspace_request follows its method's switch; slides and unknown methods refused", () => {
+  test("workspace_request follows its method's switch; unknown methods are refused", () => {
     const code = on({ codeEditor: true });
     assert.equal(workspaceAllowed(code, "workspace_request", { method: "workspace.code" }), true);
     assert.equal(workspaceAllowed(code, "workspace_request", { method: "workspace.canvas" }), false);
     assert.equal(workspaceAllowed(on({ canvas: true }), "workspace_request", { method: "workspace.whiteboard" }), true);
     assert.equal(workspaceAllowed(code, "workspace_request", { method: "workspace.presentation" }), false);
+    assert.equal(workspaceAllowed(on({ preview: true }), "workspace_request", { method: "workspace.presentation" }), true);
     assert.equal(workspaceAllowed(code, "workspace_request", { method: "anything" }), false);
   });
   test("unknown tools are refused", () => {
-    assert.equal(workspaceAllowed(on({ canvas: true, codeEditor: true, preview: true, choice: true }), "next_presentation_slide", {}), false);
+    assert.equal(workspaceAllowed(on({ canvas: true, codeEditor: true, preview: true, choice: true }), "invented_tool", {}), false);
+    assert.equal(workspaceAllowed(on({ preview: true }), "next_presentation_slide", {}), true);
+    assert.equal(workspaceAllowed(NO_TOOLS, "next_presentation_slide", {}), false);
   });
 });
 
 describe("prompt: the workspace for this call", () => {
   const roleplay: RoleplaySkill = { skill: "---\nname: test\n---\n# Test", difficulty: "medium" };
   const specs = { agentName: "Test", agentSlug: "test", personaName: "Adam" };
-  const prompt = (tools?: ToolSettings) => formatRoleplaySession(specs, roleplay, { learnerBlock: "" }, tools);
+  const prompt = (tools?: ToolSettings, call?: CallSettings) => formatRoleplaySession(specs, roleplay, { learnerBlock: "" }, tools, call);
 
-  test("nothing on: the role-play prompt is word for word as before", () => {
+  test("nothing on: only end_call and scenario_examples, and no workspace", () => {
     assert.equal(prompt(NO_TOOLS), prompt());
     assert.match(prompt(), /no trainer persona and no workspace\./);
-    assert.match(prompt(), /Call no tool except end_call \(to hang up, as above\) and scenario_examples\. Trainer, knowledge, document, résumé, plan and workspace tools are disabled in this mode\./);
+    assert.match(prompt(), /Call no tool except end_call \(to hang up, as above\), scenario_examples\. Every other tool is disabled in this mode\./);
     assert.equal(formatWorkspaceBlock(NO_TOOLS, { client: true }), "");
   });
 
-  test("some on: the prompt lists only those, in character, and allows read_document", () => {
-    const text = prompt(on({ preview: true }));
+  test("some on: the prompt lists only those, in character, and allows read_document once uploads are on", () => {
+    const text = prompt(on({ preview: true }), { screenShare: false, preUpload: true, duringUpload: false });
     assert.doesNotMatch(text, /and no workspace/);
     assert.match(text, /# Workspace for this call/);
     assert.match(text, /open_pdf/);

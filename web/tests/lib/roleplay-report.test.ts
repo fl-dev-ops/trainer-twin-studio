@@ -5,7 +5,7 @@ mock.module("@/lib/db", () => ({
   withLock: async () => { throw new Error("Unexpected locked write in read-only fixture"); },
   isUniqueViolation: (error: unknown) => typeof error === "object" && error !== null && "code" in error && error.code === "P2002", db: { interviewSession: { findUnique: async () => row } } }));
 
-const { buildRoleplayReport, loadRoleplayReportInput, roleplayAfterOf, toRoleplayReport } = await import("@/lib/roleplay/session-report");
+const { buildRoleplayReport, loadRoleplayReportInput, reportSystemPrompt, roleplayAfterOf, toRoleplayReport } = await import("@/lib/roleplay/session-report");
 const { ReportError } = await import("@/lib/report-model");
 
 const after = {
@@ -90,4 +90,15 @@ test("no transcript is fatal; a silent learner gets an empty, all-missed report 
   expect(silent.score).toBe(0);
   expect(silent.goalResults?.every((g) => g.status === "not_met")).toBe(true);
   expect(silent.rubricScores?.every((r) => r.points === 0)).toBe(true);
+});
+
+test("a client role play keeps the sales coach; an interview is judged as an interview, with no sales framing", () => {
+  const client = reportSystemPrompt();
+  expect(client).toBe(reportSystemPrompt("client", "Agent"));
+  expect(client).toMatch(/expert sales coach/);
+  const interview = reportSystemPrompt("Interviewer", "Candidate");
+  expect(interview).toMatch(/^You are an expert coach evaluating a completed practice role play between an AI playing the Interviewer and a Learner playing the Candidate\./);
+  expect(interview).not.toMatch(/sales|salesperson|surface objection|Waiting for the market|Pitched too early/);
+  // Same report shape and consistency rules.
+  for (const line of ["goalResults", "rubricScores", "keyMoments", "Keep goal results and rubric points consistent"]) expect(interview).toContain(line);
 });

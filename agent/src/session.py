@@ -18,11 +18,11 @@ from tts import build_tts
 
 logger = logging.getLogger(__name__)
 
-# "trainertwin-runtime" is the magic model name both backends treat as "use the
-# agent's own default model": the web runtime (chat-completions handler) hardcodes
-# it, and the chat bridge accepts it (or "trainertwin-brain") as the default-model
-# signal. Switching backends = changing LLM_BASE_URL only.
+# "trainertwin-runtime" is the model name the chat bridge accepts (as "trainertwin-brain")
+# as "use the agent's own default model".
 DEFAULT_LLM_MODEL = "trainertwin-runtime"
+# The chat service (eve, chat/agent/channels/openai-compat.ts) runs every session; the web's own runtime is gone.
+DEFAULT_LLM_BASE_URL = "http://localhost:2000/v1"
 DEFAULT_DEEPGRAM_STT_MODEL = "flux-general-en"
 
 
@@ -38,11 +38,7 @@ def build_agent_session(
     dg_api_key = os.getenv("DEEPGRAM_API_KEY", "").strip() or "test-key"
     stt = deepgram.STTv2(model=DEFAULT_DEEPGRAM_STT_MODEL, api_key=dg_api_key)
 
-    web_base = os.getenv("WEB_URL", "http://localhost:3000").rstrip("/")
-    resolved_base_url = base_url or os.getenv("LLM_BASE_URL", f"{web_base}/api/v1")
-    # Model name is backend-magic: "trainertwin-brain" = chat bridge default,
-    # "trainertwin-runtime" = the web runtime (which also ignores it). Set
-    # LLM_MODEL in .env to match LLM_BASE_URL's backend.
+    resolved_base_url = base_url or os.getenv("LLM_BASE_URL", DEFAULT_LLM_BASE_URL)
     resolved_model = model or os.getenv("LLM_MODEL", "").strip() or DEFAULT_LLM_MODEL
     resolved_api_key = api_key or ""
     if not resolved_api_key:

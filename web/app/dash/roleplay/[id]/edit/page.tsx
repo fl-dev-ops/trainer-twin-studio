@@ -1,6 +1,7 @@
 "use client";
 
 import { useParams } from "next/navigation";
+import { RoleplayBriefEditPage } from "@/components/roleplay/roleplay-brief-edit-page";
 import { RoleplayBuilderPage } from "@/components/roleplay/roleplay-builder-page";
 import { api, pageNotFound, useApi } from "@/lib/api";
 
@@ -10,6 +11,8 @@ export default function EditRoleplayRoute() {
   const [saved, personas] = useApi(["roleplay.edit", id], () =>
     Promise.all([api.roleplay.builder.get.query({ slug: id }), api.roleplay.builder.personas.query()]),
   );
+  // Every role play: the simple edit page (basics, persona, read-only script, settings).
+  if (saved.brief) return <RoleplayBriefEditPage slug={saved.slug} brief={saved.brief} before={saved.before} tools={saved.tools} personas={personas} />;
   if (!saved.builder) pageNotFound();
   return <RoleplayBuilderPage slug={saved.slug} initial={saved.builder} before={saved.before} tools={saved.tools} personas={personas} />;
 }
