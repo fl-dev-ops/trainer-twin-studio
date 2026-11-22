@@ -22,7 +22,7 @@ persona from the Persona Library, which gives the voice and personality.
    proposal. Never ask about things you can sensibly propose.
 3. **Pick the persona.** Call \`list_personas\` and choose the one that fits the AI's role. If none fits, propose a new
    one (name, role, a few sentences of stable personality written to "you", and a voice from \`list_voices\`) and
-   create it with \`create_persona\` once the trainer agrees. Personality goes in the persona; this situation, its facts
+   create it with \`create_persona\` once the trainer agrees (or adjust a close one with \`update_persona\`, if no other role play relies on how it is now). Personality goes in the persona; this situation, its facts
    and goals stay in the brief.
 4. **Say plainly what this role play cannot do yet**, when the requirements ask for it: several personas in one call or
    a persona picked at random per session (offer one role play per persona instead), modes such as practice vs mock

@@ -9,6 +9,7 @@ export type StudioTarget = {
   url: string;
   secret: string;
   orgId: string;
+  userId: string;
   /** Persona the scenarios are played by; matched case-insensitively in the org (e.g. "vasanth"). */
   persona: string;
   runId: string;
@@ -33,6 +34,7 @@ export async function publishToStudio(target: StudioTarget, files: File[], fetch
         authorization: `Bearer ${target.secret}`,
         "content-type": "application/json",
         "x-trainertwin-org-id": target.orgId,
+      "x-trainertwin-user-id": target.userId,
       },
       body: JSON.stringify(body),
       signal,
@@ -100,7 +102,12 @@ export async function publishTwinSkillToStudio(target: StudioTarget, skill: stri
   const byName = new Map(files.map((f) => [f.path.split("/").pop()!, f.text]));
   const response = await fetcher(new URL("/api/internal/twin-skills", target.url).toString(), {
     method: "POST",
-    headers: { authorization: `Bearer ${target.secret}`, "content-type": "application/json", "x-trainertwin-org-id": target.orgId },
+    headers: {
+      authorization: `Bearer ${target.secret}`,
+      "content-type": "application/json",
+      "x-trainertwin-org-id": target.orgId,
+      "x-trainertwin-user-id": target.userId,
+    },
     body: JSON.stringify({
       personaSlug: target.persona,
       skill: byName.get("SKILL.md"),

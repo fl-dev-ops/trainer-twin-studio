@@ -1,4 +1,5 @@
-import { ingestAuthorized, ingestTwinSkill, ScenarioIngestError, twinSkillIngestSchema, type TwinSkillIngestInput } from "@/lib/scenario-ingest";
+import { copilotActor } from "@/lib/copilot-actor";
+import { ingestTwinSkill, ScenarioIngestError, twinSkillIngestSchema, type TwinSkillIngestInput } from "@/lib/scenario-ingest";
 import { AppError, errorResponse } from "@/lib/errors";
 
 export const runtime = "nodejs";
@@ -11,9 +12,9 @@ export const maxDuration = 120;
  * Re-sending the same skill is a no-op; a changed one gets a new version and replaces its items.
  */
 export async function POST(request: Request) {
-  if (!ingestAuthorized(request)) return Response.json({ error: "Unauthorized" }, { status: 401 });
-  const orgId = request.headers.get("x-trainertwin-org-id")?.trim();
-  if (!orgId) return Response.json({ error: "Organization is required" }, { status: 400 });
+  const actor = await copilotActor(request);
+  if (actor instanceof Response) return actor;
+  const orgId = actor.org.id;
 
   const body: unknown = await request.json().catch(() => null);
   const parsed = twinSkillIngestSchema.safeParse(body);
@@ -22,7 +23,7 @@ export async function POST(request: Request) {
   }
   try {
     // Validated, but stored as sent (zod output reorders unknown keys).
-    const result = await ingestTwinSkill(orgId, body as TwinSkillIngestInput);
+    const result = await ingestTwinSkill(orgId, body as TwinSkillIngestInput, { disallowRestore: true });
     return Response.json({ ok: true, skill: result }, { status: result.created ? 201 : 200 });
   } catch (error) {
     if (error instanceof AppError) return errorResponse(error);

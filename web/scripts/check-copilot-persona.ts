@@ -20,6 +20,7 @@ try {
     await tx.user.create({ data: { id: user, email: `${user}@example.com`, name: "QA Trainer", emailVerified: true } });
     await tx.organization.create({ data: { id: org, slug: org, name: "Persona QA", createdAt: new Date(), members: { create: { id: `${org}-member`, role: "admin", userId: user, createdAt: new Date() } } } });
     await tx.voice.create({ data: { id: voice, orgId: org, name: "Granite Demo", kind: "cloned", status: "ready", s3AudioKey: `fixture/${org}/tts-voices/${voice}/reference.wav` } });
+    await tx.persona.create({ data: { orgId: org, slug: "qa-trainer", name: "QA Trainer", isOwn: true, data: {} } });
   });
   const evalRun = Bun.spawn(["bunx", "eve", "eval", "persona-approval", "--skip-report"], {
     cwd: fileURLToPath(new URL("../../copilot", import.meta.url)), stdout: "inherit", stderr: "inherit",
@@ -27,10 +28,17 @@ try {
       PERSONA_QA_ORG: org, PERSONA_QA_USER: user, PERSONA_QA_VOICE: voice, OTEL_SDK_DISABLED: "", LANGFUSE_PUBLIC_KEY: "", LANGFUSE_SECRET_KEY: "" },
   });
   assert.equal(await evalRun.exited, 0);
-  const personas = await db.persona.findMany({ where: { orgId: org }, select: { slug: true, voiceId: true } });
-  assert.deepEqual(personas, [{ slug: "maya-approved", voiceId: voice }]);
+  const personas = await db.persona.findMany({ where: { orgId: org, isOwn: false }, select: { slug: true, voiceId: true, version: true, data: true } });
+  assert.equal(personas.length, 1);
+  assert.equal(personas[0].slug, "maya-approved");
+  assert.equal(personas[0].voiceId, voice);
+  assert.equal(personas[0].version, 2);
+  assert.match(JSON.stringify(personas[0].data), /You ask one short question at a time/);
+  assert.equal(await db.agent.count({ where: { orgId: org, kind: "TWIN", slug: `${org}-qa-trainer-twin` } }), 1);
 } finally {
   server.stop(true);
+  await db.agent.deleteMany({ where: { orgId: org } });
+  await db.specVersion.deleteMany({ where: { orgId: org } });
   await db.persona.deleteMany({ where: { orgId: org } });
   await db.voice.deleteMany({ where: { orgId: org } });
   await db.organization.deleteMany({ where: { id: org } });

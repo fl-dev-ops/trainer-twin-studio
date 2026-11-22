@@ -2,6 +2,8 @@
 // knowledge re-sync. Run: bun test test/copilot-v2.test.ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readdirSync } from "node:fs";
+import { fetchUpload } from "../agent/lib/uploads";
 import { applyEdits, holdsPart, mergeWithBase, rebaseAfterPublish, saveTwinSkill } from "../agent/lib/twin-skill.ts";
 import { outPath } from "../agent/lib/paths.ts";
 import { studio } from "../agent/lib/studio.ts";
@@ -17,6 +19,21 @@ const base = {
   slug: "olga-objection-handling", version: 1, skillId: "objection-handling", name: "Objection Handling",
   items: [item("a", "too-expensive", "I never defend the price, I clarify what they mean"), item("b", "wait", "When they want to wait I build the cost chain")],
 };
+
+test("only approved Studio and scoped draft/source tools are shipped", () => {
+  const tools = readdirSync(new URL("../agent/tools/", import.meta.url)).filter((name) => name.endsWith(".ts")).map((name) => name.slice(0, -3));
+  assert.deepEqual(tools.sort(), [
+    "build_scenario", "build_twin_skill", "check", "create_persona", "create_twin", "draft_roleplay", "files",
+    "get_roleplay", "get_twin", "list_personas", "list_roleplays", "list_twins", "list_voices", "load_skill",
+    "publish", "publish_roleplay", "publish_twin_skill", "read", "read_file", "read_method", "read_sessions",
+    "search", "update_persona", "update_roleplay", "update_twin", "write",
+  ]);
+});
+
+test("attachments must come from the Studio upload picker", async () => {
+  await assert.rejects(async () => fetchUpload("https://example.invalid/attachment.pdf"), /Studio file picker/);
+  await assert.rejects(async () => fetchUpload("trainertwin-upload://fixture"), /isn't available/);
+});
 
 test("a redacted stored item still matches its source turn", () => {
   assert.equal(holdsPart("Call Maria now and ask what she means", "Call Maria now"), true);

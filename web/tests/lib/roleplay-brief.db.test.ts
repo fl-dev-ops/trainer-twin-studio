@@ -79,6 +79,14 @@ describe.skipIf(!localMinutesDb)("role plays written from requirements, through 
     const { copilotStudioInput } = await import("@/lib/copilot-studio");
     expect(copilotStudioInput.safeParse({ action: "createPersona", name: "", role: "Buyer", about: "" }).success).toBe(false);
     expect(copilotStudioInput.safeParse({ action: "createPersona", name: "X", role: "Buyer", about: "", isOwn: true }).success).toBe(false);
+
+    // Edit: only the passed fields change, a new version; the trainer's own persona is refused.
+    const updated = await studio({ action: "updatePersona", slug: "priya-nair", role: "Engineering manager" });
+    expect(updated).toMatchObject({ ok: true, slug: "priya-nair", version: 2 });
+    const edited = await db.persona.findFirstOrThrow({ where: { orgId: f.org.id, slug: "priya-nair" }, select: { name: true, voiceId: true, data: true } });
+    expect(edited).toMatchObject({ name: "Priya Nair", voiceId: own!.id, data: expect.objectContaining({ role: "Engineering manager", background: "You are calm and ask short questions." }) });
+    await expect(studio({ action: "updatePersona", slug: f.org.slug, name: "Someone else" })).rejects.toThrow(/own persona/);
+    await expect(studio({ action: "updatePersona", slug: "nobody", name: "X" })).rejects.toThrow(/not found/);
   });
 
   test("lists personas, drafts without saving, publishes once, republishes as a no-op and an edit as v2", async () => {
@@ -108,6 +116,16 @@ describe.skipIf(!localMinutesDb)("role plays written from requirements, through 
     expect(read).toMatchObject({ kind: "roleplay-brief", brief: { id: "bevan-missed-deadlines-chloe", ending: { limit: "At most 5 minutes." } } });
     expect((await studio({ action: "list", kind: "roleplay" }) as { items: { slug: string; kind: string }[] }).items)
       .toContainEqual(expect.objectContaining({ slug: agent.slug, kind: "roleplay-brief" }));
+  });
+
+  test("publishing cannot restore an archived role play", async () => {
+    const input = { action: "publishRoleplay" as const, persona: "chloe", brief: brief("bevan-missed-deadlines") };
+    const { slug } = await studio(input) as { slug: string };
+    const archived = await db.agent.update({ where: { slug }, data: { archivedAt: new Date() } });
+    const originalFiles = new Map(files);
+    await expect(studio(input)).rejects.toMatchObject({ status: 409 });
+    expect(await db.agent.findUniqueOrThrow({ where: { slug } })).toEqual(archived);
+    expect(files).toEqual(originalFiles);
   });
 
   test("items are indexed with their kind, step and tags", async () => {

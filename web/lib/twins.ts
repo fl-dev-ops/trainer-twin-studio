@@ -1,4 +1,4 @@
-import { db } from "@/lib/db";
+import { db, withLock } from "@/lib/db";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import { validSlug } from "@/lib/specs";
 import { resolveSnapshotSkill, type SessionSkillCatalogEntry, type loadSessionSkills } from "@/lib/session-skills";
@@ -147,23 +147,26 @@ export async function ensureTwin(orgId: string, personaSlug: string) {
   const slug = `${org.slug}-${persona.slug}-twin`.toLowerCase();
   if (!validSlug(slug)) throw new TwinError(`"${slug}" is not a valid twin id`, 400);
 
-  const existing = await db.agent.findUnique({ where: { slug }, select: { orgId: true, name: true } });
-  if (existing && existing.orgId !== orgId) {
-    throw new TwinError(`Twin "${slug}" belongs to another organization`, 409);
-  }
-  if (existing) return { slug, name: existing.name, created: false };
+  return withLock([`agent:${slug}`], async (tx) => {
+    const existing = await tx.agent.findUnique({ where: { slug }, select: { orgId: true, name: true, kind: true, personaId: true, data: true, archivedAt: true } });
+    if (existing) {
+      if (existing.orgId !== orgId || existing.kind !== "TWIN" || existing.personaId !== persona.id || asRecord(existing.data)?.source !== TWIN_SOURCE || existing.archivedAt) {
+        throw new TwinError("That twin name is already in use or archived", 409);
+      }
+      return { slug, name: existing.name, created: false };
+    }
 
-  const name = `${persona.name}'s twin`;
-  const data = {
-    id: slug,
-    name,
-    objective: `Helps with real client situations: what to do and say next, the way ${persona.name} would.`,
-    source: TWIN_SOURCE,
-    config: { context: { mode: "none", required: false } },
-  };
-  const json = (value: unknown) => value as Prisma.InputJsonValue;
-  await db.agent.create({ data: { slug, name, version: 1, personaId: persona.id, kind: "TWIN", data: json(data), orgId } });
-  return { slug, name, created: true };
+    const name = `${persona.name}'s twin`;
+    const data = {
+      id: slug,
+      name,
+      objective: `Helps with real client situations: what to do and say next, the way ${persona.name} would.`,
+      source: TWIN_SOURCE,
+      config: { context: { mode: "none", required: false } },
+    };
+    await tx.agent.create({ data: { slug, name, version: 1, personaId: persona.id, kind: "TWIN", data, orgId } });
+    return { slug, name, created: true };
+  });
 }
 
 export class TwinError extends Error {

@@ -15,7 +15,7 @@ const inputSchema = z.object({
 
 export default defineTool({
   description:
-    "Create a new persona in the Persona Library (name, role, about, voice), when none from list_personas fits a role play. Check list_personas first and never create a duplicate of an existing one. Needs the trainer's approval. It can't edit or delete personas, or the trainer's own persona; those are done in Personas.",
+    "Create a new persona in the Persona Library (name, role, about, voice), when none from list_personas fits a role play. Check list_personas first and never create a duplicate of an existing one. Needs the trainer's approval. To change an existing one use update_persona. It can't delete personas or touch the trainer's own persona; those are done in Personas.",
   inputSchema,
   approval: {
     request: always(),

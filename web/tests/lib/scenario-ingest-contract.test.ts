@@ -232,6 +232,8 @@ mock.module("next/cache", () => ({ ...realCache, unstable_cache: <A extends unkn
 const { POST: studio } = await import("@/app/api/copilot/studio/route");
 const { roleplaySkill, formatRoleplaySession } = await import("../../../chat/agent/lib/roleplay");
 const { isRunnableAgentData } = await import("@/lib/specs");
+const people = await import("@/lib/org-people");
+mock.module("@/lib/org-people", () => ({ ...people, orgPerson: async () => ({ role: "admin", disabled: false, name: "Trainer" }) }));
 const { POST: scenarios } = await import("@/app/api/internal/scenarios/route");
 const { POST: runs } = await import("@/app/api/internal/scenario-runs/route");
 const { publishToStudio, runIdFor } = await import("../../../copilot/agent/lib/studio-publish");
@@ -274,7 +276,7 @@ const files = [
 
 test("an ingest publication lands in S3, Chroma and Postgres, files byte for byte", async () => {
   process.env.SCENARIO_INGEST_SECRET = "s3cret";
-  const target = { url: "http://web", secret: "s3cret", orgId: "org1", persona: "vasanth", runId: runIdFor("sess:01/abc") };
+  const target = { url: "http://web", secret: "s3cret", orgId: "org1", userId: "trainer", persona: "vasanth", runId: runIdFor("sess:01/abc") };
   expect(target.runId).toBe("sess-01-abc");
 
   const result = await publishToStudio(target, files, fetcher);
@@ -339,12 +341,12 @@ test("an ingest publication lands in S3, Chroma and Postgres, files byte for byt
 });
 
 test("failures come back per call instead of throwing", async () => {
-  const result = await publishToStudio({ url: "http://web", secret: "wrong", orgId: "org1", persona: "vasanth", runId: "r1" }, files, fetcher);
+  const result = await publishToStudio({ url: "http://web", secret: "wrong", orgId: "org1", userId: "trainer", persona: "vasanth", runId: "r1" }, files, fetcher);
   expect(result.run).toEqual({ ok: false, error: "Unauthorized" });
   expect(result.scenarios).toEqual([{ id: "fundamental-depth", ok: false, error: "Unauthorized" }]);
 
   process.env.SCENARIO_INGEST_SECRET = "s3cret";
-  const unknown = await publishToStudio({ url: "http://web", secret: "s3cret", orgId: "org1", persona: "nobody", runId: "r1" }, files, fetcher);
+  const unknown = await publishToStudio({ url: "http://web", secret: "s3cret", orgId: "org1", userId: "trainer", persona: "nobody", runId: "r1" }, files, fetcher);
   expect(unknown.scenarios[0]).toMatchObject({ ok: false, error: expect.stringContaining("Persona") });
 });
 
@@ -363,7 +365,7 @@ const kbFetch = async (url: string, init?: RequestInit) => {
   }
   return knowledgeSources(new Request(url, init));
 };
-const kb = { url: "https://dash.test", secret: "s3cret", orgId: "org1" };
+const kb = { url: "https://dash.test", secret: "s3cret", orgId: "org1", userId: "trainer" };
 const session = (n: number) => Array.from({ length: n }, (_, i) => (i % 2 ? "speaker_2: Fine, the viewing went well and the client liked it a lot." : "speaker_1: So what did the client say after the viewing?")).join("\n");
 
 test("the copilot pulls every Markdown copy in the org's knowledge base into its sandbox", async () => {
@@ -402,8 +404,8 @@ test("knowledge sources: secret and org required; a failed download fails the pu
 });
 
 test("only studio (organization) sessions read the knowledge base, and never fall back to the users folder", () => {
-  const org = { principalId: "org1", principalType: "organization" };
-  expect(knowledgeBaseFor(org, { STUDIO_URL: "https://dash.test", SCENARIO_INGEST_SECRET: "s" })).toEqual({ url: "https://dash.test", secret: "s", orgId: "org1" });
+  const org = { principalId: "org1", principalType: "organization", attributes: { userId: "trainer" } };
+  expect(knowledgeBaseFor(org, { STUDIO_URL: "https://dash.test", SCENARIO_INGEST_SECRET: "s" })).toEqual({ url: "https://dash.test", secret: "s", orgId: "org1", userId: "trainer" });
   expect(knowledgeBaseFor(org, {})).toBe("unconfigured");
   expect(knowledgeBaseFor({ principalId: "me", principalType: "user" }, {})).toBeNull();
   expect(knowledgeBaseFor(null, {})).toBeNull();
@@ -483,7 +485,7 @@ test("twin-creator: builds a twin skill from the trainer's own words, and publis
   expect(rejected).toEqual([]);
   agents.length = 0;
   const fetcher = async (url: string, init: RequestInit) => twinSkills(new Request(url, init));
-  const result = await publishTwinSkillToStudio({ url: "https://dash.test", secret: "s3cret", orgId: "org1", persona: "vasanth", runId: "run-twin" }, "off-plan-waiting", files, fetcher);
+  const result = await publishTwinSkillToStudio({ url: "https://dash.test", secret: "s3cret", orgId: "org1", userId: "trainer", persona: "vasanth", runId: "run-twin" }, "off-plan-waiting", files, fetcher);
   expect(result).toMatchObject({ ok: true, slug: "acme-off-plan-waiting", created: true, items: 8 });
   const agent = agents[0];
   expect(agent).toMatchObject({ kind: "TWIN", personaId: "p1", slug: "acme-off-plan-waiting" });
@@ -566,7 +568,7 @@ test("twin-creator: a 4th build of the same skill is refused, so the copilot rep
 
 test("twin skills endpoint: secret, org, and the trainer's words only", async () => {
   process.env.SCENARIO_INGEST_SECRET = "s3cret";
-  const post = (body: unknown, headers: Record<string, string> = { authorization: "Bearer s3cret", "x-trainertwin-org-id": "org1" }) =>
+  const post = (body: unknown, headers: Record<string, string> = { authorization: "Bearer s3cret", "x-trainertwin-org-id": "org1", "x-trainertwin-user-id": "trainer" }) =>
     twinSkills(new Request("https://dash.test/api/internal/twin-skills", { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) }));
   expect((await post({}, { authorization: "Bearer wrong", "x-trainertwin-org-id": "org1" })).status).toBe(401);
   expect((await post({}, { authorization: "Bearer s3cret" })).status).toBe(400);

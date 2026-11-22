@@ -38,10 +38,12 @@ async function toStudio(
   const url = process.env.STUDIO_URL;
   const secret = process.env.SCENARIO_INGEST_SECRET;
   if (principal?.principalType !== "organization") return { skipped: "This session is not attached to a TrainerTwin organization." };
+  const userId = principal.attributes?.userId;
+  if (typeof userId !== "string" || !userId) return { skipped: "No signed-in trainer." };
   if (!url || !secret) return { skipped: "STUDIO_URL or SCENARIO_INGEST_SECRET is not configured." };
   if (!files.some((f) => f.path === "plan.json")) return { skipped: "Nothing passed validation, so nothing was sent." };
   return publishToStudio(
-    { url, secret, orgId: principal.principalId, persona: persona ?? user, runId: runIdFor(ctx.session.id) },
+    { url, secret, orgId: principal.principalId, userId, persona: persona ?? user, runId: runIdFor(ctx.session.id) },
     files,
     fetch,
     ctx.abortSignal,

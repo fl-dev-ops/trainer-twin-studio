@@ -30,11 +30,12 @@ export default defineTool({
     const principal = sessionPrincipal(ctx);
     const url = process.env.STUDIO_URL;
     const secret = process.env.SCENARIO_INGEST_SECRET;
-    const studio = principal?.principalType !== "organization"
+    const userId = principal?.attributes?.userId;
+    const studio = principal?.principalType !== "organization" || typeof userId !== "string" || !userId
       ? { skipped: "This session is not attached to a TrainerTwin organization." }
       : !url || !secret
         ? { skipped: "STUDIO_URL or SCENARIO_INGEST_SECRET is not configured." }
-        : await publishTwinSkillToStudio({ url, secret, orgId: principal.principalId, persona: persona ?? user, runId: runIdFor(ctx.session.id) }, skill, files, fetch, ctx.abortSignal, changes ?? undefined);
+        : await publishTwinSkillToStudio({ url, secret, orgId: principal.principalId, userId, persona: persona ?? user, runId: runIdFor(ctx.session.id) }, skill, files, fetch, ctx.abortSignal, changes ?? undefined);
     // The next build in this conversation builds on what is now live, not on what was loaded before.
     if ("ok" in studio && studio.ok && studio.slug && studio.version) await rebaseAfterPublish(io, user, skill, { slug: studio.slug, version: studio.version });
     return { published: published.length, where: published[0]?.replace(/\/[^/]*$/, "") ?? null, rejected, studio, ...(changes ? { changes } : {}) };

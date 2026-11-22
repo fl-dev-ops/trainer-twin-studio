@@ -13,6 +13,7 @@ import type { BeforeSettings } from "@/lib/context-upload";
 import { renderRoleplay, roleplayBuilderSchema, type RoleplayItem } from "@/lib/roleplay/skill";
 import { draftBrief } from "@/lib/roleplay/brief";
 import { validSlug } from "@/lib/specs";
+import { TWIN_SOURCE } from "@/lib/twins";
 import type { ToolSettings } from "@/lib/agent-tools";
 
 /** Agent.data.source of a role play built in the builder (twin skills: "scenario-ingest"). */
@@ -201,6 +202,7 @@ async function storeSkillAgent(input: {
   runId?: string | null;
   /** Publish onto this existing slug instead of `<org>-<scenario>` (an interview converted in place keeps its slug). */
   slug?: string;
+  disallowRestore?: boolean;
 }) {
   const { org, kind } = input;
   const built = input.built ?? {
@@ -228,6 +230,9 @@ async function storeSkillAgent(input: {
     const currentAgent = await tx.agent.findUnique({ where: { slug } });
     if (currentAgent && currentAgent.orgId !== org.id) {
       throw new ScenarioIngestError(`Scenario "${slug}" belongs to another organization`, 409);
+    }
+    if (currentAgent && ((currentAgent.data as { source?: unknown } | null)?.source === TWIN_SOURCE || (input.disallowRestore && currentAgent.archivedAt))) {
+      throw new ScenarioIngestError("Cannot publish over a main twin or a restricted archived item", 409);
     }
     if (currentAgent && currentAgent.kind !== kind) {
       throw new ScenarioIngestError(kind === "TWIN" ? `"${slug}" is a role play, not a twin skill` : `"${slug}" is a twin skill, not a role play`, 409);
@@ -358,7 +363,7 @@ async function storeSkillAgent(input: {
 }
 
 /** Publishes authored scenario files; twins require an own persona, role plays may use any org persona. */
-export async function ingestScenario(orgId: string, input: ScenarioIngestInput) {
+export async function ingestScenario(orgId: string, input: ScenarioIngestInput, options?: { disallowRestore: boolean }) {
   const kind = input.kind ?? "TWIN";
   const [org, persona] = await Promise.all([
     requireOrg(orgId),
@@ -367,7 +372,7 @@ export async function ingestScenario(orgId: string, input: ScenarioIngestInput) 
   if (!persona) throw new ScenarioIngestError(`Persona "${input.personaSlug}" was not found in this organization`, 404);
   return storeSkillAgent({
     org, kind, personaId: persona.id, manifest: input.scenario, skill: input.skill, items: input.items,
-    patterns: input.patterns, runId: input.runId,
+    patterns: input.patterns, runId: input.runId, disallowRestore: options?.disallowRestore,
   });
 }
 
@@ -400,7 +405,7 @@ export async function publishInterviewSkill(orgId: string, input: {
  * kept with the role play (`data.roleplayBrief`) so the copilot edits it rather than rewriting the skill. Refuses an
  * incomplete brief; the same brief republished is a no-op.
  */
-export async function publishRoleplayBrief(orgId: string, input: { personaSlug: string; brief: unknown }) {
+export async function publishRoleplayBrief(orgId: string, input: { personaSlug: string; brief: unknown }, options?: { disallowRestore: boolean }) {
   const draft = draftBrief(input.brief);
   if (!draft.ok) throw new ScenarioIngestError(`The role play is not ready: ${draft.reasons.join(" ")}`, 400);
   const [org, persona] = await Promise.all([
@@ -410,7 +415,7 @@ export async function publishRoleplayBrief(orgId: string, input: { personaSlug: 
   if (!persona) throw new ScenarioIngestError(`Persona "${input.personaSlug}" was not found in this organization`, 404);
   return storeSkillAgent({
     org, kind: "ROLEPLAY", personaId: persona.id, manifest: scenarioManifestSchema.parse(draft.scenario), skill: draft.skill, items: draft.items,
-    data: { roleplayBrief: draft.brief },
+    data: { roleplayBrief: draft.brief }, disallowRestore: options?.disallowRestore,
   });
 }
 
@@ -463,7 +468,7 @@ export function buildTwinSkill(orgSlug: string, manifest: TwinSkillManifest, ski
 }
 
 /** Creates or updates a twin skill from the copilot's twin-creator. Always a TWIN of the trainer's own persona. */
-export async function ingestTwinSkill(orgId: string, input: TwinSkillIngestInput) {
+export async function ingestTwinSkill(orgId: string, input: TwinSkillIngestInput, options?: { disallowRestore: boolean }) {
   const [org, persona] = await Promise.all([
     requireOrg(orgId),
     db.persona.findFirst({ where: { orgId, isOwn: true, slug: { equals: input.personaSlug, mode: "insensitive" } }, select: { id: true } }),
@@ -471,7 +476,7 @@ export async function ingestTwinSkill(orgId: string, input: TwinSkillIngestInput
   if (!persona) throw new ScenarioIngestError(`Persona "${input.personaSlug}" was not found in this organization`, 404);
   return storeSkillAgent({
     org, kind: "TWIN", personaId: persona.id, built: buildTwinSkill(org.slug, input.manifest, input.skill),
-    skill: input.skill, items: input.items, patterns: input.patterns, changes: input.changes, runId: input.runId,
+    skill: input.skill, items: input.items, patterns: input.patterns, changes: input.changes, runId: input.runId, disallowRestore: options?.disallowRestore,
   });
 }
 

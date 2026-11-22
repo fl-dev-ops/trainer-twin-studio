@@ -1,4 +1,5 @@
-import { ingestAuthorized, ingestScenarioRun, ScenarioIngestError, scenarioRunSchema, type ScenarioRunInput } from "@/lib/scenario-ingest";
+import { copilotActor } from "@/lib/copilot-actor";
+import { ingestScenarioRun, ScenarioIngestError, scenarioRunSchema, type ScenarioRunInput } from "@/lib/scenario-ingest";
 
 export const runtime = "nodejs";
 
@@ -7,9 +8,9 @@ export const runtime = "nodejs";
  * Call once per run, before sending its scenarios to /api/internal/scenarios with the same runId.
  */
 export async function POST(request: Request) {
-  if (!ingestAuthorized(request)) return Response.json({ error: "Unauthorized" }, { status: 401 });
-  const orgId = request.headers.get("x-trainertwin-org-id")?.trim();
-  if (!orgId) return Response.json({ error: "Organization is required" }, { status: 400 });
+  const actor = await copilotActor(request);
+  if (actor instanceof Response) return actor;
+  const orgId = actor.org.id;
 
   const body: unknown = await request.json().catch(() => null);
   const parsed = scenarioRunSchema.safeParse(body);

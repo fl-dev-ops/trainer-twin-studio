@@ -5,9 +5,8 @@ import * as externalApi from "@/lib/external-api";
 import * as delivery from "@/lib/external-api-assignments";
 import { GET as listAssignments, POST } from "@/app/api/v1/assignments/route";
 import { GET, PATCH } from "@/app/api/v1/assignments/[id]/route";
-import { assignRoleplayLearners, inviteToRoleplay } from "@/lib/invite/roleplay";
+import { assignRoleplayLearners } from "@/lib/invite/roleplay";
 import { setMemberDisabled } from "@/lib/members";
-import { runCopilotStudio, type CopilotStudioDeps } from "@/lib/copilot-studio";
 import { availableOrgSeconds, fundOrg } from "../setup/meteroid";
 import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "./minutes-test-db";
 
@@ -82,18 +81,6 @@ describe.skipIf(!localMinutesDb)("Module 4 atomic role-play assignment services 
     await db.member.update({ where: { id: `${f.learner.id}-member` }, data: code === "person_disabled" ? { disabledAt: new Date() } : { role: "team" } });
     const before = await snapshot(); const newcomer = `batch-${f.org.id}@example.com`;
     await expect(assign([newcomer, f.learner.email])).rejects.toMatchObject({ code, status: 409 });
-    expect(await snapshot()).toEqual(before);
-    expect(await db.user.count({ where: { email: newcomer } })).toBe(0);
-    expect(await availableOrgSeconds(f.org.id)).toBe(6000);
-  });
-
-  test("refuses person_is_studio when the copilot batch contains a team email; nothing is written", async () => {
-    await fundOrg({ orgId: f.org.id, minutes: 100 });
-    await db.member.update({ where: { id: `${f.learner.id}-member` }, data: { role: "team" } });
-    const before = await snapshot(); const newcomer = `copilot-${f.org.id}@example.com`;
-    // Real membership validation + assignment transaction; no workflow or email transport is needed on refusal.
-    const deps = { db, inviteToRoleplay } as unknown as CopilotStudioDeps;
-    await expect(runCopilotStudio({ org: f.org, user: f.trainer }, { action: "inviteLearners", slug: f.roleplay.slug, emails: [newcomer, f.learner.email] }, deps)).rejects.toMatchObject({ code: "person_is_studio", status: 409 });
     expect(await snapshot()).toEqual(before);
     expect(await db.user.count({ where: { email: newcomer } })).toBe(0);
     expect(await availableOrgSeconds(f.org.id)).toBe(6000);

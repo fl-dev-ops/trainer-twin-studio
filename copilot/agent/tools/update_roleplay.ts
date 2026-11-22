@@ -9,11 +9,11 @@ const inputSchema = z.object({
     "Builder role plays only: the fields to change, named as get_roleplay returns them (name, clientName, situation {scenario, hiddenTruth, learnerRole, agreesWhen, declinesWhen}, difficulty, howTheyTalk, guardedIf, opensUpIf, whatToExpect, opening, exampleLines, learnerGoals, rubric). Omitted fields keep their value.",
   ),
   before: z.object({
-    preScreenshare: z.boolean(), preUpload: z.boolean(), duringUpload: z.boolean(),
+    preScreenshare: z.boolean(), preUpload: z.boolean(), preUploadRequired: z.boolean(), duringUpload: z.boolean(),
     uploadTitle: z.string().max(80), uploadInstruction: z.string().max(300),
   }).partial().optional(),
-  tools: z.object({ canvas: z.boolean(), codeEditor: z.boolean(), preview: z.boolean(), choice: z.boolean() }).partial().optional()
-    .describe("Workspace tools the client may open during the call."),
+  tools: z.object({ canvas: z.boolean(), codeEditor: z.boolean(), preview: z.boolean(), choice: z.boolean(), knowledge: z.boolean() }).partial().optional()
+    .describe("Workspace tools the client may open during the call; knowledge lets the client search the knowledge base during the call."),
 });
 
 const describe = (input: z.infer<typeof inputSchema>) => [

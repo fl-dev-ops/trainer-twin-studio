@@ -12,7 +12,7 @@ export const UPLOAD_SCHEME = "trainertwin-upload://";
 type Resolved = { name: string; mediaType: string; url?: string; data?: string };
 
 export const fetchUpload: FetchFileFunction = async (url, context) => {
-  if (!url.startsWith(UPLOAD_SCHEME)) return null;
+  if (!url.startsWith(UPLOAD_SCHEME)) throw attachmentError("Attach files through the Studio file picker.");
   if (!context) throw attachmentError("This file isn't available.");
   let resolved: Resolved;
   try {

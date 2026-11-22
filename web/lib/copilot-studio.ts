@@ -8,29 +8,20 @@ import { roleplayBuilderFrom } from "@/lib/roleplay/skill";
 import { getObjectText } from "@/lib/s3";
 import { publishRoleplayBrief, ROLEPLAY_SOURCE, ScenarioIngestError, TWIN_SKILL_SOURCE } from "@/lib/scenario-ingest";
 import { draftBrief } from "@/lib/roleplay/brief";
-import { runRoleplayAssign, runTwinAssign } from "@/lib/workflow-runs";
-import { accessUntilSchema, listTwinAssignments } from "@/lib/twin-access";
 import { updateTwin } from "@/lib/twin/manage";
-import { personaInputSchema } from "@/lib/persona";
+import { personaFromStored, personaInputSchema } from "@/lib/persona";
 import { PersonaError, savePersona } from "@/lib/personas";
 import { listAvailableVoices } from "@/lib/voices";
-import { TWIN_SOURCE } from "@/lib/twins";
+import { ensureTwin, TWIN_SOURCE, TwinError } from "@/lib/twins";
 import { readSkillPackage, skillRefusals } from "@/lib/skills";
 import { getMappedSkillPackage, hydrateAgentSkill } from "@/lib/skill-history";
 
-/**
- * What the copilot may read and change in the studio, for one org (plans/copilot-v2.md). Twins, twin skills and role
- * plays: read, change settings, archive / restore (soft delete). Learners: invite only. Never studio members, never a
- * hard delete. The route (/api/internal/copilot-studio) authenticates the copilot and passes the org and acting user.
- */
-
 const slug = z.string().trim().min(1).max(200);
-const emails = z.array(z.string().trim().toLowerCase().email().max(320)).min(1).max(100);
 const before = z.object({
-  preScreenshare: z.boolean(), preUpload: z.boolean(), duringUpload: z.boolean(),
+  preScreenshare: z.boolean(), preUpload: z.boolean(), preUploadRequired: z.boolean(), duringUpload: z.boolean(),
   uploadTitle: z.string().trim().max(80), uploadInstruction: z.string().trim().max(300),
 }).partial().strict();
-const tools = z.object({ canvas: z.boolean(), codeEditor: z.boolean(), preview: z.boolean(), choice: z.boolean() }).partial().strict();
+const tools = z.object({ canvas: z.boolean(), codeEditor: z.boolean(), preview: z.boolean(), choice: z.boolean(), knowledge: z.boolean() }).partial().strict();
 
 export const copilotStudioInput = z.discriminatedUnion("action", [
   z.object({ action: z.literal("context") }).strict(),
@@ -54,40 +45,22 @@ export const copilotStudioInput = z.discriminatedUnion("action", [
     before: before.optional(),
     tools: tools.optional(),
   }).strict(),
-  z.object({
-    action: z.literal("inviteLearners"), slug, emails,
-    /** Legacy, ignored: new learners get their starting minutes from the org balance. */
-    minutes: z.number().int().min(1).max(10_000).optional(),
-    accessUntil: accessUntilSchema,
-  }).strict(),
   // Role plays written from requirements (lib/roleplay/brief.ts): personas to play them, a draft (check + render, nothing
   // saved), and publishing on the trainer's approval.
   z.object({ action: z.literal("listPersonas") }).strict(),
   // A new role-play persona (the Personas page's form: name, role, about, a voice), on the trainer's approval.
   z.object({ action: z.literal("listVoices") }).strict(),
   personaInputSchema.extend({ action: z.literal("createPersona") }).strict(),
+  // Edit a role-play persona: only the fields passed change. The trainer's own persona is edited in Personas.
+  personaInputSchema.partial().extend({ action: z.literal("updatePersona"), slug }).strict(),
   z.object({ action: z.literal("draftRoleplay"), brief: z.unknown() }).strict(),
   z.object({ action: z.literal("publishRoleplay"), persona: slug, brief: z.unknown() }).strict(),
-  z.object({ action: z.literal("archive"), slug }).strict(),
-  z.object({ action: z.literal("restore"), slug }).strict(),
+  z.object({ action: z.literal("createTwin"), persona: slug }).strict(),
 ]);
 export type CopilotStudioInput = z.infer<typeof copilotStudioInput>;
 export type Actor = { org: { id: string; slug: string }; user: { id: string; name: string } };
 
-/** What runCopilotStudio talks to; tests pass fakes instead of stubbing modules. */
-/**
- * What the copilot says about the invite emails: queued in the send-invite-emails workflow (their outcome isn't known
- * yet, so no failure count), or, when they were sent right away, how many failed.
- */
-function emailsStatus<T extends { emailFailures: number; emailsQueued?: number; emailProgress?: string }>(result: T) {
-  const { emailFailures, emailsQueued, emailProgress, ...stats } = result;
-  return emailProgress
-    ? { ...stats, emails: `${emailsQueued} being sent; each is retried automatically, and the studio shows any that still fail` }
-    : { ...stats, emailFailures };
-}
-
-// Assigning goes through the assign-twin / assign-roleplay workflows (lib/workflow-runs.ts), as on the Assign pages.
-const defaultDeps = { db, getObjectText, savePersona, listAvailableVoices, assignTwinAndInvite: runTwinAssign, listTwinAssignments, inviteToRoleplay: runRoleplayAssign, updateTwin, updateRoleplay, resolveUpload, publishRoleplayBrief };
+const defaultDeps = { db, getObjectText, savePersona, listAvailableVoices, ensureTwin, updateTwin, updateRoleplay, resolveUpload, publishRoleplayBrief };
 export type CopilotStudioDeps = typeof defaultDeps;
 
 const asRecord = (value: unknown) => (value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {});
@@ -157,24 +130,13 @@ export async function runCopilotStudio(actor: Actor, input: CopilotStudioInput, 
         slug: agent.slug, name: agent.name, kind, version: agent.version, archived: agent.archivedAt !== null,
         description: text(asRecord(agent.data).objective), settings: beforeSettings(agent.data),
       };
-      if (agent.kind === "TWIN") {
-        const learners = await d.listTwinAssignments(orgId, agent.id);
-        return {
-          ...base,
-          learners: learners.map((row) => ({ email: row.email, status: row.status, minutesGiven: row.minutesGiven, minutesUsed: row.minutesUsed })),
-        };
-      }
-      const invites = await d.db.rolePlayAssignment.findMany({
-        where: { orgId, deployment: { agentId: agent.id } },
-        select: { status: true, member: { select: { user: { select: { email: true } } } } },
-      });
+      if (agent.kind === "TWIN") return base;
       return {
         ...base,
         tools: toolSettings(agent.data),
         builder: kind === "roleplay-builder" ? roleplayBuilderFrom(agent.data) : null,
         // A role play written from requirements: its brief, which an edit changes (then publishRoleplay again).
         brief: kind === "roleplay-brief" ? asRecord(agent.data).roleplayBrief : null,
-        learners: invites.map((row) => ({ email: row.member.user.email.toLowerCase(), status: row.status })),
       };
     }
 
@@ -255,19 +217,6 @@ export async function runCopilotStudio(actor: Actor, input: CopilotStudioInput, 
     case "updateRoleplay":
       return d.updateRoleplay(orgId, input.slug, { builder: input.builder as never, before: input.before, tools: input.tools });
 
-    case "inviteLearners": {
-      const agent = await findAgent(d, orgId, input.slug, { archived: false });
-      // As the dashboard does (specs/practice.md rules 10, 19): a team member or a disabled person in the list refuses
-      // the whole batch (person_is_studio / person_disabled), with nothing written.
-      if (agent.kind === "TWIN") {
-        return emailsStatus(await d.assignTwinAndInvite({
-          org: actor.org, by: actor.user, agent: { id: agent.id, name: agent.name },
-          emails: input.emails, accessUntil: input.accessUntil,
-        }));
-      }
-      return emailsStatus(await d.inviteToRoleplay({ org: actor.org, by: actor.user, agent, emails: input.emails }));
-    }
-
     case "listPersonas": {
       // Who can play a role play: the org's personas (personality and voice). The skill never redefines them.
       const personas = await d.db.persona.findMany({
@@ -299,6 +248,21 @@ export async function runCopilotStudio(actor: Actor, input: CopilotStudioInput, 
       }
     }
 
+    case "updatePersona": {
+      const { action: _action, slug: personaSlug, ...patch } = input;
+      const existing = await d.db.persona.findFirst({ where: { orgId, slug: personaSlug }, select: { name: true, isOwn: true, data: true } });
+      if (!existing) throw new ScenarioIngestError(`Persona "${personaSlug}" was not found`, 404);
+      if (existing.isOwn) throw new ScenarioIngestError("The trainer's own persona is edited in Personas, not from the copilot", 403);
+      const current = personaFromStored(existing.name, existing.data);
+      try {
+        const saved = await d.savePersona(orgId, { ...current, ...patch }, personaSlug);
+        return { ok: true, slug: saved.slug, version: saved.version, changed: Object.keys(patch), appliesTo: "later sessions of every role play using this persona" };
+      } catch (error) {
+        if (error instanceof PersonaError) throw new ScenarioIngestError(error.message, error.status);
+        throw error;
+      }
+    }
+
     case "draftRoleplay": {
       const draft = draftBrief(input.brief);
       return draft.ok
@@ -311,21 +275,17 @@ export async function runCopilotStudio(actor: Actor, input: CopilotStudioInput, 
       if (existing && (existing.kind !== "ROLEPLAY" || (!asRecord(existing.data).roleplayBrief && asRecord(existing.data).skill))) {
         throw new ScenarioIngestError("A different role play or twin already uses this id; choose another brief id.", 409);
       }
-      const published = await d.publishRoleplayBrief(orgId, { personaSlug: input.persona, brief: input.brief });
+      const published = await d.publishRoleplayBrief(orgId, { personaSlug: input.persona, brief: input.brief }, { disallowRestore: true });
       return { ok: true, slug: published.slug, name: published.name, version: published.version, created: published.created, items: published.items };
     }
 
-    case "archive": {
-      const agent = await findAgent(d, orgId, input.slug, { archived: false });
-      if (kindOf(agent) === "main-twin") throw new ScenarioIngestError("The main twin can't be archived; archive its skills instead", 400);
-      await d.db.agent.update({ where: { id: agent.id }, data: { archivedAt: new Date() } });
-      return { slug: agent.slug, name: agent.name, archived: true, restore: "restore with the same slug" };
-    }
-
-    case "restore": {
-      const agent = await findAgent(d, orgId, input.slug, { archived: true });
-      await d.db.agent.update({ where: { id: agent.id }, data: { archivedAt: null } });
-      return { slug: agent.slug, name: agent.name, archived: false };
+    case "createTwin": {
+      try {
+        return { ok: true, ...await d.ensureTwin(orgId, input.persona) };
+      } catch (error) {
+        if (error instanceof TwinError) throw new ScenarioIngestError(error.message, error.status);
+        throw error;
+      }
     }
   }
 }

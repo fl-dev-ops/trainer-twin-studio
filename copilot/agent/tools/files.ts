@@ -6,7 +6,7 @@ import { sessionIo } from "../lib/session-io";
 
 export default defineTool({
   description:
-    "Sync a user's sources into the sandbox (first call only) and list them, one line per file: `id | turns | title` for two-person recordings (candidates), `id | path` for docs and other recordings. Posts are only counted; search them with bash under users/<user>/data. Refer to a file by its id.",
+    "Sync a user's sources into the sandbox (first call only) and list them, one line per file: `id | turns | title` for two-person recordings (candidates), `id | path` for docs and other recordings. Posts are only counted; find them with search. Refer to a file by its id.",
   inputSchema: z.object({ user: z.string() }),
   async execute({ user }, ctx) {
     const all = await ensureSynced(await sessionIo(ctx), user);

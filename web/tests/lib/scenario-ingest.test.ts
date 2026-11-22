@@ -228,6 +228,8 @@ const { buildScenario, fileText, ingestScenario, ROLEPLAY_SOURCE, saveRoleplay, 
 const { orgPrefix } = await import("@/lib/s3");
 const { readFileSync } = await import("node:fs");
 const roleplayBuilder = { ...JSON.parse(readFileSync(new URL("../../data/roleplay/skills/wait-and-see-investor/builder.json", import.meta.url), "utf8")), persona: "rohan" };
+const people = await import("@/lib/org-people");
+mock.module("@/lib/org-people", () => ({ ...people, orgPerson: async () => ({ role: "admin", disabled: false, name: "Trainer" }) }));
 const { POST } = await import("@/app/api/internal/scenarios/route");
 const { POST: POST_RUN } = await import("@/app/api/internal/scenario-runs/route");
 
@@ -399,12 +401,14 @@ test("route: secret, org header and payload are checked before ingesting", async
   process.env.SCENARIO_INGEST_SECRET = "s3cret";
   const call = (headers: Record<string, string>, body: unknown) =>
     POST(new Request("http://x/api/internal/scenarios", { method: "POST", headers, body: JSON.stringify(body) }));
-  const body = { personaSlug: "Vasanth", skill: SKILL, scenario, items: [item("x#1")] };
+  const body = { personaSlug: "Vasanth", kind: "ROLEPLAY", skill: SKILL, scenario, items: [item("x#1")] };
+  const auth = { authorization: "Bearer s3cret", "x-trainertwin-org-id": "org1", "x-trainertwin-user-id": "trainer" };
 
   expect((await call({ authorization: "Bearer wrong", "x-trainertwin-org-id": "org1" }, body)).status).toBe(401);
   expect((await call({ authorization: "Bearer s3cret" }, body)).status).toBe(400);
-  expect((await call({ authorization: "Bearer s3cret", "x-trainertwin-org-id": "org1" }, { ...body, scenario: { name: "x" } })).status).toBe(400);
-  const ok = await call({ authorization: "Bearer s3cret", "x-trainertwin-org-id": "org1" }, body);
+  expect((await call(auth, { ...body, scenario: { name: "x" } })).status).toBe(400);
+  expect((await call(auth, { ...body, kind: "TWIN" })).status).toBe(400);
+  const ok = await call(auth, body);
   expect(ok.status).toBe(201);
   const response = await ok.json();
   // items.json is archived with keys in the order ingest wrote them (scenario_id first), byte for byte.
@@ -418,7 +422,7 @@ test("run route: archives plan.json, report.md and specs as ingest wrote them", 
     POST_RUN(new Request("http://x/api/internal/scenario-runs", { method: "POST", headers, body: JSON.stringify(body) }));
   const plan = { scenarios: [{ id: "fundamental-depth", sessions: [] }] };
   const body = { runId: "run-1", plan, report: "# Report\n", specs: { "fundamental-depth": "# Spec\n" } };
-  const auth = { authorization: "Bearer s3cret", "x-trainertwin-org-id": "org1" };
+  const auth = { authorization: "Bearer s3cret", "x-trainertwin-org-id": "org1", "x-trainertwin-user-id": "trainer" };
 
   expect((await call({ ...auth, authorization: "Bearer no" }, body)).status).toBe(401);
   expect((await call(auth, { ...body, runId: "../escape" })).status).toBe(400);

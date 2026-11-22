@@ -25,7 +25,9 @@ export default defineEval({
     for (const optionId of ["deny", "approve"] as const) {
       const name = optionId === "deny" ? "Maya Denied" : "Maya Approved";
       const slug = name.toLowerCase().replace(" ", "-");
-      const pending = await t.send(`Create a new persona in our library: ${name}, Buyer, with this description: You are curious and calm. Use the voice Granite Demo. I want the persona only, not a role play.`, { headers });
+      const proposal = await t.send(`Create a new persona in our library: ${name}, Buyer, with this description: You are curious and calm. Use the voice Granite Demo. I want the persona only, not a role play.`, { headers });
+      assert(!(await list()).includes(slug), "The persona was saved before approval");
+      const pending = proposal.interactions.length ? proposal : await proposal.session.send("Those are the details I want. Show me the approval card.", { headers });
       const approval = pending.interactions.find((i) => i.request.prompt?.includes(`Create the persona "${name}"`));
       assert(approval, `Expected persona approval for ${name}: ${pending.reply}`);
       assert(!((await list()).includes(slug)), "The persona was saved before approval");
@@ -36,5 +38,20 @@ export default defineEval({
         typeof output === "object" && output !== null && "voice" in output && output.voice === voiceId,
       });
     }
+    const proposeEdit = await t.send("Change the role-play persona Maya Approved's description to exactly: You ask one short question at a time. Leave the name, role, and voice alone.", { headers });
+    const edit = proposeEdit.interactions.length ? proposeEdit : await proposeEdit.session.send("Those are the changes I want. Show me the approval card.", { headers });
+    const editApproval = edit.interactions.find((i) => i.request.prompt?.includes('Change persona "maya-approved"'));
+    assert(editApproval, `Expected an approval before updating the persona: ${edit.reply}`);
+    const edited = await edit.session.respond([{ interactionId: editApproval.interactionId, optionId: "approve" }], { headers });
+    edited.expectOk();
+    edited.calledTool("update_persona", { count: 1 });
+
+    const proposeTwin = await t.send("Create the main twin for the existing trainer persona QA Trainer. Do not create a twin skill.", { headers });
+    const twin = proposeTwin.interactions.length ? proposeTwin : await proposeTwin.session.send("Yes, show me the approval card to create that main twin.", { headers });
+    const twinApproval = twin.interactions.find((i) => i.request.prompt?.includes("Create the main twin"));
+    assert(twinApproval, `Expected main twin approval: ${twin.reply}`);
+    const createdTwin = await twin.session.respond([{ interactionId: twinApproval.interactionId, optionId: "approve" }], { headers });
+    createdTwin.expectOk();
+    createdTwin.calledTool("create_twin", { count: 1 });
   },
 });
