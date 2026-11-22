@@ -60,8 +60,9 @@ export function PresentationViewer({
   const [fullscreen, setFullscreen] = useState(false);
 
   useEffect(() =>
-    registerWorkspaceHandler(PRESENTATION_RPC_METHOD, (request) =>
-      handlePresentationRpc(request, {
+    registerWorkspaceHandler(PRESENTATION_RPC_METHOD, (request) => {
+      if (error) return Promise.reject(new Error(error));
+      return handlePresentationRpc(request, {
         controller: controllerRef.current,
         presentation,
         fileName,
@@ -73,9 +74,9 @@ export function PresentationViewer({
           await controllerRef.current?.setZoom(percent);
           setZoom(percent);
         },
-      }),
-    ),
-  [fileName, presentation, registerWorkspaceHandler, showThumbnails, slideCount, warningCount]);
+      });
+    }, () => !source || Boolean(error) || Boolean(controllerRef.current?.isReady())),
+  [error, fileName, presentation, registerWorkspaceHandler, showThumbnails, slideCount, source, warningCount]);
 
   useEffect(() => {
     const onFullscreenChange = () => setFullscreen(Boolean(document.fullscreenElement));

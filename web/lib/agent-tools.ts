@@ -2,8 +2,8 @@ import { z } from "zod";
 
 /**
  * Which workspace surfaces an agent (role play or twin) may use: Agent.data.tools, set on the role play's Tools tab.
- * Missing or partial settings are off. The chat agent reads the same shape (chat/agent/lib/agent-tools.ts) and loads
- * only these tools for a session; a call keeps the settings it started with.
+ * Missing or partial switches are off, except legacy interviews with no tools field retain their original workspace.
+ * The chat agent resolves the same policy (chat/agent/lib/agent-tools.ts); a call keeps its pinned configuration.
  */
 export type ToolSettings = {
   canvas: boolean; codeEditor: boolean; preview: boolean; choice: boolean;

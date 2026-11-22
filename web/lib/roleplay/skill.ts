@@ -35,7 +35,7 @@ export const roleplayBuilderSchema = z.object({
   situation: z.object({
     scenario: z.string().trim().min(1, "Describe the situation").max(4000),
     hiddenTruth: optionalText(4000),
-    learnerRole: z.string().trim().min(1, "Say who the learner plays").max(200),
+    learnerRole: z.string().trim().min(1, "Say who the learner plays").max(100),
     agreesWhen: optionalText(2000),
     declinesWhen: optionalText(2000),
   }),

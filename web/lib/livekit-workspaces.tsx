@@ -20,7 +20,8 @@ export type WorkspaceMethod =
   | "workspace.canvas"
   | "workspace.whiteboard"
   | "workspace.presentation"
-  | "workspace.choice";
+  | "workspace.choice"
+  | "workspace.preview";
 
 export function unwrapWorkspaceResult(raw: string): unknown {
   try {
@@ -34,7 +35,7 @@ export function unwrapWorkspaceResult(raw: string): unknown {
 }
 
 const WorkspaceContext = createContext<
-  ((method: WorkspaceMethod, handler: WorkspaceHandler) => () => void) | null
+  ((method: WorkspaceMethod, handler: WorkspaceHandler, ready?: () => boolean) => () => void) | null
 >(null);
 
 export function useWorkspaceHandlers() {
@@ -54,7 +55,7 @@ function workspaceMethodFor(tool: string, input: Record<string, unknown>): { met
   if (tool === "add_canvas_component") return { method: "workspace.canvas", action: "add_component", payload: input };
   if (tool === "clear_canvas") return { method: "workspace.canvas", action: "clear", payload: {} };
   if (tool === "get_presentation_state") return { method: "workspace.presentation", action: "get_state", payload: {} };
-  if (tool === "set_presentation_slide") return { method: "workspace.presentation", action: "go_to_slide", payload: { slideIndex: input.slide_index } };
+  if (tool === "set_presentation_slide") return { method: "workspace.presentation", action: "go_to_slide", payload: { slideNumber: Number(input.slide_index) + 1 } };
   if (tool === "next_presentation_slide") return { method: "workspace.presentation", action: "next", payload: {} };
   if (tool === "previous_presentation_slide") return { method: "workspace.presentation", action: "previous", payload: {} };
   if (tool === "get_choice_state") return { method: "workspace.choice", action: "get_state", payload: {} };
@@ -74,7 +75,14 @@ export function parseWorkspaceCommandSurface(command: {
     ? command.input as Record<string, unknown>
     : {};
   const action = String(input.action ?? input.type ?? "");
-  const payload = (input.payload as Record<string, unknown>) ?? input;
+  const payload = input.payload && typeof input.payload === "object" && !Array.isArray(input.payload)
+    ? input.payload as Record<string, unknown> : input;
+  if (["open_pdf", "highlight_pdf", "highlight_document", "open_image"].includes(action) &&
+      !(typeof payload.fileId === "string" && payload.fileId.trim()) &&
+      !(typeof payload.sourceUrl === "string" && /^(https?:\/\/|\/api\/documents\/)/.test(payload.sourceUrl))) return null;
+  if (["highlight_pdf", "highlight_document"].includes(action) &&
+      ![payload.highlightQuery, payload.highlight, payload.query].some((value) => typeof value === "string" && value.trim())) return null;
+  if (action === "open_choice" && (!Array.isArray(payload.options) || payload.options.length < 2)) return null;
   const hasId = Boolean(
     (typeof payload.eventId === "string" && payload.eventId.trim().length > 0) ||
     (typeof payload.questionId === "string" && payload.questionId.trim().length > 0),
@@ -83,8 +91,8 @@ export function parseWorkspaceCommandSurface(command: {
     ...payload,
     type: action,
     ...(command.tool === "start_resume_question" ? { commandId: command.id } : {}),
-    ...(action === "open_code_editor" && !hasId
-      ? { commandId: command.id }
+    ...(["open_code_editor", "open_whiteboard", "open_choice"].includes(action) && !hasId
+      ? { commandId: command.id, questionId: command.id }
       : {}),
   });
 }
@@ -106,8 +114,10 @@ export function LiveKitWorkspaceProvider({
   /** While false (e.g. intro video still playing), pending commands are not polled. */
   active?: boolean;
 }) {
-  const handlers = useRef(new Map<WorkspaceMethod, WorkspaceHandler>());
-  const seen = useRef(new Set<string>());
+  const handlers = useRef(new Map<WorkspaceMethod, { execute: WorkspaceHandler; ready: () => boolean }>());
+  const results = useRef(new Map<string, Promise<{ status: "completed" | "failed"; result: unknown }>>());
+  const consumerId = useRef<string | undefined>(undefined);
+  const lastSurfaceKey = useRef<string | undefined>(undefined);
   // Latest callbacks, read at call time: callers pass inline functions, which must not restart polling each render.
   const onSurfaceRef = useRef(onSurface);
   const onEndSessionRef = useRef(onEndSession);
@@ -117,10 +127,11 @@ export function LiveKitWorkspaceProvider({
   });
 
   const register = useCallback(
-    (method: WorkspaceMethod, handler: WorkspaceHandler) => {
-      handlers.current.set(method, handler);
+    (method: WorkspaceMethod, handler: WorkspaceHandler, ready: () => boolean = () => true) => {
+      const entry = { execute: handler, ready };
+      handlers.current.set(method, entry);
       return () => {
-        if (handlers.current.get(method) === handler) handlers.current.delete(method);
+        if (handlers.current.get(method) === entry) handlers.current.delete(method);
       };
     },
     [],
@@ -128,12 +139,25 @@ export function LiveKitWorkspaceProvider({
 
   useEffect(() => {
     if (!sessionId || !runtimeToken || !active) return;
-    let cancelled = false;
+    consumerId.current ??= crypto.randomUUID();
+    const consumer = consumerId.current;
+    const controller = new AbortController();
+    const signal = controller.signal;
     const headers = { Authorization: `Bearer ${runtimeToken}` };
 
-    async function run(command: { id: string; tool: string; input: unknown }) {
-      if (seen.current.has(command.id)) return;
-      seen.current.add(command.id);
+    async function handlerFor(method: WorkspaceMethod, previous?: WorkspaceHandler) {
+      const until = Date.now() + 12_000;
+      while (!signal.aborted && Date.now() < until) {
+        const handler = handlers.current.get(method)
+          ?? (method === "workspace.canvas" ? handlers.current.get("workspace.whiteboard") : undefined);
+        if (handler?.ready() && handler.execute !== previous) return handler.execute;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      throw new Error(`${method} is not ready`);
+    }
+
+    async function execute(command: { id: string; tool: string; input: unknown }) {
+      if (signal.aborted) throw new Error("Session workspace disconnected");
       const input = command.input && typeof command.input === "object" && !Array.isArray(command.input)
         ? command.input as Record<string, unknown>
         : {};
@@ -142,56 +166,81 @@ export function LiveKitWorkspaceProvider({
           // Acknowledge the command immediately so the brain's tool loop resolves,
           // then wait a grace period for any remaining TTS audio to finish playing
           // before tearing down the WebRTC connection.
-          await fetch(`/api/sessions/${sessionId}/commands/${command.id}`, {
-            method: "POST",
-            headers: { ...headers, "Content-Type": "application/json" },
-            body: JSON.stringify({ result: { ok: true } }),
-          });
           await new Promise((resolve) => setTimeout(resolve, 5000));
-          onEndSessionRef.current?.();
-          return;
+          return { status: "completed" as const, result: { ok: true } };
         }
         if (command.tool === "surface" || command.tool === "start_resume_question") {
           const parsed = parseWorkspaceCommandSurface(command);
-          if (command.tool === "start_resume_question" && !parsed) throw new Error("Resume question has no PDF surface");
-          const surfaceResult = parsed ? await onSurfaceRef.current(parsed.surface) : undefined;
-          const action = String(input.action ?? input.type ?? "");
-          await fetch(`/api/sessions/${sessionId}/commands/${command.id}`, {
-            method: "POST",
-            headers: { ...headers, "Content-Type": "application/json" },
-            body: JSON.stringify({ result: { ok: true, action, ...(command.tool === "start_resume_question" ? surfaceResult ?? { status: "viewer_unavailable" } : surfaceResult) } }),
-          });
-          return;
+          if (!parsed) throw new Error("Unsupported or invalid workspace surface");
+          const surface = parsed.surface;
+          const method: WorkspaceMethod | undefined = surface?.tool === "code" ? "workspace.code"
+            : surface?.tool === "canvas" ? "workspace.whiteboard"
+            : surface?.tool === "choice" ? "workspace.choice"
+            : surface?.tool === "presentation" ? "workspace.presentation"
+            : surface ? "workspace.preview" : undefined;
+          const key = `${sessionId}:${surface?.key ?? "none"}`;
+          const previous = key !== lastSurfaceKey.current && method ? handlers.current.get(method)?.execute : undefined;
+          lastSurfaceKey.current = key;
+          const surfaceResult = await onSurfaceRef.current(surface);
+          // On a replacement, the previous panel may still be registered until React commits the new one.
+          if (method && command.tool !== "start_resume_question") {
+            const handler = await handlerFor(method, previous);
+            if (signal.aborted) throw new Error("Session workspace disconnected");
+            unwrapWorkspaceResult(await handler(JSON.stringify({ action: "get_state" })));
+            if (surface?.tool === "pdf" && surface.highlightQuery) {
+              unwrapWorkspaceResult(await handler(JSON.stringify({ action: "highlight", payload: { query: surface.highlightQuery } })));
+            }
+          }
+          return { status: "completed" as const, result: { ok: true, action: input.action ?? input.type,
+            ...(command.tool === "start_resume_question" ? surfaceResult ?? { status: "viewer_unavailable" } : surfaceResult) } };
         }
         const routed = workspaceMethodFor(command.tool, input);
         if (!routed) throw new Error(`Unsupported workspace tool ${command.tool}`);
-        const handler = handlers.current.get(routed.method)
-          ?? (routed.method === "workspace.canvas" ? handlers.current.get("workspace.whiteboard") : undefined);
-        if (!handler) throw new Error(`${routed.method} is not open`);
+        const handler = await handlerFor(routed.method);
+        if (signal.aborted) throw new Error("Session workspace disconnected");
         const raw = await handler(JSON.stringify({ action: routed.action, payload: routed.payload }));
-        let result: unknown = raw;
-        try { result = JSON.parse(raw); } catch { /* keep string */ }
-        await fetch(`/api/sessions/${sessionId}/commands/${command.id}`, {
-          method: "POST",
-          headers: { ...headers, "Content-Type": "application/json" },
-          body: JSON.stringify({ result }),
-        });
+        unwrapWorkspaceResult(raw);
+        return { status: "completed" as const, result: JSON.parse(raw) as unknown };
       } catch (error) {
-        await fetch(`/api/sessions/${sessionId}/commands/${command.id}`, {
-          method: "POST",
-          headers: { ...headers, "Content-Type": "application/json" },
-          body: JSON.stringify({ status: "failed", result: { ok: false, error: error instanceof Error ? error.message : String(error) } }),
-        }).catch(() => {});
+        return { status: "failed" as const, result: { ok: false, error: error instanceof Error ? error.message : String(error) } };
       }
     }
 
+    async function run(command: { id: string; tool: string; input: unknown }) {
+      const key = `${sessionId}:${command.id}`;
+      let execution = results.current.get(key);
+      if (!execution) {
+        const claim = await fetch(`/api/sessions/${sessionId}/commands/${command.id}`, {
+          method: "POST", signal,
+          headers: { ...headers, "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "claim", consumerId: consumer }),
+        });
+        if (!claim.ok) throw new Error("Workspace claim failed");
+        if (!(await claim.json()).claimed || signal.aborted) return;
+        execution = results.current.get(key) ?? execute(command);
+        results.current.set(key, execution);
+      }
+      const outcome = await execution;
+      if (signal.aborted) return;
+      const response = await fetch(`/api/sessions/${sessionId}/commands/${command.id}`, {
+        method: "POST", signal,
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({ ...outcome, action: "complete", consumerId: consumer }),
+      });
+      if (!response.ok) throw new Error("Workspace acknowledgement failed");
+      if (command.tool === "finish_session" && outcome.status === "completed" && !signal.aborted) onEndSessionRef.current?.();
+    }
+
     async function poll() {
-      while (!cancelled) {
+      while (!signal.aborted) {
         try {
-          const response = await fetch(`/api/sessions/${sessionId}/commands`, { headers });
+          const response = await fetch(`/api/sessions/${sessionId}/commands`, { headers, signal });
           if (response.ok) {
             const body = await response.json() as { commands?: Array<{ id: string; tool: string; input: unknown }> };
-            for (const command of body.commands ?? []) await run(command);
+            for (const command of body.commands ?? []) {
+              if (signal.aborted) break;
+              await run(command);
+            }
           }
         } catch {
           // retry
@@ -200,7 +249,7 @@ export function LiveKitWorkspaceProvider({
       }
     }
     void poll();
-    return () => { cancelled = true; };
+    return () => { controller.abort(); };
   }, [sessionId, runtimeToken, active]);
 
   const value = useMemo(() => register, [register]);

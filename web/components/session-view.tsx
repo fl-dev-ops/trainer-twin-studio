@@ -12,6 +12,7 @@ import "@livekit/components-styles";
 import {
   RoomAudioRenderer,
   RoomContext,
+  useConnectionState,
 } from "@livekit/components-react";
 import {
   ParticipantKind,
@@ -21,6 +22,7 @@ import {
   type RemoteParticipant,
   type TranscriptionSegment,
   DisconnectReason,
+  ConnectionState,
 } from "livekit-client";
 import { Button } from "@/components/ui/button";
 import {
@@ -162,6 +164,8 @@ export function SessionView({
     [],
   );
 
+  const roomState = useConnectionState(room);
+  const workspaceConnected = roomState === ConnectionState.Connected;
   const [agent, setAgent] = useState(initialAgent ?? agents[0] ?? "");
   const persona = agentPersonas[agent] ?? personas[0] ?? "";
   const [contextIds, setContextIds] = useState<string[]>([]);
@@ -218,6 +222,7 @@ export function SessionView({
   const coverageRef = useRef<Coverage>({});
   const finalizedRef = useRef(false);
   const surfaceKeyRef = useRef<string | null>(null);
+  const uiReportRevisionRef = useRef(0);
   const surfaceRevisionRef = useRef(0);
   const lastSurfaceStatePublishedAtRef = useRef(0);
   const whiteboardAcknowledgementsRef = useRef(
@@ -679,24 +684,32 @@ export function SessionView({
   // Browser-confirmed screen state is durable session truth; the brain reads it
   // through getSessionContext instead of inferring it from LiveKit RPC history.
   useEffect(() => {
-    if (!connection || ended) return;
+    if (!connection || ended || !workspaceConnected) return;
     const controller = new AbortController();
+    uiReportRevisionRef.current = Math.max(Date.now(), uiReportRevisionRef.current + 1);
+    const revision = uiReportRevisionRef.current;
     const timer = setTimeout(() => {
-      fetch(`/api/sessions/${connection.sessionId}/ui-state`, {
+      void (async () => {
+        for (let attempt = 0; attempt < 3 && !controller.signal.aborted; attempt++) {
+          const response = await fetch(`/api/sessions/${connection.sessionId}/ui-state`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${connection.runtimeToken}`,
         },
-        body: JSON.stringify(surface ? { active: surface.tool, key: surface.key } : { active: null }),
+        body: JSON.stringify({ active: surface?.tool ?? null, key: surface?.key ?? null, revision }),
         signal: controller.signal,
-      }).catch(() => {});
+          }).catch(() => null);
+          if (response?.ok) return;
+          await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
+        }
+      })();
     }, 400);
     return () => {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [connection, ended, surface]);
+  }, [connection, ended, surface, workspaceConnected]);
 
   const handleChoiceSubmission = useCallback(async (option: { id: string; text: string }) => {
     if (surface?.tool !== "choice") return;
@@ -1222,7 +1235,7 @@ export function SessionView({
           runtimeToken={connection?.runtimeToken}
           onSurface={handleSurface}
           onEndSession={() => void handleDisconnect("completed")}
-          active={introSrc ? introDone : true}
+          active={workspaceConnected && (introSrc ? introDone : true)}
         >
           <SessionHeader title={title} linkHome={!sessionCode}>
             {isScreenSharing && (

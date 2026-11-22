@@ -728,7 +728,8 @@ model WorkspaceCommand {
   sessionId   String
   tool        String
   input       Json
-  status      String    @default("pending") // pending | completed | failed
+  status      String    @default("pending") // pending | running | completed | failed
+  claimedBy   String?
   result      Json?
   createdAt   DateTime  @default(now())
   completedAt DateTime?

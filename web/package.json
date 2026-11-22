@@ -21,6 +21,8 @@
     "test:db": "bun test --parallel .db.test",
     "test:flows": "bun test --parallel tests/flows",
     "test:e2e": "playwright test",
+    "typecheck:e2e": "tsc --noEmit -p tsconfig.e2e.json",
+    "test:workspace": "bun node_modules/@playwright/test/cli.js test -c e2e/workspace/playwright.config.ts",
     "e2e:server": "bun e2e/server.ts"
   },
   "dependencies": {

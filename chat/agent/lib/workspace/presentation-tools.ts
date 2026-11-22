@@ -2,8 +2,7 @@ import { z } from "zod";
 import { transportTool } from "../workspace-tools";
 
 /**
- * Slide tools (the browser's presentation viewer). Not offered: there is no Tools switch for slides yet, so nothing
- * loads these. To offer them, add a switch (lib/agent-tools.ts) and return them from tools/workspace.ts.
+ * Presentation navigation, enabled by the same Preview switch as PDF/image surfaces.
  */
 export const presentationTools = {
   get_presentation_state: transportTool("Get current presentation slide number, total slides, and viewer state.", z.object({})),

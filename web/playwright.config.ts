@@ -8,6 +8,7 @@ import { E2E_PORT, e2eUrl } from "./e2e/env";
  */
 export default defineConfig({
   testDir: "e2e",
+  testIgnore: ["**/workspace/**"],
   // The specs share the seeded org and some change it: one at a time.
   workers: 1,
   timeout: 60_000,

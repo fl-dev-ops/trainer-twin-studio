@@ -3,6 +3,7 @@ import { afterEach, describe, test } from "node:test";
 import { callSettings, formatCallBlock, formatWorkspaceBlock, NO_CALL_SETTINGS, NO_TOOLS, toolSettings, workspaceAllowed, type CallSettings, type ToolSettings } from "../../../agent/lib/agent-tools";
 import { formatRoleplaySession, type RoleplaySkill } from "../../../agent/lib/roleplay";
 import workspace from "../../../agent/tools/workspace";
+import { executeWorkspaceTool } from "../../../agent/lib/workspace-tools";
 
 process.env.COPILOT_SERVICE_SECRET ??= "test-secret";
 const realFetch = globalThis.fetch;
@@ -33,6 +34,7 @@ describe("tool settings", () => {
     assert.deepEqual(toolSettings(undefined), NO_TOOLS);
     assert.deepEqual(toolSettings({ tools: { codeEditor: true, canvas: "yes" } }), on({ codeEditor: true }));
   });
+
 });
 
 describe("call settings", () => {
@@ -65,10 +67,10 @@ describe("workspace tools resolver: a session gets only its switched-on tools", 
   test("multiple choice", async () => {
     assert.deepEqual(await resolve({ choice: true }), [...shared, "get_choice_state", "highlight_choice"].sort());
   });
-  test("preview (PDF) opens through surface only; no slide tools are ever offered", async () => {
-    assert.deepEqual(await resolve({ preview: true }), shared.sort());
-    const all = await resolve({ canvas: true, codeEditor: true, preview: true, choice: true });
-    assert.equal(all?.some((name) => name.includes("presentation")), false);
+  test("preview enables PDF/image/presentation surfaces and slide navigation", async () => {
+    assert.deepEqual(await resolve({ preview: true }), [...shared, "get_presentation_state", "set_presentation_slide", "next_presentation_slide", "previous_presentation_slide"].sort());
+    const withoutPreview = await resolve({ canvas: true, codeEditor: true, choice: true });
+    assert.equal(withoutPreview?.some((name) => name.includes("presentation")), false);
   });
   test("nothing on, no settings, or a failed lookup: no workspace tools", async () => {
     assert.equal(await resolve({ canvas: false }), null);
@@ -90,22 +92,25 @@ describe("backstop: a call is allowed only when its switch is on", () => {
     assert.equal(workspaceAllowed(pdf, "surface", { action: "open_pdf" }), true);
     assert.equal(workspaceAllowed(pdf, "surface", { action: "highlight_document" }), true);
     assert.equal(workspaceAllowed(pdf, "surface", { action: "open_whiteboard" }), false);
-    assert.equal(workspaceAllowed(pdf, "surface", { action: "open_image" }), false);
-    assert.equal(workspaceAllowed(pdf, "surface", { action: "open_presentation" }), false);
+    assert.equal(workspaceAllowed(pdf, "surface", { action: "open_image" }), true);
+    assert.equal(workspaceAllowed(pdf, "surface", { action: "open_presentation" }), true);
     assert.equal(workspaceAllowed(pdf, "surface", { action: "close_surface" }), true);
     assert.equal(workspaceAllowed(NO_TOOLS, "surface", { action: "close_surface" }), false);
     assert.equal(workspaceAllowed(pdf, "surface", { action: "something_new" }), false);
   });
-  test("workspace_request follows its method's switch; slides and unknown methods refused", () => {
+  test("workspace_request follows its method's switch; unknown methods are refused", () => {
     const code = on({ codeEditor: true });
     assert.equal(workspaceAllowed(code, "workspace_request", { method: "workspace.code" }), true);
     assert.equal(workspaceAllowed(code, "workspace_request", { method: "workspace.canvas" }), false);
     assert.equal(workspaceAllowed(on({ canvas: true }), "workspace_request", { method: "workspace.whiteboard" }), true);
     assert.equal(workspaceAllowed(code, "workspace_request", { method: "workspace.presentation" }), false);
+    assert.equal(workspaceAllowed(on({ preview: true }), "workspace_request", { method: "workspace.presentation" }), true);
     assert.equal(workspaceAllowed(code, "workspace_request", { method: "anything" }), false);
   });
   test("unknown tools are refused", () => {
-    assert.equal(workspaceAllowed(on({ canvas: true, codeEditor: true, preview: true, choice: true }), "next_presentation_slide", {}), false);
+    assert.equal(workspaceAllowed(on({ canvas: true, codeEditor: true, preview: true, choice: true }), "invented_tool", {}), false);
+    assert.equal(workspaceAllowed(on({ preview: true }), "next_presentation_slide", {}), true);
+    assert.equal(workspaceAllowed(NO_TOOLS, "next_presentation_slide", {}), false);
   });
 });
 

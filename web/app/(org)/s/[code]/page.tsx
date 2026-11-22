@@ -22,9 +22,9 @@ export default function SharedSessionPage() {
       <main className="grid min-h-svh place-items-center p-4">
         <Card className="w-full max-w-md text-center">
           <CardHeader>
-            <CardTitle>Twin not available</CardTitle>
+            <CardTitle>Practice not available</CardTitle>
             <CardDescription>
-              {loaded.message}. You are signed in as {loaded.email}.
+              {loaded.message.replace(/\.+$/, "")}. You are signed in as {loaded.email}.
               <HomeRedirect />
             </CardDescription>
           </CardHeader>
@@ -72,7 +72,7 @@ export default function SharedSessionPage() {
         <CardHeader>
           <CardTitle>Invalid session link</CardTitle>
           <CardDescription>
-            This practice link is not assigned to your account, has expired, or has already been completed.
+            This link does not open a practice in this organization.
             <HomeRedirect />
           </CardDescription>
         </CardHeader>

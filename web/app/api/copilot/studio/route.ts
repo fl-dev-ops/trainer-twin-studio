@@ -69,6 +69,10 @@ const requestSchema = z.discriminatedUnion("action", [
     personaSlug: z.string().optional(),
   }).strict(),
   z.object({
+    action: z.literal("getWorkspaceState"),
+    sessionId: z.string().trim().min(1),
+  }).strict(),
+  z.object({
     action: z.literal("enqueueWorkspaceCommand"),
     sessionId: z.string().trim().min(1),
     callId: z.string().trim().min(1),
@@ -167,6 +171,14 @@ export async function POST(request: Request) {
       if (error instanceof UploadError) return Response.json({ error: error.message }, { status: error.status });
       throw error;
     }
+  }
+
+  if (input.action === "getWorkspaceState") {
+    const session = await db.interviewSession.findFirst({
+      where: { id: input.sessionId, orgId }, select: { runtimeState: true },
+    });
+    const state = session?.runtimeState as { uiState?: unknown } | null;
+    return Response.json({ uiState: state?.uiState ?? null });
   }
 
   if (input.action === "getSessionContext") {

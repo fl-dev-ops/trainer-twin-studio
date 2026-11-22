@@ -51,6 +51,8 @@ test("limits: at least one goal, at most five; rubric 1..8; slug must be kebab-c
   expect(() => renderRoleplay("x", { ...builder, learnerGoals: ["a", "b", "c", "d", "e", "f"] })).toThrow();
   expect(() => renderRoleplay("x", { ...builder, rubric: Array.from({ length: 9 }, (_, i) => ({ name: `c${i}`, points: 10 })) })).toThrow();
   expect(() => renderRoleplay("Not Kebab", builder)).toThrow();
+  expect(() => renderRoleplay("x", { ...builder, situation: { ...builder.situation, learnerRole: "x".repeat(101) } })).toThrow();
+  expect(renderRoleplay("x", { ...builder, situation: { ...builder.situation, learnerRole: "x".repeat(100) } }).scenario.learner_role).toHaveLength(100);
   // Optional parts drop out of SKILL.md cleanly.
   const bare = renderRoleplay("bare", { ...builder, clientName: undefined, howTheyTalk: undefined, guardedIf: [], opensUpIf: [], exampleLines: [], situation: { ...builder.situation, hiddenTruth: undefined } });
   expect(bare.skill).not.toContain("## What is really going on");

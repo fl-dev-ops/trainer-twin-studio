@@ -1,11 +1,19 @@
 "use client";
 
-import { useState, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
+import { useWorkspaceHandlers } from "@/lib/livekit-workspaces";
 import { ZoomIn, ZoomOut, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export function ImageViewerSurface({ sourceUrl, title }: { sourceUrl?: string; title?: string }) {
+  const register = useWorkspaceHandlers();
   const [scale, setScale] = useState(1);
+  const [loaded, setLoaded] = useState<string>();
+  const [failed, setFailed] = useState<string>();
+  useEffect(() => register("workspace.preview", async () => {
+    if (failed === sourceUrl) throw new Error("Image could not be loaded");
+    return JSON.stringify({ ok: true, result: { ready: true } });
+  }, () => Boolean(sourceUrl && (loaded === sourceUrl || failed === sourceUrl))), [failed, loaded, register, sourceUrl]);
   const fileName = title || (sourceUrl ? decodeURIComponent(sourceUrl.split("/").pop()?.split("?")[0] || "Image") : "Image");
 
   return (
@@ -48,6 +56,8 @@ export function ImageViewerSurface({ sourceUrl, title }: { sourceUrl?: string; t
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={sourceUrl}
+            onLoad={() => setLoaded(sourceUrl)}
+            onError={() => setFailed(sourceUrl)}
             alt={fileName}
             style={{ "--zoom": scale } as CSSProperties}
             className="max-h-full max-w-full origin-center scale-(--zoom) rounded-lg object-contain shadow-sm transition-transform duration-150 ease-out"

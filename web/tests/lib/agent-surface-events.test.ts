@@ -312,6 +312,23 @@ describe("session document surfaces", () => {
     expect(openSurface?.surface?.key).toEqual(hlSurface?.surface?.key);
   });
 
+  it("uses distinct command identities for new whiteboard and choice questions", () => {
+    for (const action of ["open_whiteboard", "open_choice"]) {
+      const payload = action === "open_choice" ? { options: [{ id: "A", text: "Yes" }, { id: "B", text: "No" }] } : {};
+      const first = parseWorkspaceCommandSurface({ id: "question-one", tool: "surface", input: { action, payload } });
+      const second = parseWorkspaceCommandSurface({ id: "question-two", tool: "surface", input: { action, payload } });
+      expect(first?.surface?.key).not.toBe(second?.surface?.key);
+    }
+  });
+
+  it("rejects unknown surface commands and missing or unsafe file sources", () => {
+    for (const action of ["invented", "open_pdf", "highlight_document", "open_image"]) {
+      expect(parseWorkspaceCommandSurface({ id: "invalid", tool: "surface", input: { action } })).toBeNull();
+    }
+    expect(parseWorkspaceCommandSurface({ id: "unsafe", tool: "surface", input: { action: "open_image", payload: { sourceUrl: "javascript:alert(1)" } } })).toBeNull();
+    expect(parseWorkspaceCommandSurface({ id: "empty-choice", tool: "surface", input: { action: "open_choice", payload: { options: [] } } })).toBeNull();
+  });
+
   it("parses close_surface workspace command to surface null so UI panel closes", () => {
     const closeCmd = {
       id: "cmd_close_1",

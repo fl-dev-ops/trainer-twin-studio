@@ -8,9 +8,8 @@ import { toast } from "sonner";
 import { useWorkspaceHandlers } from "@/lib/livekit-workspaces";
 
 /**
- * RPC contract mirrors the reference interview agent exactly: the only supported
- * action is `highlight_component`, which selects and scrolls to a labeled text
- * element on the canvas. The agent-kind guard lives in the workspace provider.
+ * Browser actions for reading, adding, clearing and highlighting canvas elements.
+ * Tool availability is enforced by chat; execution waits for Excalidraw to mount.
  */
 const WHITEBOARD_RPC_METHOD = "workspace.whiteboard";
 
@@ -41,7 +40,8 @@ export function Whiteboard({
   const api = useRef<ExcalidrawImperativeAPI | null>(null);
   const sceneRevisionRef = useRef("");
   const [isExporting, setIsExporting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
+  const [submittedQuestion, setSubmittedQuestion] = useState<string>();
+  const submitted = submittedQuestion === question;
 
   useEffect(() => {
     if (api.current) {
@@ -59,11 +59,22 @@ export function Whiteboard({
         throw new Error("Invalid whiteboard command");
       }
 
+      if (parsed.action === "get_state") return JSON.stringify({ ok: true, result: { ready: true } });
+      if (parsed.action === "add_component") {
+        const label = String(parsed.payload?.label ?? "").trim();
+        const x = Number(parsed.payload?.x ?? 100);
+        const y = Number(parsed.payload?.y ?? 100);
+        if (!label || label.length > 200 || !Number.isInteger(x) || !Number.isInteger(y)) throw new Error("Invalid canvas component");
+        const { convertToExcalidrawElements } = await import("@excalidraw/excalidraw");
+        const elements = convertToExcalidrawElements([{ type: "rectangle", x, y, width: 180, height: 70, label: { text: label } }]);
+        api.current!.updateScene({ elements: [...api.current!.getSceneElements(), ...elements] });
+        return JSON.stringify({ ok: true, result: { element_id: elements[0].id, label } });
+      }
       if (parsed.action === "get_scene") {
         const elements = api.current.getSceneElements().filter((el) => !el.isDeleted);
         const textElements = elements
           .filter((el) => el.type === "text")
-          .map((el: any) => ({
+          .map((el) => ({
             id: el.id,
             label: (el.originalText || el.text || "").trim(),
             x: Math.round(el.x),
@@ -104,10 +115,11 @@ export function Whiteboard({
       const requestedLabel = normalizeLabel(componentLabel);
       const elements = api.current.getSceneElements();
       const textElement = elements.find((element) => {
+        if (element.isDeleted) return false;
         if (element.id === componentLabel) return true;
         if (element.type !== "text") return false;
         const visibleLabel = normalizeLabel(element.originalText || element.text);
-        return (
+        return visibleLabel.length > 0 && (
           visibleLabel === requestedLabel ||
           visibleLabel.includes(requestedLabel) ||
           requestedLabel.includes(visibleLabel)
@@ -117,7 +129,7 @@ export function Whiteboard({
         throw new Error("Whiteboard component label was not found");
       }
       const selectedIds: Record<string, true> = { [textElement.id]: true };
-      if ((textElement as any).containerId) selectedIds[(textElement as any).containerId] = true;
+      if (textElement.type === "text" && textElement.containerId) selectedIds[textElement.containerId] = true;
       const selectedElements = elements.filter((element) => selectedIds[element.id]);
       api.current.updateScene({
         appState: { selectedElementIds: selectedIds },
@@ -126,8 +138,8 @@ export function Whiteboard({
         animate: true,
         fitToContent: true,
       });
-      return JSON.stringify({ ok: true, componentLabel: (textElement as any).text ?? textElement.id });
-    }));
+      return JSON.stringify({ ok: true, componentLabel: textElement.type === "text" ? textElement.text : textElement.id });
+    }, () => Boolean(api.current)));
 
   async function handleDone() {
     if (!api.current || isExporting || submitted) return;
@@ -161,7 +173,7 @@ export function Whiteboard({
         new Uint8Array(await crypto.subtle.digest("SHA-256", await blob.arrayBuffer())),
       ).map((byte) => byte.toString(16).padStart(2, "0")).join("");
       if (await onSubmit({ blob, imageSha256 })) {
-        setSubmitted(true);
+        setSubmittedQuestion(question);
         toast.success("Drawing submitted.");
       }
     } catch (error) {
