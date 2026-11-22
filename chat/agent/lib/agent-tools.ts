@@ -132,7 +132,7 @@ export function formatWorkspaceBlock(tools: ToolSettings, { client }: { client: 
   const who = client ? "Stay in character as the client while you use it" : "Keep talking to the learner while you use it";
   const lines = [
     tools.canvas &&
-      "- Whiteboard: open it with surface({ action: \"open_whiteboard\" }) when a quick sketch helps (numbers, a comparison, a plan). Use read_canvas_scene when the learner says they drew or changed something, and highlight_whiteboard to point at one label they wrote.",
+      "- Whiteboard: open it with surface({ action: \"open_whiteboard\", payload: { question } }), where question is the problem they are drawing for, when a quick sketch helps (numbers, a comparison, a plan). Use read_canvas_scene when the learner says they drew or changed something, and highlight_whiteboard to point at one label they wrote.",
     tools.codeEditor &&
       "- Code editor: open it with surface({ action: \"open_code_editor\", payload: { questionId, question, language, starterCode, readOnly } }) when the conversation calls for code. Read what they wrote with get_code_state or read_code_range before reacting, and run it with run_code.",
     tools.preview &&

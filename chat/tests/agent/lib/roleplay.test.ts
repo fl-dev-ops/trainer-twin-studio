@@ -101,11 +101,21 @@ describe("client role play (kind ROLEPLAY with a SKILL.md)", () => {
     assert.match(prompt, /scenario_examples/);
     assert.match(prompt, /end_call\(\{ outcome: "completed" \}\)/);
     assert.doesNotMatch(prompt, /a CLIENT|a salesperson|# Guard level|private scoring criterion|say exactly:/);
+    // Speaking rules every authored practice gets, and opening an attached document before asking about it.
+    assert.match(prompt, /Use tools silently\. Never announce what you are about to do/);
+    assert.match(prompt, /Call the learner by the name in LEARNER DATA/);
+    assert.match(prompt, /answer each of them/);
+    assert.match(prompt, /open it on screen with surface open_pdf before your first question about it/);
+    assert.match(prompt, /speech-to-text and are sometimes misheard/);
+    const drawing = formatSessionSpec({ ...base, roleplay: authored, tools: { canvas: true, preview: false, codeEditor: false, choice: false } });
+    assert.match(drawing, /look at it first \(read_canvas_scene\)/);
+    assert.doesNotMatch(drawing, /surface open_pdf before your first question/);
     const withoutWorkspace = formatSessionSpec({ ...base, roleplay: authored });
     // No documents can reach the call: no read_document, no artifact list, and never ask for a file.
     assert.match(withoutWorkspace, /the learner cannot attach files in this call/);
     assert.doesNotMatch(withoutWorkspace, /ATTACHED ARTIFACTS/);
     assert.match(withoutWorkspace, /No workspace surfaces are enabled/);
+    assert.doesNotMatch(withoutWorkspace, /surface open_pdf before|read_canvas_scene/);
     assert.equal(roleplaySkill("ROLEPLAY", { source: "scenario-ingest", skill: " " }), undefined);
   });
 

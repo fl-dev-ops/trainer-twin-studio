@@ -52,7 +52,7 @@ async function getChoiceState(input: z.infer<typeof noInput>, ctx: unknown) {
 /** The surface tool's description: only the actions this session's switches allow. */
 function surfaceDescription(tools: ToolSettings): string {
   const actions = [
-    tools.canvas && "open_whiteboard",
+    tools.canvas && "open_whiteboard (payload { question }: the problem the learner is drawing for)",
     tools.codeEditor && "open_code_editor (payload { questionId, question, language, starterCode, readOnly })",
     tools.choice && "open_choice (payload { questionId, question, options: [{ id, text }], correctOptionId, code? })",
     tools.preview &&
