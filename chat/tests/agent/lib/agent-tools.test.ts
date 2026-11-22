@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, test } from "node:test";
-import { formatWorkspaceBlock, NO_TOOLS, toolSettings, workspaceAllowed, type CallSettings, type ToolSettings } from "../../../agent/lib/agent-tools";
+import { callSettings, formatCallBlock, formatWorkspaceBlock, NO_CALL_SETTINGS, NO_TOOLS, toolSettings, workspaceAllowed, type CallSettings, type ToolSettings } from "../../../agent/lib/agent-tools";
 import { formatRoleplaySession, type RoleplaySkill } from "../../../agent/lib/roleplay";
 import workspace from "../../../agent/tools/workspace";
 
@@ -32,6 +32,25 @@ describe("tool settings", () => {
   test("missing or partial settings are off; only true turns a surface on", () => {
     assert.deepEqual(toolSettings(undefined), NO_TOOLS);
     assert.deepEqual(toolSettings({ tools: { codeEditor: true, canvas: "yes" } }), on({ codeEditor: true }));
+  });
+});
+
+describe("call settings", () => {
+  test("saved Before settings override older twin settings, including explicit off; invalid blocks fall back", () => {
+    const twinSettings = { preScreenshare: true, preUpload: true, duringUpload: true };
+    assert.deepEqual(callSettings({ twinSettings, before: { preUpload: false } }), NO_CALL_SETTINGS);
+    for (const before of [undefined, null, [], "old value"]) {
+      assert.deepEqual(callSettings({ twinSettings, before }), { screenShare: true, preUpload: true, duringUpload: true });
+    }
+    assert.deepEqual(callSettings({ before: { preScreenshare: "true", preUpload: 1, duringUpload: "true" } }), NO_CALL_SETTINGS);
+  });
+
+  test("files attached before the call can be read without asking for another mid-call", () => {
+    const beforeOnly = { ...NO_CALL_SETTINGS, preUpload: true };
+    assert.match(formatCallBlock(beforeOnly, NO_TOOLS), /none attached yet.*[Nn]ever ask.*during the call/);
+    assert.match(formatCallBlock(beforeOnly, NO_TOOLS, { attached: 1 }), /ATTACHED ARTIFACTS.*read_document.*[Nn]ever ask.*during the call/);
+    assert.match(formatCallBlock({ ...beforeOnly, duringUpload: true }, NO_TOOLS), /may also attach one during the call/);
+    assert.match(formatCallBlock(NO_CALL_SETTINGS, NO_TOOLS, { attached: 1 }), /read_document/);
   });
 });
 

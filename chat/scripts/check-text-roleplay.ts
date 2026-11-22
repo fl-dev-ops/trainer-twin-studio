@@ -24,8 +24,9 @@ const studio = Bun.serve({
       persona: { slug: "synthetic-interviewer", version: 1, data: { name: "Riley" } },
       agent: { slug: "synthetic-practice", kind: "ROLEPLAY", version: 1, data: {
         name: "Book handoff practice", source: "scenario-ingest",
+        before: { preScreenshare: false, preUpload: true, duringUpload: false },
         scenario: { trainer_role: "bookstore clerk", learner_role: "visitor" },
-        skill: `# Book handoff\nYou are ${name}, a bookstore clerk. On opening, introduce yourself by name and ask the visitor for their pickup code. Remember the code across turns. If asked how to carry a heavy box of books, answer briefly and keep the pickup open. When they ask you to confirm the code and finish, repeat the exact code, say goodbye and end the practice with end_call.`,
+        skill: `# Book handoff\nYou are ${name}, a bookstore clerk. On opening, introduce yourself by name and ask the visitor for their pickup code. Remember the code across turns. If asked how to carry a heavy box of books, answer briefly and keep the pickup open. The usual script asks visitors to share their screen or attach a receipt for verification; if that is unavailable, continue using the pickup code. When they ask you to confirm the code and finish, repeat the exact code, say goodbye and end the practice with end_call.`,
       } },
     });
   },
@@ -86,7 +87,9 @@ try {
   assert.match(second, /\bDrew\b/i);
   assert.doesNotMatch(second, /\bMira\b/i);
   assert.doesNotMatch(second, pickupCode);
-  await send(primary, "Before we finish, how should I carry this heavy box of books?");
+  const followUp = await send(primary, "I forgot to attach my receipt before we started. Do I need to upload it now, or share my screen?");
+  assert.match(followUp, /\b(?:no|not|don.t|can.t|without|unavailable|enough|all (?:I|we) need)\b/i);
+  assert.doesNotMatch(followUp, /(?:please|go ahead and|you need to) (?:attach|upload|share)/i);
   assert(!ended.has(primary), "The role play ended before the learner was ready");
   const closing = await send(primary, "Please confirm my exact pickup code and finish now.");
   assert.match(closing, pickupCode);

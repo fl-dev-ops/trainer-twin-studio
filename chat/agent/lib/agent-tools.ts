@@ -11,8 +11,9 @@ export type ToolSettings = {
 };
 export const NO_TOOLS: ToolSettings = { canvas: false, codeEditor: false, preview: false, choice: false, knowledge: false };
 
-const asRecord = (value: unknown): Record<string, unknown> =>
-  value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+const recordOrNull = (value: unknown): Record<string, unknown> | null =>
+  value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+const asRecord = (value: unknown) => recordOrNull(value) ?? {};
 
 export function toolSettings(agentData: unknown): ToolSettings {
   const tools = asRecord(asRecord(agentData).tools);
@@ -147,7 +148,7 @@ export const NO_CALL_SETTINGS: CallSettings = { screenShare: false, preUpload: f
 
 export function callSettings(agentData: unknown): CallSettings {
   const data = asRecord(agentData);
-  const before = asRecord(data.before ?? data.twinSettings);
+  const before = recordOrNull(data.before) ?? asRecord(data.twinSettings);
   return { screenShare: before.preScreenshare === true, preUpload: before.preUpload === true, duringUpload: before.duringUpload === true };
 }
 
@@ -161,7 +162,7 @@ export function formatCallBlock(call: CallSettings, tools: ToolSettings, { attac
       ? "- Screen: the learner shares their whole screen. You see it only through [SCREEN OBSERVER CONTEXT] notes; never claim to see more than they describe."
       : "- Screen: screen sharing is off for this call. Never ask the learner to share or show their screen.",
     documentsOn(call, attached)
-      ? `- Documents: ${attached > 0 ? "the ones listed under ATTACHED ARTIFACTS" : "none attached yet"}${call.duringUpload ? "; the learner may also attach one during the call (it arrives as [ATTACHED <id>])" : ""}. Read one with read_document before you refer to it; quote only what it says.`
+      ? `- Documents: ${attached > 0 ? "the ones listed under ATTACHED ARTIFACTS" : "none attached yet"}${call.duringUpload ? "; the learner may also attach one during the call (it arrives as [ATTACHED <id>])" : ""}. Read one with read_document before you refer to it; quote only what it says.${call.duringUpload ? "" : " Never ask the learner to attach a file during the call."}`
       : "- Documents: the learner cannot attach files in this call. Never ask them to upload or send a document.",
     knowledgeSwitch &&
       (tools.knowledge
