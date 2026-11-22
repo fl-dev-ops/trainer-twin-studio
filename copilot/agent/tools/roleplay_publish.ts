@@ -6,9 +6,9 @@ import { studioResult } from "../lib/studio";
 
 export default defineTool({
   description:
-    "Role play from requirements (roleplay-creator): publishes the brief as a role play played by the persona, after draft_roleplay passed and the trainer has seen it. Publishing the same brief again changes nothing; an edited brief (same id) becomes the next version and the previous one is kept. Needs the trainer's approval. Report what the studio stored, or its error, honestly.",
+    "Role play from requirements (roleplay-creator): publishes the brief as a role play played by the persona, after roleplay_draft passed and the trainer has seen it. Publishing the same brief again changes nothing; an edited brief (same id) becomes the next version and the previous one is kept. Needs the trainer's approval. Report what the studio stored, or its error, honestly.",
   inputSchema: z.object({
-    persona: z.string().min(1).describe("Persona slug from list_personas."),
+    persona: z.string().min(1).describe("Persona slug from persona_list."),
     brief: roleplayBrief,
   }),
   approval: {

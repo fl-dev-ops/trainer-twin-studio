@@ -47,12 +47,15 @@ try {
     await tx.knowledgeDocument.create({ data: { kbId: kb.id, slug: "demo-playbook", title: "Demo Playbook", status: "indexed", ext: "md", size: 64, s3SourceKey: knowledgeKey, s3MarkdownKey: knowledgeKey } });
   });
   await putObject(knowledgeKey, `# Demo Playbook\nThe fallback phrase for an unconfirmed demo is ${phrase}.`, "text/markdown");
-  const evalRun = Bun.spawn(["bunx", "eve", "eval", "persona-approval", "--skip-report"], {
+  const evalName = process.env.COPILOT_QA_EVAL ?? "persona-approval";
+  const evalRun = Bun.spawn(["bunx", "eve", "eval", evalName, "--skip-report", ...(process.env.COPILOT_QA_ARGS?.split(" ").filter(Boolean) ?? [])], {
     cwd: fileURLToPath(new URL("../../copilot", import.meta.url)), stdout: "inherit", stderr: "inherit",
     env: { ...process.env, STUDIO_URL: server.url.origin, COPILOT_SERVICE_SECRET: secret, SCENARIO_INGEST_SECRET: secret,
       PERSONA_QA_ORG: org, PERSONA_QA_USER: user, PERSONA_QA_VOICE: voice, PERSONA_QA_PHRASE: phrase, OTEL_SDK_DISABLED: "", LANGFUSE_PUBLIC_KEY: "", LANGFUSE_SECRET_KEY: "" },
   });
   assert.equal(await evalRun.exited, 0);
+  if (evalName !== "persona-approval") process.exitCode = 0;
+  else {
   const personas = await db.persona.findMany({ where: { orgId: org, isOwn: false }, select: { slug: true, voiceId: true, version: true, data: true } });
   assert.equal(personas.length, 1);
   assert.equal(personas[0].slug, "maya-approved");
@@ -67,6 +70,7 @@ try {
   assert.equal(roleplay.kind, "ROLEPLAY");
   assert.equal(roleplay.name, "Renewal Check-in");
   assert.equal((roleplay.data as { before?: { preUpload?: boolean } }).before?.preUpload, true);
+  }
 } finally {
   server.stop(true);
   if ((await db.organization.findUnique({ where: { id: org } }))?.chromaTenantId) await ChromaTenantService.deleteOrgDatabase(org);

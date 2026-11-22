@@ -5,7 +5,7 @@ import { studioResult } from "../lib/studio";
 
 export default defineTool({
   description:
-    "Role play from requirements (roleplay-creator): checks a role-play brief and renders it, saving nothing. Returns the rendered SKILL.md and learner brief, or the reasons to fix. Fix every reason in the next call, all at once; at most 3 drafts. Show the trainer the result before publish_roleplay.",
+    "Role play from requirements (roleplay-creator): checks a role-play brief and renders it, saving nothing. Returns the rendered SKILL.md and learner brief, or the reasons to fix. Fix every reason in the next call, all at once; at most 3 drafts. Show the trainer the result before roleplay_publish.",
   inputSchema: z.object({ brief: roleplayBrief }),
   async execute({ brief }, ctx) {
     return studioResult(ctx, { action: "draftRoleplay", brief });

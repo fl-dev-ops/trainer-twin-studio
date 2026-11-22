@@ -4,7 +4,7 @@ import { studio, type StudioCtx } from "./studio";
 /**
  * Files a trainer attaches in a copilot chat (plans/uploads-to-s3.md): the browser uploads to S3 first and sends a
  * file part pointing at trainertwin-upload://<id>; eve stages it through this. An image reaches the model as pixels; a
- * PDF comes as its text (<name>.md, opened with read_file), because the copilot's model refuses PDF file parts and a
+ * PDF comes as its text (<name>.md, opened with attachment_read), because the copilot's model refuses PDF file parts and a
  * refused part fails the whole conversation. Only the trainer's own uploads in this org (the studio checks), 30 days.
  */
 export const UPLOAD_SCHEME = "trainertwin-upload://";

@@ -26,7 +26,7 @@ export default defineEval({
     }
     const roster = await t.send("What is Riley Example's role in this organization, and which twin and role play are assigned to Riley now?", { headers });
     roster.expectOk();
-    roster.calledTool("list_users");
+    roster.calledTool("user_list");
     const reply = roster.reply;
     assert(reply, "Expected a roster reply");
     for (const expected of [/Riley Example/i, /learner/i, /Silver Compass/i, /Orchard Follow-up/i]) assert.match(reply, expected);
@@ -47,17 +47,17 @@ export default defineEval({
       const result = await pending.session.respond([{ interactionId: approval.interactionId, optionId }], { headers });
       result.expectOk();
       assert.equal((await list()).includes(slug), optionId === "approve");
-      if (optionId === "approve") result.calledTool("create_persona", { output: (output: unknown) =>
+      if (optionId === "approve") result.calledTool("persona_create", { output: (output: unknown) =>
         typeof output === "object" && output !== null && "voice" in output && output.voice === voiceId,
       });
     }
     const proposeEdit = await t.send("Change the role-play persona Maya Approved's description to exactly: You ask one short question at a time. Leave the name, role, and voice alone.", { headers });
     const edit = proposeEdit.interactions.length ? proposeEdit : await proposeEdit.session.send("Those are the changes I want. Show me the approval card.", { headers });
-    const editApproval = edit.interactions.find((i) => i.request.prompt?.includes('Change persona "maya-approved"'));
+    const editApproval = edit.interactions.find((i) => /Change persona "(Maya Approved|maya-approved)"/.test(i.request.prompt ?? ""));
     assert(editApproval, `Expected an approval before updating the persona: ${edit.reply}`);
     const edited = await edit.session.respond([{ interactionId: editApproval.interactionId, optionId: "approve" }], { headers });
     edited.expectOk();
-    edited.calledTool("update_persona", { count: 1 });
+    edited.calledTool("persona_update", { count: 1 });
 
     const proposeTwin = await t.send("Create the main twin for the existing trainer persona QA Trainer. Do not create a twin skill.", { headers });
     const twin = proposeTwin.interactions.length ? proposeTwin : await proposeTwin.session.send("Yes, show me the approval card to create that main twin.", { headers });
@@ -65,7 +65,7 @@ export default defineEval({
     assert(twinApproval, `Expected main twin approval: ${twin.reply}`);
     const createdTwin = await twin.session.respond([{ interactionId: twinApproval.interactionId, optionId: "approve" }], { headers });
     createdTwin.expectOk();
-    createdTwin.calledTool("create_twin", { count: 1 });
+    createdTwin.calledTool("twin_create", { count: 1 });
 
     const approvalFor = async (ask: string, prefix: string) => {
       const first = await t.send(ask, { headers });
@@ -82,7 +82,7 @@ export default defineEval({
     const unchangedTwin = await studio({ action: "get", kind: "twin", slug: `${org}-qa-trainer-twin` });
     assert.equal(unchangedTwin.status, 200);
     assert(!JSON.stringify(await unchangedTwin.json()).includes("Compass Trainer Twin"));
-    await approveTwinEdit("update_twin");
+    await approveTwinEdit("twin_update");
 
     const approveRoleplay = await approvalFor(
       'Create and publish a role play titled "Renewal Check-in", brief ID renewal-check-in, played by the persona Maya Approved. The learner is an account manager calling a buyer about renewal. The buyer needs a clear follow-up date before deciding. Have the learner start, then have the buyer ask about the timeline and agree only if the learner proposes a date. Show the learner their goal before practice. Use no example items. These are the final requirements; show me the draft before requesting approval.',
@@ -90,12 +90,12 @@ export default defineEval({
     );
     const roleplaySlug = `${org}-renewal-check-in`;
     assert.equal((await studio({ action: "get", kind: "roleplay", slug: roleplaySlug })).status, 404);
-    await approveRoleplay("publish_roleplay");
+    await approveRoleplay("roleplay_publish");
 
     const approveRoleplayEdit = await approvalFor('Update the published Renewal Check-in role play: turn on optional file upload before the call. Keep all other settings and the brief unchanged.', "Change role play");
     const unchangedRoleplay = await studio({ action: "get", kind: "roleplay", slug: roleplaySlug });
     assert.equal(unchangedRoleplay.status, 200);
     assert(!JSON.stringify(await unchangedRoleplay.json()).includes('"preUpload":true'));
-    await approveRoleplayEdit("update_roleplay");
+    await approveRoleplayEdit("roleplay_settings_update");
   },
 });

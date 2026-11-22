@@ -22,12 +22,7 @@ const base = {
 
 test("only approved Studio and scoped draft/source tools are shipped", () => {
   const tools = readdirSync(new URL("../agent/tools/", import.meta.url)).filter((name) => name.endsWith(".ts")).map((name) => name.slice(0, -3));
-  assert.deepEqual(tools.sort(), [
-    "build_scenario", "build_twin_skill", "check", "create_persona", "create_twin", "draft_roleplay", "files",
-    "get_roleplay", "get_twin", "list_personas", "list_roleplays", "list_twins", "list_users", "list_voices", "load_skill",
-    "publish", "publish_roleplay", "publish_twin_skill", "read", "read_file", "read_method", "read_sessions",
-    "search", "update_persona", "update_roleplay", "update_twin", "write",
-  ]);
+  assert.deepEqual(tools.sort(), ["attachment_read", "knowledge_list", "knowledge_read", "knowledge_search", "note_read", "note_write", "persona_create", "persona_list", "persona_update", "roleplay_draft", "roleplay_list", "roleplay_publish", "roleplay_read", "roleplay_recording_build", "roleplay_recording_check", "roleplay_recording_load", "roleplay_recording_method_read", "roleplay_recording_publish", "roleplay_recording_sessions_read", "roleplay_settings_update", "roleplay_tools_update", "roleplay_update", "twin_create", "twin_list", "twin_read", "twin_settings_update", "twin_skill_build", "twin_skill_load", "twin_skill_publish", "twin_update", "user_list", "voice_list"]);
 });
 
 test("attachments must come from the Studio upload picker", async () => {

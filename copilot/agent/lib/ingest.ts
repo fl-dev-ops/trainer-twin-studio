@@ -693,7 +693,7 @@ export async function check(io: Io, user: string, scenario?: string, stage: Stag
 /** The rules every check enforces, written from the same constants, so the agent knows them before its first build. */
 export function requirementsText() {
   const observed = PATTERN_SECTIONS.filter((h) => h !== "## From the method docs" && h !== "## Gaps");
-  return `# Requirements build_scenario and check enforce
+  return `# Requirements roleplay_recording_build and check enforce
 
 Know these before you read anything. Every number is a hard limit in code.
 

@@ -4,7 +4,7 @@ import { z } from "zod";
 import { studioResult } from "../lib/studio";
 
 export default defineTool({
-  description: "Create the main twin for an existing trainer persona from list_personas (own: true). If their twin already exists, returns it unchanged. Creating or changing a twin skill uses twin-creator instead.",
+  description: "Create the trainer's main twin from their own persona (persona_list, own: true). Needs the trainer's approval. If it already exists, returns it unchanged. Not for twin skills (twin-creator) or changing a twin (twin_update, twin_settings_update).",
   inputSchema: z.object({ persona: z.string().trim().min(1).max(200) }).strict(),
   approval: { request: always(), prompt: ({ input }) => `Create the main twin for ${input?.persona ?? "this trainer"}?` },
   async execute(input, ctx) {

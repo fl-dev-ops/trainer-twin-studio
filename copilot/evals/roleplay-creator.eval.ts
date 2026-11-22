@@ -61,15 +61,15 @@ const builds = cases.map((c) => defineEval({
     const turns = [first];
     let session = first.session;
     // The copilot may ask for something it can't propose; answer once with "use your proposals".
-    if (!calls(turns, "draft_roleplay").some(ok)) {
+    if (!calls(turns, "roleplay_draft").some(ok)) {
       const next = await session.send("Use your proposals for anything not in the requirements, and draft it.", { headers: headers() });
       turns.push(next);
       session = next.session;
     }
-    const drafts = calls(turns, "draft_roleplay");
+    const drafts = calls(turns, "roleplay_draft");
     t.log(`${c.id}: ${drafts.length} drafts; reasons ${JSON.stringify(drafts.map((d) => (d.output as { reasons?: unknown })?.reasons ?? []))}`);
     await t.require(drafts.some(ok), satisfies((value) => value === true, "a draft passed the studio's checks"));
-    t.calledTool("list_personas");
+    t.calledTool("persona_list");
     if (c.expectNotes) t.check(turns.map((turn) => turn.reply).join("\n"), satisfies((reply) => c.expectNotes!.test(String(reply)), "explains what the role play can't do yet"));
 
     const brief = drafts.filter(ok).at(-1)!.input as { brief: unknown };
@@ -90,8 +90,8 @@ const builds = cases.map((c) => defineEval({
     // The trainer sees what was drafted and what was published, in words.
     t.check(turns.at(-1)!.reply, satisfies((reply) => String(reply).trim().length > 40, "shows the trainer the draft"));
     t.check(approved.reply, satisfies((reply) => /publish|version|live|ready/i.test(String(reply)), "reports the publish"));
-    t.calledTool("publish_roleplay", { output: (value: unknown) => (value as { ok?: unknown })?.ok === true, count: 1 });
-    const published = calls([approved], "publish_roleplay").at(-1)?.output as { persona?: string } | undefined;
+    t.calledTool("roleplay_publish", { output: (value: unknown) => (value as { ok?: unknown })?.ok === true, count: 1 });
+    const published = calls([approved], "roleplay_publish").at(-1)?.output as { persona?: string } | undefined;
     t.log(`${c.id}: published ${JSON.stringify(published)}; expected persona ${c.persona}`);
   },
 }));
@@ -103,8 +103,8 @@ const vague = defineEval({
     if (!process.env.EVAL_ORG_ID) return t.skip("EVAL_ORG_ID not provided");
     const turn = await t.send("<use-skill name=\"roleplay-creator\" />\nCan you make a role play for my team?", { headers: headers() });
     turn.expectOk();
-    t.notCalledTool("draft_roleplay");
-    t.notCalledTool("publish_roleplay");
+    t.notCalledTool("roleplay_draft");
+    t.notCalledTool("roleplay_publish");
     t.judge("The reply asks, in one message, for the essentials of the role play (who the AI plays, who the learner plays, the situation, what the learner should achieve) and does not ask about details it could propose itself.", { on: turn.reply }).atLeast(0.7);
   },
 });

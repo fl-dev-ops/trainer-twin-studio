@@ -16,7 +16,7 @@ function relPath(user: string, path: string, owns: RegExp, label: string) {
 
 export function writeTool(owns: RegExp, label: string) {
   return defineTool({
-    description: `Write ${label} under output/<user>/, replacing it. JSON must be valid. To change part of an existing file, use edit if you have it.`,
+    description: `Write ${label} under output/<user>/, replacing the whole file. Nothing else can be written; build tools create every other file.`,
     inputSchema: z.object({ user: z.string(), path: z.string(), content: z.string() }),
     async execute({ user, path, content }, ctx) {
       const { id, rel } = relPath(user, path, owns, label);
