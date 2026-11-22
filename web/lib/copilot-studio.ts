@@ -11,6 +11,9 @@ import { draftBrief } from "@/lib/roleplay/brief";
 import { runRoleplayAssign, runTwinAssign } from "@/lib/workflow-runs";
 import { accessUntilSchema, listTwinAssignments } from "@/lib/twin-access";
 import { updateTwin } from "@/lib/twin/manage";
+import { personaInputSchema } from "@/lib/persona";
+import { PersonaError, savePersona } from "@/lib/personas";
+import { listAvailableVoices } from "@/lib/voices";
 import { TWIN_SOURCE } from "@/lib/twins";
 import { readSkillPackage, skillRefusals } from "@/lib/skills";
 import { getMappedSkillPackage, hydrateAgentSkill } from "@/lib/skill-history";
@@ -60,6 +63,9 @@ export const copilotStudioInput = z.discriminatedUnion("action", [
   // Role plays written from requirements (lib/roleplay/brief.ts): personas to play them, a draft (check + render, nothing
   // saved), and publishing on the trainer's approval.
   z.object({ action: z.literal("listPersonas") }).strict(),
+  // A new role-play persona (the Personas page's form: name, role, about, a voice), on the trainer's approval.
+  z.object({ action: z.literal("listVoices") }).strict(),
+  personaInputSchema.extend({ action: z.literal("createPersona") }).strict(),
   z.object({ action: z.literal("draftRoleplay"), brief: z.unknown() }).strict(),
   z.object({ action: z.literal("publishRoleplay"), persona: slug, brief: z.unknown() }).strict(),
   z.object({ action: z.literal("archive"), slug }).strict(),
@@ -81,7 +87,7 @@ function emailsStatus<T extends { emailFailures: number; emailsQueued?: number; 
 }
 
 // Assigning goes through the assign-twin / assign-roleplay workflows (lib/workflow-runs.ts), as on the Assign pages.
-const defaultDeps = { db, getObjectText, assignTwinAndInvite: runTwinAssign, listTwinAssignments, inviteToRoleplay: runRoleplayAssign, updateTwin, updateRoleplay, resolveUpload, publishRoleplayBrief };
+const defaultDeps = { db, getObjectText, savePersona, listAvailableVoices, assignTwinAndInvite: runTwinAssign, listTwinAssignments, inviteToRoleplay: runRoleplayAssign, updateTwin, updateRoleplay, resolveUpload, publishRoleplayBrief };
 export type CopilotStudioDeps = typeof defaultDeps;
 
 const asRecord = (value: unknown) => (value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {});
@@ -275,6 +281,22 @@ export async function runCopilotStudio(actor: Actor, input: CopilotStudioInput, 
           voice: p.voice?.name ?? null, usedBy: p._count.agents,
         })),
       };
+    }
+
+    case "listVoices": {
+      const voices = await d.listAvailableVoices(orgId);
+      return { voices: voices.map((v) => ({ id: v.id, name: v.name, own: v.orgId === orgId })) };
+    }
+
+    case "createPersona": {
+      const { action: _action, ...fields } = input;
+      try {
+        const created = await d.savePersona(orgId, fields);
+        return { ok: true, slug: created.slug, name: fields.name, role: fields.role, voice: fields.voiceId ?? null };
+      } catch (error) {
+        if (error instanceof PersonaError) throw new ScenarioIngestError(error.message, error.status);
+        throw error;
+      }
     }
 
     case "draftRoleplay": {

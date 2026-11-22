@@ -64,6 +64,23 @@ describe.skipIf(!localMinutesDb)("role plays written from requirements, through 
     await f.clean();
   });
 
+  test("creates a persona with a voice from the org's list; refuses a voice it can't use and a bad form", async () => {
+    const { voices } = await studio({ action: "listVoices" }) as { voices: { id: string; own: boolean }[] };
+    const own = voices.find((v) => v.own);
+    expect(own?.id).toBe(`${f.org.id}-voice`);
+    const created = await studio({ action: "createPersona", name: "Priya Nair", role: "Hiring manager", about: "You are calm and ask short questions.", voiceId: own!.id });
+    expect(created).toMatchObject({ ok: true, slug: "priya-nair" });
+    const row = await db.persona.findFirstOrThrow({ where: { orgId: f.org.id, slug: "priya-nair" }, select: { isOwn: true, voiceId: true, data: true } });
+    expect(row).toMatchObject({ isOwn: false, voiceId: own!.id, data: expect.objectContaining({ role: "Hiring manager", background: "You are calm and ask short questions." }) });
+    // Same name again: a new slug, never an overwrite.
+    expect(await studio({ action: "createPersona", name: "Priya Nair", role: "Hiring manager", about: "" })).toMatchObject({ slug: "priya-nair-2" });
+    await expect(studio({ action: "createPersona", name: "Ghost", role: "Buyer", about: "", voiceId: "another-orgs-voice" })).rejects.toThrow(/not available/);
+    expect(await db.persona.count({ where: { orgId: f.org.id, slug: "ghost" } })).toBe(0);
+    const { copilotStudioInput } = await import("@/lib/copilot-studio");
+    expect(copilotStudioInput.safeParse({ action: "createPersona", name: "", role: "Buyer", about: "" }).success).toBe(false);
+    expect(copilotStudioInput.safeParse({ action: "createPersona", name: "X", role: "Buyer", about: "", isOwn: true }).success).toBe(false);
+  });
+
   test("lists personas, drafts without saving, publishes once, republishes as a no-op and an edit as v2", async () => {
     const { personas } = await studio({ action: "listPersonas" }) as { personas: { slug: string; role: string | null }[] };
     expect(personas.map((p) => p.slug)).toEqual([f.org.slug, "chloe"]);

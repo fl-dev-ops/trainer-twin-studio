@@ -20,8 +20,10 @@ persona from the Persona Library, which gives the voice and personality.
 2. **Ask once, only for what is missing and essential**: who the AI plays, who the learner plays, the situation, what the
    learner should achieve. Ask them together in one short message. Everything else, propose yourself and say it is a
    proposal. Never ask about things you can sensibly propose.
-3. **Pick the persona.** Call \`list_personas\` and choose the one that fits the AI's role. If none fits, say which
-   persona to create (name, role, a line of personality) in Personas, and stop until it exists.
+3. **Pick the persona.** Call \`list_personas\` and choose the one that fits the AI's role. If none fits, propose a new
+   one (name, role, a few sentences of stable personality written to "you", and a voice from \`list_voices\`) and
+   create it with \`create_persona\` once the trainer agrees. Personality goes in the persona; this situation, its facts
+   and goals stay in the brief.
 4. **Say plainly what this role play cannot do yet**, when the requirements ask for it: several personas in one call or
    a persona picked at random per session (offer one role play per persona instead), modes such as practice vs mock
    (offer one role play per mode), and scoring, reports or feedback (not part of the role play). Never fake them in the
