@@ -5,7 +5,7 @@ import channel from "../../../agent/channels/openai-compat";
 import type { SessionSpecs, TwinPlaybook } from "../../../agent/lib/brain";
 import { composeInstructions } from "../../../agent/lib/compose-instructions";
 import { roleplaySkill } from "../../../agent/lib/roleplay";
-import { CALIBRATION_FEEDBACK_EVENT, sessionMode, userInactiveEvent } from "../../../agent/lib/session-mode";
+import { CALIBRATION_FEEDBACK_EVENT, sessionMode, USER_INACTIVE_EVENT } from "../../../agent/lib/session-mode";
 import { clearSessionModeCache, primeSessionMode } from "../../../agent/lib/session-mode-lookup";
 
 const platform = await readFile(new URL("../../../prompts/platform.md", import.meta.url), "utf8");
@@ -17,7 +17,7 @@ const twinSpecs = {
   warmOpening: { style: { phrasingStyle: [{ text: "Hi, tell me", score: 1 }] } },
 } as unknown as SessionSpecs;
 const clientSpecs = {
-  agentName: "Wait-and-see investor", agentSlug: "olga-wait", objective: "", phases: [], documents: [], mode: "voice", personaName: "Rohan",
+  agentName: "Wait-and-see investor", agentSlug: "olga-wait", objective: "", documents: [], mode: "voice", personaName: "Rohan",
   roleplay: roleplaySkill("ROLEPLAY", { skill: "# The investor", scenario: { difficulty: "easy" } }),
 } as unknown as SessionSpecs;
 
@@ -30,14 +30,13 @@ describe("session mode", () => {
     assert.equal(sessionMode({ twin: {} }), "twin");
     assert.equal(sessionMode({ twin: {}, calibration: true }), "twin-calibration");
     assert.equal(sessionMode({ calibration: true }), "unavailable");
-    assert.equal(sessionMode({ playbook: {} }), "legacy-playbook");
     assert.equal(sessionMode({}), "unavailable");
   });
 });
 
 describe("composed instructions", () => {
   test("an agent with nothing to run (an old interview not converted yet) says it isn't ready, on the platform rules only", () => {
-    const specs = { agentName: "Frontend mock", agentSlug: "cwv-frontend", objective: "", phases: [], documents: [], mode: "voice" } as unknown as SessionSpecs;
+    const specs = { agentName: "Frontend mock", agentSlug: "cwv-frontend", objective: "", documents: [], mode: "voice" } as unknown as SessionSpecs;
     assert.equal(sessionMode(specs), "unavailable");
     const prompt = composeInstructions(specs);
     assert.ok(prompt.includes(platform.trim()));
@@ -123,14 +122,12 @@ describe("runtime events", () => {
     return message;
   }
 
-  test("silence: legacy playbooks keep their directive; twins and clients get the fact, their instructions say what to do", async () => {
-    primeSessionMode("org1", "pb", "a", "legacy-playbook");
+  test("silence: every mode gets the fact; its instructions say what to do", async () => {
     primeSessionMode("org1", "tw", "a", "twin");
     primeSessionMode("org1", "rp", "a", "roleplay-client");
     const inactive = "__TRAINERTWIN_USER_INACTIVE__";
-    assert.equal(await sent("pb", inactive, "system"), "[USER INACTIVE] The learner has been silent for 60 seconds. Adapt to the current moment in the session. Do not advance the interview or ask a new interview question.");
     assert.equal(await sent("tw", inactive, "system"), "[USER INACTIVE] The learner has been silent for 60 seconds.");
-    assert.equal(await sent("rp", inactive, "system"), userInactiveEvent("roleplay-client"));
+    assert.equal(await sent("rp", inactive, "system"), USER_INACTIVE_EVENT);
   });
 
   test("\"Feels off\" is calibration feedback only in a twin calibration", async () => {

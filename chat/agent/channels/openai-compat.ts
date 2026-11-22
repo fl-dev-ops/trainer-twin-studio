@@ -7,7 +7,7 @@ import { SPEAKING_MODEL, SPEAKING_ROUTE } from "../lib/models";
 import { studioPrincipal } from "../lib/auth";
 import { summarizeToolInput, summarizeToolOutput, withoutImageBytes } from "../lib/tool-trace";
 import { thinkingBudgetSchema } from "../lib/thinking-budget";
-import { CALIBRATION_FEEDBACK_EVENT, userInactiveEvent } from "../lib/session-mode";
+import { CALIBRATION_FEEDBACK_EVENT, USER_INACTIVE_EVENT } from "../lib/session-mode";
 import { sessionModeFor } from "../lib/session-mode-lookup";
 import { studioFetch } from "../lib/studio";
 
@@ -127,8 +127,7 @@ function mapLatestMessage(messages: ChatMessage[]): string | null {
   if (!text) return null;
   // LiveKit transport control messages become explicit internal events for Eve.
   if (text === "session-start") return "[OPENING] Generate the session opening.";
-  // Its text depends on the session mode; the handler fills it in (userInactiveEvent).
-  if (text === USER_INACTIVE_SIGNAL) return USER_INACTIVE_SIGNAL;
+  if (text === USER_INACTIVE_SIGNAL) return USER_INACTIVE_EVENT;
 
   let previousTurnIndex = -1;
   for (let index = latestIndex - 1; index >= 0; index -= 1) {
@@ -225,15 +224,13 @@ export default defineChannel({
       }
 
       let message = mapLatestMessage(body?.messages ?? []);
-      // Runtime events whose meaning depends on the session mode (lib/session-mode.ts).
+      // Twin calibration: "Feels off" becomes its runtime event (lib/session-mode.ts).
       const sessionRef = {
         orgId,
         sessionId: request.headers.get("x-trainertwin-session-id")?.trim() || undefined,
         agentSlug: request.headers.get("x-trainertwin-agent-slug")?.trim() || undefined,
       };
-      if (message === USER_INACTIVE_SIGNAL) {
-        message = userInactiveEvent(await sessionModeFor(sessionRef));
-      } else if (message && sessionRef.sessionId && isFeelsOff(message) && (await sessionModeFor(sessionRef)) === "twin-calibration") {
+      if (message && sessionRef.sessionId && isFeelsOff(message) && (await sessionModeFor(sessionRef)) === "twin-calibration") {
         message = CALIBRATION_FEEDBACK_EVENT;
       }
       // One line per transport request (before any early return) so dropped/rejected turns are visible.

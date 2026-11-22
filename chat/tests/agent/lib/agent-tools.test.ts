@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, test } from "node:test";
-import { formatWorkspaceBlock, NO_TOOLS, toolSettings, workspaceAllowed, type ToolSettings } from "../../../agent/lib/agent-tools";
+import { formatWorkspaceBlock, NO_TOOLS, toolSettings, workspaceAllowed, type CallSettings, type ToolSettings } from "../../../agent/lib/agent-tools";
 import { formatRoleplaySession, type RoleplaySkill } from "../../../agent/lib/roleplay";
 import workspace from "../../../agent/tools/workspace";
 
@@ -93,17 +93,17 @@ describe("backstop: a call is allowed only when its switch is on", () => {
 describe("prompt: the workspace for this call", () => {
   const roleplay: RoleplaySkill = { skill: "---\nname: test\n---\n# Test", difficulty: "medium" };
   const specs = { agentName: "Test", agentSlug: "test", personaName: "Adam" };
-  const prompt = (tools?: ToolSettings) => formatRoleplaySession(specs, roleplay, { learnerBlock: "" }, tools);
+  const prompt = (tools?: ToolSettings, call?: CallSettings) => formatRoleplaySession(specs, roleplay, { learnerBlock: "" }, tools, call);
 
-  test("nothing on: the role-play prompt is word for word as before", () => {
+  test("nothing on: only end_call and scenario_examples, and no workspace", () => {
     assert.equal(prompt(NO_TOOLS), prompt());
     assert.match(prompt(), /no trainer persona and no workspace\./);
-    assert.match(prompt(), /Call no tool except end_call \(to hang up, as above\) and scenario_examples\. Trainer, knowledge, document, résumé, plan and workspace tools are disabled in this mode\./);
+    assert.match(prompt(), /Call no tool except end_call \(to hang up, as above\), scenario_examples\. Every other tool is disabled in this mode\./);
     assert.equal(formatWorkspaceBlock(NO_TOOLS, { client: true }), "");
   });
 
-  test("some on: the prompt lists only those, in character, and allows read_document", () => {
-    const text = prompt(on({ preview: true }));
+  test("some on: the prompt lists only those, in character, and allows read_document once uploads are on", () => {
+    const text = prompt(on({ preview: true }), { screenShare: false, preUpload: true, duringUpload: false });
     assert.doesNotMatch(text, /and no workspace/);
     assert.match(text, /# Workspace for this call/);
     assert.match(text, /open_pdf/);

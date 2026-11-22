@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, test } from "node:test";
 import { z } from "zod";
-import { formatSessionSpec, scenarioPlaybook, type SessionSpecs } from "../../../agent/lib/brain";
+import { formatSessionSpec, type SessionSpecs } from "../../../agent/lib/brain";
 import { roleplaySkill } from "../../../agent/lib/roleplay";
 import scenarioExamples from "../../../agent/tools/scenario_examples";
 import endCall from "../../../agent/tools/end_call";
@@ -46,7 +46,6 @@ const base: SessionSpecs = {
   agentSlug: "acme-wait-and-see-investor",
   agentVersion: 1,
   objective: "",
-  phases: [],
   personaName: "Rohan Mehta",
   personaSlug: "off-plan-lead-waiting-for-prices",
   personaBrief: "- Name: Rohan Mehta\n- Behaviour: Skeptical & Reserved",
@@ -70,8 +69,6 @@ describe("client role play (kind ROLEPLAY with a SKILL.md)", () => {
       opening: "The market has basically stopped. I'll wait for prices to hit the bottom.",
     });
     assert.equal(roleplaySkill("ROLEPLAY", { ...roleplayData, scenario: { ...roleplayData.scenario, difficulty: "weird" } })?.difficulty, "medium");
-    // A role play is never a twin playbook.
-    assert.equal(scenarioPlaybook("ROLEPLAY", roleplayData), undefined);
   });
 
   test("prompt: client mode with persona brief + SKILL.md + difficulty; never the goals or rubric", () => {
@@ -105,7 +102,9 @@ describe("client role play (kind ROLEPLAY with a SKILL.md)", () => {
     assert.match(prompt, /end_call\(\{ outcome: "completed" \}\)/);
     assert.doesNotMatch(prompt, /a CLIENT|a salesperson|# Guard level|private scoring criterion|say exactly:/);
     const withoutWorkspace = formatSessionSpec({ ...base, roleplay: authored });
-    assert.match(withoutWorkspace, /Use read_document for attached document facts/);
+    // No documents can reach the call: no read_document, no artifact list, and never ask for a file.
+    assert.match(withoutWorkspace, /the learner cannot attach files in this call/);
+    assert.doesNotMatch(withoutWorkspace, /ATTACHED ARTIFACTS/);
     assert.match(withoutWorkspace, /No workspace surfaces are enabled/);
     assert.equal(roleplaySkill("ROLEPLAY", { source: "scenario-ingest", skill: " " }), undefined);
   });
@@ -209,7 +208,63 @@ describe("knowledge search switch", () => {
     const tools = { canvas: false, codeEditor: false, preview: false, choice: false };
     const on = formatSessionSpec({ ...base, roleplay: roleplaySkill("ROLEPLAY", data), tools: { ...tools, knowledge: true } });
     const off = formatSessionSpec({ ...base, roleplay: roleplaySkill("ROLEPLAY", data), tools });
-    assert.match(on, /Knowledge search is on: call search_knowledge before you judge/);
+    assert.match(on, /Knowledge search: on\. Call search_knowledge before you judge/);
     assert.doesNotMatch(off, /search_knowledge/);
+    assert.match(off, /Knowledge search: off/);
+  });
+});
+
+describe("Settings and Tools tabs reach the prompt", () => {
+  const tools = { canvas: false, codeEditor: false, preview: false, choice: false };
+  const authored = roleplaySkill("ROLEPLAY", { source: "scenario-ingest", skill: "# Interview", scenario: { trainer_role: "Interviewer", learner_role: "Candidate" } });
+  const client = roleplaySkill("ROLEPLAY", roleplayData);
+  const doc = { id: "doc-1", name: "CV.pdf", kind: "pdf", mimeType: "application/pdf", size: 100 };
+
+  test("screen share off: the AI is told never to ask for it; on: it is told how it sees the screen", () => {
+    for (const roleplay of [authored, client]) {
+      const off = formatSessionSpec({ ...base, roleplay, tools, call: { screenShare: false, preUpload: false, duringUpload: false } });
+      assert.match(off, /screen sharing is off for this call\. Never ask the learner to share/);
+      const on = formatSessionSpec({ ...base, roleplay, tools, call: { screenShare: true, preUpload: false, duringUpload: false } });
+      assert.match(on, /the learner shares their whole screen/);
+      assert.doesNotMatch(on, /screen sharing is off/);
+    }
+  });
+
+  test("uploads: read_document and ATTACHED ARTIFACTS only when a document can reach the call", () => {
+    for (const roleplay of [authored, client]) {
+      const off = formatSessionSpec({ ...base, roleplay, tools, call: { screenShare: false, preUpload: false, duringUpload: false } });
+      assert.doesNotMatch(off, /read_document|ATTACHED ARTIFACTS/);
+      const before = formatSessionSpec({ ...base, roleplay, tools, documents: [doc], call: { screenShare: false, preUpload: true, duringUpload: false } });
+      assert.match(before, /read_document/);
+      assert.match(before, /ATTACHED ARTIFACTS\n- kind: pdf; id: "doc-1"/);
+      const during = formatSessionSpec({ ...base, roleplay, tools, call: { screenShare: false, preUpload: false, duringUpload: true } });
+      assert.match(during, /attach one during the call \(it arrives as \[ATTACHED <id>\]\)/);
+    }
+  });
+
+  test("builder client: its tool list names exactly what is switched on", () => {
+    const off = formatSessionSpec({ ...base, roleplay: client, tools });
+    assert.match(off, /Call no tool except end_call \(to hang up, as above\), scenario_examples\. Every other tool/);
+    const on = formatSessionSpec({ ...base, roleplay: client, tools: { ...tools, canvas: true, knowledge: true }, documents: [doc], call: { screenShare: false, preUpload: true, duringUpload: false } });
+    assert.match(on, /scenario_examples, read_document, search_knowledge and read_knowledge_document, the workspace below\./);
+    assert.match(on, /open_whiteboard/);
+  });
+
+  test("callSettings reads the Settings tab (before, or an older twin's twinSettings); missing is off", async () => {
+    const { callSettings } = await import("../../../agent/lib/agent-tools");
+    assert.deepEqual(callSettings({}), { screenShare: false, preUpload: false, duringUpload: false });
+    assert.deepEqual(callSettings({ before: { preScreenshare: true, preUpload: true, duringUpload: true } }), { screenShare: true, preUpload: true, duringUpload: true });
+    assert.deepEqual(callSettings({ twinSettings: { preScreenshare: true } }), { screenShare: true, preUpload: false, duringUpload: false });
+    assert.deepEqual(callSettings({ before: { preScreenshare: "yes" } }).screenShare, false);
+  });
+});
+
+describe("finish_session", () => {
+  afterEach(() => clearSessionModeCache());
+  test("is refused in a role play (role plays end with end_call)", async () => {
+    const { executeWorkspaceTool } = await import("../../../agent/lib/workspace-tools");
+    primeSessionMode("org1", "rp-finish", undefined, "roleplay-client");
+    const ctx = { toolName: "finish_session", session: { auth: { initiator: { principalId: "org1" }, current: { principalId: "org1", attributes: { sessionId: "rp-finish" } } } } };
+    assert.deepEqual(await executeWorkspaceTool({}, ctx), { disabled: true, reason: "Role plays end with end_call." });
   });
 });

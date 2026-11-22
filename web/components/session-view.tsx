@@ -290,8 +290,8 @@ export function SessionView({
   );
   const isContextRequired = Boolean(contextUpload?.required ?? agentContextRequired[agent]);
   const documentLabel = contextUpload?.label || "Documents";
-  // Role-play defaults when the agent has no resolved settings: whole screen shared, documents accepted, no mid-call attach.
-  const screenShareRequired = contextUpload?.screenShare ?? true;
+  // Without resolved settings everything is off (as on the Settings tab), except a document the agent requires.
+  const screenShareRequired = contextUpload?.screenShare ?? false;
   const documentsAllowed = contextUpload?.allowed ?? true;
   const attachDuringSession = contextUpload?.duringSession ?? false;
 

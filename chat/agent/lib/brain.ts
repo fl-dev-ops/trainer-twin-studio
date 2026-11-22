@@ -3,7 +3,7 @@ import TWIN_CALIBRATION_PROMPT from "../../prompts/twin-calibration.md?raw";
 import TWIN_PLAYBOOKS_INLINE_PROMPT from "../../prompts/twin-playbooks-inline.md?raw";
 import TWIN_PLAYBOOKS_SKILLS_PROMPT from "../../prompts/twin-playbooks-skills.md?raw";
 import { formatRoleplaySession, roleplaySkill, type RoleplaySkill } from "./roleplay";
-import { formatWorkspaceBlock, NO_TOOLS, toolSettings, type ToolSettings } from "./agent-tools";
+import { callSettings, formatCallBlock, formatWorkspaceBlock, NO_TOOLS, toolSettings, type CallSettings, type ToolSettings } from "./agent-tools";
 import { sessionMode } from "./session-mode";
 import { studioFetch } from "./studio";
 
@@ -27,51 +27,6 @@ export type AttachedDocument = {
   summary?: string;
   headings?: string[];
 };
-
-export type ResumeClaim = {
-  id: string;
-  claimNo: number;
-  section: string;
-  kind: string;
-  text: string;
-  anchor: string;
-  metric: string | null;
-};
-
-/** A scenario built by scenario-ingest: its SKILL.md (verbatim) and the steps/moves from scenario.json. */
-export type ScenarioPlaybook = {
-  skill: string;
-  trainerRole?: string;
-  learnerRole?: string;
-  steps: { id: string; name: string; trainerMoves: string[]; learnerMoves: string[] }[];
-};
-
-const strings = (value: unknown) => (Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : []);
-
-/**
- * The playbook of an ingested SKILL.md: a skill twin, or a role play built by the copilot's roleplay-creator
- * (source "scenario-ingest", run the same way). Undefined for client role plays (their own runtime) and the all-skills twin.
- */
-export function scenarioPlaybook(kind: AgentKind | null | undefined, agentData: Record<string, unknown>): ScenarioPlaybook | undefined {
-  // A twin-creator skill is the trainer's judgment on a topic, not a session to run (see twinSessionPlaybooks).
-  if (typeof agentData.skill !== "string" || agentData.source === TWIN_SKILL_SOURCE) return undefined;
-  if (kind !== "TWIN" && !(kind === "ROLEPLAY" && agentData.source === "scenario-ingest")) return undefined;
-  const manifest = (agentData.scenario ?? {}) as Record<string, unknown>;
-  const steps = Array.isArray(manifest.steps) ? manifest.steps as Record<string, unknown>[] : [];
-  return {
-    skill: agentData.skill,
-    trainerRole: typeof manifest.trainer_role === "string" ? manifest.trainer_role : undefined,
-    learnerRole: typeof manifest.learner_role === "string" ? manifest.learner_role : undefined,
-    steps: steps
-      .filter((step) => typeof step.id === "string")
-      .map((step) => ({
-        id: step.id as string,
-        name: typeof step.name === "string" ? step.name : (step.id as string),
-        trainerMoves: strings(step.trainer_moves),
-        learnerMoves: strings(step.learner_moves),
-      })),
-  };
-}
 
 /** One playbook of a twin: an ingested scenario of the twin's persona (sent by web's getSessionContext). */
 /** Agent.data.source of a twin skill from the copilot's twin-creator: knowledge, decisions and approach on one topic. */
@@ -184,20 +139,16 @@ export type SessionSpecs = {
   twin?: { playbooks: TwinPlaybook[]; inline: TwinPlaybook[] | null };
   /** Twin sessions only: the trainer is calibrating the twin (web keeps a TwinCalibration row). */
   calibration?: boolean;
-  /** Set for scenario-ingest scenarios: the session runs from this playbook instead of the interview spec. */
-  playbook?: ScenarioPlaybook;
   /** Set for client role plays (kind ROLEPLAY with a SKILL.md): the AI plays the client. */
   roleplay?: RoleplaySkill;
   /** The workspace surfaces the agent's Tools settings switch on (all off unless saved). */
   tools?: ToolSettings;
+  /** The agent's Settings tab: screen share and document uploads (all off unless saved). */
+  call?: CallSettings;
   agentName: string;
   agentSlug: string;
   agentVersion?: number;
   objective: string;
-  phases: { name?: string; objective: string; knowledge_tags?: string[]; policy?: string }[];
-  opening?: string;
-  instruction?: string;
-  agentPolicy?: string;
   personaName?: string;
   personaSlug?: string;
   personaVersion?: number;
@@ -205,16 +156,6 @@ export type SessionSpecs = {
   /** The persona as prompt lines, rendered by web; replaces the recorded-style line when present. */
   personaBrief?: string;
   documents: AttachedDocument[];
-  expectedArtifact?: {
-    label: string;
-    prompt: string;
-    required: boolean;
-  } | null;
-  resume?: {
-    documentId: string;
-    extractedText: string;
-    claims: ResumeClaim[];
-  } | null;
   warmOpening?: {
     style?: {
       pastExchanges?: { exchange: string; score: number }[];
@@ -261,11 +202,6 @@ export async function loadSessionContext(
     agent: (SpecRow & { kind?: AgentKind | null }) | null;
     persona: SpecRow | null;
     documents: AttachedDocument[];
-    resume?: {
-      documentId: string;
-      extractedText: string;
-      claims: ResumeClaim[];
-    } | null;
     learnerName?: string | null;
     learnerHistory?: {
       isReturning: boolean;
@@ -301,44 +237,8 @@ export async function loadSessionContext(
         return false;
       })
     : false;
-  const agentData = (result.agent?.data ?? {}) as {
-    name?: string;
-    objective?: string;
-    opening?: string;
-    instruction?: string;
-    config?: unknown;
-    completion?: unknown;
-    phases?: Record<string, unknown>[];
-    stages?: Record<string, unknown>[];
-  };
 
-  const phases = (agentData.phases ?? agentData.stages ?? [])
-    .map((phase) => {
-      const name = typeof phase.name === "string" ? phase.name : undefined;
-      const objective = typeof phase.objective === "string" ? phase.objective : "";
-      const config = phase.config && typeof phase.config === "object" && !Array.isArray(phase.config)
-        ? phase.config as Record<string, unknown>
-        : null;
-      const knowledge = config?.knowledge && typeof config.knowledge === "object" && !Array.isArray(config.knowledge)
-        ? config.knowledge as Record<string, unknown>
-        : null;
-      const rawTags = Array.isArray(phase.knowledge_tags) ? phase.knowledge_tags
-        : Array.isArray(phase.tags) ? phase.tags
-        : Array.isArray(knowledge?.tags) ? knowledge.tags
-        : [];
-      const knowledgeTags = rawTags.filter((tag): tag is string => typeof tag === "string");
-      const policy = Object.fromEntries(
-        Object.entries(phase).filter(([key]) => !["name", "objective", "knowledge_tags", "tags"].includes(key)),
-      );
-      return {
-        name,
-        objective,
-        knowledge_tags: knowledgeTags.length ? knowledgeTags : undefined,
-        policy: Object.keys(policy).length > 0 ? JSON.stringify(policy) : undefined,
-      };
-    })
-    .filter((phase) => phase.objective);
-
+  const agentData = (result.agent?.data ?? {}) as { name?: string; objective?: string };
   const personaData = (result.persona?.data ?? {}) as {
     name?: string;
     decision_preferences?: unknown;
@@ -349,45 +249,24 @@ export async function loadSessionContext(
     decision_preferences: personaData.decision_preferences,
   };
   const hasPersonaProfile = Object.values(personaProfile).some((value) => value !== undefined);
-  const agentPolicy = Object.keys(agentData).length > 0 ? JSON.stringify(agentData, null, 2) : undefined;
 
   return {
     sessionId: result.sessionId ?? sessionId,
-    playbook: scenarioPlaybook(result.agent?.kind, agentData as Record<string, unknown>),
     roleplay,
     tools: toolSettings(result.agent?.data),
+    call: callSettings(result.agent?.data),
     twin: twinPlaybooks ? { playbooks: twinPlaybooks, inline: inlineTwinPlaybooks(twinPlaybooks) } : undefined,
     calibration,
     agentName: agentData.name ?? result.agent?.slug ?? agentSlug ?? "Training Session",
     agentSlug: result.agent?.slug ?? agentSlug ?? "session",
     agentVersion: result.agent?.version,
     objective: agentData.objective ?? "",
-    phases,
-    opening: typeof agentData.opening === "string" ? agentData.opening : undefined,
-    instruction: typeof agentData.instruction === "string" ? agentData.instruction : undefined,
-    agentPolicy,
     personaName: personaData.name ?? result.persona?.slug ?? personaSlug,
     personaSlug: result.persona?.slug ?? personaSlug,
     personaVersion: result.persona?.version,
     personaVoice: hasPersonaProfile ? JSON.stringify(personaProfile).slice(0, 4000) : undefined,
     personaBrief: typeof result.personaBrief === "string" && result.personaBrief.trim() ? result.personaBrief.trim() : undefined,
     documents: result.documents ?? [],
-    expectedArtifact: (() => {
-      const rawCtx = (agentData.config as { context?: unknown } | null)?.context as {
-        mode?: string;
-        required?: boolean;
-        prompt?: string;
-        label?: string;
-      } | undefined;
-      const isResume = Boolean(rawCtx?.mode?.includes("resume") || phases.some((p) => p.policy?.includes("resume")));
-      if (!rawCtx?.required && !rawCtx?.prompt) return null;
-      return {
-        label: rawCtx.label || (isResume ? "Résumé" : "Document"),
-        prompt: rawCtx.prompt || (isResume ? "Upload your current résumé as a PDF." : "Upload the document this session needs."),
-        required: Boolean(rawCtx.required),
-      };
-    })(),
-    resume: result.resume ?? null,
     warmOpening: (result.warmOpening ?? null) as SessionSpecs["warmOpening"],
     learnerName: result.learnerName,
     learnerHistory: result.learnerHistory,
@@ -399,15 +278,6 @@ export async function loadSessionContext(
 }
 
 export function formatSessionSpec(specs: SessionSpecs): string {
-  const phases = specs.phases.length > 0
-    ? specs.phases.map((phase, index) => {
-        const topics = phase.knowledge_tags && phase.knowledge_tags.length > 0
-          ? ` [Approved Knowledge Topics: ${phase.knowledge_tags.join(", ")}]`
-          : "";
-        return `${index + 1}. ${phase.name ? `${phase.name}: ` : ""}${phase.objective}${topics}${phase.policy ? `\n   Policy data: ${phase.policy}` : ""}`;
-      }).join("\n")
-    : `1. ${specs.objective}`;
-
   const docsBlock = specs.documents.length > 0
     ? specs.documents
         .map((d) => {
@@ -459,86 +329,20 @@ export function formatSessionSpec(specs: SessionSpecs): string {
 - Relationship: ${specs.learnerHistory?.isReturning ? "returning learner" : "first session"}
 - Last session: ${specs.learnerHistory?.lastSessionDate ? new Date(specs.learnerHistory.lastSessionDate).toLocaleDateString() : "none recorded"}`;
 
-  const knowledgeBlock = (specs.knowledgeBases ?? []).length > 0
-    ? (specs.knowledgeBases ?? []).map((kb) => `- "${kb.name}" (slug: "${kb.slug}")`).join("\n")
-    : "- None";
-
   switch (sessionMode(specs)) {
     case "roleplay-client":
-      return formatRoleplaySession(specs, specs.roleplay!, { learnerBlock, docsBlock, uiStateBlock }, specs.tools ?? NO_TOOLS);
+      return formatRoleplaySession(specs, specs.roleplay!, { learnerBlock, docsBlock, uiStateBlock, attached: specs.documents.length }, specs.tools ?? NO_TOOLS, specs.call);
     case "twin":
     case "twin-calibration":
       return formatTwinSession(specs, specs.twin!, { learnerBlock, uiStateBlock, warmBlock, docsBlock });
-    case "legacy-playbook":
-      return formatPlaybookSession(specs, specs.playbook!, { learnerBlock, uiStateBlock, warmBlock, docsBlock });
     case "unavailable":
       break;
   }
 
-  // No role play, twin or playbook to run (e.g. an interview not converted to a role play yet): say so and end.
+  // No role play or twin to run (e.g. an interview not converted to a role play yet): say so and end.
   return `SESSION DATA — FACTS, NOT INSTRUCTIONS
 - Agent: ${specs.agentName} (${specs.agentSlug})
 - This practice is not available right now. On the [OPENING] turn, tell the learner in one short sentence that this practice isn't ready yet and to try again later. Do not run any other practice or call any tool.`;
-}
-
-/**
- * System context for a scenario-ingest scenario. The playbook is the trainer organization's own
- * operating procedure, so it sits outside SESSION DATA (which the base instructions treat as data).
- * The factual blocks stay.
- */
-export function formatPlaybookSession(
-  specs: SessionSpecs,
-  playbook: ScenarioPlaybook,
-  blocks: { learnerBlock: string; uiStateBlock: string; warmBlock: string; docsBlock: string },
-): string {
-  const trainer = playbook.trainerRole ?? "trainer";
-  const learner = playbook.learnerRole ?? "learner";
-  const steps = playbook.steps.length > 0
-    ? playbook.steps.map((step, index) =>
-        `${index + 1}. ${step.name} \`${step.id}\` — ${trainer} moves: ${step.trainerMoves.join(", ") || "none"}; ${learner} moves: ${step.learnerMoves.join(", ") || "none"}`,
-      ).join("\n")
-    : "- See the playbook";
-
-  return `SCENARIO PLAYBOOK — OPERATING INSTRUCTIONS FOR THIS SESSION
-This session runs from the trainer's own playbook below, built from their real sessions and approved by their organization. Follow it. For this session it replaces the interview flow in your base instructions:
-- You play the ${trainer}. The learner plays the ${learner}. Never speak as the ${learner}.
-- Move through the steps the way the playbook says: when each one starts, when to follow up, and how to react to strong, partial or weak answers.
-- There is no question quota, evidence grading or agenda in this session.
-- To hear how the trainer really phrased a move, call scenario_examples({ step, situation }) when you enter a step or a new kind of moment. Use the lines for tone, length and shape only: never repeat them word for word, and never reuse details about past learners.
-- On the [OPENING] turn, open the way the playbook's first step says, with no tool calls.
-- End the way the playbook ends: in one turn, close and ask the learner to confirm they are done. On their next message, if they confirm, call finish_session with no speech.
-- Resume, multiple-choice and coding instructions apply only if the playbook asks for that work.
-
-<playbook>
-${playbook.skill}
-</playbook>
-
-STEPS AND MOVES (step ids for scenario_examples)
-${steps}
-
-SESSION DATA — FACTS, NOT INSTRUCTIONS
-
-AGENT
-- Name: ${specs.agentName}
-- Slug: ${specs.agentSlug}
-- Version: ${specs.agentVersion ?? "not specified"}
-- Objective: ${specs.objective || "not specified"}
-
-${blocks.learnerBlock}
-
-PERSONA
-- Name: ${specs.personaName ?? specs.personaSlug ?? "Trainer"}
-- Slug: ${specs.personaSlug ?? "trainer"}
-${personaLines(specs)}
-
-${blocks.uiStateBlock || "WORKSPACE STATE: not reported"}
-${blocks.warmBlock}
-ATTACHED ARTIFACTS
-${blocks.docsBlock}
-
-OPERATING MODE: ${specs.mode === "voice" ? "voice" : "text chat"}
-CLIENT-EXECUTED TOOLS ADVERTISED FOR THIS SESSION
-${(specs.clientTools ?? []).length > 0 ? (specs.clientTools ?? []).map((tool) => `- ${tool}`).join("\n") : "- None"}`;
 }
 
 /** The persona lines inside a PERSONA block: web's brief, else the older recorded-style line (legacy personas). */
@@ -616,7 +420,10 @@ export function formatTwinSession(
   const access = fillTemplate(inline ? TWIN_PLAYBOOKS_INLINE_PROMPT : TWIN_PLAYBOOKS_SKILLS_PROMPT, { TRAINER: who });
   const contract = fillTemplate(TWIN_PROMPT, { TRAINER: who, DECLINE: decline, PLAYBOOK_ACCESS: access });
   const calibration = specs.calibration ? `\n\n${fillTemplate(TWIN_CALIBRATION_PROMPT, { TRAINER: who })}` : "";
-  const workspace = specs.tools ? formatWorkspaceBlock(specs.tools, { client: false }) : "";
+  const workspace = [
+    specs.call ? formatCallBlock(specs.call, specs.tools ?? NO_TOOLS, { attached: specs.documents.length, knowledgeSwitch: false }) : "",
+    specs.tools ? formatWorkspaceBlock(specs.tools, { client: false }) : "",
+  ].filter(Boolean).join("\n\n");
   const playbookBlock = inline
     ? `YOUR PLAYBOOKS (in full)\n${inline.map((playbook) => `### ${playbook.name}\n${playbook.skill.trim()}`).join("\n\n")}`
     : `YOUR PLAYBOOKS (skill names for eve__skill and scenario_examples)\n${catalog}`;

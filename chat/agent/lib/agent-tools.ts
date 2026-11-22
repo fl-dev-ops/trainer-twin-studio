@@ -136,3 +136,37 @@ export function formatWorkspaceBlock(tools: ToolSettings, { client }: { client: 
 You can show these on the learner's screen. Open one only when it genuinely helps the conversation or the learner asks for it, never as a gimmick. ${who}, and never describe it as a tool or a system. Close it with surface({ action: "close_surface" }) when you move on.
 ${lines.join("\n")}`;
 }
+
+/**
+ * The call settings saved on the role play's (or twin's) Settings tab, Agent.data.before (older twins:
+ * data.twinSettings). The browser enforces them (web/lib/context-upload.ts); the prompt states them so the AI never
+ * asks for something the call can't do (a screen share that is off, a file nobody can send).
+ */
+export type CallSettings = { screenShare: boolean; preUpload: boolean; duringUpload: boolean };
+export const NO_CALL_SETTINGS: CallSettings = { screenShare: false, preUpload: false, duringUpload: false };
+
+export function callSettings(agentData: unknown): CallSettings {
+  const data = asRecord(agentData);
+  const before = asRecord(data.before ?? data.twinSettings);
+  return { screenShare: before.preScreenshare === true, preUpload: before.preUpload === true, duringUpload: before.duringUpload === true };
+}
+
+/** Whether documents can reach this call (attached before it, or during it). */
+export const documentsOn = (call: CallSettings, attached = 0) => call.preUpload || call.duringUpload || attached > 0;
+
+/** The prompt's lines for the screen, documents and knowledge search of this call: what is on, and what is not. */
+export function formatCallBlock(call: CallSettings, tools: ToolSettings, { attached = 0, knowledgeSwitch = true }: { attached?: number; knowledgeSwitch?: boolean } = {}): string {
+  const lines = [
+    call.screenShare
+      ? "- Screen: the learner shares their whole screen. You see it only through [SCREEN OBSERVER CONTEXT] notes; never claim to see more than they describe."
+      : "- Screen: screen sharing is off for this call. Never ask the learner to share or show their screen.",
+    documentsOn(call, attached)
+      ? `- Documents: ${attached > 0 ? "the ones listed under ATTACHED ARTIFACTS" : "none attached yet"}${call.duringUpload ? "; the learner may also attach one during the call (it arrives as [ATTACHED <id>])" : ""}. Read one with read_document before you refer to it; quote only what it says.`
+      : "- Documents: the learner cannot attach files in this call. Never ask them to upload or send a document.",
+    knowledgeSwitch &&
+      (tools.knowledge
+        ? "- Knowledge search: on. Call search_knowledge before you judge a technical answer as right, wrong or incomplete, and read_knowledge_document to read a result in full. If nothing relevant comes back, ask a neutral question instead of judging."
+        : "- Knowledge search: off."),
+  ].filter(Boolean);
+  return `# This call's settings\n${lines.join("\n")}`;
+}

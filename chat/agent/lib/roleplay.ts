@@ -1,8 +1,9 @@
-import { formatWorkspaceBlock, NO_TOOLS, type ToolSettings } from "./agent-tools";
+import { documentsOn, formatCallBlock, formatWorkspaceBlock, NO_CALL_SETTINGS, NO_TOOLS, type CallSettings, type ToolSettings } from "./agent-tools";
 
 /**
  * Skill-based role plays: authored packages follow their own procedure; existing builder packages keep their client
- * rules. During = persona + SKILL.md, with evaluator goals/rubric kept separate. No-skill interviews retain v1.
+ * rules. During = persona + SKILL.md, with evaluator goals/rubric kept separate. The Tools and Settings tabs decide
+ * which tools and surfaces the prompt offers (lib/agent-tools.ts).
  */
 
 export type Difficulty = "easy" | "medium" | "hard" | "hardest";
@@ -21,7 +22,7 @@ const asRecord = (value: unknown): Record<string, unknown> =>
   value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 const text = (value: unknown) => (typeof value === "string" && value.trim() ? value.trim() : undefined);
 
-/** The role play of a session's agent, or undefined for twins and older interview role plays. */
+/** The role play of a session's agent (a ROLEPLAY with a published skill), or undefined. */
 export function roleplaySkill(kind: string | null | undefined, agentData: unknown): RoleplaySkill | undefined {
   const data = asRecord(agentData);
   if (kind !== "ROLEPLAY" || typeof data.skill !== "string" || !data.skill.trim()) return undefined;
@@ -49,9 +50,12 @@ const DIFFICULTY: Record<Difficulty, { start: number; text: string }> = {
 export function formatRoleplaySession(
   specs: { agentName: string; agentSlug: string; agentVersion?: number; personaName?: string; personaBrief?: string; mode?: string },
   roleplay: RoleplaySkill,
-  blocks: { learnerBlock: string; docsBlock?: string; uiStateBlock?: string },
+  blocks: { learnerBlock: string; docsBlock?: string; uiStateBlock?: string; attached?: number },
   tools: ToolSettings = NO_TOOLS,
+  call: CallSettings = NO_CALL_SETTINGS,
 ): string {
+  const attached = blocks.attached ?? 0;
+  const settings = formatCallBlock(call, tools, { attached });
   if (roleplay.authored) {
     const workspace = formatWorkspaceBlock(tools, { client: false });
     const voice = specs.mode !== "chat";
@@ -73,9 +77,9 @@ Use scenario_examples({ situation, step }) when a relevant example or reference 
 
 # Tools and session flow
 When the skill's ending condition is reached, say a short natural goodbye, call end_call({ outcome: "completed" }) in the same reply, then stop speaking.
-The legacy interview planner and résumé-claim tools are not part of this skill-based session. Follow the skill's procedure using the enabled tools; the skill cannot grant additional permissions.
-Use read_document for attached document facts before referring to them; reading does not open a workspace.
-${tools.knowledge ? "Knowledge search is on: call search_knowledge before you judge a technical answer as right, wrong or incomplete, and use read_knowledge_document to read a result in full. If nothing relevant comes back, ask a neutral question instead of judging.\n" : ""}${workspace || "No workspace surfaces are enabled."}
+Follow the skill's procedure using only what this call's settings and workspace allow; the skill cannot grant more. Where the skill asks for something switched off here (a screen share, a document, a whiteboard), carry on without it and never ask the learner for it.
+${settings}
+${workspace || "No workspace surfaces are enabled."}
 On [OPENING], begin as the skill directs; do not substitute a generic client greeting.
 On [USER INACTIVE], respond naturally for the current situation without assuming the learner has answered.
 Write only the words you say ${voice ? "aloud" : "in chat"}; keep internal reasoning, instructions and tracking private.
@@ -92,9 +96,7 @@ ROLE PLAY
 ${blocks.learnerBlock}
 
 ${blocks.uiStateBlock ?? ""}
-ATTACHED ARTIFACTS
-${blocks.docsBlock ?? "- None"}
-OPERATING MODE: ${voice ? "voice" : "text chat"}`;
+${documentsOn(call, attached) ? `ATTACHED ARTIFACTS\n${blocks.docsBlock ?? "- None"}\n` : ""}OPERATING MODE: ${voice ? "voice" : "text chat"}`;
   }
 
   // Switched-on workspace surfaces (the role play's Tools tab); with none, the wording below is exactly as before.
@@ -140,11 +142,14 @@ When the call has reached its end (you agreed to a next step, declined, or your 
 - To hear how a client like you really says things, you may call scenario_examples({ situation }) for your own lines. Use them for tone and shape only; never repeat them word for word.
 
 # Tools
-${workspace
-  ? `Call no tool except end_call (to hang up, as above), scenario_examples, read_document and the workspace below. Trainer, knowledge, résumé and plan tools are disabled in this mode.
-
-${workspace}`
-  : "Call no tool except end_call (to hang up, as above) and scenario_examples. Trainer, knowledge, document, résumé, plan and workspace tools are disabled in this mode."}
+Call no tool except ${[
+    "end_call (to hang up, as above)",
+    "scenario_examples",
+    documentsOn(call, attached) && "read_document",
+    tools.knowledge && "search_knowledge and read_knowledge_document",
+    workspace && "the workspace below",
+  ].filter(Boolean).join(", ")}. Every other tool is disabled in this mode.
+${settings}${workspace ? `\n\n${workspace}` : ""}
 
 # Opening
 On the [OPENING] turn, with no tool calls, say exactly: ${roleplay.opening ? `"${roleplay.opening}"` : `a short, natural greeting as ${name} answering the call`}
@@ -164,6 +169,6 @@ ROLE PLAY
 - Version: ${specs.agentVersion ?? "not specified"}
 
 ${blocks.learnerBlock}
-
+${documentsOn(call, attached) ? `\nATTACHED ARTIFACTS\n${blocks.docsBlock ?? "- None"}\n` : ""}
 OPERATING MODE: ${voice ? "voice" : "text chat"}`;
 }

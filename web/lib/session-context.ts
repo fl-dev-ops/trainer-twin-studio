@@ -91,43 +91,6 @@ export async function buildSessionContext(input: {
     : null;
   const learnerName = (session?.runtimeState as Record<string, unknown> | null)?.learner_name ?? user?.name ?? null;
 
-  const primaryDocId = session?.context?.id ?? session?.documents?.[0]?.document?.id ?? Array.from(docMap.keys())[0];
-  let resume: {
-    documentId: string;
-    extractedText: string;
-    claims: Array<{
-      id: string;
-      claimNo: number;
-      section: string;
-      kind: string;
-      text: string;
-      anchor: string;
-      metric: string | null;
-    }>;
-  } | null = null;
-
-  if (primaryDocId) {
-    const [docRecord, claims] = await Promise.all([
-      db.contextDocument.findFirst({
-        where: { id: primaryDocId, orgId: input.orgId },
-        select: { id: true, extractedText: true },
-      }),
-      db.resumeClaim.findMany({
-        where: { documentId: primaryDocId },
-        orderBy: { claimNo: "asc" },
-        select: { id: true, claimNo: true, section: true, kind: true, text: true, anchor: true, metric: true },
-      }),
-    ]);
-    const eligibleKinds = new Set(["project", "experience", "impact", "architecture", "technology"]);
-    if (docRecord?.extractedText) {
-      resume = {
-        documentId: docRecord.id,
-        extractedText: docRecord.extractedText,
-        claims: claims.filter((claim) => eligibleKinds.has(claim.kind)),
-      };
-    }
-  }
-
   const agent = managedSkill
     ? { slug: session!.agentSlug, version: session!.agentVersion, data: managedSkill.data }
     : snapshot?.agent?.data
@@ -156,7 +119,6 @@ export async function buildSessionContext(input: {
     knowledgeBases: sharedKnowledgeBase ? [sharedKnowledgeBase] : [],
     documents: Array.from(docMap.values()),
     learnerName,
-    resume,
     warmOpening: session?.warmOpening ?? null,
     uiState: (session?.runtimeState as Record<string, unknown> | null)?.uiState ?? null,
   };

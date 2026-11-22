@@ -1,4 +1,4 @@
-import { isCalibrationSession, scenarioPlaybook, twinSessionPlaybooks } from "./brain";
+import { isCalibrationSession, twinSessionPlaybooks } from "./brain";
 import { roleplaySkill } from "./roleplay";
 import { sessionMode, type SessionMode } from "./session-mode";
 import { studioFetch } from "./studio";
@@ -33,7 +33,6 @@ async function fetchMode(orgId: string, sessionId?: string, agentSlug?: string):
   return sessionMode({
     roleplay: roleplaySkill(agent?.kind, data),
     twin,
-    playbook: scenarioPlaybook(kind, data),
     calibration: twin ? await isCalibrationSession(orgId, sessionId) : false,
   });
 }
