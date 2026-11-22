@@ -10,7 +10,33 @@ import { BASE_DOMAIN, safeFamilyRedirect } from "@/lib/base-domain";
 import { sendOtpEmail } from "@/lib/email";
 import { AppError, refusals, toAPIError } from "@/lib/errors";
 import { isDisabledUser } from "@/lib/members";
+import { googleProfile, isPlaceholderName } from "@/lib/user-name";
 
+
+/**
+ * After a Google sign-in links or refreshes its account: give the user Google's name (and photo, if they have none)
+ * while their name is still the placeholder made from their email (lib/user-name.ts). A name set on purpose stays.
+ * Runs on every Google sign-in, so people added before this existed are fixed the next time they sign in.
+ * Never blocks the sign-in.
+ */
+export async function fillNameFromGoogle(account: { id?: string; providerId?: string; userId?: string; idToken?: string | null }) {
+  try {
+    const row = account.providerId && account.userId && account.idToken !== undefined
+      ? account
+      : account.id ? await db.account.findUnique({ where: { id: account.id }, select: { providerId: true, userId: true, idToken: true } }) : null;
+    if (row?.providerId !== "google" || !row.userId) return;
+    const profile = googleProfile(row.idToken);
+    if (!profile.name) return;
+    const user = await db.user.findUnique({ where: { id: row.userId }, select: { name: true, email: true, image: true } });
+    if (!user || !isPlaceholderName(user.name, user.email)) return;
+    await db.user.update({
+      where: { id: row.userId },
+      data: { name: profile.name, ...(!user.image && profile.picture ? { image: profile.picture } : {}) },
+    });
+  } catch (error) {
+    console.warn("[auth] could not fill the name from Google", (error as Error).message);
+  }
+}
 
 const memberActionClosed = async (): Promise<never> => {
   throw toAPIError(new AppError("member_action_closed", "Add, change and disable people from Settings.", 403));
@@ -59,6 +85,10 @@ export const auth = betterAuth({
     }),
   },
   databaseHooks: {
+    account: {
+      create: { after: (account) => fillNameFromGoogle(account) },
+      update: { after: (account) => fillNameFromGoogle(account) },
+    },
     session: {
       create: {
         // Disabled members cannot sign in (any method); disabling also deletes their open sessions.

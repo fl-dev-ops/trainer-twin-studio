@@ -6,6 +6,7 @@ import { DEFAULT_LEARNER_MINUTES, giveStartingMinutes, minutesLock } from "@/lib
 import { isValidInviteEmail } from "@/lib/invite/emails";
 import { ADMIN_ROLE, isStudioRole, LEARNER_ROLE, STUDIO_ROLES, type OrgRole } from "@/lib/roles";
 import { scheduleOrgUsage } from "@/lib/schedule-org-credits";
+import { emailPlaceholderName } from "@/lib/user-name";
 
 /**
  * An org's people (specs/people.md): an account (`user`), then a member of the org with a role, then (elsewhere) the
@@ -191,7 +192,7 @@ async function accountsFor(emails: string[], tx: Prisma.TransactionClient) {
   if (!missing.length) return found;
   // Created by another org at the same moment: the unique email keeps one, and this finds it.
   await tx.user.createMany({
-    data: missing.map((email) => ({ id: randomUUID(), email, name: email.split("@")[0] || email, emailVerified: false })),
+    data: missing.map((email) => ({ id: randomUUID(), email, name: emailPlaceholderName(email), emailVerified: false })),
     skipDuplicates: true,
   });
   return find();
