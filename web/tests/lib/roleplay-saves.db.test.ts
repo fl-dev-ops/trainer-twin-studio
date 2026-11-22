@@ -20,6 +20,7 @@ mock.module("@/lib/s3", () => ({
 const { saveRoleplay, ROLEPLAY_SOURCE } = await import("@/lib/scenario-ingest");
 const { saveSpec } = await import("@/lib/specs");
 const { roleplayRouter } = await import("@/lib/roleplay/trpc");
+const { updateRoleplay } = await import("@/lib/roleplay/manage");
 const rawBuilder: unknown = JSON.parse(readFileSync(new URL("../../data/roleplay/skills/wait-and-see-investor/builder.json", import.meta.url), "utf8"));
 const before = { preScreenshare: false, preUpload: true, duringUpload: false, uploadTitle: "Notes", uploadInstruction: "Bring notes" };
 
@@ -62,6 +63,34 @@ describe.skipIf(!localMinutesDb)("Module 4 role-play saves (real Postgres locks)
     expect(JSON.parse(files.get(`${data.artifacts}/scenario.json`)!)).toEqual(data.scenario);
     expect(JSON.parse(files.get(`${data.artifacts}/items.json`)!)).toEqual(items.get(current.version));
     for (const [key, text] of previousFiles) expect(files.get(key)).toBe(text);
+  });
+
+  test("two approved Copilot changes keep both builder settings without republishing the script", async () => {
+    const original = await saveRoleplay(f.org.id, builder("Keep this script"), f.roleplay.slug, before);
+    const originalFiles = new Map(files);
+    const lock = database.withLock;
+    let ready!: () => void;
+    const bothWaiting = new Promise<void>((resolve) => { ready = resolve; });
+    let requests = 0;
+    spies.push(spyOn(database, "withLock").mockImplementation((keys, work, options) => {
+      if (++requests === 2) ready();
+      return lock(keys, work, options);
+    }));
+    const patch = { orgId: f.org.id, slug: f.roleplay.slug };
+    const keys = [`skill-ownership:${patch.orgId}`, `agent:${patch.slug}`];
+    let updates!: Promise<PromiseSettledResult<unknown>[]>;
+    await lock(keys, async () => {
+      updates = Promise.allSettled([
+        updateRoleplay(patch.orgId, patch.slug, { before: { preScreenshare: true } }),
+        updateRoleplay(patch.orgId, patch.slug, { tools: { preview: true } }),
+      ]);
+      await bothWaiting;
+    });
+    expect((await updates).map(({ status }) => status)).toEqual(["fulfilled", "fulfilled"]);
+    expect(await row()).toMatchObject({ version: original.version, data: {
+      before: { ...before, preScreenshare: true }, tools: { preview: true }, skill: expect.stringContaining("Keep this script"),
+    } });
+    expect(files).toEqual(originalFiles);
   });
 
   test("settings changed during builder publication are preserved by refusal and explicit retry", async () => {

@@ -4,6 +4,12 @@ import { as, seed } from "./seed-data";
 
 test.use(as("admin"));
 
+test("the retired Domains bookmark is not a Studio route", async ({ page }) => {
+  const response = await page.goto("/domains");
+  expect(response?.status()).toBe(404);
+  await expect(page).toHaveURL(/\/domains$/);
+});
+
 test("old /agents links land on the same role play under /roleplay", async ({ page }) => {
   const slug = seed().roleplay.slug;
   await page.goto("/agents");
