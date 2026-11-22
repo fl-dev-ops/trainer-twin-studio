@@ -739,7 +739,7 @@ export async function getAgentConfigForAgent(
   const persona = agent.persona;
 
   // An agent attachment narrows retrieval to exactly one collection; otherwise the agent's selected collections
-  // (data.knowledge_bases, carried over from its former domain).
+  // (data.knowledge_bases).
   const attachedKnowledge = isRecord(agent.data) && typeof agent.data.knowledgeBase === "string"
     ? [agent.data.knowledgeBase]
     : [];
