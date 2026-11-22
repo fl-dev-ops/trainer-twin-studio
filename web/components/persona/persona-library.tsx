@@ -51,8 +51,10 @@ export function PersonaLibrary({ personas }: { personas: PersonaView[] }) {
         </section>
       ) : (
         <div className={cn(CARD, "mt-6 flex flex-col items-center gap-3 px-6 py-14 text-center")}>
-          <p className="m-0 text-sm font-medium">No personas yet</p>
-          <p className="m-0 text-sm text-muted-foreground">Create the first person your learners will talk to.</p>
+          <p className="m-0 text-sm font-medium">{own.length ? "No clients or interviewers yet" : "No personas yet"}</p>
+          <p className="m-0 text-sm text-muted-foreground">
+            {own.length ? "Create a client or interviewer for your role plays to use." : "Create the first person your learners will talk to."}
+          </p>
           <Link href="/personas/new" className="mt-1 inline-flex h-8 items-center rounded-full border border-(--card-border) px-4 text-body-s font-medium hover:bg-(--tone-control)">
             Create persona
           </Link>
