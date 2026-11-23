@@ -329,3 +329,90 @@ for (const p of personas) {
   }
 }
 console.log(`wrote ${personas.length * 2} role plays to ${out}`);
+
+// ---------- Pooled: one role play per scenario, every persona in its pool (specs/agents.md) ----------
+// Each session plays one persona picked at random; the shared script carries a short section per persona and the
+// persona record carries the rest (background, budget, areas). Written to <out>-pooled/.
+const pooledOut = `${out.replace(/\/$/, "")}-pooled`;
+mkdirSync(pooledOut, { recursive: true });
+const typeName = { investor: "an investor", "end user": "an end user (buying a home)", undecided: "undecided between a home and an investment" };
+const perPersona = (line) => personas.map((p) => `${p.name}: ${line(p)}`.slice(0, 300));
+const pooled = (slug, builder) => ({ slug, personas: personas.map((p) => p.slug), builder: { ...builder, persona: personas.find((p) => p.key === "adam").slug } });
+
+const pooledFirstCall = pooled("first-call", {
+  name: "First call after the ad",
+  situation: {
+    scenario: `You are the client in your persona profile. You clicked an ad, submitted a form, and now a Dubai real estate agent is calling you for the first time. You half-remember the form and other agents may already have called you. The call lasts 4 minutes at most. Your lead source and type are under "Who you are on this call" for your name.
+
+Call flow:
+1. Answer the phone briefly, as yourself.
+2. The agent introduces themselves and the reason for the call.
+3. Within the first exchange, push back with the main pushback for your type (see "Pushback by type"). Vary the wording.
+4. If the agent explores the pushback with genuine questions, trust goes up. If they pitch or argue, trust goes down.
+5. Around the midpoint of the call, however it is going, test the agent: "You just want the commission."
+6. If trust is high enough, share more details (budget, timeline, who decides) and be open to a next step.
+7. Later in the call you may add a secondary objection, such as "I want to wait and see, the market feels uncertain."
+
+Hang-up rule: if the agent makes two pitch moves in a row with no discovery question, or answers the commission test defensively, end the call with: "I've got to go, just send me something on WhatsApp."
+If the agent simply agrees to send options on WhatsApp without asking anything, accept politely and wrap up the call.
+
+${HOW_TO_BEHAVE}`,
+    hiddenTruth: `Pushback by type (what you say first, and what sits under it):
+${Object.entries(PUSHBACK).map(([type, push]) => `- ${typeName[type]}: ${push.lines.map((l) => `"${l}"`).join(" ")} Under it: ${push.under}`).join("\n")}
+
+Who you are on this call (play only your own line):
+${personas.map((p) => `- ${p.name}: ${p.who}; came from ${p.source}; ${typeName[p.type]}. When trust is high you ${p.trust}.`).join("\n")}`,
+    learnerRole: "Dubai real estate agent",
+    agreesWhen: "Trust is high (the agent asked about your situation, listened, was honest about risk and stayed warm on the commission test) and they propose a next step tied to what you said, with a day and time: do what your line under \"Who you are on this call\" says. If trust is only partly earned, agree to look at options on WhatsApp with no time set.",
+    declinesWhen: "The agent pitched before asking, argued with you, predicted prices or promised returns, got defensive about commission, or pushed for a meeting before earning it. Say: \"I've got to go, just send me something on WhatsApp.\"",
+  },
+  difficulty: "medium",
+  guardedIf: [...SHARED_GUARDED.slice(0, 3), ...perPersona((p) => p.shuts.join("; "))].slice(0, 12),
+  opensUpIf: [...SHARED_OPENS.slice(0, 3), ...perPersona((p) => p.opens.join("; "))].slice(0, 12),
+  whatToExpect: "First call with a lead from an online ad: you'll meet one of several buyers, picked at random. Up to 4 minutes. Expect pushback early and a test of your motives. Ask before you pitch, be honest about risk, and agree a specific next step with a day and time.",
+  opening: "Hello?",
+  exampleLines: [...new Set([...PUSHBACK.investor.lines, ...PUSHBACK["end user"].lines,
+    "Why are you asking this?", "Can you just send me some options on WhatsApp?", "You just want the commission.",
+    "I want to wait and see, the market feels uncertain.", "I've got to go, just send me something on WhatsApp."])].slice(0, 20),
+  learnerGoals: ["Agree a specific next step with a day and time (a presentation call, a follow-up or a comparison call) that fits what the buyer said"],
+  rubric: S1_RUBRIC,
+});
+
+const pooledAfter = pooled("after-presentation", {
+  name: "Objections after the presentation",
+  situation: {
+    scenario: `You are the client in your persona profile. A Dubai real estate agent has just presented a property to you (in person or on Zoom). It fits your budget and the areas you are interested in. The presentation has just ended. Your opening line is only a short, neutral acknowledgement: raise no objection in it and then wait. The agent will ask you something like "Is this something you could potentially consider?" Your answer to that question is your first objection, usually a stall such as "I need some time to think." If the agent jumps straight to closing or pitching instead of asking, answer with a stall anyway.
+
+You raise 3 to 5 objections, one after another, from the list in "What is really going on", only ones tagged Any or your type (see "Who you are on this call"). Rough mix: one stall first, then one or two value objections (layout, location, view, yield), one price objection, and optionally one trust or decision-maker objection. Vary the wording so the same objection never sounds identical twice.
+
+How objections are delivered:
+- When the agent has clarified and dealt with the real concern behind an objection, accept it and raise the next objection.
+- If the agent handles it badly (argues, pushes, ignores it, answers straight away without asking what is behind it), stay on that objection or become more resistant.
+- Each objection hides a real concern that comes from your own priorities and worries (your persona profile). Reveal it only when the agent asks a clarifying question first.
+- After the last objection, agree a next step if the agent has earned it, or disengage.
+
+${HOW_TO_BEHAVE}`,
+    hiddenTruth: `Who you are on this call (play only your own line):
+${personas.map((p) => `- ${p.name}: ${p.who}; ${typeName[p.type]}.`).join("\n")}
+
+Objections you can use (never read them out as a list), tagged by who uses them:
+${OBJ.map(([, text, , fit]) => `- [${fit}] ${text}`).join("\n")}`,
+    learnerRole: "Dubai real estate agent",
+    agreesWhen: "After your last objection, if the agent clarified each one, discussed it with you as a team and resolved the real concern honestly: agree a concrete next step with a day and time (a reservation appointment, a second viewing, a call with your spouse or partner, or a review of the contract). If they handled it only partly, stay interested but take no concrete step (\"send me the details, I'll think\").",
+    declinesWhen: "The agent argued, pressured you, used hype or guarantees, or kept answering surface objections without asking what is behind them. Disengage and end the conversation.",
+  },
+  difficulty: "hard",
+  guardedIf: ["answers an objection straight away without asking what is behind it", "argues or counter-attacks", "lectures instead of discussing", ...perPersona((p) => p.shuts.join("; "))].slice(0, 12),
+  opensUpIf: ["asks what is behind your concern before answering", "explores the concern together with you", "resolves it with facts you can check", ...perPersona((p) => p.opens.join("; "))].slice(0, 12),
+  whatToExpect: "You have just presented a property to a buyer, one of several picked at random. They will acknowledge it; you start by asking: \"Is this something you could potentially consider?\" Expect 3–5 objections in a row. Clarify, Discuss, Diffuse, then Agree a next step with a day and time.",
+  opening: "Okay, thanks for walking me through that.",
+  exampleLines: [...new Set([...EXAMPLE_IDS.investor, ...EXAMPLE_IDS["end user"]])].slice(0, 20).map((id) => OBJ.find(([n]) => n === id)[1]),
+  learnerGoals: [
+    "Uncover the real concern behind each objection before answering it",
+    "Agree the next step after the last objection (reservation, second viewing, a call with the spouse or partner, or a contract review) with a day and time",
+  ],
+  rubric: S2_RUBRIC,
+});
+
+for (const rp of [pooledFirstCall, pooledAfter]) writeFileSync(join(pooledOut, `${rp.slug}.json`), `${JSON.stringify(rp, null, 2)}\n`);
+console.log(`wrote 2 pooled role plays (${personas.length} personas each) to ${pooledOut}`);
