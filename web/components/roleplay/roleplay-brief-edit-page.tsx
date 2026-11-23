@@ -4,15 +4,17 @@ import type { Route } from "next";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useRef, useState, type ReactNode } from "react";
+import { useRef, useState } from "react";
 import { ArrowLeft, Check, Play, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { PersonaPicker, TOOL_ROWS } from "@/components/roleplay/roleplay-builder-page";
 import { PageContainer } from "@/components/page-container";
-import { SettingCard, SettingsPanel, SettingsSection } from "@/components/settings-cards";
+import { PageSection, SECTION_CARD, SectionRow } from "@/components/page-section";
 import { SwitchToggle } from "@/components/switch-toggle";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import type { ToolSettings } from "@/lib/agent-tools";
 import type { BeforeSettings } from "@/lib/context-upload";
 import { seedCopilot } from "@/lib/copilot-handoff";
@@ -27,19 +29,7 @@ type Brief = NonNullable<RoleplayOutputs["builder"]["get"]["brief"]>;
 type Script = Brief["script"];
 type Persona = RoleplayOutputs["builder"]["personas"][number];
 
-const input = "w-full rounded-lg border border-(--border) bg-transparent px-3 text-sm text-(--foreground) outline-none focus:border-(--brand) focus:ring-1 focus:ring-(--brand)";
-const card = "flex flex-col gap-5 rounded-tt-lg border border-(--card-border) bg-card p-6 shadow-card";
 const kicker = "m-0 text-xs font-semibold tracking-wide text-muted-foreground uppercase";
-
-function Field({ id, label, hint, children }: { id?: string; label: string; hint?: string; children: ReactNode }) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <label htmlFor={id} className={kicker}>{label}</label>
-      {children}
-      {hint ? <span className="text-xs text-muted-foreground">{hint}</span> : null}
-    </div>
-  );
-}
 
 /** Opens the copilot on this role play, with the trainer's change request typed in. */
 export function editWithCopilot(slug: string, title: string, change: string, go: (href: Route) => void) {
@@ -124,8 +114,11 @@ export function RoleplayBriefEditPage({ slug, brief, before: initialBefore, tool
   const queue = useRef(Promise.resolve());
   const set = (key: keyof typeof form, value: string) => setForm((prev) => ({ ...prev, [key]: value }));
   const dirty = JSON.stringify(form) !== JSON.stringify(initial);
+  const canSave = !saving && dirty && Boolean(form.title.trim())
+    && (brief.kind === "authored" || (Boolean(form.learnerBrief.trim()) && (!brief.aiStarts || Boolean(form.openingLine.trim()))));
 
   async function save() {
+    if (!canSave) return;
     setSaving(true);
     try {
       await roleplayClient.builder.saveBrief.mutate({ slug, ...form });
@@ -175,8 +168,8 @@ export function RoleplayBriefEditPage({ slug, brief, before: initialBefore, tool
         </Button>
       </div>
 
-      <Tabs defaultValue="general" className="mt-6 gap-4">
-        <TabsList>
+      <Tabs defaultValue="general" className="mt-6 min-w-0 gap-4">
+        <TabsList className="max-w-full overflow-x-auto">
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="persona">Persona</TabsTrigger>
           <TabsTrigger value="script">Script</TabsTrigger>
@@ -184,105 +177,103 @@ export function RoleplayBriefEditPage({ slug, brief, before: initialBefore, tool
         </TabsList>
 
         <TabsContent value="general">
-          <article className={card}>
-            <Field id="rp-title" label="Name">
-              <input id="rp-title" maxLength={120} value={form.title} onChange={(e) => set("title", e.target.value)} className={cn(input, "h-10")} />
-            </Field>
-            <Field id="rp-brief" label="Learner brief" hint="Shown to the learner before the call: who they are, the situation and what to aim for.">
-              <textarea id="rp-brief" rows={4} maxLength={1000} value={form.learnerBrief} onChange={(e) => set("learnerBrief", e.target.value)} className={cn(input, "py-2.5")} />
-            </Field>
-            {brief.kind !== "authored" ? <>
-            <Field
-              id="rp-opening"
-              label={brief.aiStarts ? "Opening line" : "First reply"}
-              hint={brief.aiStarts ? "The AI's first words when the call starts." : "The learner speaks first; this is the AI's first reply."}
-            >
-              <input id="rp-opening" maxLength={400} value={form.openingLine} onChange={(e) => set("openingLine", e.target.value)} className={cn(input, "h-10")} />
-            </Field>
-            </> : null}
-            {brief.kind === "brief" ? (
-              <Field id="rp-limit" label="Time limit" hint={'Optional, e.g. "At most 5 minutes."'}>
-                <input id="rp-limit" maxLength={200} value={form.limit} onChange={(e) => set("limit", e.target.value)} className={cn(input, "h-10")} />
-              </Field>
-            ) : null}
-          </article>
-          <div className="flex items-center justify-end gap-3 pt-4">
-            <Button variant="ghost" nativeButton={false} render={<Link href={dashRoute(`/roleplay/${slug}`)} />}>Cancel</Button>
-            <Button variant="brand" disabled={saving || !dirty || !form.title.trim() || (brief.kind !== "authored" && (!form.learnerBrief.trim() || (brief.aiStarts && !form.openingLine.trim())))} onClick={() => void save()}>
-              <Check data-icon="inline-start" /> {saving ? "Saving…" : "Save changes"}
-            </Button>
-          </div>
+          <PageSection title="Role play details" description="Edit the name, learner brief, and any opening or timing details.">
+            <form className="flex flex-col gap-3" onSubmit={(event) => { event.preventDefault(); void save(); }}>
+              <fieldset disabled={saving} className={cn(SECTION_CARD, "m-0 min-w-0")}>
+                <SectionRow title={<label htmlFor="rp-title">Name</label>}>
+                  <Input id="rp-title" className="w-full sm:w-80" maxLength={120} value={form.title} onChange={(e) => set("title", e.target.value)} />
+                </SectionRow>
+                <SectionRow title={<label htmlFor="rp-brief">Learner brief</label>} className="sm:flex-col sm:items-stretch sm:gap-3"
+                  detail={<span id="rp-brief-help">Shown to the learner before the call: who they are, the situation and what to aim for.</span>}>
+                  <Textarea id="rp-brief" aria-describedby="rp-brief-help" rows={4} className="min-h-32" maxLength={1000} value={form.learnerBrief} onChange={(e) => set("learnerBrief", e.target.value)} />
+                </SectionRow>
+                {brief.kind !== "authored" ? (
+                  <SectionRow title={<label htmlFor="rp-opening">{brief.aiStarts ? "Opening line" : "First reply"}</label>} className="sm:flex-col sm:items-stretch sm:gap-3"
+                    detail={<span id="rp-opening-help">{brief.aiStarts ? "The AI's first words when the call starts." : "The learner speaks first; this is the AI's first reply."}</span>}>
+                    <Input id="rp-opening" aria-describedby="rp-opening-help" maxLength={400} value={form.openingLine} onChange={(e) => set("openingLine", e.target.value)} />
+                  </SectionRow>
+                ) : null}
+                {brief.kind === "brief" ? (
+                  <SectionRow title={<label htmlFor="rp-limit">Time limit</label>} detail={<span id="rp-limit-help">Optional, e.g. “At most 5 minutes.”</span>}>
+                    <Input id="rp-limit" aria-describedby="rp-limit-help" className="w-full sm:w-80" maxLength={200} value={form.limit} onChange={(e) => set("limit", e.target.value)} />
+                  </SectionRow>
+                ) : null}
+              </fieldset>
+              <div className="flex items-center justify-end gap-3">
+                <Button variant="ghost" nativeButton={false} render={<Link href={dashRoute(`/roleplay/${slug}`)} />}>Cancel</Button>
+                <Button variant="brand" type="submit" disabled={!canSave}>
+                  <Check data-icon="inline-start" /> {saving ? "Saving…" : "Save changes"}
+                </Button>
+              </div>
+            </form>
+          </PageSection>
         </TabsContent>
 
         <TabsContent value="persona">
           <PersonaPool slug={slug} personas={personas} pool={pool} />
         </TabsContent>
 
-        <TabsContent value="script" className="flex flex-col gap-4">
-          <form
-            className={cn(card, "gap-3")}
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (change.trim()) editWithCopilot(slug, brief.title, change.trim(), router.push);
-            }}
-          >
-            <label htmlFor="rp-change" className={kicker}>Change the script with the copilot</label>
-            <textarea
-              id="rp-change"
-              rows={2}
-              value={change}
-              placeholder="e.g. Make the buyer push back harder on price, and end after 4 minutes."
-              onChange={(e) => setChange(e.target.value)}
-              className={cn(input, "py-2.5")}
-            />
-            <div className="flex justify-end">
-              <Button type="submit" variant="brand" disabled={!change.trim()}>
-                <Sparkles data-icon="inline-start" /> Ask the copilot
-              </Button>
-            </div>
-          </form>
-          <article className={card}>
-            <ScriptView script={brief.script} />
-          </article>
+        <TabsContent value="script">
+          <div className="flex flex-col gap-10">
+            <PageSection title="Change the script with the copilot" description="Describe what you want to change in the conversation.">
+              <form className="flex flex-col gap-3" onSubmit={(event) => {
+                event.preventDefault();
+                if (change.trim()) editWithCopilot(slug, brief.title, change.trim(), router.push);
+              }}>
+                <div className={cn(SECTION_CARD, "px-5 py-4")}>
+                  <Textarea aria-label="Change the script with the copilot" rows={2} value={change}
+                    placeholder="e.g. Make the buyer push back harder on price, and end after 4 minutes."
+                    onChange={(e) => setChange(e.target.value)} />
+                </div>
+                <div className="flex justify-end">
+                  <Button type="submit" variant="brand" disabled={!change.trim()}>
+                    <Sparkles data-icon="inline-start" /> Ask the copilot
+                  </Button>
+                </div>
+              </form>
+            </PageSection>
+            <PageSection title="Current script">
+              <div className={cn(SECTION_CARD, "px-5 py-4")}>
+                <ScriptView script={brief.script} />
+              </div>
+            </PageSection>
+          </div>
         </TabsContent>
 
         <TabsContent value="settings">
-          <SettingsPanel>
-            <SettingsSection title="Files" description="Changes save automatically.">
-              <SettingCard
-                title="Upload a file before the call"
-                description="Learners may add a file before the call starts, like a résumé or a brochure. A PDF or an image, up to 10 MB."
-                control={<SwitchToggle checked={before.preUpload} onChange={(on) => saveSettings({ before: { ...before, preUpload: on, preUploadRequired: on && before.preUploadRequired } }, `File upload before the call turned ${on ? "on" : "off"}`)} label="Upload a file before the call" />}
-              />
-              {before.preUpload ? (
-                <SettingCard
-                  title="Required"
-                  description="The call can't start until the learner adds the file."
-                  control={<SwitchToggle checked={before.preUploadRequired === true} onChange={(on) => saveSettings({ before: { ...before, preUploadRequired: on } }, on ? "The file is now required" : "The file is now optional")} label="File required" />}
-                />
-              ) : null}
-              <SettingCard
-                title="Attach during the call"
-                description="Learners can share an image or a PDF while they talk."
-                control={<SwitchToggle checked={before.duringUpload} onChange={(on) => saveSettings({ before: { ...before, duringUpload: on } }, `Attach during the call turned ${on ? "on" : "off"}`)} label="Attach files during the call" />}
-              />
-              <SettingCard
-                title="Share screen"
-                description="Learners share their entire screen for the whole call."
-                control={<SwitchToggle checked={before.preScreenshare} onChange={(on) => saveSettings({ before: { ...before, preScreenshare: on } }, `Screen share turned ${on ? "on" : "off"}`)} label="Share screen" />}
-              />
-            </SettingsSection>
-            <SettingsSection title="Workspace tools" description="What the AI can show on the learner's screen. All off unless you switch them on.">
-              {TOOL_ROWS.map((row) => (
-                <SettingCard
-                  key={row.key}
-                  title={row.label}
-                  description={row.description}
-                  control={<SwitchToggle checked={tools[row.key] === true} onChange={(on) => saveSettings({ tools: { ...tools, [row.key]: on } }, `${row.label} turned ${on ? "on" : "off"}`)} label={row.label} />}
-                />
-              ))}
-            </SettingsSection>
-          </SettingsPanel>
+          <div className="flex flex-col gap-10">
+            <PageSection title="Before the conversation" description="What learners share before the call begins. Switches save automatically.">
+              <div className={SECTION_CARD}>
+                <SectionRow title="Share screen" detail="Learners share their entire screen for the whole call.">
+                  <SwitchToggle checked={before.preScreenshare} onChange={(on) => saveSettings({ before: { ...before, preScreenshare: on } }, `Screen share turned ${on ? "on" : "off"}`)} label="Share screen" />
+                </SectionRow>
+                <SectionRow title="Upload a file before the call" detail="Learners may add a PDF or an image, up to 10 MB.">
+                  <SwitchToggle checked={before.preUpload} onChange={(on) => saveSettings({ before: { ...before, preUpload: on, preUploadRequired: on && before.preUploadRequired } }, `File upload before the call turned ${on ? "on" : "off"}`)} label="Upload a file before the call" />
+                </SectionRow>
+                {before.preUpload ? (
+                  <SectionRow title="Required" detail="The call can't start until the learner adds the file.">
+                    <SwitchToggle checked={before.preUploadRequired === true} onChange={(on) => saveSettings({ before: { ...before, preUploadRequired: on } }, on ? "The file is now required" : "The file is now optional")} label="File required" />
+                  </SectionRow>
+                ) : null}
+              </div>
+            </PageSection>
+            <PageSection title="During the conversation" description="What learners can share while they talk.">
+              <div className={SECTION_CARD}>
+                <SectionRow title="Attach during the call" detail="Learners can share an image or a PDF while they talk.">
+                  <SwitchToggle checked={before.duringUpload} onChange={(on) => saveSettings({ before: { ...before, duringUpload: on } }, `Attach during the call turned ${on ? "on" : "off"}`)} label="Attach files during the call" />
+                </SectionRow>
+              </div>
+            </PageSection>
+            <PageSection title="Workspace tools" description="What the AI can show on the learner's screen. All off unless you switch them on.">
+              <div className={SECTION_CARD}>
+                {TOOL_ROWS.map((row) => (
+                  <SectionRow key={row.key} title={row.label} detail={row.description}>
+                    <SwitchToggle checked={tools[row.key] === true} onChange={(on) => saveSettings({ tools: { ...tools, [row.key]: on } }, `${row.label} turned ${on ? "on" : "off"}`)} label={row.label} />
+                  </SectionRow>
+                ))}
+              </div>
+            </PageSection>
+          </div>
         </TabsContent>
       </Tabs>
     </PageContainer>
@@ -317,14 +308,12 @@ function PersonaPool({ slug, personas, pool }: { slug: string; personas: Persona
   }
 
   return (
-    <section className={card} aria-labelledby="rp-personas-heading">
-      <div>
-        <h2 id="rp-personas-heading" className="m-0 text-sm font-semibold">Who the learner talks to</h2>
-        <p id="rp-personas-hint" className="m-0 mt-1 text-sm text-muted-foreground">Choose who can play this role. Each new session picks one of the selected personas at random.</p>
+    <PageSection title="Who the learner talks to" description="Choose who can play this role. Each new session picks one of the selected personas at random.">
+      <div className={cn(SECTION_CARD, "px-5 py-4")}>
+        <PersonaPicker personas={personas} value={draft} disabled={busy} onChange={(slug) => setDraft((prev) =>
+          prev.includes(slug) ? prev.filter((item) => item !== slug) : [...prev, slug],
+        )} />
       </div>
-      <PersonaPicker personas={personas} value={draft} disabled={busy} onChange={(slug) => setDraft((prev) =>
-        prev.includes(slug) ? prev.filter((item) => item !== slug) : [...prev, slug],
-      )} />
       {dirty ? (
         <div className="flex flex-wrap items-center justify-end gap-2">
           <span className="mr-auto text-sm text-muted-foreground" role="status">{draft.length ? "Unsaved changes" : "Select at least one persona."}</span>
@@ -332,6 +321,6 @@ function PersonaPool({ slug, personas, pool }: { slug: string; personas: Persona
           <Button type="button" variant="brand" disabled={busy || !draft.length} onClick={() => void save()}>{busy ? "Saving…" : "Save personas"}</Button>
         </div>
       ) : null}
-    </section>
+    </PageSection>
   );
 }

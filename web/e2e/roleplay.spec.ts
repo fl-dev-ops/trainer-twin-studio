@@ -29,6 +29,34 @@ test("the library lists role plays only, and each card's menu edits, assigns and
   await expect(page.getByRole("menuitem", { name: "Calibrate" })).toHaveAttribute("href", `/roleplay/${slug}/calibrate`);
 });
 
+test("edit page: all tabs use section panels that fit desktop and mobile", async ({ page }, testInfo) => {
+  const slug = seed().roleplay.slug;
+  await page.goto(`/roleplay/${slug}/edit`);
+  const sections = {
+    General: ["Role play details"],
+    Persona: ["Who the learner talks to"],
+    Script: ["Change the script with the copilot", "Current script"],
+    Settings: ["Before the conversation", "During the conversation", "Workspace tools"],
+  };
+  for (const width of [1280, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const [tab, names] of Object.entries(sections)) {
+      await page.getByRole("tab", { name: tab, exact: true }).click();
+      const panel = page.getByRole("tabpanel", { name: tab, exact: true });
+      for (const name of names) await expect(panel.getByRole("region", { name, exact: true })).toBeVisible();
+      await expect(panel.locator('[data-slot="card"]')).toHaveCount(0);
+      expect(await panel.evaluate((element) => element.scrollWidth)).toBeLessThanOrEqual((await panel.boundingBox())!.width + 1);
+      await panel.screenshot({ path: testInfo.outputPath(`${tab.toLowerCase()}-${width}.png`), animations: "disabled" });
+    }
+  }
+  const script = page.getByRole("tab", { name: "Script", exact: true });
+  await script.click();
+  const ask = page.getByRole("button", { name: "Ask the copilot" });
+  await expect(ask).toBeDisabled();
+  await page.getByRole("textbox", { name: "Change the script with the copilot" }).fill("Ask one more question about the buyer's budget.");
+  await expect(ask).toBeEnabled();
+});
+
 test("edit page: saved upload requirements control whether the learner can join", async ({ page, browser }) => {
   const slug = seed().roleplay.slug;
   await page.goto(`/roleplay/${slug}/edit`);
