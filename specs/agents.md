@@ -27,7 +27,8 @@ InterviewSession: the persona it played (personaSlug/version) + SessionSkill pin
    a catalog (`compiledSnapshot.twinSkills`) that must match its `SessionSkill` rows; a role play pins its one package.
    Twins draw only on their own persona's skills; a bot's skills may come from any persona.
 4. A role play's persona is picked once, at session start (`lib/agent-personas.ts`), re-checked under the session lock,
-   and recorded on the session, so reports and replays stay exact.
+   and recorded on the session, so reports and replays stay exact. The role-play editor saves the selected personas
+   together without republishing the script. It keeps the default if still selected, otherwise uses the first selection.
 
 ## Twins: main twin and topic skills
 

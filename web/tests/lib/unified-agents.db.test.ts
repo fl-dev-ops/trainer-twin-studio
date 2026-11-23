@@ -154,22 +154,25 @@ describe.skipIf(!localMinutesDb)("unified agents: supporting skills and personas
     });
   });
 
-  test("a role play's persona pool: extras are added and switched without republishing; a new main persona replaces the old one", async () => {
+  test("editing a role play's persona selection does not republish and can replace its original persona", async () => {
     const second = await db.persona.create({ data: { orgId: f.org.id, slug: `${f.org.slug}-second`, name: "Second", data: {} } });
     const third = await db.persona.create({ data: { orgId: f.org.id, slug: `${f.org.slug}-third`, name: "Third", data: {} } });
     await db.agent.update({ where: { id: f.roleplay.id }, data: { data: { source: ROLEPLAY_SOURCE } } });
     const caller = roleplayRouter.createCaller({ user: { ...f.trainer, orgId: f.org.id, orgSlug: f.org.slug, role: "admin" } } as never);
     const version = (await db.agent.findUniqueOrThrow({ where: { id: f.roleplay.id } })).version;
-    await caller.builder.setPersonaPool({ slug: f.roleplay.slug, extras: [{ slug: second.slug, active: true }, { slug: third.slug, active: false }] });
-    expect(await caller.builder.personaPool({ slug: f.roleplay.slug })).toEqual([
-      { slug: persona.slug, active: true, main: true }, { slug: second.slug, active: true, main: false }, { slug: third.slug, active: false, main: false },
-    ]);
-    expect((await db.agent.findUniqueOrThrow({ where: { id: f.roleplay.id } })).version).toBe(version);
-    // Any save that changes the main persona swaps it in at the head; the extras stay.
-    await db.agent.update({ where: { id: f.roleplay.id }, data: { personaId: third.id } });
-    expect(await caller.builder.personaPool({ slug: f.roleplay.slug })).toEqual([
-      { slug: third.slug, active: true, main: true }, { slug: second.slug, active: true, main: false },
-    ]);
+    const slug = f.roleplay.slug;
+    await runCopilotStudio({ org: f.org, user: f.trainer }, { action: "setRoleplayPersonas", slug, extras: [{ slug: third.slug, active: false }] });
+    expect(await caller.builder.personaPool({ slug })).toEqual([persona.slug]);
+    await expect(caller.builder.setPersonaPool({ slug, personas: [] })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(caller.builder.setPersonaPool({ slug, personas: ["missing"] })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await caller.builder.setPersonaPool({ slug, personas: [second.slug, persona.slug, second.slug] });
+    expect(await caller.builder.personaPool({ slug })).toEqual([persona.slug, second.slug]);
+    await caller.builder.setPersonaPool({ slug, personas: [third.slug, second.slug] });
+    expect(await caller.builder.personaPool({ slug })).toEqual([third.slug, second.slug]);
+    expect(await db.agent.findUniqueOrThrow({ where: { id: f.roleplay.id } })).toMatchObject({ version, personaId: third.id });
+    // Other publication paths can still replace the default without dropping the remaining pool.
+    await db.agent.update({ where: { id: f.roleplay.id }, data: { personaId: persona.id } });
+    expect(await caller.builder.personaPool({ slug })).toEqual([persona.slug, second.slug]);
   });
 
   test("a newly published twin skill joins a merged main twin at the end; an unmerged twin is left as it was", async () => {

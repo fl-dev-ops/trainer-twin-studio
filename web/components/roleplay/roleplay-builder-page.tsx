@@ -118,7 +118,7 @@ function ListField({ id, items, onChange, max, placeholder, addLabel }: {
 }
 
 /** Pick the client (reference rolePersonaPicker): the org's personas with photo, first name and role. */
-export function PersonaPicker({ personas, value, onChange }: { personas: Persona[]; value: string; onChange: (slug: string) => void }) {
+export function PersonaPicker({ personas, value, onChange, disabled }: { personas: Persona[]; value: string | string[]; onChange: (slug: string) => void; disabled?: boolean }) {
   if (!personas.length) {
     return (
       <p className="text-sm text-muted-foreground">
@@ -126,16 +126,18 @@ export function PersonaPicker({ personas, value, onChange }: { personas: Persona
       </p>
     );
   }
+  const multiple = Array.isArray(value);
   return (
-    <div role="radiogroup" aria-label="Client persona" className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+    <div role={multiple ? "group" : "radiogroup"} aria-label={multiple ? "Personas" : "Client persona"} className="grid grid-cols-2 gap-2 sm:grid-cols-3">
       {personas.map((persona) => {
-        const on = persona.slug === value;
+        const on = multiple ? value.includes(persona.slug) : persona.slug === value;
         return (
           <button
             key={persona.slug}
             type="button"
-            role="radio"
+            role={multiple ? "checkbox" : "radio"}
             aria-checked={on}
+            disabled={disabled}
             onClick={() => onChange(persona.slug)}
             className={cn(
               "flex items-center gap-3 rounded-tt-md border p-2.5 pr-3 text-left transition-colors outline-none focus-visible:ring-2 focus-visible:ring-(--brand)",

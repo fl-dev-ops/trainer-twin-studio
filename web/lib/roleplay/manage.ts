@@ -36,7 +36,7 @@ export async function updateRoleplay(
     });
   }
 
-  const agent = await db.agent.findFirst({ where, select: { id: true, slug: true, version: true, primarySkillId: true, data: true } });
+  const agent = await db.agent.findFirst({ where, select: { id: true, slug: true, version: true, primarySkillId: true, data: true, persona: { select: { slug: true } } } });
   if (!agent) throw notFound();
   if ((agent.data as { source?: unknown } | null)?.source !== ROLEPLAY_SOURCE) {
     throw new ScenarioIngestError("This role play does not use builder fields: update its script through its publishing flow", 400);
@@ -46,7 +46,7 @@ export async function updateRoleplay(
   const hydrated = agent.primarySkillId ? await hydrateAgentSkill(orgId, agent) : agent;
   const current = roleplayBuilderFrom(hydrated.data);
   if (!current) throw new ScenarioIngestError(`Role play "${slug}" has no builder fields`, 400);
-  const parsed = roleplayBuilderSchema.safeParse({ ...current, ...patch.builder, situation: { ...current.situation, ...patch.builder?.situation } });
+  const parsed = roleplayBuilderSchema.safeParse({ ...current, persona: agent.persona.slug, ...patch.builder, situation: { ...current.situation, ...patch.builder.situation } });
   if (!parsed.success) throw new ScenarioIngestError(parsed.error.issues[0]?.message ?? "Invalid role play", 400);
   const saved = await saveRoleplay(orgId, parsed.data, slug, before, tools);
   return { slug: saved.slug, version: saved.version, changed: true };

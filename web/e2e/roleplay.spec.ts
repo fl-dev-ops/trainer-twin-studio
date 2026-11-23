@@ -93,6 +93,53 @@ test("edit page: saved upload requirements control whether the learner can join"
   await expect(page.getByText("File upload before the call turned off")).toBeVisible();
 });
 
+test("persona cards select multiple people, save explicitly, and let the trainer replace the original", async ({ page }, testInfo) => {
+  const slug = seed().roleplay.slug;
+  await page.goto(`/roleplay/${slug}/edit`);
+  const open = () => page.getByRole("tab", { name: "Persona", exact: true }).click();
+  const panel = page.getByRole("tabpanel", { name: "Persona", exact: true });
+  const trainer = panel.getByRole("checkbox", { name: /E2E Trainer/ });
+  const buyer = panel.getByRole("checkbox", { name: /E2E Buyer/ });
+  const save = panel.getByRole("button", { name: "Save personas" });
+  async function saveSelection() {
+    const response = page.waitForResponse((r) => r.url().includes("builder.setPersonaPool") && r.request().method() === "POST");
+    await save.click();
+    expect((await response).ok()).toBe(true);
+    await expect(page.getByText("Personas saved", { exact: true }).first()).toBeVisible();
+  }
+  try {
+    await open();
+    await expect(panel.getByRole("region", { name: "Who the learner talks to" })).toHaveCount(1);
+    await expect(panel.getByText("Also played by")).toHaveCount(0);
+    await expect(trainer).toBeChecked();
+    await buyer.focus();
+    await buyer.press("Space");
+    await expect(buyer).toBeChecked();
+    await panel.getByRole("button", { name: "Cancel" }).click();
+    await expect(buyer).not.toBeChecked();
+    await trainer.click();
+    await expect(save).toBeDisabled();
+    await expect(panel.getByText("Select at least one persona.")).toBeVisible();
+    await trainer.click();
+    await buyer.click();
+    await saveSelection();
+    await page.reload();
+    await open();
+    await expect(trainer).toBeChecked();
+    await expect(buyer).toBeChecked();
+    await panel.screenshot({ path: testInfo.outputPath("persona-selection.png"), animations: "disabled" });
+    await trainer.click();
+    await saveSelection();
+    await page.reload();
+    await open();
+    await expect(trainer).not.toBeChecked();
+    await expect(buyer).toBeChecked();
+  } finally {
+    const reset = await page.request.post("/api/roleplay/builder.setPersonaPool", { data: { json: { slug, personas: ["e2e-trainer"] } } });
+    expect(reset.ok()).toBe(true);
+  }
+});
+
 test("calibration opens with the selected persona, without starting a call", async ({ page }) => {
   const slug = seed().roleplay.slug;
   await page.goto(`/roleplay/${slug}/calibrate`);

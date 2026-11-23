@@ -56,6 +56,7 @@ if (localVoice) await db.voice.create({ data: {
   s3AudioKey: `${voicePrefix(ORG.id, voiceId)}/unused.wav`,
 } });
 const persona = await db.persona.create({ data: { orgId: ORG.id, slug: "e2e-trainer", name: "E2E Trainer", data: {}, isOwn: true, voiceId: localVoice ? voiceId : null } });
+await db.persona.create({ data: { orgId: ORG.id, slug: "e2e-buyer", name: "E2E Buyer", data: { role: "Buyer" } } });
 const roleplay = await db.agent.create({
   data: { id: "e2e-roleplay", orgId: ORG.id, personaId: persona.id, kind: "ROLEPLAY", slug: "e2e-pitch", name: "Pitch practice", data: { source: ROLEPLAY_SOURCE, objective: "Pitch the product in two minutes." } },
 });

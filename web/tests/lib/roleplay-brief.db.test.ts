@@ -200,11 +200,14 @@ describe.skipIf(!localMinutesDb)("role plays written from requirements, through 
     expect(edit.brief?.script).toMatchObject({ learnerRole: "Advisor", situation: ["Buyer is uncertain"], concerns: [{ concern: "Worried about the mortgage", hidden: true }] });
     expect((await caller.scenarios.get({ slug: made.slug })).script).toMatchObject({ learnerRole: "Advisor" });
 
-    const saved = await caller.builder.saveBrief({ slug: made.slug, persona: "chloe", title: "Older practice, renamed", learnerBrief: "Find the real worry.", openingLine: "Not sure yet.", limit: "" });
+    await caller.builder.setPersonaPool({ slug: made.slug, personas: [f.org.slug] });
+    expect((await caller.builder.get({ slug: made.slug })).brief?.persona).toBe(f.org.slug);
+    const saved = await caller.builder.saveBrief({ slug: made.slug, title: "Older practice, renamed", learnerBrief: "Find the real worry.", openingLine: "Not sure yet.", limit: "" });
     expect(saved.changed).toBe(true);
     const after = await caller.builder.get({ slug: made.slug });
     // Basics changed; the rest of the form's fields kept (rubric, difficulty, example lines).
-    expect(after.builder).toMatchObject({ name: "Older practice, renamed", whatToExpect: "Find the real worry.", opening: "Not sure yet.", difficulty: "medium", exampleLines: ["Please explain"], rubric: [{ name: "Understanding", points: 100 }] });
+    expect(after.builder).toMatchObject({ persona: f.org.slug, name: "Older practice, renamed", whatToExpect: "Find the real worry.", opening: "Not sure yet.", difficulty: "medium", exampleLines: ["Please explain"], rubric: [{ name: "Understanding", points: 100 }] });
+    expect(await caller.builder.personaPool({ slug: made.slug })).toEqual([f.org.slug]);
   });
 
   test("refuses an incomplete brief, an unknown persona and an id another role play already owns", async () => {
