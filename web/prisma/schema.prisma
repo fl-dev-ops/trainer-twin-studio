@@ -30,6 +30,8 @@ model Persona {
   updatedAt DateTime        @updatedAt
   sources   PersonaSource[]
   agents    Agent[]
+  /// The agents this persona plays (AgentPersona): a twin's or bot's one, or one of a role play's.
+  agentLinks AgentPersona[]
 
   @@unique([orgId, slug])
   @@index([orgId])
@@ -40,7 +42,8 @@ model Persona {
 enum AgentKind {
   TWIN
   ROLEPLAY
-  /// A public agent for signed-out visitors (website widget, public link) on a trainer's persona; specs/public-twins.md.
+  /// A public agent for signed-out visitors (website widget, public link): its own persona, SKILL.md and chosen skills;
+  /// specs/bots.md.
   BOT
 
   @@map("agent_kind")
@@ -66,6 +69,10 @@ model Agent {
   deployments     Deployment[]
   skillSources    SkillSource[]
   skillVersions   AgentSkillVersion[]
+  /// Supporting skills (AgentSkill), in order after the main skill (primarySkillId).
+  supportingSkills AgentSkill[]
+  /// Who it speaks as (AgentPersona): a twin's own persona, a bot's one, or a role play's pool (one picked per session).
+  personas        AgentPersona[]
   sessions        InterviewSession[]
   twinAssignments TwinAssignment[]
   twinShareLinks  TwinShareLink[]
@@ -91,6 +98,7 @@ model Skill {
   organization     Organization   @relation(fields: [orgId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   versions         SkillVersion[] @relation("SkillVersions")
   agents           Agent[]
+  botAgents        AgentSkill[]
   currentVersion   SkillVersion?  @relation("SkillCurrentVersion", fields: [currentVersionId, id], references: [id, skillId], onDelete: Restrict, onUpdate: Restrict)
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
@@ -1332,4 +1340,38 @@ model BillingPayment {
 
   @@index([orgId, paidAt])
   @@index([paidAt])
+}
+
+/// Supporting skills: library skills an agent draws on after its main skill (primarySkillId), in order; each can be
+/// switched off without detaching it (specs/agents.md).
+model AgentSkill {
+  agentId   String
+  skillId   String
+  orgId     String
+  position  Int
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade, onUpdate: Restrict)
+  skill     Skill    @relation(fields: [skillId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@id([agentId, skillId])
+  @@unique([agentId, position])
+  @@index([skillId])
+  @@index([orgId])
+}
+
+/// Who an agent speaks as (specs/agents.md): a twin's one own persona, a bot's one persona, or a role play's pool
+/// (each session picks one active persona at random and records it). Agent.personaId mirrors the first one meanwhile.
+model AgentPersona {
+  agentId   String
+  personaId String
+  position  Int
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade, onUpdate: Restrict)
+  persona   Persona  @relation(fields: [personaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@id([agentId, personaId])
+  @@unique([agentId, position])
+  @@index([personaId])
 }
