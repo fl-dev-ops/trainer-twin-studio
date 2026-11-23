@@ -103,12 +103,14 @@ export function ScriptView({ script }: { script: Script }) {
  * the few things a trainer changes by hand; Script is read-only and changed by asking the copilot; Settings save as
  * they change.
  */
-export function RoleplayBriefEditPage({ slug, brief, before: initialBefore, tools: initialTools, personas }: {
+export function RoleplayBriefEditPage({ slug, brief, before: initialBefore, tools: initialTools, personas, pool }: {
   slug: string;
   brief: Brief;
   before: BeforeSettings;
   tools: ToolSettings;
   personas: Persona[];
+  /** Who plays it: the main persona and the extras (specs/agents.md). */
+  pool: RoleplayOutputs["builder"]["personaPool"];
 }) {
   const router = useRouter();
   const refresh = useRefresh();
@@ -237,6 +239,7 @@ export function RoleplayBriefEditPage({ slug, brief, before: initialBefore, tool
             </div>
             <PersonaPicker personas={personas} value={savedPersona} onChange={(next) => void savePersona(next)} />
           </article>
+          <PersonaPool slug={slug} main={savedPersona} personas={personas} pool={pool} />
         </TabsContent>
 
         <TabsContent value="script" className="flex flex-col gap-4">
@@ -307,5 +310,75 @@ export function RoleplayBriefEditPage({ slug, brief, before: initialBefore, tool
         </TabsContent>
       </Tabs>
     </PageContainer>
+  );
+}
+
+/**
+ * Extra personas that can also play the role play: each session picks one active persona at random (the main one
+ * included). Saved from its bar; the role play itself is not republished.
+ */
+function PersonaPool({ slug, main, personas, pool }: { slug: string; main: string; personas: Persona[]; pool: RoleplayOutputs["builder"]["personaPool"] }) {
+  const refresh = useRefresh();
+  const initial = () => pool.filter((row) => !row.main && row.slug !== main).map((row) => ({ slug: row.slug, active: row.active }));
+  const [extras, setExtras] = useState(initial);
+  const [received, setReceived] = useState(pool);
+  const [busy, setBusy] = useState(false);
+  const dirty = JSON.stringify(extras) !== JSON.stringify(initial());
+  if (received !== pool) {
+    setReceived(pool);
+    if (!dirty) setExtras(initial());
+  }
+  const others = personas.filter((persona) => persona.slug !== main);
+  const chosen = new Map(extras.map((row) => [row.slug, row]));
+  const toggle = (personaSlug: string) => setExtras((prev) => chosen.has(personaSlug)
+    ? prev.filter((row) => row.slug !== personaSlug)
+    : [...prev, { slug: personaSlug, active: true }]);
+  async function save() {
+    setBusy(true);
+    try {
+      await roleplayClient.builder.setPersonaPool.mutate({ slug, extras });
+      toast.success(extras.some((row) => row.active) ? "Each session now picks one of these personas at random" : "Only the main persona plays it");
+      refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not save the personas");
+    } finally {
+      setBusy(false);
+    }
+  }
+  if (!others.length) return null;
+  return (
+    <article className={cn(card, "mt-4")} aria-label="Also played by">
+      <div>
+        <p className={kicker}>Also played by</p>
+        <p className="m-0 mt-1 text-xs text-muted-foreground">Each session picks one of the chosen personas at random, the main one included. Switch one off to keep it but skip it.</p>
+      </div>
+      <ul className="m-0 flex list-none flex-col gap-2 p-0">
+        {others.map((persona) => {
+          const row = chosen.get(persona.slug);
+          return (
+            <li key={persona.slug} className="flex items-center justify-between gap-3 rounded-tt-md border border-(--border) px-3 py-2">
+              <label className="flex min-w-0 cursor-pointer items-center gap-3">
+                <input type="checkbox" className="size-4 accent-(--brand)" checked={Boolean(row)} disabled={busy} onChange={() => toggle(persona.slug)} />
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-medium">{persona.name}</span>
+                  <span className="block truncate text-xs text-muted-foreground">{persona.isOwn ? "You" : persona.role}</span>
+                </span>
+              </label>
+              {row ? (
+                <SwitchToggle checked={row.active} label={`Use ${persona.name}`}
+                  onChange={(active) => setExtras((prev) => prev.map((item) => item.slug === persona.slug ? { ...item, active } : item))} />
+              ) : null}
+            </li>
+          );
+        })}
+      </ul>
+      {dirty ? (
+        <div className="flex items-center justify-end gap-2">
+          <span className="mr-auto text-sm text-muted-foreground" role="status">Unsaved changes</span>
+          <Button type="button" variant="ghost" disabled={busy} onClick={() => setExtras(initial())}>Discard</Button>
+          <Button type="button" variant="brand" disabled={busy} onClick={() => void save()}>{busy ? "Saving…" : "Save personas"}</Button>
+        </div>
+      ) : null}
+    </article>
   );
 }

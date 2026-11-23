@@ -31,10 +31,15 @@ InterviewSession: the persona it played (personaSlug/version) + SessionSkill pin
 
 ## Twins: main twin and topic skills
 
-A trainer's main twin carries the topic skills as supporting skills. A twin not yet merged keeps the older behaviour:
-every live skill twin of its persona (`resolveTwinCatalog`). Merging (per org, after its skills are imported into the
-library with `scripts/migrate-skills.ts`) attaches each topic twin's skill to the main twin and archives the topic twin;
-its sessions and assignments stay as history.
+A trainer has one twin: the main twin (`data.source = "twin"`). Its topics are skills, attached as its supporting
+skills. Each topic skill's package is still versioned under a topic-twin agent (its record: history, restore, copilot
+updates go through it), which stays live but is shown as a skill of the main twin, never as a twin of its own.
+
+- Publishing a **new** twin skill (`ingestTwinSkill`) appends it as active when the trainer's main twin has supporting
+  skills (`attachTwinSkillToMainTwin`). Editing an existing topic leaves the trainer's selection and switches alone.
+- A twin with nothing attached keeps the older behaviour: every live skill twin of its persona (`resolveTwinCatalog`).
+  An org moves over once its skills are in the library (`scripts/migrate-skills.ts`); the merge then attaches each
+  topic skill to the main twin.
 
 ## Bots
 

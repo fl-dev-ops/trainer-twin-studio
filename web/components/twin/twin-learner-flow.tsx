@@ -28,8 +28,6 @@ import { authClient } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 import { useRefresh } from "@/lib/use-refresh";
 import posthog from "posthog-js";
-import { PublicTwinCall } from "@/components/twin/public-twin-call";
-import type { PublicTwinSettings } from "@/lib/public-twin-settings";
 
 /** The signed-in person's access to this twin (null: signed out). */
 export type LearnerAccess =
@@ -41,7 +39,7 @@ export type LearnerAccess =
   | null;
 
 export type Trainer = { name: string; title: string | null; bio: string | null; photoUrl: string | null };
-export type Twin = { id?: string; slug: string; name: string; description: string | null; attach?: boolean; publicAccess?: PublicTwinSettings };
+export type Twin = { slug: string; name: string; description: string | null; attach?: boolean };
 type Step = "profile" | "call" | "summary";
 
 // The dash's own scale (twin overview cards): 16px cards with the soft shadow, 11px labels, 18px titles, 15px body.
@@ -126,9 +124,6 @@ export function TwinLearnerFlow({ path, trainer, twin, access }: { path: string;
   );
 
   const report = reportFor ? <ReportDialog twin={twin} sessionId={reportFor.sessionId} onClose={() => setReportFor(null)} /> : null;
-  const visitor = access === null && twin.publicAccess?.enabled && Boolean(twin.id);
-
-  if (step === "call" && visitor) return <PublicTwinCall twin={twin} trainer={trainer} onBack={() => setStep("profile")} />;
 
   if (step === "call" && access?.ok) {
     return (
@@ -234,13 +229,13 @@ export function TwinLearnerFlow({ path, trainer, twin, access }: { path: string;
             <Button size="xl" variant="brand"
               
               disabled={minutesLeft !== null && minutesLeft < MIN_START_MINUTES}
-              onClick={() => (access?.ok || visitor ? setStep("call") : setSigningIn(true))}
+              onClick={() => (access?.ok ? setStep("call") : setSigningIn(true))}
             >
               <PhoneIcon data-icon="inline-start" className="size-[18px]" />
               {access?.ok ? "Start voice call" : "Start conversation"}
             </Button>
           </div>
-          <p className="m-0 text-xs text-muted-foreground">{visitor ? "Talk with an AI twin. Your name and transcript are shared with the organization." : `Conversations are recorded to help you and ${coach}.`}</p>
+          <p className="m-0 text-xs text-muted-foreground">Conversations are recorded to help you and {coach}.</p>
         </div>
       ) : null}
 

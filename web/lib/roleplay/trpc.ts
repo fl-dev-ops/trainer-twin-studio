@@ -23,6 +23,7 @@ import { toolSettings, toolSettingsInput } from "@/lib/agent-tools";
 import { hydrateAgentSkill } from "@/lib/skill-history";
 import { skillRefusals } from "@/lib/skills";
 import { dashRoute } from "@/lib/routes";
+import { setAgentPersonas } from "@/lib/agent-personas";
 
 /**
  * Role-play tRPC surface, mounted at /api/roleplay (the twin module's twin, plans/roleplay-skill.md step 6).
@@ -394,6 +395,37 @@ const builderRouter = t.router({
         }
         throw error;
       }
+    }),
+
+  /**
+   * Who plays the role play (specs/agents.md): its main persona (from the brief, always on) and extra personas that can
+   * play it too, each switchable. Each session picks one active persona at random.
+   */
+  personaPool: studioProcedure.input(slugInput).query(async ({ ctx, input }) => {
+    const agent = await findRoleplay(ctx.user.orgId, input.slug);
+    const rows = await db.agentPersona.findMany({
+      where: { agentId: agent.id }, orderBy: { position: "asc" },
+      select: { active: true, persona: { select: { id: true, slug: true } } },
+    });
+    const main = (await db.agent.findUniqueOrThrow({ where: { id: agent.id }, select: { personaId: true } })).personaId;
+    return rows.map((row) => ({ slug: row.persona.slug, active: row.active, main: row.persona.id === main }));
+  }),
+  setPersonaPool: studioProcedure
+    .input(slugInput.extend({ extras: z.array(z.object({ slug: z.string().trim().min(1).max(200), active: z.boolean() })).max(20) }))
+    .mutation(async ({ ctx, input }) => {
+      const agent = await findRoleplay(ctx.user.orgId, input.slug);
+      await withLock([`agent:${agent.slug}`], async (tx) => {
+        const current = await tx.agent.findUniqueOrThrow({ where: { id: agent.id }, select: { personaId: true } });
+        const extras = await tx.persona.findMany({ where: { orgId: ctx.user.orgId, slug: { in: input.extras.map((row) => row.slug) } }, select: { id: true, slug: true } });
+        const idOf = new Map(extras.map((row) => [row.slug, row.id]));
+        const missing = input.extras.find((row) => !idOf.has(row.slug));
+        if (missing) throw new TRPCError({ code: "NOT_FOUND", message: `Persona "${missing.slug}" was not found in this organization` });
+        await setAgentPersonas(agent.id, [
+          { personaId: current.personaId, active: true },
+          ...input.extras.filter((row) => idOf.get(row.slug) !== current.personaId).map((row) => ({ personaId: idOf.get(row.slug)!, active: row.active })),
+        ], tx);
+      });
+      return { ok: true };
     }),
 
   /** The org's personas the client can be (Persona Library), with photo and role. */

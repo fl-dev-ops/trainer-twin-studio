@@ -7,7 +7,7 @@ import { beforeSettings } from "@/lib/context-upload";
 import { publicTwinSettingsSchema } from "@/lib/public-twin-settings";
 import { widgetSettingsSchema } from "@/lib/widget-settings";
 import { botBySlug, createBot, listBots, publicSettingsOf, saveBotDetails, saveBotPublic, saveBotSkills, widgetSettingsOf, type PublicBot } from "@/lib/bots";
-import { supportingSkillChoices } from "@/lib/agent-skills";
+import { setSupportingSkills, supportingSkillChoices } from "@/lib/agent-skills";
 import { assignablePeople } from "@/lib/learners";
 import { LEARNER_ROLE } from "@/lib/org";
 import { LEARNER, orgPeople, orgPerson } from "@/lib/org-people";
@@ -288,6 +288,12 @@ const agentsRouter = t.router({
         ? skillAgents.map((skill) => ({ agentId: skill.id, version: skill.version }))
         : [{ agentId: found.id, version: agent.version }]),
       settings: beforeSettings(data),
+      /** The main twin's supporting skills (specs/agents.md), in order with their switches; empty = all its persona's. */
+      supportingSkills: allSkills ? (await db.agentSkill.findMany({
+        where: { agentId: found.id }, orderBy: { position: "asc" },
+        select: { active: true, skill: { select: { id: true, name: true, ownerSlug: true } } },
+      })).map((row) => ({ id: row.skill.id, slug: row.skill.ownerSlug, name: row.skill.name, active: row.active })) : [],
+      skillChoices: allSkills ? await supportingSkillChoices(orgId) : [],
       credit: {
         // Minutes of this twin's learners (each learner's own, shared with their other twins and role plays).
         minutes: active.reduce((sum, row) => sum + row.minutesGiven, 0),
@@ -341,6 +347,19 @@ const agentsRouter = t.router({
     .mutation(({ ctx, input }) => twinCall(async () => {
       const { version } = await updateTwin(ctx.user.orgId, input.slug, { name: input.name, description: input.description, settings: input.settings });
       return { version };
+    })),
+
+  /** The main twin's supporting skills: which topic skills it draws on, in order, each switchable (specs/agents.md). */
+  setSkills: studioProcedure
+    .input(slugInput.extend({ skills: z.array(z.object({ skillId: z.string().min(1).max(100), active: z.boolean() })).max(50) }))
+    .mutation(({ ctx, input }) => twinCall(async () => {
+      const found = await findTwinAgent(ctx.user.orgId, input.slug);
+      const twin = await db.agent.findUniqueOrThrow({ where: { id: found.id }, select: { data: true } });
+      if ((twin.data as Record<string, unknown> | null)?.source !== TWIN_SOURCE) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Only a main twin has supporting skills" });
+      }
+      await withLock([`agent:${found.slug}`], (tx) => setSupportingSkills(ctx.user.orgId, found.id, input.skills, tx));
+      return { ok: true };
     })),
 
   /**

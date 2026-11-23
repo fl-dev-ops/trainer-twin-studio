@@ -173,12 +173,12 @@ export async function trainerProfile(personaId: string): Promise<FlowProps["trai
 
 /** What a twin's page shows about it: the trainer whose twin it is, and the twin. Public (no sign-in needed). */
 export async function twinProfile(agentId: string): Promise<Pick<FlowProps, "trainer" | "twin">> {
-  const agent = await db.agent.findUniqueOrThrow({ where: { id: agentId }, select: { id: true, slug: true, name: true, data: true, personaId: true } });
+  const agent = await db.agent.findUniqueOrThrow({ where: { id: agentId }, select: { slug: true, name: true, data: true, personaId: true } });
   const data = agent.data && typeof agent.data === "object" ? (agent.data as Record<string, unknown>) : {};
   return {
     trainer: await trainerProfile(agent.personaId),
     // attach: the twin's "Enable upload" during the call (an image up to 5 MB or a PDF up to 10 MB; enforced by the attach route).
-    twin: { id: agent.id, slug: agent.slug, name: agent.name, description: text(data.objective), attach: beforeSettings(agent.data).duringUpload },
+    twin: { slug: agent.slug, name: agent.name, description: text(data.objective), attach: beforeSettings(agent.data).duringUpload },
   };
 }
 

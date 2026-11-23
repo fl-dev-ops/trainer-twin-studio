@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { createHash, randomUUID } from "node:crypto";
 import * as workflow from "workflow/api";
 import * as livekit from "@/lib/livekit";
-import { supportingCatalog, setSupportingSkills } from "@/lib/agent-skills";
+import { attachTwinSkillToMainTwin, supportingCatalog, setSupportingSkills } from "@/lib/agent-skills";
 import { pickSessionPersona, setAgentPersonas } from "@/lib/agent-personas";
 import { createBot, saveBotPublic, saveBotSkills } from "@/lib/bots";
 import { getAgentConfigForAgent } from "@/lib/specs";
@@ -11,6 +11,9 @@ import { startPublicTwinSession } from "@/lib/public-twin-sessions";
 import { skillPackageHash } from "@/lib/skills";
 import { orgPrefix } from "@/lib/s3";
 import { fundOrg } from "../setup/meteroid";
+import { runCopilotStudio } from "@/lib/copilot-studio";
+import { roleplayRouter } from "@/lib/roleplay/trpc";
+import { ROLEPLAY_SOURCE } from "@/lib/scenario-ingest";
 import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "./minutes-test-db";
 
 /** Twins, role plays and bots share one shape (specs/agents.md): main skill, supporting skills, persona(s). */
@@ -22,7 +25,7 @@ describe.skipIf(!localMinutesDb)("unified agents: supporting skills and personas
 
   beforeEach(async () => {
     f = minutesFixture();
-    await f.create();
+    await f.create({ voice: true });
     persona = await db.persona.findFirstOrThrow({ where: { orgId: f.org.id, slug: f.org.slug }, select: { id: true, slug: true } });
   });
   afterEach(async () => {
@@ -49,6 +52,7 @@ describe.skipIf(!localMinutesDb)("unified agents: supporting skills and personas
       artifacts: `${orgPrefix(f.org.id)}/skills/${slug}/v1`,
     } });
     await db.skill.update({ where: { id: skill.id }, data: { currentVersionId: version.id } });
+    await db.agent.update({ where: { slug }, data: { primarySkillId: skill.id } });
     return { skill, version, slug };
   }
 
@@ -70,7 +74,8 @@ describe.skipIf(!localMinutesDb)("unified agents: supporting skills and personas
   });
 
   test("a bot speaking as any persona pins its active supporting skills into each public call", async () => {
-    const custom = await db.persona.create({ data: { orgId: f.org.id, slug: `${f.org.slug}-guide`, name: "Guide", data: {} } });
+    const { voiceId } = await db.persona.findUniqueOrThrow({ where: { id: persona.id }, select: { voiceId: true } });
+    const custom = await db.persona.create({ data: { orgId: f.org.id, slug: `${f.org.slug}-guide`, name: "Guide", data: {}, voiceId } });
     const objections = await topicSkill("objections");
     const bot = await db.$transaction(async (tx) => {
       const made = (await createBot(f.org.id, { personaId: custom.id, name: "Homepage", objective: "Welcome visitors." }, tx))!;
@@ -80,12 +85,18 @@ describe.skipIf(!localMinutesDb)("unified agents: supporting skills and personas
     expect(bot).toMatchObject({ personaId: custom.id, data: { source: "bot", objective: "Welcome visitors." } });
     expect(bot.data).not.toHaveProperty("twinId");
     await fundOrg({ orgId: f.org.id, minutes: 10 });
+    const realFetch = globalThis.fetch;
     spies.push(
       spyOn(workflow, "start").mockResolvedValue(undefined as never),
+      spyOn(livekit, "closeLiveKitSession").mockResolvedValue(undefined),
       spyOn(livekit, "activateLiveKitSession").mockImplementation(async (input) => ({
         room: input.sessionId, token: "token", dispatchId: "dispatch", videoEgressId: null, videoS3Key: null,
       })),
-      spyOn(globalThis, "fetch").mockImplementation(async () => new Response(null, { status: 204 })),
+      spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
+        if (String(url).includes("meteroid.test")) return realFetch(url, init);
+        if (new URL(String(url)).pathname === "/internal/sessions") return new Response(null, { status: 204 });
+        throw new Error(`Unexpected network request: ${String(url)}`);
+      }),
     );
     const opened = await startPublicTwinSession({ orgId: f.org.id, agentId: bot.id, visitorId: hash(randomUUID()), ipHash: hash(randomUUID()), name: "Visitor" });
     const row = await db.interviewSession.findUniqueOrThrow({ where: { id: opened.session.id }, include: { skillPins: true } });
@@ -121,4 +132,62 @@ describe.skipIf(!localMinutesDb)("unified agents: supporting skills and personas
     })).rejects.toThrow();
     expect(await db.agentPersona.findMany({ where: { agentId: f.twin.id }, select: { personaId: true } })).toEqual([{ personaId: persona.id }]);
   });
+
+  test("the copilot sets a main twin's skills and a role play's extra personas, and manages bots, by slug", async () => {
+    const actor = { org: { id: f.org.id, slug: f.org.slug }, user: { id: f.trainer.id, name: "Trainer" } };
+    const silent = await topicSkill("silent");
+    await db.agent.update({ where: { id: f.twin.id }, data: { data: { source: "twin" } } });
+    await runCopilotStudio(actor, { action: "setTwinSkills", slug: f.twin.slug, skills: [{ slug: silent.slug, active: true }] });
+    expect(await db.agentSkill.findMany({ where: { agentId: f.twin.id }, select: { skillId: true, active: true } })).toEqual([{ skillId: silent.skill.id, active: true }]);
+    await expect(runCopilotStudio(actor, { action: "setTwinSkills", slug: f.roleplay.slug, skills: [] })).rejects.toThrow("not a main twin");
+    await expect(runCopilotStudio(actor, { action: "setTwinSkills", slug: f.twin.slug, skills: [{ slug: "missing", active: true }] })).rejects.toThrow("was not found");
+
+    const second = await db.persona.create({ data: { orgId: f.org.id, slug: `${f.org.slug}-second`, name: "Second", data: {} } });
+    await runCopilotStudio(actor, { action: "setRoleplayPersonas", slug: f.roleplay.slug, extras: [{ slug: second.slug, active: true }] });
+    expect(await db.agentPersona.findMany({ where: { agentId: f.roleplay.id }, orderBy: { position: "asc" }, select: { personaId: true, active: true } }))
+      .toEqual([{ personaId: persona.id, active: true }, { personaId: second.id, active: true }]);
+
+    const created = await runCopilotStudio(actor, { action: "createBot", persona: second.slug, name: "Homepage", objective: "Welcome visitors." }) as { slug: string };
+    await runCopilotStudio(actor, { action: "updateBot", slug: created.slug, objective: "Answer questions.", skills: [{ slug: silent.slug, active: false }] });
+    expect(await runCopilotStudio(actor, { action: "getBot", slug: created.slug })).toMatchObject({
+      name: "Homepage", persona: second.slug, objective: "Answer questions.", publicCalls: "off", skills: [{ slug: silent.slug, active: false }],
+    });
+  });
+
+  test("a role play's persona pool: extras are added and switched without republishing; a new main persona replaces the old one", async () => {
+    const second = await db.persona.create({ data: { orgId: f.org.id, slug: `${f.org.slug}-second`, name: "Second", data: {} } });
+    const third = await db.persona.create({ data: { orgId: f.org.id, slug: `${f.org.slug}-third`, name: "Third", data: {} } });
+    await db.agent.update({ where: { id: f.roleplay.id }, data: { data: { source: ROLEPLAY_SOURCE } } });
+    const caller = roleplayRouter.createCaller({ user: { ...f.trainer, orgId: f.org.id, orgSlug: f.org.slug, role: "admin" } } as never);
+    const version = (await db.agent.findUniqueOrThrow({ where: { id: f.roleplay.id } })).version;
+    await caller.builder.setPersonaPool({ slug: f.roleplay.slug, extras: [{ slug: second.slug, active: true }, { slug: third.slug, active: false }] });
+    expect(await caller.builder.personaPool({ slug: f.roleplay.slug })).toEqual([
+      { slug: persona.slug, active: true, main: true }, { slug: second.slug, active: true, main: false }, { slug: third.slug, active: false, main: false },
+    ]);
+    expect((await db.agent.findUniqueOrThrow({ where: { id: f.roleplay.id } })).version).toBe(version);
+    // Any save that changes the main persona swaps it in at the head; the extras stay.
+    await db.agent.update({ where: { id: f.roleplay.id }, data: { personaId: third.id } });
+    expect(await caller.builder.personaPool({ slug: f.roleplay.slug })).toEqual([
+      { slug: third.slug, active: true, main: true }, { slug: second.slug, active: true, main: false },
+    ]);
+  });
+
+  test("a newly published twin skill joins a merged main twin at the end; an unmerged twin is left as it was", async () => {
+    await db.agent.update({ where: { id: f.twin.id }, data: { data: { source: "twin" } } });
+    const attachedTo = async () => (await db.agentSkill.findMany({ where: { agentId: f.twin.id }, orderBy: { position: "asc" }, select: { skill: { select: { ownerSlug: true } }, active: true } }))
+      .map((row) => `${row.skill.ownerSlug.replace(`${f.org.slug}-`, "")}${row.active ? "" : " (off)"}`);
+    const first = await topicSkill("first");
+    const attach = (skillId: string) => db.$transaction((tx) => attachTwinSkillToMainTwin(f.org.id, persona.id, skillId, tx));
+    await attach(first.skill.id);
+    expect(await attachedTo()).toEqual([]);
+    // Merged: a later skill goes at the end; switched-off ones keep their state; repeating is a no-op.
+    await db.$transaction((tx) => setSupportingSkills(f.org.id, f.twin.id, [{ skillId: first.skill.id, active: false }], tx));
+    const second = await topicSkill("second");
+    const third = await topicSkill("third");
+    await Promise.all([attach(second.skill.id), attach(third.skill.id), attach(second.skill.id)]);
+    const [existing, ...added] = await attachedTo();
+    expect(existing).toBe("first (off)");
+    expect(added.sort()).toEqual(["second", "third"]);
+  });
+
 });

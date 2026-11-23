@@ -15,6 +15,7 @@ import { draftBrief } from "@/lib/roleplay/brief";
 import { validSlug } from "@/lib/specs";
 import { TWIN_SOURCE } from "@/lib/twins";
 import type { ToolSettings } from "@/lib/agent-tools";
+import { attachTwinSkillToMainTwin } from "@/lib/agent-skills";
 
 /** Agent.data.source of a role play built in the builder (twin skills: "scenario-ingest"). */
 export const ROLEPLAY_SOURCE = "roleplay-skill";
@@ -328,6 +329,7 @@ async function storeSkillAgent(input: {
           data: { slug, name: agentData.name, version, personaId: input.personaId, kind, data: json(data), orgId: org.id, primarySkillId: skillId },
         });
         await recordPublicationSkillLinks(tx, { orgId: org.id, agentId: created.id, agentVersion: version, skillVersionId: currentVersion.id }, input.items, linkOptions);
+        if (kind === "TWIN" && input.built) await attachTwinSkillToMainTwin(org.id, input.personaId, skillId, tx);
         return done;
       }
       // Publishing onto an archived skill / role play brings it back (archive is a soft delete; the slug stays taken).

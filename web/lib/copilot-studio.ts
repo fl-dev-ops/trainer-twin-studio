@@ -1,8 +1,12 @@
 import { resolveUpload, UploadError } from "@/lib/uploads";
 import { z } from "zod";
+import { botBySlug, createBot, listBots, publicSettingsOf, saveBotDetails, saveBotSkills, type PublicBot } from "@/lib/bots";
+import { setAgentPersonas } from "@/lib/agent-personas";
+import { setSupportingSkills } from "@/lib/agent-skills";
 import { toolSettings } from "@/lib/agent-tools";
 import { beforeSettings } from "@/lib/context-upload";
-import { db } from "@/lib/db";
+import { db, withLock } from "@/lib/db";
+import type { Prisma } from "@/lib/generated/prisma/client";
 import { LEARNER, orgPeople } from "@/lib/org-people";
 import { updateRoleplay } from "@/lib/roleplay/manage";
 import { roleplayBuilderFrom } from "@/lib/roleplay/skill";
@@ -58,6 +62,17 @@ export const copilotStudioInput = z.discriminatedUnion("action", [
   z.object({ action: z.literal("draftRoleplay"), brief: z.unknown() }).strict(),
   z.object({ action: z.literal("publishRoleplay"), persona: slug, brief: z.unknown() }).strict(),
   z.object({ action: z.literal("createTwin"), persona: slug }).strict(),
+  // Supporting skills and personas (specs/agents.md), by slug; bots by slug.
+  z.object({ action: z.literal("setTwinSkills"), slug, skills: z.array(z.object({ slug, active: z.boolean() })).max(50) }).strict(),
+  z.object({ action: z.literal("setRoleplayPersonas"), slug, extras: z.array(z.object({ slug, active: z.boolean() })).max(20) }).strict(),
+  z.object({ action: z.literal("listBots") }).strict(),
+  z.object({ action: z.literal("getBot"), slug }).strict(),
+  z.object({ action: z.literal("createBot"), persona: slug, name: z.string().trim().min(1).max(120), objective: z.string().trim().min(1).max(2000) }).strict(),
+  z.object({
+    action: z.literal("updateBot"), slug,
+    persona: slug.optional(), name: z.string().trim().min(1).max(120).optional(), objective: z.string().trim().min(1).max(2000).optional(),
+    skills: z.array(z.object({ slug, active: z.boolean() })).max(50).optional(),
+  }).strict(),
 ]);
 export type CopilotStudioInput = z.infer<typeof copilotStudioInput>;
 export type Actor = { org: { id: string; slug: string }; user: { id: string; name: string } };
@@ -324,5 +339,82 @@ export async function runCopilotStudio(actor: Actor, input: CopilotStudioInput, 
         throw error;
       }
     }
+
+    case "setTwinSkills": {
+      const twin = await findAgent(d, orgId, input.slug, { archived: false });
+      if (twin.kind !== "TWIN" || asRecord(twin.data).source !== TWIN_SOURCE) throw new ScenarioIngestError(`"${input.slug}" is not a main twin`, 400);
+      const skills = await skillIdsBySlug(orgId, input.skills);
+      await withLock([`agent:${twin.slug}`], (tx) => setSupportingSkills(orgId, twin.id, skills, tx));
+      return { ok: true, skills: input.skills };
+    }
+
+    case "setRoleplayPersonas": {
+      const roleplay = await findAgent(d, orgId, input.slug, { archived: false });
+      if (roleplay.kind !== "ROLEPLAY") throw new ScenarioIngestError(`"${input.slug}" is not a role play`, 400);
+      await withLock([`agent:${roleplay.slug}`], async (tx) => {
+        const main = (await tx.agent.findUniqueOrThrow({ where: { id: roleplay.id }, select: { personaId: true } })).personaId;
+        const extras = await personaIdsBySlug(orgId, input.extras.map((row) => row.slug), tx);
+        await setAgentPersonas(roleplay.id, [
+          { personaId: main, active: true },
+          ...input.extras.map((row) => ({ personaId: extras.get(row.slug)!, active: row.active })).filter((row) => row.personaId !== main),
+        ], tx);
+      });
+      return { ok: true, extras: input.extras };
+    }
+
+    case "listBots":
+      return { items: (await listBots(orgId)).map(botSummary) };
+
+    case "getBot": {
+      const bot = await botBySlug(orgId, input.slug);
+      if (!bot) throw new ScenarioIngestError(`Bot "${input.slug}" was not found`, 404);
+      return { ...botSummary(bot), objective: asRecord(bot.data).objective ?? "" };
+    }
+
+    case "createBot": {
+      const persona = (await personaIdsBySlug(orgId, [input.persona])).get(input.persona)!;
+      const bot = await db.$transaction((tx) => createBot(orgId, { personaId: persona, name: input.name, objective: input.objective }, tx));
+      return { ok: true, slug: bot?.slug, publicCalls: "off" };
+    }
+
+    case "updateBot": {
+      const personaId = input.persona ? (await personaIdsBySlug(orgId, [input.persona])).get(input.persona) : undefined;
+      const skills = input.skills ? await skillIdsBySlug(orgId, input.skills) : undefined;
+      await withLock([`agent:${input.slug}`], async (tx) => {
+        let bot = await botBySlug(orgId, input.slug, tx);
+        if (!bot) throw new ScenarioIngestError(`Bot "${input.slug}" was not found`, 404);
+        if (input.name !== undefined || input.objective !== undefined || personaId) bot = await saveBotDetails(bot, { name: input.name, objective: input.objective, personaId }, tx);
+        if (bot && skills) await saveBotSkills(bot, skills, tx);
+      });
+      return { ok: true };
+    }
   }
+}
+
+/** A bot as the copilot sees it: no websites or public switches (those stay with the trainer, under Bots). */
+function botSummary(bot: PublicBot) {
+  return {
+    slug: bot.slug, name: bot.name, persona: bot.persona.slug, version: bot.version,
+    skills: bot.supportingSkills.map((row) => ({ slug: row.skill.ownerSlug, name: row.skill.name, active: row.active })),
+    publicCalls: publicSettingsOf(bot.deployment).enabled ? "on" : "off",
+  };
+}
+
+/** Library skills by their slugs (published twin skills of the org), in the order given. */
+async function skillIdsBySlug(orgId: string, rows: { slug: string; active: boolean }[]) {
+  const skills = await db.skill.findMany({ where: { orgId, ownerSlug: { in: rows.map((row) => row.slug) } }, select: { id: true, ownerSlug: true } });
+  const idOf = new Map(skills.map((skill) => [skill.ownerSlug, skill.id]));
+  const missing = rows.find((row) => !idOf.has(row.slug));
+  if (missing) throw new ScenarioIngestError(`Skill "${missing.slug}" was not found among the published skills`, 404);
+  return rows.map((row) => ({ skillId: idOf.get(row.slug)!, active: row.active }));
+}
+
+/** Personas by slug: the org's and the global library's. */
+async function personaIdsBySlug(orgId: string, slugs: string[], client: Prisma.TransactionClient = db) {
+  const rows = await client.persona.findMany({ where: { slug: { in: slugs }, OR: [{ orgId }, { orgId: null }] }, select: { id: true, slug: true, orgId: true } });
+  const idOf = new Map<string, string>();
+  for (const row of rows) if (!idOf.has(row.slug) || row.orgId) idOf.set(row.slug, row.id);
+  const missing = slugs.find((value) => !idOf.has(value));
+  if (missing) throw new ScenarioIngestError(`Persona "${missing}" was not found`, 404);
+  return idOf;
 }

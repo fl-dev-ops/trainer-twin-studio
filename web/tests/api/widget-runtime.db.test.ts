@@ -40,8 +40,8 @@ describe.skipIf(!localMinutesDb)("widget cookieless lifecycle (real database)", 
   beforeEach(async () => {
     f = minutesFixture();
     other = minutesFixture();
-    await f.create();
-    await other.create();
+    await f.create({ voice: true });
+    await other.create({ voice: true });
     previous = process.env.COPILOT_SERVICE_SECRET;
     process.env.COPILOT_SERVICE_SECRET = secret;
     for (const fixture of [f, other]) {

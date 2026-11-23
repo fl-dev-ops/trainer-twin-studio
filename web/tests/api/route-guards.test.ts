@@ -84,8 +84,6 @@ const classification: Record<string, Guard> = {
   "GET onboarding": "public",
   "POST onboarding": "signed_in",
   "PATCH org/settings": "studio",
-  "POST public/twins/[agentId]/sessions": "public",
-  "POST public/sessions/[sessionId]/end": "browser_token",
   "POST public/widgets/[agentId]/bootstrap": "public",
   "POST public/widgets/[agentId]/sessions": "widget_token",
   "POST public/widgets/sessions/[sessionId]/end": "widget_token",

@@ -22,6 +22,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { AccessUntil } from "@/components/twin/access-until";
 import { TWIN_UPLOAD_TITLE_DEFAULT } from "@/lib/context-upload";
 import { dashRoute } from "@/lib/routes";
+import { SupportingSkillsEditor } from "@/components/agents/supporting-skills-editor";
 
 type LearnerAssign = TwinOutputs["assignments"]["list"][number];
 
@@ -62,7 +63,7 @@ export function TwinEditPage({
   learners,
   defaultTab = "general",
 }: {
-  twin: Pick<TwinOutputs["agents"]["get"], "slug" | "name" | "description" | "settings">;
+  twin: Pick<TwinOutputs["agents"]["get"], "slug" | "name" | "description" | "settings" | "allSkills" | "supportingSkills" | "skillChoices">;
   learners: LearnerAssign[];
   /** /edit opens on General, /assign on Learners. */
   defaultTab?: "general" | "conversation" | "learners";
@@ -208,6 +209,7 @@ export function TwinEditPage({
         <TabsList className="max-w-full overflow-x-auto">
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="conversation">Conversation</TabsTrigger>
+          {twin.allSkills ? <TabsTrigger value="skills">Skills</TabsTrigger> : null}
           <TabsTrigger value="learners">
             Learners
             <span className="text-muted-foreground tabular-nums">· {assigned.length}</span>
@@ -296,6 +298,18 @@ export function TwinEditPage({
         </div>
       </TabsContent>
 
+      {twin.allSkills ? (
+        <TabsContent value="skills">
+          <SupportingSkillsEditor
+            title="Supporting skills"
+            description="The topic skills this twin draws on, in order. Switch one off to keep it but leave it out of new calls."
+            empty="None chosen yet: the twin uses every topic skill of its persona. Add skills to choose exactly which."
+            attached={twin.supportingSkills}
+            choices={twin.skillChoices}
+            onSave={(skills) => twinClient.agents.setSkills.mutate({ slug: id, skills })}
+          />
+        </TabsContent>
+      ) : null}
       <TabsContent value="learners">
       <div id="assign">
         <PageSection title="Learners" description={`${assigned.length} assigned. Credits are each learner’s own, shared across twins and role plays.`}

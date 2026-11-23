@@ -21,7 +21,7 @@ describe.skipIf(!localMinutesDb)("public twin lifecycle (real database)", () => 
   const hash = (value: string) => createHash("sha256").update(value).digest("hex");
   beforeEach(async () => {
     f = minutesFixture();
-    await f.create();
+    await f.create({ voice: true });
     bot = (await setTwinPublic(f, { publicAccess: { enabled: true, maxSeconds: 300 } }))!;
     oldSecret = process.env.COPILOT_SERVICE_SECRET;
     initializeFails = false;

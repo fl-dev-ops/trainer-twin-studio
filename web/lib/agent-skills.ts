@@ -52,3 +52,21 @@ export async function supportingSkillChoices(orgId: string) {
   });
   return skills.map((skill) => ({ id: skill.id, slug: skill.ownerSlug, name: skill.name, items: skill.currentVersion?.itemCount ?? 0 }));
 }
+
+/**
+ * A twin skill just published (its topic twin owns the package) joins its trainer's main twin as an active supporting
+ * skill, at the end, once that twin is merged (has supporting skills). A twin not merged yet keeps drawing on every topic
+ * skill of its persona, the new one included, until its org's merge attaches them all (specs/agents.md).
+ */
+export async function attachTwinSkillToMainTwin(orgId: string, personaId: string, skillId: string, tx: Prisma.TransactionClient) {
+  const main = await tx.agent.findFirst({
+    where: { orgId, kind: "TWIN", personaId, archivedAt: null, data: { path: ["source"], equals: "twin" } },
+    orderBy: { createdAt: "asc" },
+    select: { id: true, slug: true },
+  });
+  if (!main) return;
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`agent:${main.slug}`}))`;
+  const attached = await tx.agentSkill.findMany({ where: { agentId: main.id, orgId }, orderBy: { position: "desc" }, select: { skillId: true, position: true } });
+  if (!attached.length || attached.some((row) => row.skillId === skillId)) return;
+  await tx.agentSkill.create({ data: { agentId: main.id, orgId, skillId, position: attached[0].position + 1, active: true } });
+}

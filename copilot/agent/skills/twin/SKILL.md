@@ -13,6 +13,7 @@ description: The trainer's twin and its twin skills - listing them, reading one,
 | `twin_create` | Creates the main twin from the trainer's own persona (`persona_list`, `own: true`). | yes |
 | `twin_update` | Changes name and/or description. | yes |
 | `twin_settings_update` | Changes Before settings: screen share, upload before or during the call, upload title and instruction. | yes |
+| `twin_skills_set` | Chooses which twin skills the main twin draws on, in order, each on or off (replaces the list). | yes |
 | `twin_skill_build`, `twin_skill_load`, `twin_skill_publish` | Build, load and publish a twin skill's content; used inside `twin-creator`. | publish: yes |
 
 ## How
@@ -22,6 +23,8 @@ description: The trainer's twin and its twin skills - listing them, reading one,
 4. If the trainer declines, don't retry; ask what to change. Report only what the studio says it saved.
 
 **Example.** "Turn on screen share for my pricing skill" → `twin_list` → `twin_read` "acme-pricing" → `twin_settings_update` with `{ preScreenshare: true }`.
+
+**Choose the main twin's skills** with `twin_skills_set`: pass the whole ordered list of twin skill slugs from `twin_list`, each `active`. An off skill stays attached but is left out of new calls; an empty list means the twin uses every twin skill again.
 
 **Create the main twin** when `twin_list` shows no `main-twin` and `persona_list` has the trainer's own persona: `twin_create` with that slug.
 
