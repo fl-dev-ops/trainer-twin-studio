@@ -4,13 +4,14 @@ import { db } from "@/lib/db";
 import { refusals } from "@/lib/errors";
 import { DEFAULT_PUBLIC_CALL_SECONDS, PUBLIC_CALL_DURATIONS, publicTwinSettingsSchema, type PublicTwinSettings } from "@/lib/public-twin-settings";
 import { widgetSettingsSchema, type WidgetSettings } from "@/lib/widget-settings";
+import { setAgentPersonas } from "@/lib/agent-personas";
+import { setSupportingSkills } from "@/lib/agent-skills";
 
 /**
- * Bots: the public side of a trainer's twin (specs/public-twins.md). A BOT agent shares the twin's persona and skills
- * but has its own row, name and purpose, so changing the twin for learners never silently changes what website visitors
- * get. A twin can have several bots (say, one per website); data.twinId links each to its twin, and the oldest one
- * answers the twin's own public link. Each bot's public link and widget settings live on its one Deployment (channel
- * "public"): status = public calls on, maxCallSeconds, the allowed websites, and the widget's look in config.
+ * Bots (specs/agents.md): their own module, like twins and role plays. A BOT agent speaks as exactly one persona (the
+ * trainer's own or a custom one), behaves by its purpose (data.objective; later its own `bot` SKILL.md), and draws on
+ * the supporting skills chosen for it (AgentSkill). Signed-out visitors reach it through its one public Deployment
+ * (channel "public"): status = public calls on, maxCallSeconds, the allowed websites, and the widget's look.
  */
 
 export const BOT_SOURCE = "bot";
@@ -23,8 +24,12 @@ const deploymentSelect = {
 } satisfies Prisma.DeploymentSelect;
 const botSelect = {
   id: true, orgId: true, slug: true, name: true, version: true, personaId: true, data: true, archivedAt: true,
-  persona: { select: { name: true } },
+  persona: { select: { id: true, slug: true, name: true } },
   deployments: { where: { channel: PUBLIC_CHANNEL }, select: deploymentSelect, take: 1 },
+  supportingSkills: {
+    orderBy: { position: "asc" },
+    select: { active: true, skill: { select: { id: true, name: true, ownerSlug: true } } },
+  },
 } satisfies Prisma.AgentSelect;
 
 type BotRow = Prisma.AgentGetPayload<{ select: typeof botSelect }>;
@@ -40,7 +45,7 @@ function shape(row: BotRow | null): PublicBot | null {
 const record = (value: unknown): Record<string, unknown> =>
   value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 
-/** Public call settings, in the shape the twin settings page edits. No deployment: off, default length. */
+/** Public call settings, in the shape the bot page edits. No deployment: off, default length. */
 export function publicSettingsOf(deployment: Pick<DeploymentRow, "status" | "maxCallSeconds"> | null): PublicTwinSettings {
   const seconds = PUBLIC_CALL_DURATIONS.find((value) => value === deployment?.maxCallSeconds) ?? DEFAULT_PUBLIC_CALL_SECONDS;
   return { enabled: deployment?.status === "active", maxSeconds: seconds };
@@ -59,32 +64,14 @@ export function widgetSettingsOf(deployment: Pick<DeploymentRow, "allowedOrigins
   };
 }
 
-/** The live bot made for this twin, if any. */
-export async function botForTwin(orgId: string, twinId: string, client: Prisma.TransactionClient = db) {
-  return shape(await client.agent.findFirst({
-    where: { orgId, kind: "BOT", archivedAt: null, data: { path: ["twinId"], equals: twinId } },
-    orderBy: { createdAt: "asc" },
-    select: botSelect,
-  }));
-}
-
-/**
- * The live bot a public request names: its own id, or (links and widget snippets made before bots existed) the id of
- * the twin it was made for.
- */
-export async function publicBot(orgId: string, agentId: string, client: Prisma.TransactionClient = db) {
-  const own = await client.agent.findFirst({ where: { id: agentId, orgId, kind: "BOT", archivedAt: null }, select: botSelect });
-  const bot = own ? shape(own) : await botForTwin(orgId, agentId, client);
-  if (!bot) return null;
-  // Archiving the twin takes its public side down too.
-  const twinId = record(bot.data).twinId;
-  if (typeof twinId === "string" && !await client.agent.findFirst({ where: { id: twinId, orgId, archivedAt: null }, select: { id: true } })) return null;
-  return bot;
-}
-
-/** A live bot by its slug (the Website bot page), with its twin's name. */
+/** A live bot by its slug (the bot page). */
 export async function botBySlug(orgId: string, slug: string, client: Prisma.TransactionClient = db) {
   return shape(await client.agent.findFirst({ where: { orgId, slug, kind: "BOT", archivedAt: null }, select: botSelect }));
+}
+
+/** The live bot a public request names (its id: the widget snippet's data-twin-id). */
+export async function publicBot(orgId: string, agentId: string, client: Prisma.TransactionClient = db) {
+  return shape(await client.agent.findFirst({ where: { id: agentId, orgId, kind: "BOT", archivedAt: null }, select: botSelect }));
 }
 
 /** Every live bot of the org, oldest first. */
@@ -93,32 +80,25 @@ export async function listBots(orgId: string, client: Prisma.TransactionClient =
   return rows.map((row) => shape(row)!);
 }
 
-/** The twin a bot speaks as (data.twinId). */
-export const twinIdOf = (bot: Pick<PublicBot, "data">) => {
-  const id = record(bot.data).twinId;
-  return typeof id === "string" ? id : null;
-};
+const slugify = (value: string) => value.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "bot";
 
 /**
- * A new bot for a twin: the twin's persona, voice and skills, its own name and purpose (the twin's description unless
- * given), and a public deployment with calls off and no websites.
+ * A new bot: one persona (any of the org's, or a global one), its name and purpose, and a public deployment with calls
+ * off and no websites. Supporting skills are chosen afterwards.
  */
-export async function createBot(orgId: string, twinId: string, details: { name?: string; objective?: string }, tx: Prisma.TransactionClient) {
-  const twin = await tx.agent.findFirst({
-    where: { id: twinId, orgId, kind: "TWIN", archivedAt: null },
-    select: { id: true, slug: true, name: true, visibility: true, personaId: true, data: true },
-  });
-  if (!twin) return null;
-  let slug = `${twin.slug}-bot`;
-  for (let n = 2; await tx.agent.findUnique({ where: { slug }, select: { id: true } }); n++) slug = `${twin.slug}-bot-${n}`;
-  const data = record(twin.data);
-  const name = details.name ?? twin.name;
+export async function createBot(orgId: string, input: { personaId: string; name: string; objective: string }, tx: Prisma.TransactionClient) {
+  const [org, persona] = await Promise.all([
+    tx.organization.findUnique({ where: { id: orgId }, select: { slug: true } }),
+    tx.persona.findFirst({ where: { id: input.personaId, OR: [{ orgId }, { orgId: null }] }, select: { id: true } }),
+  ]);
+  if (!org || !persona) throw refusals.notFound();
+  const base = `${org.slug}-${slugify(input.name)}`;
+  let slug = base;
+  for (let n = 2; await tx.agent.findUnique({ where: { slug }, select: { id: true } }); n++) slug = `${base}-${n}`;
   const bot = await tx.agent.create({
     data: {
-      orgId, slug, name, version: 1, personaId: twin.personaId, kind: "BOT", visibility: twin.visibility,
-      data: JSON.parse(JSON.stringify({
-        id: slug, name, source: BOT_SOURCE, twinId: twin.id, objective: details.objective ?? data.objective, config: data.config,
-      })),
+      orgId, slug, name: input.name, version: 1, personaId: persona.id, kind: "BOT",
+      data: { id: slug, name: input.name, source: BOT_SOURCE, objective: input.objective, config: { context: { mode: "none", required: false } } },
     },
     select: { id: true },
   });
@@ -130,11 +110,6 @@ export async function createBot(orgId: string, twinId: string, details: { name?:
     },
   });
   return botBySlug(orgId, slug, tx);
-}
-
-/** The twin's first bot, created the first time its public settings are saved through the twin. */
-export async function ensureBotForTwin(orgId: string, twinId: string, tx: Prisma.TransactionClient) {
-  return (await botForTwin(orgId, twinId, tx)) ?? createBot(orgId, twinId, {}, tx);
 }
 
 export type BotPublicPatch = {
@@ -163,12 +138,18 @@ export async function saveBotPublic(bot: PublicBot, patch: BotPublicPatch, tx: P
   return botBySlug(bot.orgId!, bot.slug, tx);
 }
 
-/** A bot's own name and purpose (what its visitors get), versioned on the bot only: the twin is untouched. */
-export async function saveBotOwnDetails(bot: PublicBot, patch: { name?: string; objective?: string }, tx: Prisma.TransactionClient) {
+/** A bot's name, purpose and persona: a new bot version (the old one kept as history, like any agent edit). */
+export async function saveBotDetails(bot: PublicBot, patch: { name?: string; objective?: string; personaId?: string }, tx: Prisma.TransactionClient) {
   const data = record(bot.data);
   const name = patch.name ?? bot.name;
   const next = { ...data, name, objective: patch.objective ?? data.objective };
-  if (name === bot.name && next.objective === data.objective) return bot;
+  const personaChanged = patch.personaId !== undefined && patch.personaId !== bot.personaId;
+  if (name === bot.name && next.objective === data.objective && !personaChanged) return bot;
+  if (personaChanged) {
+    const persona = await tx.persona.findFirst({ where: { id: patch.personaId, OR: [{ orgId: bot.orgId }, { orgId: null }] }, select: { id: true } });
+    if (!persona) throw refusals.notFound();
+    await setAgentPersonas(bot.id, [{ personaId: persona.id, active: true }], tx);
+  }
   await tx.specVersion.create({
     data: { entityType: "agents", entitySlug: bot.slug, version: bot.version, data: JSON.parse(JSON.stringify(bot.data ?? {})), orgId: bot.orgId },
   });
@@ -176,14 +157,8 @@ export async function saveBotOwnDetails(bot: PublicBot, patch: { name?: string; 
   return botBySlug(bot.orgId!, bot.slug, tx);
 }
 
-/** Saves public settings onto the twin's first bot (creating it if needed): the twin settings API and the copilot. */
-export async function saveBotPublicSettings(orgId: string, twinId: string, patch: BotPublicPatch, tx: Prisma.TransactionClient) {
-  const bot = await ensureBotForTwin(orgId, twinId, tx);
-  return bot ? saveBotPublic(bot, patch, tx) : null;
-}
-
-/** The twin's first bot's name and purpose (creating it if needed). */
-export async function saveBotDetails(orgId: string, twinId: string, patch: { name?: string; objective?: string }, tx: Prisma.TransactionClient) {
-  const bot = await ensureBotForTwin(orgId, twinId, tx);
-  return bot ? saveBotOwnDetails(bot, patch, tx) : null;
+/** A bot's supporting skills, in order, each switchable. Calls in progress keep the skills they started with. */
+export async function saveBotSkills(bot: PublicBot, skills: { skillId: string; active: boolean }[], tx: Prisma.TransactionClient) {
+  await setSupportingSkills(bot.orgId!, bot.id, skills, tx);
+  return botBySlug(bot.orgId!, bot.slug, tx);
 }

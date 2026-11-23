@@ -8,6 +8,7 @@ import { expect, test, type APIRequestContext, type BrowserContext, type Frame, 
 import { z } from "zod";
 import { e2eUrl } from "./env";
 import { as, seed } from "./seed-data";
+import { e2eBotView, updateE2eBot } from "./bots";
 import { customerServer, CUSTOMER_ORIGIN, DISALLOWED_ORIGIN } from "./widget-fixtures/customer";
 import type {} from "./widget-fixtures/fake-livekit";
 import type {} from "../../widgets/src/loader";
@@ -36,11 +37,7 @@ const visitorKey = () => `trainertwin-widget:visitor:${agentId}:${CUSTOMER_ORIGI
 const message = { source: "trainertwin-host", version: 1 };
 
 async function update(request: APIRequestContext, changes: Record<string, unknown>) {
-  const response = await request.post(e2eUrl("dash", "/api/twin/agents.update?batch=1"), {
-    headers: { Origin: new URL(e2eUrl("dash")).origin },
-    data: { "0": { json: { slug: seed().twin.slug, ...changes } } },
-  });
-  expect(response.ok(), await response.text()).toBe(true);
+  await updateE2eBot(request, changes);
 }
 
 async function frame(page: Page) {
@@ -220,9 +217,7 @@ test.describe.serial("cross-origin hosted voice widget", () => {
     await promisify(execFile)("bun", [resolve("../widgets/e2e/build-hosted.ts"), output], { cwd: process.cwd() });
     bundle = await readFile(output, "utf8");
     admin = await browser.newContext(as("admin"));
-    const response = await admin.request.get(e2eUrl("dash", `/api/twin/agents.get?input=${encodeURIComponent(JSON.stringify({ json: { slug: seed().twin.slug } }))}`));
-    expect(response.ok(), await response.text()).toBe(true);
-    original = settingsResponse.parse(await response.json()).result.data.json;
+    original = settingsResponse.parse({ result: { data: { json: await e2eBotView(admin.request) } } }).result.data.json;
     agentId = original.widget.id;
     await update(admin.request, {
       publicAccess: { enabled: true, maxSeconds: 300 },

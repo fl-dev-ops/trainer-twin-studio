@@ -7,7 +7,7 @@ import { db } from "@/lib/db";
 import { voicePrefix } from "@/lib/s3";
 import { testDatabaseUrl } from "../setup/test-db-url";
 import type { Prisma } from "@/lib/generated/prisma/client";
-import { saveBotPublicSettings } from "@/lib/bots";
+import { createBot, listBots, saveBotPublic, type BotPublicPatch } from "@/lib/bots";
 
 // Never use a remote database, or a fake left behind by another file's mock.module.
 const testUrl = testDatabaseUrl();
@@ -76,10 +76,21 @@ meteroidServer.events.on("request:unhandled", ({ request }) => { if (request.url
 beforeAll(() => meteroidServer.listen({ onUnhandledRequest: "bypass" }));
 afterAll(() => { meteroidServer.close(); expect(unexpectedMeteroid).toEqual([]); });
 
-/** Public calls and the widget for a fixture's twin: saved on its bot's public deployment, as the settings page does. */
+/**
+ * The fixture org's bot (lib/bots): made on first use, speaking as the fixture twin's persona; later calls change its
+ * public call and widget settings.
+ */
 export async function setTwinPublic(
   f: { org: { id: string }; twin: { id: string } },
-  settings: Parameters<typeof saveBotPublicSettings>[2],
+  settings: BotPublicPatch,
 ) {
-  return db.$transaction((tx) => saveBotPublicSettings(f.org.id, f.twin.id, settings, tx));
+  return db.$transaction(async (tx) => {
+    let bot = (await listBots(f.org.id, tx))[0];
+    if (!bot) {
+      const twin = await tx.agent.findUniqueOrThrow({ where: { id: f.twin.id }, select: { personaId: true, name: true, data: true } });
+      const objective = (twin.data as { objective?: string } | null)?.objective ?? "Talk with visitors.";
+      bot = (await createBot(f.org.id, { personaId: twin.personaId, name: twin.name, objective }, tx))!;
+    }
+    return saveBotPublic(bot, settings, tx);
+  });
 }

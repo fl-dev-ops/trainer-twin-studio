@@ -3,6 +3,7 @@ import type { Prisma } from "@/lib/generated/prisma/client";
 import { validSlug } from "@/lib/specs";
 import { resolveSnapshotSkill, type SessionSkillCatalogEntry, type loadSessionSkills } from "@/lib/session-skills";
 import { hydrateAgentSkill } from "@/lib/skill-history";
+import { supportingCatalog } from "@/lib/agent-skills";
 
 /**
  * A twin ("Ask Olga") is an open conversation with a trainer's persona that can draw on every
@@ -68,7 +69,13 @@ export async function pinTwinSkills(orgId: string, personaId: string): Promise<P
   return rows.filter((row) => toPlaybook(row.slug, row.name, row.data, row.version)).map(({ slug, version }) => ({ slug, version }));
 }
 
-export async function resolveTwinCatalog(orgId: string, personaId: string, client: Prisma.TransactionClient) {
+/**
+ * The skills a main twin session pins: its supporting skills (lib/agent-skills) once it has any, else (not merged yet)
+ * every skill twin of its persona.
+ */
+export async function resolveTwinCatalog(orgId: string, personaId: string, client: Prisma.TransactionClient, agentId?: string) {
+  const supporting = agentId ? await supportingCatalog(orgId, agentId, client) : null;
+  if (supporting) return supporting;
   await client.$queryRaw`SELECT 1 FROM "Agent" WHERE "orgId" = ${orgId} AND "personaId" = ${personaId} AND "kind" = 'TWIN' AND "archivedAt" IS NULL FOR KEY SHARE`;
   const rows = await client.agent.findMany({
     where: { orgId, personaId, kind: "TWIN", archivedAt: null },

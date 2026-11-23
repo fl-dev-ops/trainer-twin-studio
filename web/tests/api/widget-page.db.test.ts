@@ -5,6 +5,7 @@ import { db, localMinutesDb, minutesFixture, setTwinPublic, type MinutesFixture 
 
 describe.skipIf(!localMinutesDb)("hosted widget security (real database)", () => {
   let f: MinutesFixture;
+  let bot: { id: string };
   const origins = ["https://customer.example", "https://other.example:8443", "http://localhost:4312"];
   const xss = '</script><script>alert("xss")</script>&\u2028\u2029';
   const settings = () => ({
@@ -16,10 +17,10 @@ describe.skipIf(!localMinutesDb)("hosted widget security (real database)", () =>
     await f.create();
     // The bot takes the twin's name and data when it is made (lib/bots).
     await db.agent.update({ where: { id: f.twin.id }, data: { name: xss, data: { privateInstructions: "never-expose-private-instructions" } } });
-    await setTwinPublic(f, settings());
+    bot = (await setTwinPublic(f, settings()))!;
   });
   afterEach(async () => { await f.clean(); });
-  const page = (parent: string | null = origins[0], agentId = f.twin.id, host = `${f.org.slug}.${BASE_DOMAIN}`) => {
+  const page = (parent: string | null = origins[0], agentId = bot.id, host = `${f.org.slug}.${BASE_DOMAIN}`) => {
     const url = new URL(`https://${host}/embed/${agentId}`);
     if (parent !== null) url.searchParams.set("parentOrigin", parent);
     return GET(new Request(url, { headers: { host } }), { params: Promise.resolve({ agentId }) });
@@ -60,7 +61,7 @@ describe.skipIf(!localMinutesDb)("hosted widget security (real database)", () =>
     if (kind === "widget-off") await setTwinPublic(f, { widget: { allowedOrigins: [] } });
     if (kind === "public-off") await setTwinPublic(f, { publicAccess: { enabled: false } });
     if (kind === "removed-origin") await setTwinPublic(f, { widget: { allowedOrigins: [origins[1]] } });
-    if (kind === "archived") await db.agent.update({ where: { id: f.twin.id }, data: { archivedAt: new Date() } });
+    if (kind === "archived") await db.agent.update({ where: { id: bot.id }, data: { archivedAt: new Date() } });
     const response = await page();
     expect(response.status).toBe(kind === "archived" ? 404 : 403);
     expect(response.headers.get("content-security-policy")).toContain("frame-ancestors 'none'");
@@ -68,6 +69,6 @@ describe.skipIf(!localMinutesDb)("hosted widget security (real database)", () =>
   test("unknown agent and wrong org never serve widget config", async () => {
     expect((await page(origins[0], f.roleplay.id)).status).toBe(404);
     expect((await page(origins[0], "missing")).status).toBe(404);
-    expect((await page(origins[0], f.twin.id, `missing.${BASE_DOMAIN}`)).status).toBe(404);
+    expect((await page(origins[0], bot.id, `missing.${BASE_DOMAIN}`)).status).toBe(404);
   });
 });

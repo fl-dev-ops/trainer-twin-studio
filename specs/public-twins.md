@@ -5,15 +5,13 @@ signed-in learner practice. [Website widgets](widgets.md) reuse this session/run
 
 ## Settings and access
 
-- Public calls run on the twin's **bot**: a `BOT` agent on the same persona (`data.twinId` → the twin), made the first
-  time public settings are saved (`web/lib/bots.ts`). It uses the trainer's voice and all of their twin skills like the
-  main twin, but has its own name and purpose (`data.objective`, edited under Public access → Bot), so editing the twin
-  for learners never changes what visitors get, and saving public settings never versions the twin.
-- The bot's one `Deployment` with `channel = "public"` holds the settings: `status` `active` = public calls on (default
-  `disabled`); `maxCallSeconds` 300, 600, 900, 1200 or 1800 (default 300). Archiving the twin takes the bot offline.
-- Anonymous sessions belong to the bot (DB triggers: anonymous sessions only on `BOT`; a bot session must be anonymous,
-  voice, and within an active public deployment). The twin's sessions list shows them with the twin's own.
-- Links and widget snippets that name the twin's id keep working: public lookups resolve a twin id to its bot.
+- Public calls run on **bots** ([agents](agents.md)): their own module, with one persona (own or custom), a purpose
+  (`data.objective`) and supporting skills, managed under `/bots`. A bot has no link to a twin; the twin's `/t/` link is
+  for assigned learners only.
+- A bot's one `Deployment` with `channel = "public"` holds the settings: `status` `active` = public calls on (default
+  `disabled`); `maxCallSeconds` 300, 600, 900, 1200 or 1800 (default 300). Archiving the bot takes it offline.
+- Anonymous sessions belong to bots (DB triggers: anonymous sessions only on `BOT`; a bot session must be anonymous,
+  voice, and within an active public deployment). Each call pins the bot's active supporting skills.
 - The existing org-host `/t/<path>` page offers anonymous prejoin only when signed out and public access is enabled.
   A signed-in person's existing membership/assignment/credits rules are unchanged.
 - Enabling access exposes that twin's current published skills; it is not a separate public-content selection.

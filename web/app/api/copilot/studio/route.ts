@@ -296,7 +296,7 @@ export async function POST(request: Request) {
             pins: [{ alias: previewAgent.slug, position: 0, version }], data,
           };
         }
-        const selected = await resolveTwinCatalog(orgId, previewAgent.personaId, tx);
+        const selected = await resolveTwinCatalog(orgId, previewAgent.personaId, tx, previewAgent.id);
         const versions = await tx.skillVersion.findMany({
           where: { id: { in: selected.pins.map((pin) => pin.skillVersionId) }, status: "ready", indexStatus: "ready", skill: { orgId } },
           select: {

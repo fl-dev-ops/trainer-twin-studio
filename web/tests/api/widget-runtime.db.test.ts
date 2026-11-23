@@ -32,6 +32,7 @@ describe.skipIf(!localMinutesDb)("widget cookieless lifecycle (real database)", 
   let transport: ReturnType<typeof spyOn<typeof livekit, "activateLiveKitSession">>;
   let scheduling: ReturnType<typeof spyOn<typeof workflow, "start">>;
   let bot: { id: string; slug: string };
+  const bots = new Map<MinutesFixture, { id: string }>();
   const config = () => ({
     publicAccess: { enabled: true, maxSeconds: 300 as const },
     widget: { allowedOrigins: [parent, secondParent], welcome: "Talk to us", accentColor: "#123456" },
@@ -45,6 +46,7 @@ describe.skipIf(!localMinutesDb)("widget cookieless lifecycle (real database)", 
     process.env.COPILOT_SERVICE_SECRET = secret;
     for (const fixture of [f, other]) {
       const made = (await setTwinPublic(fixture, config()))!;
+      bots.set(fixture, made);
       if (fixture === f) bot = made;
       await fundOrg({ orgId: fixture.org.id, minutes: 10 });
     }
@@ -75,14 +77,14 @@ describe.skipIf(!localMinutesDb)("widget cookieless lifecycle (real database)", 
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
   };
-  const boot = (body: unknown = { parentOrigin: parent }, fixture = f, agentId = fixture.twin.id) =>
+  const boot = (body: unknown = { parentOrigin: parent }, fixture = f, agentId = bots.get(fixture)!.id) =>
     bootstrap(request(`/api/public/widgets/${agentId}/bootstrap`, body, undefined, fixture), { params: Promise.resolve({ agentId }) });
   const grant = async (parentOrigin = parent) => {
     const response = await boot({ parentOrigin });
     expect(response.status).toBe(200);
     return bootstrapSchema.parse(await response.json());
   };
-  const launch = (token: string, body: unknown = { name: "  Visitor <admin>  " }, fixture = f, agentId = f.twin.id) =>
+  const launch = (token: string, body: unknown = { name: "  Visitor <admin>  " }, fixture = f, agentId = bot.id) =>
     start(request(`/api/public/widgets/${agentId}/sessions`, body, token, fixture), { params: Promise.resolve({ agentId }) });
   const finish = (id: string, token: string, fixture = f) =>
     end(request(`/api/public/widgets/sessions/${id}/end`, { transcript: [{ text: "forged" }] }, token, fixture), { params: Promise.resolve({ sessionId: id }) });
@@ -137,7 +139,7 @@ describe.skipIf(!localMinutesDb)("widget cookieless lifecycle (real database)", 
     const credentials = await grant();
     const scope = readWidgetGrant(credentials.grant);
     await expect(startPublicTwinSession({
-      orgId: f.org.id, agentId: f.twin.id, visitorId: scope.visitorId, name: "Visitor",
+      orgId: f.org.id, agentId: bot.id, visitorId: scope.visitorId, name: "Visitor",
       ipHash: publicIpHash(f.org.id, new Headers()), embedOrigin: parent,
       grantExpiresAt: Math.floor(Date.now() / 1000) - 1,
     })).rejects.toMatchObject({ code: "widget_token_invalid", status: 401 });
@@ -156,7 +158,7 @@ describe.skipIf(!localMinutesDb)("widget cookieless lifecycle (real database)", 
     }, { timeout: 10_000 });
     const blocker = await locked.promise;
     const pending = startPublicTwinSession({
-      orgId: f.org.id, agentId: f.twin.id, visitorId: scope.visitorId, name: "Visitor",
+      orgId: f.org.id, agentId: bot.id, visitorId: scope.visitorId, name: "Visitor",
       ipHash: publicIpHash(f.org.id, new Headers()), embedOrigin: parent,
       grantExpiresAt: scope.expiresAt,
     }).then((value) => value, (error: unknown) => error);
@@ -199,7 +201,7 @@ describe.skipIf(!localMinutesDb)("widget cookieless lifecycle (real database)", 
       const clock = spyOn(Date, "now").mockReturnValue(Date.now() - (WIDGET_GRANT_SECONDS + 1) * 1000);
       try { token = widgetStartGrant(readWidgetGrant(first.grant)); } finally { clock.mockRestore(); }
     }
-    await refusal(await launch(token, { name: "Visitor" }, kind === "other-org" ? other : f, kind === "other-agent" ? f.roleplay.id : f.twin.id), 401, "widget_token_invalid");
+    await refusal(await launch(token, { name: "Visitor" }, kind === "other-org" ? other : f, kind === "other-agent" ? f.roleplay.id : bot.id), 401, "widget_token_invalid");
     await noStart();
   });
   test.each(["removed-parent", "widget-off", "public-off", "archived"])("recheck after bootstrap: %s denies before charged start", async (kind) => {
@@ -207,7 +209,7 @@ describe.skipIf(!localMinutesDb)("widget cookieless lifecycle (real database)", 
     if (kind === "removed-parent") await setTwinPublic(f, { widget: { allowedOrigins: [secondParent] } });
     if (kind === "widget-off") await setTwinPublic(f, { widget: { allowedOrigins: [] } });
     if (kind === "public-off") await setTwinPublic(f, { publicAccess: { enabled: false } });
-    if (kind === "archived") await db.agent.update({ where: { id: f.twin.id }, data: { archivedAt: new Date() } });
+    if (kind === "archived") await db.agent.update({ where: { id: bot.id }, data: { archivedAt: new Date() } });
     await refusal(await launch(first.grant), kind === "archived" ? 404 : 403,
       kind === "archived" ? "not_found" : kind === "public-off" ? "public_twin_unavailable" : "widget_unavailable");
     await noStart();
@@ -266,7 +268,7 @@ describe.skipIf(!localMinutesDb)("widget cookieless lifecycle (real database)", 
     if (["session", "agent", "parent", "visitor"].includes(kind)) token = widgetEndToken({
       ...readWidgetGrant(credentials.grant),
       sessionId: kind === "session" ? "another-session" : id,
-      agentId: kind === "agent" ? f.roleplay.id : f.twin.id,
+      agentId: kind === "agent" ? f.roleplay.id : bot.id,
       parentOrigin: kind === "parent" ? secondParent : parent,
       visitorId: kind === "visitor" ? "f".repeat(64) : readWidgetGrant(credentials.grant).visitorId,
     });
@@ -293,7 +295,7 @@ describe.skipIf(!localMinutesDb)("widget cookieless lifecycle (real database)", 
   test("public_call_limit: widget and public-page service share hourly IP starts across origins", async () => {
     const ipHash = publicIpHash(f.org.id, new Headers());
     for (let i = 0; i < 3; i++) {
-      const opened = await startPublicTwinSession({ orgId: f.org.id, agentId: f.twin.id, visitorId: String(i).repeat(64), ipHash, name: "Public page visitor" });
+      const opened = await startPublicTwinSession({ orgId: f.org.id, agentId: bot.id, visitorId: String(i).repeat(64), ipHash, name: "Public page visitor" });
       await db.interviewSession.update({ where: { id: opened.session.id }, data: { status: "failed", endedAt: new Date(), runtimeTokenHash: null } });
     }
     const credentials = await grant(secondParent);
@@ -303,7 +305,7 @@ describe.skipIf(!localMinutesDb)("widget cookieless lifecycle (real database)", 
   test("concurrent distinct widget origins cannot reserve beyond shared org budget", async () => {
     await fundOrg({ orgId: f.org.id, minutes: -5 });
     const results = await Promise.allSettled([parent, secondParent].map((embedOrigin, i) => startPublicTwinSession({
-      orgId: f.org.id, agentId: f.twin.id, visitorId: String(i).repeat(64), ipHash: String(i + 2).repeat(64), name: "Concurrent visitor", embedOrigin,
+      orgId: f.org.id, agentId: bot.id, visitorId: String(i).repeat(64), ipHash: String(i + 2).repeat(64), name: "Concurrent visitor", embedOrigin,
     })));
     expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
     const rejected = results.find((result) => result.status === "rejected");
@@ -373,14 +375,14 @@ describe.skipIf(!localMinutesDb)("widget cookieless lifecycle (real database)", 
     await noStart();
   });
   test("public_origin_invalid: external parent may frame UI but cannot call APIs cross-origin", async () => {
-    const req = request(`/api/public/widgets/${f.twin.id}/bootstrap`, { parentOrigin: parent }, undefined, f, parent);
-    await refusal(await bootstrap(req, { params: Promise.resolve({ agentId: f.twin.id }) }), 403, "public_origin_invalid");
+    const req = request(`/api/public/widgets/${bot.id}/bootstrap`, { parentOrigin: parent }, undefined, f, parent);
+    await refusal(await bootstrap(req, { params: Promise.resolve({ agentId: bot.id }) }), 403, "public_origin_invalid");
     await noStart();
   });
   test("public_call_busy: active widget reserves the public-page service IP concurrency slot", async () => {
     await open();
     await expect(startPublicTwinSession({
-      orgId: f.org.id, agentId: f.twin.id, visitorId: "b".repeat(64), ipHash: publicIpHash(f.org.id, new Headers()), name: "Page visitor",
+      orgId: f.org.id, agentId: bot.id, visitorId: "b".repeat(64), ipHash: publicIpHash(f.org.id, new Headers()), name: "Page visitor",
     })).rejects.toMatchObject({ code: "public_call_busy" });
     expect(await db.interviewSession.count({ where: { orgId: f.org.id } })).toBe(1);
   });

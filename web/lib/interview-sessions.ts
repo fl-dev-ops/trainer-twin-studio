@@ -16,6 +16,7 @@ import { orgCredits } from "@/lib/org-credits";
 import { BEFORE_UPLOAD_REFUSED, uploadAllowed } from "@/lib/context-upload";
 import { resolveSnapshotSkill } from "@/lib/session-skills";
 import { assertVoiceObjectKeys, availableVoiceWhere, listAvailableVoices } from "@/lib/voices";
+import { confirmSessionPersona, pickSessionPersona } from "@/lib/agent-personas";
 
 const shareCode = () => randomBytes(18).toString("base64url");
 export const tokenHash = (token: string) => createHash("sha256").update(token).digest("hex");
@@ -345,7 +346,9 @@ export async function activateSession(input: {
   }
   const primaryId = snapshot.docIds[0];
   const primary = snapshot.documents.find((document) => document.id === primaryId);
-  const compiledConfig = await getAgentConfigForAgent(agentId, input.orgId, primaryId, snapshot.docIds);
+  // A role play with several personas plays one at random per session (lib/agent-personas); the session records it.
+  const personaId = snapshot.agent.kind === "ROLEPLAY" ? await pickSessionPersona(agentId) ?? undefined : undefined;
+  const compiledConfig = await getAgentConfigForAgent(agentId, input.orgId, primaryId, snapshot.docIds, undefined, undefined, personaId);
   // The org's balance from Meteroid now, before the lock (no network calls while it's held).
   if (studio && mode === "voice") await orgCredits(input.orgId, { fresh: true });
 
@@ -374,14 +377,15 @@ export async function activateSession(input: {
     if (eligibleAgent.kind === "TWIN" || (eligibleAgent.kind === "ROLEPLAY" && eligibleAgent.primarySkillId)) {
       // Non-key publication updates must proceed: pin insertion also locks Skill, which publishers update first.
       await tx.$queryRaw`SELECT 1 FROM "Agent" WHERE "id" = ${agentId} AND "orgId" = ${input.orgId} FOR KEY SHARE`;
-      const reread = await getAgentConfigForAgent(agentId, input.orgId, primaryId, snapshot.docIds, tx);
+      const lockedPersonaId = eligibleAgent.kind === "ROLEPLAY" ? await confirmSessionPersona(agentId, personaId, tx) : undefined;
+      const reread = await getAgentConfigForAgent(agentId, input.orgId, primaryId, snapshot.docIds, tx, undefined, lockedPersonaId);
       if (!reread || reread.agent.archivedAt) throw refusals.notFound();
       if (snapshot.docIds.length && usesBeforeSettings(reread.agent.data, reread.agent.kind) && !beforeSettings(reread.agent.data).preUpload) {
         throw refusals.invalidInput(reread.agent.kind === "TWIN" ? "This twin does not take documents" : "This role play does not take documents");
       }
       coherentConfig = reread;
       if (reread.agent.kind === "TWIN" && jsonRecord(reread.agent.data).source === TWIN_SOURCE) {
-        const selected = await resolveTwinCatalog(input.orgId, reread.persona.id, tx);
+        const selected = await resolveTwinCatalog(input.orgId, reread.persona.id, tx, reread.agent.id);
         managed = true;
         pins = selected.pins;
         twinSkills = selected.catalog;

@@ -8,7 +8,8 @@ import { toast } from "sonner";
 import { BotIcon } from "@/components/icons";
 import { PageContainer } from "@/components/page-container";
 import { PageHeader } from "@/components/page-header";
-import { PageSection, SECTION_CARD } from "@/components/page-section";
+import { PageSection, SECTION_CARD, SectionRow } from "@/components/page-section";
+import { SwitchToggle } from "@/components/switch-toggle";
 import { PublicAccessPanel } from "@/components/twin/public-access-panel";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
@@ -29,20 +30,18 @@ type Bot = TwinOutputs["bots"]["get"];
  * Website bots (sidebar, under Twin): the public side of the trainers' twins (lib/bots). A twin can have several bots,
  * say one per website, each with its own name, purpose, public call settings and widget.
  */
-export function TwinBotsPage({ data, startFor }: { data: Bots; startFor?: string | null }) {
-  const [creating, setCreating] = useState(Boolean(startFor) && data.twins.length > 0);
+export function TwinBotsPage({ data }: { data: Bots }) {
+  const [creating, setCreating] = useState(false);
   return (
     <PageContainer>
       <PageHeader
         icon={BotIcon}
-        title="Website bots"
-        description="What signed-out visitors talk to, on your twin’s link and your own websites."
-        actions={data.twins.length ? (
-          <Button variant="brand" onClick={() => setCreating(true)}><Plus data-icon="inline-start" /> New bot</Button>
-        ) : null}
+        title="Bots"
+        description="What signed-out visitors talk to on your websites: a persona, a purpose and the skills it draws on."
+        actions={<Button variant="brand" onClick={() => setCreating(true)}><Plus data-icon="inline-start" /> New bot</Button>}
       />
       <div className="mt-6">
-        <PageSection title="Bots" description="Each bot speaks as one of your twins, with its voice and skills.">
+        <PageSection title="Your bots" description="Each bot speaks as one persona, yours or a custom one.">
           {data.bots.length ? (
             <ul className={cn(SECTION_CARD, "m-0 list-none overflow-hidden p-0")}>
               {data.bots.map((bot) => (
@@ -52,7 +51,7 @@ export function TwinBotsPage({ data, startFor }: { data: Bots; startFor?: string
                     <span className="min-w-0">
                       <span className="block truncate text-sm font-medium">{bot.name}</span>
                       <span className="block truncate text-sm text-muted-foreground">
-                        {bot.twin ? `Speaks as ${bot.twin.name}` : bot.trainer} · {status(bot)}
+                        Speaks as {bot.persona.name} · {status(bot)}
                       </span>
                     </span>
                     <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
@@ -62,12 +61,12 @@ export function TwinBotsPage({ data, startFor }: { data: Bots; startFor?: string
             </ul>
           ) : (
             <div className={cn(SECTION_CARD, "px-5 py-6 text-center text-sm text-muted-foreground")}>
-              {data.twins.length ? "No bots yet. Create one to let visitors talk to your twin." : "Create a twin first: then add its bots here."}
+              No bots yet. Create one to let visitors talk to you on your website.
             </div>
           )}
         </PageSection>
       </div>
-      <NewBotDialog open={creating} onOpenChange={setCreating} twins={data.twins} startFor={startFor} />
+      <NewBotDialog open={creating} onOpenChange={setCreating} personas={data.personas} />
     </PageContainer>
   );
 }
@@ -78,27 +77,26 @@ function status(bot: Pick<Bot, "publicAccess" | "widget">) {
   return websites ? `On · ${websites} ${websites === 1 ? "website" : "websites"}` : "On · link only";
 }
 
-/** Name, purpose and (with several trainers) which twin it speaks as; opens the new bot's page, calls still off. */
-function NewBotDialog({ open, onOpenChange, twins, startFor }: {
+/** Persona, name and purpose; opens the new bot's page with calls still off. */
+function NewBotDialog({ open, onOpenChange, personas }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  twins: Bots["twins"];
-  startFor?: string | null;
+  personas: Bots["personas"];
 }) {
   const router = useRouter();
-  const [twinSlug, setTwinSlug] = useState(twins.find((twin) => twin.slug === startFor)?.slug ?? twins[0]?.slug ?? "");
+  const [personaId, setPersonaId] = useState(personas[0]?.id ?? "");
   const [name, setName] = useState("");
   const [objective, setObjective] = useState("");
   const [busy, setBusy] = useState(false);
   async function create() {
-    if (!name.trim() || !objective.trim()) {
-      toast.error(!name.trim() ? "Enter a name for the bot" : "Describe what the bot is for");
+    if (!personaId || !name.trim() || !objective.trim()) {
+      toast.error(!personaId ? "Choose who the bot speaks as" : !name.trim() ? "Enter a name for the bot" : "Describe what the bot is for");
       return;
     }
     setBusy(true);
     try {
-      const { slug } = await twinClient.bots.create.mutate({ twinSlug, name: name.trim(), objective: objective.trim() });
-      toast.success("Bot created. Turn on public calls when it’s ready.");
+      const { slug } = await twinClient.bots.create.mutate({ personaId, name: name.trim(), objective: objective.trim() });
+      toast.success("Bot created. Add its skills, then turn on public calls when it’s ready.");
       router.push(dashRoute(`/bots/${encodeURIComponent(slug)}`));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not create the bot");
@@ -111,16 +109,14 @@ function NewBotDialog({ open, onOpenChange, twins, startFor }: {
         <form className="flex flex-col gap-4" onSubmit={(event) => { event.preventDefault(); void create(); }}>
           <DialogHeader>
             <DialogTitle className="text-lg">New bot</DialogTitle>
-            <DialogDescription>It speaks with the twin’s voice and skills. Public calls start off.</DialogDescription>
+            <DialogDescription>Who it speaks as and what it’s for. Public calls start off.</DialogDescription>
           </DialogHeader>
-          {twins.length > 1 ? (
-            <div className="flex flex-col gap-2">
-              <label htmlFor="new-bot-twin" className="text-sm font-medium">Speaks as</label>
-              <NativeSelect id="new-bot-twin" value={twinSlug} onChange={(event) => setTwinSlug(event.target.value)}>
-                {twins.map((twin) => <option key={twin.slug} value={twin.slug}>{twin.name} ({twin.trainer})</option>)}
-              </NativeSelect>
-            </div>
-          ) : null}
+          <div className="flex flex-col gap-2">
+            <label htmlFor="new-bot-persona" className="text-sm font-medium">Speaks as</label>
+            <NativeSelect id="new-bot-persona" value={personaId} onChange={(event) => setPersonaId(event.target.value)}>
+              {personas.map((persona) => <option key={persona.id} value={persona.id}>{persona.name}{persona.own ? " (you)" : ""}</option>)}
+            </NativeSelect>
+          </div>
           <div className="flex flex-col gap-2">
             <label htmlFor="new-bot-name" className="text-sm font-medium">Name</label>
             <Input id="new-bot-name" maxLength={120} value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. Homepage assistant" />
@@ -158,15 +154,16 @@ export function TwinBotPage({ bot }: { bot: Bot }) {
   return (
     <PageContainer>
       <PageHeader
-        back={{ href: dashRoute("/bots"), label: "Website bots" }}
+        back={{ href: dashRoute("/bots"), label: "Bots" }}
         title={bot.name}
-        description={bot.twin
-          ? <>Speaks as <Link href={dashRoute(`/twin/${encodeURIComponent(bot.twin.slug)}`)} className="text-foreground underline-offset-4 hover:underline">{bot.twin.name}</Link>, with the same voice and skills.</>
-          : <>Speaks as {bot.trainer}.</>}
+        description={<>Speaks as {bot.persona.name}.</>}
         actions={<Button variant="outline" size="lg" onClick={() => setConfirming(true)}>Delete bot</Button>}
       />
       <section aria-label="Website bot settings" className="mt-6">
-        <PublicAccessPanel bot={bot} />
+        <div className="flex flex-col gap-10">
+          <BotSkillsSection bot={bot} />
+          <PublicAccessPanel bot={bot} />
+        </div>
       </section>
       <AlertDialog open={confirming} onOpenChange={setConfirming}>
         <AlertDialogContent>
@@ -181,5 +178,84 @@ export function TwinBotPage({ bot }: { bot: Bot }) {
         </AlertDialogContent>
       </AlertDialog>
     </PageContainer>
+  );
+}
+
+/**
+ * Who the bot speaks as and the supporting skills it draws on (in order, each switchable). Saved together from the bar;
+ * calls in progress keep what they started with.
+ */
+function BotSkillsSection({ bot }: { bot: Bot }) {
+  const refresh = useRefresh();
+  const initial = () => ({ personaId: bot.persona.id, skills: bot.skills.map((skill) => ({ skillId: skill.id, active: skill.active })) });
+  const [draft, setDraft] = useState(initial);
+  const [busy, setBusy] = useState(false);
+  const [received, setReceived] = useState(bot);
+  const dirty = JSON.stringify(draft) !== JSON.stringify(initial());
+  if (received !== bot) {
+    setReceived(bot);
+    if (!dirty) setDraft(initial());
+  }
+  const attached = new Set(draft.skills.map((skill) => skill.skillId));
+  const nameOf = new Map(bot.choices.skills.map((skill) => [skill.id, skill]));
+  async function save() {
+    setBusy(true);
+    try {
+      await twinClient.bots.update.mutate({ slug: bot.slug, personaId: draft.personaId, skills: draft.skills });
+      toast.success("Bot saved");
+      refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not save the bot");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <PageSection title="Persona and skills" description="Who the bot speaks as, and the skills it can draw on in a call.">
+      <form className={cn(SECTION_CARD, "min-w-0 overflow-hidden")} onSubmit={(event) => { event.preventDefault(); if (dirty) void save(); }}>
+        <fieldset disabled={busy} className="m-0 min-w-0">
+          <SectionRow title={<label htmlFor="bot-persona">Speaks as</label>} detail="Its voice, photo and name. Yours or a custom persona.">
+            <NativeSelect id="bot-persona" value={draft.personaId} onChange={(event) => setDraft({ ...draft, personaId: event.target.value })}>
+              {bot.choices.personas.map((persona) => <option key={persona.id} value={persona.id}>{persona.name}{persona.own ? " (you)" : ""}</option>)}
+            </NativeSelect>
+          </SectionRow>
+          <div className="flex flex-col gap-3 border-t border-(--border) px-5 py-4">
+            <div>
+              <div className="text-sm font-medium">Supporting skills</div>
+              <p className="m-0 mt-0.5 text-sm text-muted-foreground">Published twin skills it may use. Switch one off to keep it attached but unused.</p>
+            </div>
+            {draft.skills.length ? (
+              <ul className="m-0 flex list-none flex-col gap-2 p-0" aria-label="Supporting skills">
+                {draft.skills.map((skill) => (
+                  <li key={skill.skillId} className="flex items-center justify-between gap-3 rounded-tt-md border border-(--border) px-3 py-2">
+                    <span className="min-w-0 truncate text-sm">{nameOf.get(skill.skillId)?.name ?? skill.skillId}</span>
+                    <span className="flex shrink-0 items-center gap-2">
+                      <SwitchToggle checked={skill.active} label={`Use ${nameOf.get(skill.skillId)?.name ?? "skill"}`}
+                        onChange={(active) => setDraft({ ...draft, skills: draft.skills.map((row) => row.skillId === skill.skillId ? { ...row, active } : row) })} />
+                      <Button type="button" variant="ghost" onClick={() => setDraft({ ...draft, skills: draft.skills.filter((row) => row.skillId !== skill.skillId) })}>Remove</Button>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : <p className="m-0 text-sm text-muted-foreground">No skills yet: the bot answers from its purpose only.</p>}
+            {bot.choices.skills.some((skill) => !attached.has(skill.id)) ? (
+              <NativeSelect aria-label="Add a skill" value="" onChange={(event) => {
+                if (event.target.value) setDraft({ ...draft, skills: [...draft.skills, { skillId: event.target.value, active: true }] });
+              }}>
+                <option value="">Add a skill…</option>
+                {bot.choices.skills.filter((skill) => !attached.has(skill.id)).map((skill) => <option key={skill.id} value={skill.id}>{skill.name}</option>)}
+              </NativeSelect>
+            ) : null}
+          </div>
+        </fieldset>
+        {dirty ? (
+          <div className="flex items-center justify-end gap-2 border-t border-(--border) bg-muted/30 px-5 py-3">
+            <span className="mr-auto text-sm text-muted-foreground" role="status">Unsaved changes</span>
+            <Button type="button" variant="ghost" disabled={busy} onClick={() => setDraft(initial())}>Discard</Button>
+            <Button type="submit" disabled={busy}>{busy ? "Saving…" : "Save"}</Button>
+          </div>
+        ) : null}
+      </form>
+    </PageSection>
   );
 }

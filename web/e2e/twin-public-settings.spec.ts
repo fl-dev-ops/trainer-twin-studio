@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { z } from "zod";
 import { as, seed } from "./seed-data";
 import { e2eUrl } from "./env";
-import { openTwinBot } from "./bots";
+import { e2eBotView, openTwinBot } from "./bots";
 
 const settingsSchema = z.object({
   result: z.object({ data: z.object({ json: z.object({
@@ -11,11 +11,6 @@ const settingsSchema = z.object({
     settings: z.object({
       preScreenshare: z.boolean(), preUpload: z.boolean(), duringUpload: z.boolean(),
       uploadTitle: z.string(), uploadInstruction: z.string(),
-    }),
-    publicAccess: z.object({ enabled: z.boolean(), maxSeconds: z.union([z.literal(300), z.literal(600), z.literal(900), z.literal(1200), z.literal(1800)]) }),
-    widget: z.object({
-      id: z.string(),
-      config: z.object({ enabled: z.boolean(), allowedOrigins: z.array(z.string()), welcome: z.string(), accentColor: z.string() }),
     }),
   }) }) }),
 });
@@ -33,10 +28,8 @@ test.describe.serial("twin settings layout", () => {
   });
   test.afterAll(async ({ request }) => {
     if (!original) return;
-    const { allowedOrigins, welcome, accentColor } = original.widget.config;
-    const widget = { allowedOrigins, welcome, accentColor };
     const response = await request.post(e2eUrl("dash", "/api/twin/agents.update"), {
-      data: { json: { slug: seed().twin.slug, name: original.name, description: original.description ?? "", settings: original.settings, publicAccess: original.publicAccess, widget } },
+      data: { json: { slug: seed().twin.slug, name: original.name, description: original.description ?? "", settings: original.settings } },
     });
     expect(response.ok()).toBe(true);
   });
@@ -155,13 +148,14 @@ test.describe.serial("twin settings layout", () => {
     }
     const widget = panel.getByRole("region", { name: "Website widget", exact: true });
     const origins = widget.getByLabel("Allowed websites", { exact: true });
+    const savedOrigins = (await e2eBotView(page.request)).widget.config.allowedOrigins.join("\n");
     await expect(widget.getByLabel("Welcome message", { exact: true })).toHaveCount(0);
     await expect(widget.getByLabel("Accent colour", { exact: true })).toHaveCount(0);
     await expect(widget.getByRole("button", { name: "Save", exact: true })).toHaveCount(0);
     await origins.fill("https://example.com");
     await expect(widget.getByText("Unsaved changes", { exact: true })).toBeVisible();
     await widget.getByRole("button", { name: "Discard", exact: true }).click();
-    await expect(origins).toHaveValue(original.widget.config.allowedOrigins.join("\n"));
+    await expect(origins).toHaveValue(savedOrigins);
     await expect(widget.getByRole("button", { name: "Save", exact: true })).toHaveCount(0);
     await origins.fill("https://example.com/path");
     await widget.getByRole("button", { name: "Save", exact: true }).click();
@@ -193,9 +187,8 @@ test.describe.serial("twin settings layout", () => {
     await install.getByRole("button", { name: "Copy code", exact: true }).click();
     await expect(install.getByRole("button", { name: "Copied", exact: true })).toBeVisible();
     const copied = await page.evaluate(() => sessionStorage.getItem("copied-widget-value"));
-    // The embed id is the twin's bot once it exists (lib/bots), so read the current one.
-    const current = await page.request.get(e2eUrl("dash", `/api/twin/agents.get?input=${encodeURIComponent(JSON.stringify({ json: { slug: seed().twin.slug } }))}`));
-    expect(copied).toContain(`data-twin-id="${settingsSchema.parse(await current.json()).result.data.json.widget.id}"`);
+    // The embed id is the bot's own id.
+    expect(copied).toContain(`data-twin-id="${(await e2eBotView(page.request)).widget.id}"`);
     expect(copied).toContain('data-mode="floating"');
     expect(copied).toContain("/widgets/v1.js");
     const code = install.locator("pre");
@@ -207,10 +200,12 @@ test.describe.serial("twin settings layout", () => {
     await expect(page.getByRole("tab", { name: "Public access", exact: true })).toHaveCount(0);
     await page.getByRole("link", { name: "Website bots", exact: true }).click();
     await expect(page).toHaveURL(/\/bots$/);
-    await expect(page.getByRole("heading", { name: "Website bots" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Bots", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "New bot", exact: true })).toBeVisible();
     await openBot(page);
     const panel = page.getByRole("region", { name: "Website bot settings", exact: true });
+    await expect(panel.getByRole("region", { name: "Persona and skills", exact: true })).toBeVisible();
+    await expect(panel.getByLabel("Speaks as", { exact: true })).toBeVisible();
     await expect(panel.getByRole("region", { name: "Name and purpose", exact: true })).toBeVisible();
     await expect(panel.getByRole("region", { name: "Website widget", exact: true })).toBeVisible();
   });

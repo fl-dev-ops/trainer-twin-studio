@@ -1,103 +1,70 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { updateTwin } from "@/lib/twin/manage";
-import { botForTwin, publicSettingsOf, widgetSettingsOf } from "@/lib/bots";
 import { twinRouter } from "@/lib/twin/trpc";
 import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "./minutes-test-db";
 
-describe.skipIf(!localMinutesDb)("widget settings updates (real database)", () => {
+/** Bots and their public settings through the studio API (lib/bots, lib/twin/trpc botsRouter). */
+describe.skipIf(!localMinutesDb)("bots and widget settings (real database)", () => {
   let f: MinutesFixture;
+  let personaId: string;
   beforeEach(async () => {
     f = minutesFixture();
     await f.create();
+    personaId = (await db.persona.findFirstOrThrow({ where: { orgId: f.org.id, slug: f.org.slug }, select: { id: true } })).id;
   });
   afterEach(async () => {
     await db.specVersion.deleteMany({ where: { orgId: f.org.id } });
     await f.clean();
   });
-  const twin = () => db.agent.findUniqueOrThrow({ where: { id: f.twin.id } });
-  const bot = () => botForTwin(f.org.id, f.twin.id);
-  const widget = async () => widgetSettingsOf((await bot())?.deployment ?? null);
+  const admin = () => twinRouter.createCaller({ user: { ...f.trainer, orgId: f.org.id, orgSlug: f.org.slug, role: "admin" } });
+  const newBot = async (name = "Homepage") => (await admin().bots.create({ personaId, name, objective: "Welcome visitors." })).slug;
 
-  test("public settings live on the twin's bot: merged, normalized, and never version the twin", async () => {
-    const before = await twin();
-    await updateTwin(f.org.id, f.twin.slug, { widget: { allowedOrigins: ["https://EXAMPLE.com:443"], welcome: "Ask Alex", accentColor: "#AABBCC" } });
-    const first = await widget();
-    expect(first).toEqual({ enabled: true, allowedOrigins: ["https://example.com"], welcome: "Ask Alex", accentColor: "#aabbcc" });
-    expect((await twin()).version).toBe(before.version);
-    expect((await twin()).data).not.toHaveProperty("widget");
-    expect(await bot()).toMatchObject({ personaId: before.personaId, data: { source: "bot", twinId: f.twin.id } });
-    await updateTwin(f.org.id, f.twin.slug, { description: "Updated knowledge", publicAccess: { enabled: true } });
-    expect(await widget()).toEqual(first);
-    expect((await twin()).version).toBe(before.version + 1);
-    expect(publicSettingsOf((await bot())!.deployment)).toEqual({ enabled: true, maxSeconds: 300 });
-    const unchanged = await updateTwin(f.org.id, f.twin.slug, { widget: { welcome: "Ask Alex" } });
-    expect(unchanged.changed).toBe(false);
-    expect(await db.agent.count({ where: { orgId: f.org.id, kind: "BOT" } })).toBe(1);
+  test("widget settings merge, normalize, and turn on exactly with a website list", async () => {
+    const slug = await newBot();
+    const caller = admin();
+    await caller.bots.update({ slug, widget: { allowedOrigins: ["https://EXAMPLE.com:443"], welcome: "Ask Alex", accentColor: "#AABBCC" } });
+    const first = await caller.bots.get({ slug });
+    expect(first.widget.config).toEqual({ enabled: true, allowedOrigins: ["https://example.com"], welcome: "Ask Alex", accentColor: "#aabbcc" });
+    expect(first.publicAccess).toEqual({ enabled: false, maxSeconds: 300 });
+    await caller.bots.update({ slug, publicAccess: { enabled: true } });
+    expect((await caller.bots.get({ slug })).widget.config).toEqual(first.widget.config);
+    await caller.bots.update({ slug, widget: { allowedOrigins: [] } });
+    expect((await caller.bots.get({ slug })).widget.config).toMatchObject({ enabled: false, allowedOrigins: [] });
+    await expect(caller.bots.update({ slug, widget: { enabled: true } } as never)).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(caller.bots.update({ slug, widget: { allowedOrigins: ["https://*.example.com"] } })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    const got = await caller.bots.get({ slug });
+    expect(new URL(got.widget.origin).hostname.startsWith(`${f.org.slug}.`)).toBe(true);
   });
 
-  test("the website list is the only switch: clearing it turns the widget off, an enabled flag cannot override it", async () => {
-    await updateTwin(f.org.id, f.twin.slug, { widget: { allowedOrigins: ["https://example.com"] } });
-    expect((await widget()).enabled).toBe(true);
-    await updateTwin(f.org.id, f.twin.slug, { name: "Cleared list", widget: { allowedOrigins: [] } });
-    expect(await twin()).toMatchObject({ name: "Cleared list" });
-    expect(await widget()).toMatchObject({ enabled: false, allowedOrigins: [] });
-    await updateTwin(f.org.id, f.twin.slug, { widget: { enabled: true } });
-    expect((await widget()).enabled).toBe(false);
-    await updateTwin(f.org.id, f.twin.slug, { widget: { enabled: false, allowedOrigins: ["https://example.com"] } });
-    expect((await widget()).enabled).toBe(true);
-  });
-
-  test("does not enable public access as a side effect", async () => {
-    await updateTwin(f.org.id, f.twin.slug, { widget: { allowedOrigins: ["https://example.com"] } });
-    expect(publicSettingsOf((await bot())!.deployment).enabled).toBe(false);
-    await updateTwin(f.org.id, f.twin.slug, { publicAccess: { enabled: false } });
-    expect((await widget()).enabled).toBe(true);
-  });
-
-  test("enforces org scope and rejects malformed origins without saving", async () => {
-    await expect(updateTwin("different-org", f.twin.slug, { widget: { allowedOrigins: ["https://example.com"] } })).rejects.toMatchObject({ code: "not_found" });
-    const before = await twin();
-    await expect(updateTwin(f.org.id, f.twin.slug, { widget: { allowedOrigins: ["https://*.example.com"] } })).rejects.toMatchObject({ code: "invalid_input" });
-    expect((await twin()).version).toBe(before.version);
-    expect(await bot()).toBeNull();
-    expect(await db.specVersion.count({ where: { orgId: f.org.id } })).toBe(0);
-  });
-
-  test("an org can run several bots per twin, each with its own name, purpose and websites; the twin is untouched", async () => {
-    const user = { ...f.trainer, orgId: f.org.id, orgSlug: f.org.slug, role: "admin" };
-    const caller = twinRouter.createCaller({ user });
-    const before = await twin();
-    const home = await caller.bots.create({ twinSlug: f.twin.slug, name: "Homepage", objective: "Welcome visitors." });
-    const pricing = await caller.bots.create({ twinSlug: f.twin.slug, name: "Pricing", objective: "Answer pricing questions." });
-    expect(home.slug).not.toBe(pricing.slug);
-    await caller.bots.update({ slug: pricing.slug, objective: "Explain plans and suggest a call.", publicAccess: { enabled: true }, widget: { allowedOrigins: ["https://pricing.example"] } });
-    const got = await caller.bots.get({ slug: pricing.slug });
-    expect(got).toMatchObject({ name: "Pricing", objective: "Explain plans and suggest a call.", twin: { slug: f.twin.slug }, publicAccess: { enabled: true }, widget: { config: { allowedOrigins: ["https://pricing.example"] } } });
-    expect((await caller.bots.get({ slug: home.slug })).publicAccess.enabled).toBe(false);
-    expect((await caller.bots.list()).bots.map((bot) => bot.name)).toEqual(["Homepage", "Pricing"]);
-    expect((await caller.agents.get({ slug: f.twin.slug })).bots.map((bot) => bot.name)).toEqual(["Homepage", "Pricing"]);
-    expect(await twin()).toMatchObject({ name: before.name, version: before.version, data: before.data as object });
-    // Each bot versions on its own; a repeated save changes nothing.
-    expect((await caller.bots.update({ slug: pricing.slug, name: "Pricing" })).version).toBe(2);
-    await caller.bots.archive({ slug: home.slug });
+  test("an org runs several independent bots, each with its own persona, purpose, skills and websites; twins are untouched", async () => {
+    const twinBefore = await db.agent.findUniqueOrThrow({ where: { id: f.twin.id } });
+    const custom = await db.persona.create({ data: { orgId: f.org.id, slug: `${f.org.slug}-guide`, name: "Guide", data: {} } });
+    const caller = admin();
+    const home = await newBot("Homepage");
+    const pricing = (await caller.bots.create({ personaId: custom.id, name: "Pricing", objective: "Answer pricing questions." })).slug;
+    expect(home).not.toBe(pricing);
+    await caller.bots.update({ slug: pricing, objective: "Explain plans and suggest a call.", publicAccess: { enabled: true }, widget: { allowedOrigins: ["https://pricing.example"] } });
+    expect(await caller.bots.get({ slug: pricing })).toMatchObject({
+      name: "Pricing", objective: "Explain plans and suggest a call.", persona: { id: custom.id }, skills: [],
+      publicAccess: { enabled: true }, widget: { config: { allowedOrigins: ["https://pricing.example"] } },
+    });
+    expect((await caller.bots.get({ slug: home })).publicAccess.enabled).toBe(false);
+    const listed = await caller.bots.list();
+    expect(listed.bots.map((bot) => bot.name)).toEqual(["Homepage", "Pricing"]);
+    expect(listed.personas.map((persona) => persona.id)).toEqual(expect.arrayContaining([personaId, custom.id]));
+    // Switching a bot's persona is a bot edit; a repeated save changes nothing.
+    await caller.bots.update({ slug: home, personaId: custom.id });
+    expect((await caller.bots.get({ slug: home })).persona.id).toBe(custom.id);
+    expect((await caller.bots.update({ slug: pricing, name: "Pricing" })).version).toBe(2);
+    expect(await db.agent.findUniqueOrThrow({ where: { id: f.twin.id } })).toMatchObject({ version: twinBefore.version, data: twinBefore.data as object });
+    await caller.bots.archive({ slug: home });
     expect((await caller.bots.list()).bots.map((bot) => bot.name)).toEqual(["Pricing"]);
-    await expect(caller.bots.get({ slug: home.slug })).rejects.toMatchObject({ code: "NOT_FOUND" });
-    await expect(twinRouter.createCaller({ user: { ...user, ...f.learner, role: "user" } }).bots.update({ slug: pricing.slug, name: "x" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(caller.bots.get({ slug: home })).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 
-  test("studio API accepts partial updates and returns the stable ID and own-host origin", async () => {
-    const user = { ...f.trainer, orgId: f.org.id, orgSlug: f.org.slug, role: "admin" };
-    const caller = twinRouter.createCaller({ user });
-    await caller.agents.update({ slug: f.twin.slug, widget: { allowedOrigins: ["https://example.com"] } });
-    await expect(caller.agents.update({ slug: f.twin.slug, widget: { enabled: false } } as never)).rejects.toMatchObject({ code: "BAD_REQUEST" });
-    const twin = await caller.agents.get({ slug: f.twin.slug });
-    expect(twin.widget).toMatchObject({ id: (await bot())!.id, config: { enabled: true, allowedOrigins: ["https://example.com"] } });
-    expect(new URL(twin.widget.origin).hostname.startsWith(`${f.org.slug}.`)).toBe(true);
-    expect(twin.publicAccess.enabled).toBe(false);
-    await caller.agents.update({ slug: f.twin.slug, widget: { allowedOrigins: [] } });
-    expect((await caller.agents.get({ slug: f.twin.slug })).widget.config).toMatchObject({ enabled: false, allowedOrigins: [] });
-    const learner = twinRouter.createCaller({ user: { ...user, ...f.learner, role: "user" } });
-    await expect(learner.agents.update({ slug: f.twin.slug, widget: { allowedOrigins: [] } })).rejects.toMatchObject({ code: "FORBIDDEN" });
-    await expect(twinRouter.createCaller({ user: null }).agents.update({ slug: f.twin.slug, widget: { allowedOrigins: [] } })).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+  test("only studio members manage bots", async () => {
+    const slug = await newBot();
+    const learner = twinRouter.createCaller({ user: { ...f.learner, orgId: f.org.id, orgSlug: f.org.slug, role: "user" } });
+    await expect(learner.bots.update({ slug, name: "x" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(twinRouter.createCaller({ user: null }).bots.list()).rejects.toMatchObject({ code: "UNAUTHORIZED" });
   });
 });

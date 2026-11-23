@@ -42,7 +42,9 @@ async function fakeMicrophone(context: BrowserContext, denied = false) {
   }, denied);
 }
 
-test.describe.serial("public twin phase 1", () => {
+// Anonymous calls left the twin's /t/ link when bots became their own module (specs/agents.md): visitors reach a bot
+// through its website widget (widget.spec). Re-enable against a bot's own public link once it has one.
+test.describe.skip("public twin phase 1", () => {
   test("public-off requires sign-in; studio settings save the enable switch and duration immediately", async ({ page, browser }) => {
     await page.goto(publicUrl());
     await page.getByRole("button", { name: "Start conversation", exact: true }).click();

@@ -688,6 +688,8 @@ export async function getAgentConfigForAgent(
   contextIds?: string[],
   client: Prisma.TransactionClient = db,
   identity?: { agentVersion: number; personaSlug: string; personaVersion: number },
+  /** A new session's persona when it isn't the agent's default (a role play's random pick; lib/agent-personas). */
+  personaId?: string,
 ) {
   const savedAgent = await client.agent.findFirst({
     where: {
@@ -703,12 +705,15 @@ export async function getAgentConfigForAgent(
       })
     : null;
   if (identity && savedAgent.version !== identity.agentVersion && !isRecord(agentHistory?.data)) throw skillRefusals.unavailable();
-  const savedPersona = !identity || savedAgent.persona.slug === identity.personaSlug
+  const chosen = !identity && personaId && personaId !== savedAgent.personaId
+    ? await client.persona.findFirst({ where: { id: personaId, OR: [{ orgId }, { orgId: null }] } })
+    : null;
+  const savedPersona = chosen ?? (!identity || savedAgent.persona.slug === identity.personaSlug
     ? savedAgent.persona
     : await client.persona.findFirst({
         where: { slug: identity.personaSlug, OR: [{ orgId }, { orgId: null }] },
         orderBy: { orgId: { sort: "asc", nulls: "last" } },
-      });
+      }));
   if (!savedPersona) throw skillRefusals.unavailable();
   const personaHistory = identity && savedPersona.version !== identity.personaVersion
     ? await client.specVersion.findUnique({

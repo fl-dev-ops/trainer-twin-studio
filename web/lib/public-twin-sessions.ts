@@ -9,7 +9,7 @@ import { publicVisitorNameSchema } from "@/lib/public-twin-settings";
 import { publicBot, publicSettingsOf } from "@/lib/bots";
 import { browserToken, initializeChatSession, runtimeToken, tokenHash } from "@/lib/interview-sessions";
 import { getAgentConfigForAgent } from "@/lib/specs";
-import { pinTwinSkills } from "@/lib/twins";
+import { supportingCatalog } from "@/lib/agent-skills";
 import { connectVoice } from "@/lib/session-activation";
 import { closeInterviewSession } from "@/lib/session-lifecycle";
 import { closeLiveKitSession } from "@/lib/livekit";
@@ -39,7 +39,7 @@ export async function startPublicTwinSession(input: {
 }) {
   const parsed = publicVisitorNameSchema.safeParse(input.name);
   if (!parsed.success) throw refusals.invalidInput(parsed.error.issues[0].message);
-  // The public side of a twin is its bot (lib/bots): links and older widget snippets may still name the twin.
+  // Public calls run on bots (lib/bots): their own persona, purpose and supporting skills.
   const agent = await publicBot(input.orgId, input.agentId);
   if (!agent) throw refusals.notFound();
   if (!agent.deployment || !publicSettingsOf(agent.deployment).enabled) throw publicCallRefusals.unavailable();
@@ -47,8 +47,6 @@ export async function startPublicTwinSession(input: {
 
   const config = await getAgentConfigForAgent(agent.id, input.orgId);
   if (!config || config.agent.version !== agent.version) throw new AppError("public_twin_changed", "This twin was updated. Please start again.", 409);
-  // A bot speaks with all of its trainer's twin skills, like the main twin.
-  const skills = await pinTwinSkills(input.orgId, agent.personaId);
   await orgCredits(input.orgId, { fresh: true });
 
   const session = await withLock([minutesLock(input.orgId)], async (tx) => {
@@ -63,6 +61,8 @@ export async function startPublicTwinSession(input: {
     if (current.version !== agent.version) throw new AppError("public_twin_changed", "This twin was updated. Please start again.", 409);
     if (await pausedReason(input.orgId, "studio", tx)) throw publicCallRefusals.unavailable();
     const settings = publicSettingsOf(current.deployment);
+    // The bot's active supporting skills at their current versions, pinned like every managed call (main skill later).
+    const skills = await supportingCatalog(input.orgId, agent.id, tx) ?? { catalog: [], pins: [] };
     const since = new Date(Date.now() - 60 * 60 * 1000);
     const [recent, orgRecent, live] = await Promise.all([
       tx.interviewSession.count({
@@ -94,7 +94,9 @@ export async function startPublicTwinSession(input: {
         allowedSeconds: settings.maxSeconds, chargesOrg: true,
         agentSlug: agent.slug, agentVersion: agent.version,
         personaSlug: config.persona.slug, personaVersion: config.persona.version,
-        compiledSnapshot: JSON.parse(JSON.stringify({ ...config, ...(skills ? { twinSkills: skills } : {}) })),
+        compiledSnapshot: JSON.parse(JSON.stringify({ ...config, twinSkills: skills.catalog })),
+        skillPinsVersion: 1,
+        ...(skills.pins.length ? { skillPins: { create: skills.pins } } : {}),
         runtimeState: {},
       },
     });

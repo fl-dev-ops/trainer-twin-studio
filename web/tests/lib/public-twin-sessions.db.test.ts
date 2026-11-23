@@ -45,7 +45,7 @@ describe.skipIf(!localMinutesDb)("public twin lifecycle (real database)", () => 
     await f.clean();
   });
   const input = (visitor = randomUUID(), ip = visitor) => ({
-    orgId: f.org.id, agentId: f.twin.id, visitorId: hash(visitor), ipHash: hash(ip), name: "  Public Visitor  ",
+    orgId: f.org.id, agentId: bot.id, visitorId: hash(visitor), ipHash: hash(ip), name: "  Public Visitor  ",
   });
   const seed = async (fields: Parameters<MinutesFixture["session"]>[0] = {}) => f.session({
     userId: null, agentId: bot.id, agentSlug: bot.slug, anonymousId: hash(randomUUID()), anonymousIpHash: hash(randomUUID()),
@@ -85,7 +85,7 @@ describe.skipIf(!localMinutesDb)("public twin lifecycle (real database)", () => 
     await fundOrg({ orgId: f.org.id, minutes: 10 });
     const request = input();
     if (state === "off") await setTwinPublic(f, { publicAccess: { enabled: false } });
-    if (state === "archived") await db.agent.update({ where: { id: f.twin.id }, data: { archivedAt: new Date() } });
+    if (state === "archived") await db.agent.update({ where: { id: bot.id }, data: { archivedAt: new Date() } });
     if (state === "other-org") request.orgId = "different-org";
     if (state === "roleplay") request.agentId = f.roleplay.id;
     if (state === "invalid-name") request.name = " \n ";

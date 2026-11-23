@@ -29,7 +29,7 @@ type LearnerAssign = TwinOutputs["assignments"]["list"][number];
  * Copies the twin's /t/ share link. Same call and cache as the Share dialog; fetched on click, so viewing the page never
  * creates a link.
  */
-function CopyShareLinkButton({ slug, publicEnabled = false }: { slug: string; publicEnabled?: boolean }) {
+function CopyShareLinkButton({ slug }: { slug: string }) {
   const queryClient = useQueryClient();
   const [state, setState] = useState<"idle" | "busy" | "copied">("idle");
   async function copy() {
@@ -42,7 +42,7 @@ function CopyShareLinkButton({ slug, publicEnabled = false }: { slug: string; pu
       });
       await navigator.clipboard.writeText(url);
       setState("copied");
-      toast.success(publicEnabled ? "Link copied. Signed-out visitors can start a short voice call." : "Link copied. Sign in with assigned learner access to talk.");
+      toast.success("Link copied. Only learners assigned to this twin can open it.");
       setTimeout(() => setState("idle"), 2000);
     } catch {
       setState("idle");
@@ -62,7 +62,7 @@ export function TwinEditPage({
   learners,
   defaultTab = "general",
 }: {
-  twin: Pick<TwinOutputs["agents"]["get"], "slug" | "name" | "description" | "settings" | "allSkills" | "bots" | "publicAccess">;
+  twin: Pick<TwinOutputs["agents"]["get"], "slug" | "name" | "description" | "settings">;
   learners: LearnerAssign[];
   /** /edit opens on General, /assign on Learners. */
   defaultTab?: "general" | "conversation" | "learners";
@@ -200,7 +200,7 @@ export function TwinEditPage({
             Set conversation permissions and manage learner access for this twin.
           </p>
         </div>
-        <CopyShareLinkButton slug={id} publicEnabled={twin.publicAccess.enabled} />
+        <CopyShareLinkButton slug={id} />
       </div>
 
       <div className="mt-6 flex flex-col gap-4">
@@ -239,20 +239,6 @@ export function TwinEditPage({
             </div>
           </form>
         </PageSection>
-          <PageSection title="Website bots" description="What signed-out visitors talk to, on this twin’s link and your websites." className="mt-10"
-            action={<Button variant="outline" size="lg" nativeButton={false} render={<Link href={dashRoute(`/bots?new=${encodeURIComponent(id)}`)} />}>New bot</Button>}>
-            {twin.bots.length ? (
-              <div className={SECTION_CARD}>
-                {twin.bots.map((bot) => (
-                  <SectionRow key={bot.slug} title={bot.name} detail={bot.publicOn ? "Public calls are on." : "Public calls are off."}>
-                    <Button variant="ghost" nativeButton={false} render={<Link href={dashRoute(`/bots/${encodeURIComponent(bot.slug)}`)} />}>Manage</Button>
-                  </SectionRow>
-                ))}
-              </div>
-            ) : (
-              <div className={cn(SECTION_CARD, "px-5 py-6 text-center text-sm text-muted-foreground")}>No bots yet.</div>
-            )}
-          </PageSection>
       </TabsContent>
 
       <TabsContent value="conversation">

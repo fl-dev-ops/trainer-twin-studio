@@ -3,9 +3,6 @@ import { stableJson } from "@/lib/stable-json";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import { beforeSettings, type BeforeSettings } from "@/lib/context-upload";
 import { findTwinAgent } from "@/lib/twin-access";
-import type { PublicTwinSettings } from "@/lib/public-twin-settings";
-import type { WidgetSettings } from "@/lib/widget-settings";
-import { botForTwin, saveBotPublicSettings } from "@/lib/bots";
 import { refusals } from "@/lib/errors";
 import { carryAgentSkillVersion } from "@/lib/skill-history";
 import { ownershipLock, packageFieldsOmitted, skillOwnership } from "@/lib/skill-ownership";
@@ -17,23 +14,13 @@ const json = (value: unknown) => value as Prisma.InputJsonValue;
  * Changes a twin's name, description and Before settings (Configure page, copilot). Missing fields keep their value.
  * A real change snapshots the old spec and bumps the version, like a publish; no change returns the current version.
  */
-export async function updateTwin(orgId: string, slug: string, patch: { name?: string; description?: string; settings?: Partial<BeforeSettings>; publicAccess?: Partial<PublicTwinSettings>; widget?: Partial<WidgetSettings> }) {
+export async function updateTwin(orgId: string, slug: string, patch: { name?: string; description?: string; settings?: Partial<BeforeSettings> }) {
   const found = await findTwinAgent(orgId, slug);
   // One save at a time per twin (practice rule 20): read and write under its lock.
   return withLock([ownershipLock(orgId), `agent:${found.slug}`], async (tx) => {
   const current = await tx.agent.findUniqueOrThrow({ where: { id: found.id }, select: { name: true, version: true, data: true, primarySkillId: true } });
   const previous = asRecord(current.data);
   const name = patch.name ?? current.name;
-  // Public calls and the widget belong to the twin's bot (lib/bots), saved under the same lock; they don't change the
-  // twin itself, so its version (and learners' twin) stays put.
-  if (patch.publicAccess || patch.widget) {
-    const before = await botForTwin(orgId, found.id, tx);
-    const after = await saveBotPublicSettings(orgId, found.id, { publicAccess: patch.publicAccess, widget: patch.widget }, tx);
-    const publicChanged = !before || stableJson(before.deployment) !== stableJson(after?.deployment);
-    if (patch.name === undefined && patch.description === undefined && patch.settings === undefined) {
-      return { version: current.version, changed: publicChanged };
-    }
-  }
   // Before settings: read by the session screen (lib/context-upload), enforced by session start and the attach
   // route. An older `twinSettings` key is left as is; `before` wins.
   const data = {

@@ -91,8 +91,8 @@ describe.skipIf(!localMinutesDb)("public twin HTTP lifecycle (real database)", (
     return { response: await handler(), setCookies, jar };
   };
   const startCall = async (options: Parameters<typeof request>[1] = {}) => {
-    const req = request(`/api/public/twins/${f.twin.id}/sessions`, { body: { name: "  Visitor <admin>  " }, ...options });
-    return invoke(req, () => start(req, { params: Promise.resolve({ agentId: f.twin.id }) }));
+    const req = request(`/api/public/twins/${bot.id}/sessions`, { body: { name: "  Visitor <admin>  " }, ...options });
+    return invoke(req, () => start(req, { params: Promise.resolve({ agentId: bot.id }) }));
   };
   const endCall = async (id: string, options: Parameters<typeof request>[1]) => {
     const req = request(`/api/public/sessions/${id}/end`, options);
