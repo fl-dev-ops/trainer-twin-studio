@@ -358,13 +358,21 @@ test.describe.serial("cross-origin hosted voice widget", () => {
     await expectNoCardScroll(hosted);
     await page.locator("[data-trainertwin-widget] .floating").screenshot({ path: testInfo.outputPath("widget-desktop-portrait.png"), animations: "disabled" });
     if (browserName === "chromium") {
-      const client = await context.newCDPSession(hosted);
+      // An out-of-process frame has its own CDP session; a same-process one is reached through the page's, pierced.
+      const ownSession = await context.newCDPSession(hosted).catch(() => null);
+      const client = ownSession ?? await context.newCDPSession(page);
       try {
         await client.send("DOM.enable");
         await client.send("CSS.enable");
         await hosted.getByLabel("Your name", { exact: true }).fill("Surya Umapathy");
-        const { root } = await client.send("DOM.getDocument");
-        const { nodeId } = await client.send("DOM.querySelector", { nodeId: root.nodeId, selector: "#tt-visitor-name" });
+        const { root } = await client.send("DOM.getDocument", { depth: -1, pierce: !ownSession });
+        type DomNode = { nodeId: number; nodeName: string; contentDocument?: DomNode; children?: DomNode[]; shadowRoots?: DomNode[] };
+        const frameDocument = (node: DomNode): DomNode | undefined => node.nodeName === "IFRAME" && node.contentDocument
+          ? node.contentDocument
+          : [...(node.shadowRoots ?? []), ...(node.children ?? [])].map(frameDocument).find(Boolean);
+        const documentNode = ownSession ? root : frameDocument(root as DomNode);
+        expect(documentNode).toBeTruthy();
+        const { nodeId } = await client.send("DOM.querySelector", { nodeId: documentNode!.nodeId, selector: "#tt-visitor-name" });
         expect(nodeId).not.toBe(0);
         await client.send("CSS.forcePseudoState", { nodeId, forcedPseudoClasses: ["autofill"] });
         await expect(hosted.getByLabel("Your name", { exact: true })).toHaveValue("Surya Umapathy");

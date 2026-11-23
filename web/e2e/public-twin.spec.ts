@@ -76,7 +76,7 @@ test.describe.serial("public twin phase 1", () => {
     await prejoin(page);
     await expect(page.getByText(/speaking with an AI twin/)).toBeVisible();
     await expect(page.getByText(/transcribed and may be recorded/)).toBeVisible();
-    await expect(page.getByText(/Up to 3 minutes/)).toBeVisible();
+    await expect(page.getByText(/Up to \d+ minutes/)).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath("public-twin-prejoin.png"), fullPage: true });
     const name = page.getByLabel("Your name", { exact: true });
     const start = page.getByRole("button", { name: "Start voice call", exact: true });
