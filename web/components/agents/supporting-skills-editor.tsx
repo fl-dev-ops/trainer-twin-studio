@@ -37,12 +37,6 @@ export function SupportingSkillsEditor({ title, description, empty, attached, ch
   }
   const names = new Map([...choices, ...attached].map((skill) => [skill.id, skill.name]));
   const taken = new Set(draft.map((skill) => skill.skillId));
-  const move = (index: number, by: number) => setDraft((prev) => {
-    const next = [...prev];
-    const [row] = next.splice(index, 1);
-    next.splice(index + by, 0, row);
-    return next;
-  });
   async function save() {
     setBusy(true);
     try {
@@ -59,20 +53,18 @@ export function SupportingSkillsEditor({ title, description, empty, attached, ch
     <PageSection title={title} description={description}>
       <div className={cn(SECTION_CARD, "flex min-w-0 flex-col gap-3 overflow-hidden px-5 py-4")}>
         {draft.length ? (
-          <ol className="m-0 flex list-none flex-col gap-2 p-0" aria-label={title}>
-            {draft.map((skill, index) => (
+          <ul className="m-0 flex list-none flex-col gap-2 p-0" aria-label={title}>
+            {draft.map((skill) => (
               <li key={skill.skillId} className="flex items-center justify-between gap-3 rounded-tt-md border border-(--border) px-3 py-2">
-                <span className="min-w-0 truncate text-sm">{index + 1}. {names.get(skill.skillId) ?? skill.skillId}</span>
+                <span className="min-w-0 truncate text-sm">{names.get(skill.skillId) ?? skill.skillId}</span>
                 <span className="flex shrink-0 items-center gap-1">
-                  <Button type="button" variant="ghost" size="sm" disabled={busy || index === 0} aria-label="Move up" onClick={() => move(index, -1)}>↑</Button>
-                  <Button type="button" variant="ghost" size="sm" disabled={busy || index === draft.length - 1} aria-label="Move down" onClick={() => move(index, 1)}>↓</Button>
                   <SwitchToggle checked={skill.active} label={`Use ${names.get(skill.skillId) ?? "skill"}`}
                     onChange={(active) => setDraft((prev) => prev.map((row) => row.skillId === skill.skillId ? { ...row, active } : row))} />
                   <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => setDraft((prev) => prev.filter((row) => row.skillId !== skill.skillId))}>Remove</Button>
                 </span>
               </li>
             ))}
-          </ol>
+          </ul>
         ) : <p className="m-0 text-sm text-muted-foreground">{empty}</p>}
         {choices.some((skill) => !taken.has(skill.id)) ? (
           <NativeSelect aria-label="Add a skill" value="" disabled={busy} onChange={(event) => {

@@ -302,7 +302,7 @@ export function TwinEditPage({
         <TabsContent value="skills">
           <SupportingSkillsEditor
             title="Supporting skills"
-            description="The topic skills this twin draws on, in order. Switch one off to keep it but leave it out of new calls."
+            description="The topic skills this twin draws on. Switch one off to keep it but leave it out of new calls."
             empty="None chosen yet: the twin uses every topic skill of its persona. Add skills to choose exactly which."
             attached={twin.supportingSkills}
             choices={twin.skillChoices}
