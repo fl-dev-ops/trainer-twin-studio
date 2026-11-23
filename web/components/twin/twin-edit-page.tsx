@@ -50,7 +50,7 @@ function CopyShareLinkButton({ slug, publicEnabled = false }: { slug: string; pu
     }
   }
   return (
-    <Button variant="secondary" onClick={() => void copy()} disabled={state === "busy"}>
+    <Button variant="outline" size="lg" onClick={() => void copy()} disabled={state === "busy"}>
       {state === "copied" ? <Check data-icon="inline-start" /> : <Copy data-icon="inline-start" />}
       {state === "copied" ? "Copied" : "Copy link"}
     </Button>
@@ -218,16 +218,17 @@ export function TwinEditPage({
       <TabsContent value="general">
         <PageSection title="Twin details" description="The name and description shown across your workspace.">
           <form className="flex flex-col gap-3" onSubmit={(event) => { event.preventDefault(); void handleSave(); }}>
-            <fieldset disabled={saving} className={cn(SECTION_CARD, "flex min-w-0 flex-col gap-6 p-5")}>
-              <div className="flex flex-col gap-2">
-                <label htmlFor="bot-name" className="text-sm font-medium">Bot name</label>
-                <Input id="bot-name" value={name} onChange={(event) => setName(event.target.value)} />
-              </div>
-              <div className="flex flex-col gap-2">
-                <label htmlFor="bot-desc" className="text-sm font-medium">Description</label>
-                <Textarea id="bot-desc" rows={6} value={description} onChange={(event) => setDescription(event.target.value)}
-                  aria-describedby="bot-desc-help" className="min-h-40" />
-                <p id="bot-desc-help" className="m-0 text-sm text-muted-foreground">A short introduction to this twin.</p>
+            <fieldset disabled={saving} className={cn(SECTION_CARD, "m-0 min-w-0")}>
+              <SectionRow title={<label htmlFor="bot-name">Bot name</label>} detail="How the twin is named to learners and visitors.">
+                <Input id="bot-name" className="w-full sm:w-80" value={name} onChange={(event) => setName(event.target.value)} />
+              </SectionRow>
+              <div className="flex flex-col gap-3 border-t border-(--border) px-5 py-4">
+                <div>
+                  <label htmlFor="bot-desc" className="text-sm font-medium">Description</label>
+                  <p id="bot-desc-help" className="m-0 mt-0.5 text-sm text-muted-foreground">A short introduction to this twin.</p>
+                </div>
+                <Textarea id="bot-desc" rows={5} value={description} onChange={(event) => setDescription(event.target.value)}
+                  aria-describedby="bot-desc-help" className="min-h-32" />
               </div>
             </fieldset>
             <div className="flex items-center justify-end gap-3">

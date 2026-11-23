@@ -53,7 +53,7 @@ test.describe.serial("twin settings layout", () => {
     const nameBox = await panel.getByLabel("Bot name", { exact: true }).boundingBox();
     const descriptionBox = await panel.getByLabel("Description", { exact: true }).boundingBox();
     expect(descriptionBox!.width).toBeGreaterThan(600);
-    expect(descriptionBox!.x).toBe(nameBox!.x);
+    expect(Math.round(descriptionBox!.x + descriptionBox!.width)).toBe(Math.round(nameBox!.x + nameBox!.width));
     expect(updates).toBe(0);
     const saved = page.waitForResponse((response) => response.url().includes("agents.update") && response.request().method() === "POST");
     await panel.getByRole("button", { name: "Save changes", exact: true }).click();
@@ -172,7 +172,7 @@ test.describe.serial("twin settings layout", () => {
     await page.getByRole("tab", { name: "Public access", exact: true }).click();
     await expect(origins).toHaveValue("https://example.com\nhttps://www.example.com");
     await expect(widget.getByRole("switch")).toHaveCount(0);
-    await expect(widget.getByRole("status")).toHaveText("Live on 2 websites.");
+    await expect(widget.getByRole("status")).toHaveCount(0);
     expect(starts).toBe(0);
     await page.screenshot({ path: testInfo.outputPath("widget-desktop.png"), animations: "disabled" });
   });

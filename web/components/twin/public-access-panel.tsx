@@ -114,12 +114,13 @@ export function PublicAccessPanel({ twin }: { twin: Twin }) {
       <PageSection title="Website widget" description="Show this twin as a voice widget on your own website.">
         <form className={cn(SECTION_CARD, "min-w-0 overflow-hidden")}
           onSubmit={(event) => { event.preventDefault(); if (dirty) void saveWebsites(); }}>
-          <p role="status" className="m-0 flex items-center gap-2 border-b border-(--border) px-5 py-3 text-sm text-muted-foreground">
-            <span aria-hidden="true" className={cn("size-2 shrink-0 rounded-full", live ? "bg-(--brand)" : "bg-(--tone-control)")} />
-            {widgetLocked ? <span>Off. Turn on <span className="font-medium text-foreground">Allow anonymous visitors</span> to use the widget.</span>
-              : live ? <span><span className="font-medium text-foreground">Live</span> on {websites} {websites === 1 ? "website" : "websites"}.</span>
-              : <span>Off. Add a website below to show the widget.</span>}
-          </p>
+          {!live ? (
+            <p role="status" className="m-0 flex items-center gap-2 border-b border-(--border) px-5 py-3 text-sm text-muted-foreground">
+              <span aria-hidden="true" className="size-2 shrink-0 rounded-full bg-(--tone-control)" />
+              {widgetLocked ? <span>Off. Turn on <span className="font-medium text-foreground">Allow anonymous visitors</span> to use the widget.</span>
+                : <span>Off. Add a website below to show the widget.</span>}
+            </p>
+          ) : null}
           <fieldset disabled={widgetLocked || busy === "websites"} className={cn("min-w-0 transition-opacity", widgetLocked && "opacity-50")}>
             <div className="flex flex-col gap-2 px-5 py-4">
               <label htmlFor="widget-origins" className="text-sm font-medium">Allowed websites</label>
@@ -169,7 +170,7 @@ function InstallSection({ origin, id, live }: { origin: string; id: string; live
     <PageSection title="Install"
       description={live ? "Paste this once before your page’s closing </body> tag. It contains no credentials."
         : "Paste this once before your page’s closing </body> tag. The widget appears after it’s turned on above."}
-      action={<Button variant="outline" size="sm" onClick={() => void copy()}>
+      action={<Button variant="outline" size="lg" onClick={() => void copy()}>
         {copied ? <Check data-icon="inline-start" /> : <Copy data-icon="inline-start" />}{copied ? "Copied" : "Copy code"}
       </Button>}>
       <pre className={cn(SECTION_CARD, "m-0 min-w-0 whitespace-pre-wrap break-all p-5 text-xs leading-6")}><code>{displaySnippet}</code></pre>
