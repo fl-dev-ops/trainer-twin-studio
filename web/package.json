@@ -13,7 +13,7 @@
     "migrate:verify": "bun scripts/migrate-verify.ts",
     "migrate:cleanup": "bun scripts/migrate-cleanup.ts",
     "build:widgets": "bun install --cwd ../widgets --frozen-lockfile && bun ../widgets/build.ts",
-    "build": "bun run build:widgets && prisma generate && next build",
+    "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
     "test": "bun test --parallel tests",
