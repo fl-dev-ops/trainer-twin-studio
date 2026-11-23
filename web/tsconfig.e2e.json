@@ -3,6 +3,6 @@
   "compilerOptions": {
     "incremental": false
   },
-  "include": ["next-env.d.ts", "e2e/**/*.ts", "e2e/**/*.tsx", "playwright.config.ts"],
+  "include": ["next-env.d.ts", "e2e/**/*.ts", "e2e/**/*.tsx", "playwright.config.ts", "../chat/agent/raw-imports.d.ts"],
   "exclude": ["node_modules"]
 }
