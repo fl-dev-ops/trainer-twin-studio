@@ -202,12 +202,14 @@ test.describe.serial("twin settings layout", () => {
     await expect(page).toHaveURL(/\/bots$/);
     await expect(page.getByRole("heading", { name: "Bots", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "New bot", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Your bots", exact: true })).toBeVisible();
     await openBot(page);
-    const panel = page.getByRole("region", { name: "Website bot settings", exact: true });
-    await expect(panel.getByRole("region", { name: "Persona and skills", exact: true })).toBeVisible();
-    await expect(panel.getByLabel("Speaks as", { exact: true })).toBeVisible();
-    await expect(panel.getByRole("region", { name: "Name and purpose", exact: true })).toBeVisible();
-    await expect(panel.getByRole("region", { name: "Website widget", exact: true })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Website bot settings", exact: true }).getByRole("region", { name: "Website widget", exact: true })).toBeVisible();
+    await page.getByRole("tab", { name: /^Persona & skills/ }).click();
+    await expect(page.getByRole("group", { name: "Speaks as", exact: true }).getByRole("radio")).not.toHaveCount(0);
+    await expect(page.getByRole("region", { name: "Supporting skills", exact: true })).toBeVisible();
+    await page.getByRole("tab", { name: "General", exact: true }).click();
+    await expect(page.getByRole("region", { name: "Name and purpose", exact: true }).getByLabel("Purpose", { exact: true })).toBeVisible();
   });
 
   test("the website bot page fits a narrow viewport, install code included", async ({ page }, testInfo) => {

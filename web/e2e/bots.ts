@@ -17,10 +17,11 @@ export async function e2eBot(request: APIRequestContext) {
   return slug;
 }
 
-/** The E2E bot's page. */
+/** The E2E bot's page, on its Website widget tab (public calls, websites, install code). */
 export async function openTwinBot(page: Page) {
   const slug = await e2eBot(page.request);
   await page.goto(e2eUrl("dash", `/bots/${encodeURIComponent(slug)}`));
+  await page.getByRole("tab", { name: "Website widget", exact: true }).click();
   return slug;
 }
 

@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { PageSection, SECTION_CARD, SectionRow } from "@/components/page-section";
 import { SwitchToggle } from "@/components/switch-toggle";
 import { NativeSelect } from "@/components/ui/native-select";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { twinClient } from "@/lib/twin/client";
 import type { TwinOutputs } from "@/lib/twin/trpc";
@@ -21,7 +20,7 @@ type Bot = TwinOutputs["bots"]["get"];
 const draftOf = (config: WidgetSettings) => config.allowedOrigins.join("\n");
 
 /**
- * One bot's public calls, own name and purpose, and website widget. Save rule: the switch and the duration select save as soon as they
+ * One bot's website channel: public calls (on/off, length) and the widget (allowed websites, install code). Save rule: the switch and the duration select save as soon as they
  * change; the allowed websites are a draft, saved from the bar that appears under them while they differ. The widget has
  * no switch of its own: it is live while anonymous visitors are allowed and at least one website is saved.
  */
@@ -112,8 +111,6 @@ export function PublicAccessPanel({ bot }: { bot: Bot }) {
         </div>
       </PageSection>
 
-      <BotSection bot={bot} />
-
       <PageSection title="Website widget" description="Show this bot as a voice widget on your own website.">
         <div className={cn(SECTION_CARD, "min-w-0 overflow-hidden")}>
           {!live ? (
@@ -189,68 +186,3 @@ function InstallSection({ origin, id, live }: { origin: string; id: string; live
   );
 }
 
-/**
- * The bot's own name and purpose: what its signed-out visitors talk to. It speaks with the trainer's voice
- * and skills, but its name and purpose are its own, so a change here never reaches learners (lib/bots). A draft saved
- * from its bar, like the website list.
- */
-function BotSection({ bot }: { bot: Pick<Bot, "slug" | "name" | "objective"> }) {
-  const refresh = useRefresh();
-  const [saved, setSaved] = useState({ name: bot.name, objective: bot.objective });
-  const [draft, setDraft] = useState(saved);
-  const [busy, setBusy] = useState(false);
-  const dirty = draft.name !== saved.name || draft.objective !== saved.objective;
-  const [received, setReceived] = useState(bot);
-  if (received !== bot) {
-    setReceived(bot);
-    setSaved({ name: bot.name, objective: bot.objective });
-    if (!dirty) setDraft({ name: bot.name, objective: bot.objective });
-  }
-  async function save() {
-    const name = draft.name.trim();
-    const objective = draft.objective.trim();
-    if (!name || !objective) {
-      toast.error(!name ? "Enter a name for the bot" : "Describe what the bot is for");
-      return;
-    }
-    setBusy(true);
-    try {
-      await twinClient.bots.update.mutate({ slug: bot.slug, name, objective });
-      setSaved({ name, objective });
-      setDraft({ name, objective });
-      toast.success("Bot saved");
-      refresh();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not save the bot");
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <PageSection title="Name and purpose" description="What this bot’s visitors get. It uses the twin’s voice and skills; its name and purpose are its own, so learners aren’t affected.">
-      <form className={cn(SECTION_CARD, "min-w-0 overflow-hidden")} onSubmit={(event) => { event.preventDefault(); if (dirty) void save(); }}>
-        <fieldset disabled={busy} className="m-0 min-w-0">
-          <SectionRow title={<label htmlFor="bot-name">Name</label>} detail="Shown on the call screen and the website widget.">
-            <Input id="bot-name" className="w-full sm:w-80" maxLength={120} value={draft.name}
-              onChange={(event) => setDraft({ ...draft, name: event.target.value })} />
-          </SectionRow>
-          <div className="flex flex-col gap-3 border-t border-(--border) px-5 py-4">
-            <div>
-              <label htmlFor="bot-purpose" className="text-sm font-medium">Purpose</label>
-              <p id="bot-purpose-help" className="m-0 mt-0.5 text-sm text-muted-foreground">What the bot is for and how it should help visitors, e.g. answer questions about your coaching and suggest a next step.</p>
-            </div>
-            <Textarea id="bot-purpose" rows={4} maxLength={2000} value={draft.objective} aria-describedby="bot-purpose-help"
-              onChange={(event) => setDraft({ ...draft, objective: event.target.value })} className="min-h-28" />
-          </div>
-        </fieldset>
-        {dirty ? (
-          <div className="flex items-center justify-end gap-2 border-t border-(--border) bg-muted/30 px-5 py-3">
-            <span className="mr-auto text-sm text-muted-foreground" role="status">Unsaved changes</span>
-            <Button type="button" variant="ghost" disabled={busy} onClick={() => setDraft(saved)}>Discard</Button>
-            <Button type="submit" disabled={busy}>{busy ? "Saving…" : "Save"}</Button>
-          </div>
-        ) : null}
-      </form>
-    </PageSection>
-  );
-}

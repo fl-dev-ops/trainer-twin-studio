@@ -34,6 +34,7 @@ import { sessionEvidence } from "@/lib/twin/evidence";
 import { updateTwin } from "@/lib/twin/manage";
 import { attachRatings, durationSeconds, firstExchange, lastSevenDays, likeRateByWeek, mostAsked, titleFrom, transcriptTurns } from "@/lib/twin/stats";
 import { hydrateAgentSkill } from "@/lib/skill-history";
+import { listPersonas } from "@/lib/personas";
 
 /**
  * Twin-scoped tRPC surface, mounted at /api/twin. Studio members (admin, team) only; every query is
@@ -664,12 +665,13 @@ const avatarRouter = t.router({
 });
 
 /** A bot as the bot pages show it: who it speaks as, its purpose, skills and public settings. */
-function botView(bot: PublicBot, orgSlug: string) {
+function botView(bot: PublicBot, orgSlug: string, faces: Map<string, { role: string | null; photoUrl: string | null }>) {
+  const face = faces.get(bot.persona.slug);
   return {
     slug: bot.slug,
     name: bot.name,
     objective: text((bot.data as Record<string, unknown> | null)?.objective) ?? "",
-    persona: bot.persona,
+    persona: { ...bot.persona, role: face?.role ?? null, photoUrl: face?.photoUrl ?? null },
     skills: bot.supportingSkills.map((row) => ({ id: row.skill.id, slug: row.skill.ownerSlug, name: row.skill.name, active: row.active })),
     publicAccess: publicSettingsOf(bot.deployment),
     widget: { id: bot.id, config: widgetSettingsOf(bot.deployment), origin: new URL(twinShareUrl(orgSlug, "")).origin },
@@ -678,12 +680,22 @@ function botView(bot: PublicBot, orgSlug: string) {
 
 /** The personas a bot can speak as: the org's (own and custom) and the global library. */
 async function botPersonaChoices(orgId: string) {
-  const rows = await db.persona.findMany({
-    where: { OR: [{ orgId }, { orgId: null }] },
-    orderBy: [{ isOwn: "desc" }, { name: "asc" }],
-    select: { id: true, slug: true, name: true, isOwn: true, orgId: true },
-  });
-  return rows.map((row) => ({ id: row.id, slug: row.slug, name: row.name, own: row.isOwn, global: row.orgId === null }));
+  const [rows, views] = await Promise.all([
+    db.persona.findMany({
+      where: { OR: [{ orgId }, { orgId: null }] },
+      orderBy: [{ isOwn: "desc" }, { name: "asc" }],
+      select: { id: true, slug: true, name: true, isOwn: true, orgId: true },
+    }),
+    listPersonas(orgId),
+  ]);
+  const faces = new Map(views.map((view) => [view.slug, { role: view.persona.role ?? null, photoUrl: view.photoUrl ?? null }]));
+  return {
+    faces,
+    choices: rows.map((row) => ({
+      id: row.id, slug: row.slug, name: row.name, own: row.isOwn, global: row.orgId === null,
+      role: faces.get(row.slug)?.role ?? null, photoUrl: faces.get(row.slug)?.photoUrl ?? null,
+    })),
+  };
 }
 
 const botMissing = () => new TRPCError({ code: "NOT_FOUND", message: "Bot not found" });
@@ -695,13 +707,13 @@ const botMissing = () => new TRPCError({ code: "NOT_FOUND", message: "Bot not fo
 const botsRouter = t.router({
   list: studioProcedure.query(async ({ ctx }) => {
     const [bots, personas] = await Promise.all([listBots(ctx.user.orgId), botPersonaChoices(ctx.user.orgId)]);
-    return { bots: bots.map((bot) => botView(bot, ctx.user.orgSlug)), personas };
+    return { bots: bots.map((bot) => botView(bot, ctx.user.orgSlug, personas.faces)), personas: personas.choices };
   }),
   get: studioProcedure.input(z.object({ slug: z.string().min(1).max(200) })).query(async ({ ctx, input }) => {
     const bot = await botBySlug(ctx.user.orgId, input.slug);
     if (!bot) throw botMissing();
     const [personas, skills] = await Promise.all([botPersonaChoices(ctx.user.orgId), supportingSkillChoices(ctx.user.orgId)]);
-    return { ...botView(bot, ctx.user.orgSlug), choices: { personas, skills } };
+    return { ...botView(bot, ctx.user.orgSlug, personas.faces), choices: { personas: personas.choices, skills } };
   }),
   /** A new bot: its persona, name and purpose. Public calls start off; skills are added on its page. */
   create: studioProcedure
