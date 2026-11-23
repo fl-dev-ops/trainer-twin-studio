@@ -82,14 +82,14 @@ export function TwinEditPage({
   const savedSettings = useRef(twin.settings);
   const settingsQueue = useRef(Promise.resolve());
   /** Switch saves still queued: a refresh that lands meanwhile carries older settings and mustn't undo a newer click. */
-  const pendingSaves = useRef(0);
+  const [pendingSaves, setPendingSaves] = useState(0);
 
   // The page first renders from cached data, then the fresh copy arrives: take its values when they differ from what
   // this page last received (otherwise coming back after a change shows the old values).
   const [received, setReceived] = useState(twin);
   if (received !== twin) {
     setReceived(twin);
-    if (pendingSaves.current === 0 && JSON.stringify(twin.settings) !== JSON.stringify(received.settings)) {
+    if (pendingSaves === 0 && JSON.stringify(twin.settings) !== JSON.stringify(received.settings)) {
       setSettings(twin.settings);
       // Unsaved upload card text stays (a switch saved meanwhile); untouched text follows the saved values.
       const untouched = card.uploadTitle === received.settings.uploadTitle && card.uploadInstruction === received.settings.uploadInstruction;
@@ -142,7 +142,7 @@ export function TwinEditPage({
    */
   function saveSettings(next: typeof settings, done: string) {
     setSettings(next);
-    pendingSaves.current += 1;
+    setPendingSaves((count) => count + 1);
     settingsQueue.current = settingsQueue.current.then(async () => {
       if (JSON.stringify(next) === JSON.stringify(savedSettings.current)) return;
       try {
@@ -154,7 +154,7 @@ export function TwinEditPage({
         toast.error(error instanceof Error ? error.message : "Could not save");
         setSettings(savedSettings.current);
       }
-    }).finally(() => { pendingSaves.current -= 1; });
+    }).finally(() => setPendingSaves((count) => count - 1));
   }
 
   async function handleSave() {

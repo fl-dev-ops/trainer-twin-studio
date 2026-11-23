@@ -16,6 +16,9 @@ const nextConfig: NextConfig = {
     // Pages render in the browser and load their data through /api/trpc (lib/api.ts), so a page's router payload holds
     // no data: reuse it for 5 minutes and repeat navigations make no server request. useRefresh() clears it on a change.
     staleTimes: { dynamic: 300 },
+    // The browser tests' server (e2e/env.ts) restarted on an old on-disk cache serves stale client bundles, and every
+    // page then reloads forever ("HMR hash mismatch"): it compiles fresh each start instead.
+    turbopackFileSystemCacheForDev: process.env.NEXT_DIST_DIR !== ".next-e2e",
   },
   // native/wasm binaries must not be bundled into ESM chunks
   serverExternalPackages: [
