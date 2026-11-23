@@ -7,10 +7,11 @@ import { authorizeBrowserSession, authorizeRuntimeSession, browserToken, runtime
 import { expirePublicCall } from "@/workflows/steps/public-call-deadline";
 import { enqueueWorkspaceCommand } from "@/lib/workspace-commands";
 import { fundOrg, availableOrgSeconds } from "../setup/meteroid";
-import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "./minutes-test-db";
+import { db, localMinutesDb, minutesFixture, setTwinPublic, type MinutesFixture } from "./minutes-test-db";
 
 describe.skipIf(!localMinutesDb)("public twin lifecycle (real database)", () => {
   let f: MinutesFixture;
+  let bot: { id: string; slug: string };
   let oldSecret: string | undefined;
   const spies: { mockRestore(): void }[] = [];
   let scheduling: ReturnType<typeof spyOn<typeof workflow, "start">>;
@@ -21,7 +22,7 @@ describe.skipIf(!localMinutesDb)("public twin lifecycle (real database)", () => 
   beforeEach(async () => {
     f = minutesFixture();
     await f.create();
-    await db.agent.update({ where: { id: f.twin.id }, data: { data: { publicAccess: { enabled: true, maxSeconds: 300 } } } });
+    bot = (await setTwinPublic(f, { publicAccess: { enabled: true, maxSeconds: 300 } }))!;
     oldSecret = process.env.COPILOT_SERVICE_SECRET;
     initializeFails = false;
     process.env.COPILOT_SERVICE_SECRET = "public-twin-test-secret";
@@ -47,7 +48,7 @@ describe.skipIf(!localMinutesDb)("public twin lifecycle (real database)", () => 
     orgId: f.org.id, agentId: f.twin.id, visitorId: hash(visitor), ipHash: hash(ip), name: "  Public Visitor  ",
   });
   const seed = async (fields: Parameters<MinutesFixture["session"]>[0] = {}) => f.session({
-    userId: null, agentId: f.twin.id, agentSlug: f.twin.slug, anonymousId: hash(randomUUID()), anonymousIpHash: hash(randomUUID()),
+    userId: null, agentId: bot.id, agentSlug: bot.slug, anonymousId: hash(randomUUID()), anonymousIpHash: hash(randomUUID()),
     anonymousName: "Visitor", mode: "voice", chargesOrg: true, allowedSeconds: 120,
     startedAt: new Date(Date.now() - 30_000), endedAt: null, status: "active", ...fields,
   });
@@ -83,7 +84,7 @@ describe.skipIf(!localMinutesDb)("public twin lifecycle (real database)", () => 
   test.each(["off", "archived", "other-org", "roleplay", "invalid-name"])("refuses %s without session or runtime", async (state) => {
     await fundOrg({ orgId: f.org.id, minutes: 10 });
     const request = input();
-    if (state === "off") await db.agent.update({ where: { id: f.twin.id }, data: { data: {} } });
+    if (state === "off") await setTwinPublic(f, { publicAccess: { enabled: false } });
     if (state === "archived") await db.agent.update({ where: { id: f.twin.id }, data: { archivedAt: new Date() } });
     if (state === "other-org") request.orgId = "different-org";
     if (state === "roleplay") request.agentId = f.roleplay.id;

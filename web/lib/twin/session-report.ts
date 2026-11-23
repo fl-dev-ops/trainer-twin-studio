@@ -84,7 +84,7 @@ export async function loadTwinReportInput(sessionId: string): Promise<TwinReport
   const turns = transcriptTurns(session?.transcript);
   const ended = session?.status === "completed" || (session?.status === "abandoned" && turns.some((turn) => turn.who === "learner"));
   return {
-    eligible: Boolean(session && ended && session.agent.kind === "TWIN" && !session.twinCalibration),
+    eligible: Boolean(session && ended && (session.agent.kind === "TWIN" || session.agent.kind === "BOT") && !session.twinCalibration),
     transcriptFinal: evidence.transcriptFinal === true,
     turns,
     agentName: session?.agent.name ?? "Twin",

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import {
   BrandMark,
+  BotIcon,
   PersonaIcon,
   RoleplayIcon,
   SessionsIcon,
@@ -44,6 +45,13 @@ const NAV_GROUPS = [
         icon: TwinIcon,
         also: ["/twin/knowledge"],
       },
+    ],
+  },
+  {
+    label: "Bots",
+    items: [
+      // A bot is a twin's public side for signed-out visitors (lib/bots).
+      { title: "Website bots", href: dashRoute("/bots"), icon: BotIcon },
     ],
   },
   {

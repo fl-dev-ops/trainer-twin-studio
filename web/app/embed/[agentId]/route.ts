@@ -1,6 +1,6 @@
 import { AppError, refusals } from "@/lib/errors";
 import { widgetAgent, widgetPageOrg } from "@/lib/widget-access";
-import { publicTwinSettings } from "@/lib/public-twin-settings";
+import { publicSettingsOf } from "@/lib/bots";
 import { trainerProfile } from "@/lib/pages/learner";
 
 function scriptData(value: object) {
@@ -25,7 +25,7 @@ export async function GET(request: Request, context: { params: Promise<{ agentId
     const config = {
       agentId, parentOrigin, mode, name: agent.name, trainerName: agent.persona.name,
       photoUrl: trainer.photoUrl, welcome: settings.welcome, accentColor: settings.accentColor,
-      maxSeconds: publicTwinSettings(agent.data).maxSeconds,
+      maxSeconds: publicSettingsOf(agent.deployment).maxSeconds,
       livekitUrl: process.env.NEXT_PUBLIC_LIVEKIT_URL || process.env.LIVEKIT_URL || "",
     };
     const csp = [

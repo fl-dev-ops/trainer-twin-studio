@@ -22,7 +22,7 @@ export async function startSessionEnd(sessionId: string) {
   try {
     const session = await db.interviewSession.findUnique({ where: { id: sessionId }, select: { agent: { select: { kind: true } } } });
     if (!session) return;
-    await start(session.agent.kind === "TWIN" ? endTwinSession : endRoleplaySession, [sessionId]);
+    await start(session.agent.kind === "TWIN" || session.agent.kind === "BOT" ? endTwinSession : endRoleplaySession, [sessionId]);
     await db.interviewSession.update({ where: { id: sessionId }, data: { endWorkAt: new Date() } });
   } catch (error) {
     console.error(`[session-end] ${sessionId}: workflow did not start; closing and charging here:`, error instanceof Error ? error.message : error);

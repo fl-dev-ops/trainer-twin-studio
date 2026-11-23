@@ -21,7 +21,6 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { AccessUntil } from "@/components/twin/access-until";
 import { TWIN_UPLOAD_TITLE_DEFAULT } from "@/lib/context-upload";
-import { PublicAccessPanel } from "@/components/twin/public-access-panel";
 import { dashRoute } from "@/lib/routes";
 
 type LearnerAssign = TwinOutputs["assignments"]["list"][number];
@@ -63,7 +62,7 @@ export function TwinEditPage({
   learners,
   defaultTab = "general",
 }: {
-  twin: Pick<TwinOutputs["agents"]["get"], "slug" | "name" | "description" | "settings" | "publicAccess" | "widget">;
+  twin: Pick<TwinOutputs["agents"]["get"], "slug" | "name" | "description" | "settings" | "allSkills" | "bots" | "publicAccess">;
   learners: LearnerAssign[];
   /** /edit opens on General, /assign on Learners. */
   defaultTab?: "general" | "conversation" | "learners";
@@ -209,7 +208,6 @@ export function TwinEditPage({
         <TabsList className="max-w-full overflow-x-auto">
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="conversation">Conversation</TabsTrigger>
-          <TabsTrigger value="public">Public access</TabsTrigger>
           <TabsTrigger value="learners">
             Learners
             <span className="text-muted-foreground tabular-nums">· {assigned.length}</span>
@@ -241,6 +239,20 @@ export function TwinEditPage({
             </div>
           </form>
         </PageSection>
+          <PageSection title="Website bots" description="What signed-out visitors talk to, on this twin’s link and your websites." className="mt-10"
+            action={<Button variant="outline" size="lg" nativeButton={false} render={<Link href={dashRoute(`/bots?new=${encodeURIComponent(id)}`)} />}>New bot</Button>}>
+            {twin.bots.length ? (
+              <div className={SECTION_CARD}>
+                {twin.bots.map((bot) => (
+                  <SectionRow key={bot.slug} title={bot.name} detail={bot.publicOn ? "Public calls are on." : "Public calls are off."}>
+                    <Button variant="ghost" nativeButton={false} render={<Link href={dashRoute(`/bots/${encodeURIComponent(bot.slug)}`)} />}>Manage</Button>
+                  </SectionRow>
+                ))}
+              </div>
+            ) : (
+              <div className={cn(SECTION_CARD, "px-5 py-6 text-center text-sm text-muted-foreground")}>No bots yet.</div>
+            )}
+          </PageSection>
       </TabsContent>
 
       <TabsContent value="conversation">
@@ -298,9 +310,6 @@ export function TwinEditPage({
         </div>
       </TabsContent>
 
-      <TabsContent value="public">
-        <PublicAccessPanel twin={twin} />
-      </TabsContent>
       <TabsContent value="learners">
       <div id="assign">
         <PageSection title="Learners" description={`${assigned.length} assigned. Credits are each learner’s own, shared across twins and role plays.`}

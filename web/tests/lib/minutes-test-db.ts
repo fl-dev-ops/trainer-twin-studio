@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import { voicePrefix } from "@/lib/s3";
 import { testDatabaseUrl } from "../setup/test-db-url";
 import type { Prisma } from "@/lib/generated/prisma/client";
+import { saveBotPublicSettings } from "@/lib/bots";
 
 // Never use a remote database, or a fake left behind by another file's mock.module.
 const testUrl = testDatabaseUrl();
@@ -74,3 +75,11 @@ const unexpectedMeteroid: string[] = [];
 meteroidServer.events.on("request:unhandled", ({ request }) => { if (request.url.includes("meteroid")) unexpectedMeteroid.push(request.url); });
 beforeAll(() => meteroidServer.listen({ onUnhandledRequest: "bypass" }));
 afterAll(() => { meteroidServer.close(); expect(unexpectedMeteroid).toEqual([]); });
+
+/** Public calls and the widget for a fixture's twin: saved on its bot's public deployment, as the settings page does. */
+export async function setTwinPublic(
+  f: { org: { id: string }; twin: { id: string } },
+  settings: Parameters<typeof saveBotPublicSettings>[2],
+) {
+  return db.$transaction((tx) => saveBotPublicSettings(f.org.id, f.twin.id, settings, tx));
+}

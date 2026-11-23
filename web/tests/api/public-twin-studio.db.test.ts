@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { createHash, randomUUID } from "node:crypto";
 import { POST } from "@/app/api/copilot/studio/route";
 import { browserToken, runtimeToken, tokenHash } from "@/lib/interview-sessions";
-import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "../lib/minutes-test-db";
+import { db, localMinutesDb, minutesFixture, setTwinPublic, type MinutesFixture } from "../lib/minutes-test-db";
 
 describe.skipIf(!localMinutesDb)("public twin studio service boundary (real database)", () => {
   let f: MinutesFixture;
@@ -14,10 +14,10 @@ describe.skipIf(!localMinutesDb)("public twin studio service boundary (real data
     await f.create();
     oldSecret = process.env.COPILOT_SERVICE_SECRET;
     process.env.COPILOT_SERVICE_SECRET = secret;
-    await db.agent.update({ where: { id: f.twin.id }, data: { data: { publicAccess: { enabled: true, maxSeconds: 120 } } } });
+    const bot = (await setTwinPublic(f, { publicAccess: { enabled: true, maxSeconds: 300 } }))!;
     const hash = () => createHash("sha256").update(randomUUID()).digest("hex");
     call = await f.session({
-      agentId: f.twin.id, agentSlug: f.twin.slug, userId: null, anonymousId: hash(), anonymousIpHash: hash(), anonymousName: "Visitor",
+      agentId: bot.id, agentSlug: bot.slug, userId: null, anonymousId: hash(), anonymousIpHash: hash(), anonymousName: "Visitor",
       mode: "voice", status: "active", chargesOrg: true, allowedSeconds: 120, startedAt: new Date(), endedAt: null,
     });
     await db.interviewSession.update({ where: { id: call.id }, data: { runtimeTokenHash: tokenHash(runtimeToken(call.id)) } });

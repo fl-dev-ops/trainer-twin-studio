@@ -1,11 +1,12 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { db } from "@/lib/db";
+import { db, withLock } from "@/lib/db";
 import { builtFrom } from "@/lib/skill-sources";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import { beforeSettings } from "@/lib/context-upload";
-import { publicTwinSettings, publicTwinSettingsSchema } from "@/lib/public-twin-settings";
-import { widgetSettings, widgetSettingsSchema } from "@/lib/widget-settings";
+import { publicTwinSettingsSchema } from "@/lib/public-twin-settings";
+import { widgetSettingsSchema } from "@/lib/widget-settings";
+import { botBySlug, botForTwin, createBot, listBots, publicSettingsOf, saveBotOwnDetails, saveBotPublic, twinIdOf, widgetSettingsOf, type PublicBot } from "@/lib/bots";
 import { assignablePeople } from "@/lib/learners";
 import { LEARNER_ROLE } from "@/lib/org";
 import { LEARNER, orgPeople, orgPerson } from "@/lib/org-people";
@@ -62,7 +63,8 @@ const learnerSessions = (orgId: string, agentId?: string): Prisma.InterviewSessi
   startedAt: { not: null },
   status: { not: "failed" },
   twinCalibration: { is: null },
-  agent: { kind: "TWIN" },
+  // Bot calls are the twin's public calls: listed with its sessions.
+  agent: { kind: { in: ["TWIN", "BOT"] } },
   AND: [{ OR: [
     { user: { members: { some: { organizationId: orgId, role: LEARNER_ROLE } } } },
     { userId: null, anonymousId: { not: null } },
@@ -266,6 +268,7 @@ const agentsRouter = t.router({
     const agent = savedAgent.primarySkillId ? await hydrateAgentSkill(orgId, savedAgent) : savedAgent;
     const data = asRecord(agent.data);
     const allSkills = data.source === TWIN_SOURCE;
+    const bot = await botForTwin(orgId, found.id);
     const active = assignments.filter((row) => row.status === "active");
     const lengths = sessions.map((row) => durationSeconds(row.startedAt, row.endedAt)).filter((s): s is number => s !== null);
     const rated = sessions.map((row) => row.feedbackRating).filter((r): r is number => r !== null);
@@ -285,8 +288,12 @@ const agentsRouter = t.router({
         ? skillAgents.map((skill) => ({ agentId: skill.id, version: skill.version }))
         : [{ agentId: found.id, version: agent.version }]),
       settings: beforeSettings(data),
-      publicAccess: publicTwinSettings(data),
-      widget: { id: found.id, config: widgetSettings(data), origin: new URL(twinShareUrl(ctx.user.orgSlug, "")).origin },
+      /** This twin's bots (Website bots), for the card on its settings page. */
+      bots: (await listBots(orgId)).filter((row) => twinIdOf(row) === found.id)
+        .map((row) => ({ slug: row.slug, name: row.name, publicOn: publicSettingsOf(row.deployment).enabled })),
+      // Public calls and the widget are the twin's bot's (lib/bots); the install code names the bot once it exists.
+      publicAccess: publicSettingsOf(bot?.deployment ?? null),
+      widget: { id: bot?.id ?? found.id, config: widgetSettingsOf(bot?.deployment ?? null), origin: new URL(twinShareUrl(ctx.user.orgSlug, "")).origin },
       credit: {
         // Minutes of this twin's learners (each learner's own, shared with their other twins and role plays).
         minutes: active.reduce((sum, row) => sum + row.minutesGiven, 0),
@@ -646,6 +653,102 @@ const avatarRouter = t.router({
     .mutation(({ ctx, input }) => twinCall(() => savePersonaVoice(ctx.user.orgId, input))),
 });
 
+/** A bot as the Website bot pages show it. */
+async function botView(orgId: string, bot: PublicBot, twins: Map<string, { slug: string; name: string }>, orgSlug: string) {
+  const twinId = twinIdOf(bot);
+  const twin = twinId ? twins.get(twinId) : undefined;
+  const widget = widgetSettingsOf(bot.deployment);
+  return {
+    slug: bot.slug,
+    name: bot.name,
+    objective: text((bot.data as Record<string, unknown> | null)?.objective) ?? "",
+    trainer: bot.persona.name,
+    twin: twin ? { slug: twin.slug, name: twin.name } : null,
+    publicAccess: publicSettingsOf(bot.deployment),
+    widget: { id: bot.id, config: widget, origin: new URL(twinShareUrl(orgSlug, "")).origin },
+  };
+}
+
+const sourceOf = (data: unknown) => (data as Record<string, unknown> | null)?.source;
+
+async function liveTwins(orgId: string) {
+  const rows = await db.agent.findMany({
+    where: { orgId, kind: "TWIN", archivedAt: null },
+    orderBy: { createdAt: "asc" },
+    select: { id: true, slug: true, name: true, data: true, persona: { select: { name: true } } },
+  });
+  return rows;
+}
+
+/**
+ * Website bots (sidebar, under Twin): the public side of a trainer's twin (lib/bots). A twin can have several; each has
+ * its own name, purpose, public call settings and widget websites.
+ */
+const botsRouter = t.router({
+  /** Every bot, and the twins a new bot can speak as. */
+  list: studioProcedure.query(async ({ ctx }) => {
+    const orgId = ctx.user.orgId;
+    const [bots, twins] = await Promise.all([listBots(orgId), liveTwins(orgId)]);
+    const byId = new Map(twins.map((twin) => [twin.id, twin]));
+    return {
+      bots: await Promise.all(bots.map((bot) => botView(orgId, bot, byId, ctx.user.orgSlug))),
+      // Main twins first: a bot speaks with all of its trainer's skills whichever twin it was made for.
+      twins: [...twins].sort((a, b) => Number(sourceOf(b.data) === TWIN_SOURCE) - Number(sourceOf(a.data) === TWIN_SOURCE))
+        .map((twin) => ({ slug: twin.slug, name: twin.name, trainer: twin.persona.name })),
+    };
+  }),
+  get: studioProcedure.input(z.object({ slug: z.string().min(1).max(200) })).query(async ({ ctx, input }) => {
+    const bot = await botBySlug(ctx.user.orgId, input.slug);
+    if (!bot) throw new TRPCError({ code: "NOT_FOUND", message: "Bot not found" });
+    const twins = await liveTwins(ctx.user.orgId);
+    return botView(ctx.user.orgId, bot, new Map(twins.map((twin) => [twin.id, twin])), ctx.user.orgSlug);
+  }),
+  /** A new bot for one of the trainer's twins; public calls start off. */
+  create: studioProcedure
+    .input(z.object({
+      twinSlug: z.string().min(1).max(200),
+      name: z.string().trim().min(1).max(120),
+      objective: z.string().trim().min(1).max(2000),
+    }))
+    .mutation(({ ctx, input }) => twinCall(async () => {
+      const twin = await findTwinAgent(ctx.user.orgId, input.twinSlug);
+      const bot = await withLock([`agent:${twin.slug}`], (tx) => createBot(ctx.user.orgId, twin.id, { name: input.name, objective: input.objective }, tx));
+      if (!bot) throw new TRPCError({ code: "NOT_FOUND", message: "Twin not found" });
+      return { slug: bot.slug };
+    })),
+  /** A bot's name, purpose, public calls and widget websites: each part optional, saved on the bot only. */
+  update: studioProcedure
+    .input(z.object({
+      slug: z.string().min(1).max(200),
+      name: z.string().trim().min(1).max(120).optional(),
+      objective: z.string().trim().min(1).max(2000).optional(),
+      publicAccess: publicTwinSettingsSchema.partial().optional(),
+      // `enabled` follows the website list (lib/bots), so it isn't accepted here.
+      widget: z.object(widgetSettingsSchema.shape).omit({ enabled: true }).strict().partial().optional(),
+    }))
+    .mutation(({ ctx, input }) => twinCall(async () => {
+      const orgId = ctx.user.orgId;
+      const bot = await withLock([`agent:${input.slug}`], async (tx) => {
+        let current = await botBySlug(orgId, input.slug, tx);
+        if (!current) throw new TRPCError({ code: "NOT_FOUND", message: "Bot not found" });
+        if (input.name !== undefined || input.objective !== undefined) current = (await saveBotOwnDetails(current, { name: input.name, objective: input.objective }, tx))!;
+        if (input.publicAccess || input.widget) current = (await saveBotPublic(current, { publicAccess: input.publicAccess, widget: input.widget }, tx))!;
+        return current;
+      });
+      return { version: bot.version };
+    })),
+  /** Takes a bot offline for good: its link and widget stop; its calls stay in the twin's sessions. */
+  archive: studioProcedure.input(z.object({ slug: z.string().min(1).max(200) })).mutation(({ ctx, input }) => twinCall(async () => {
+    const bot = await botBySlug(ctx.user.orgId, input.slug);
+    if (!bot) throw new TRPCError({ code: "NOT_FOUND", message: "Bot not found" });
+    await db.$transaction([
+      db.agent.update({ where: { id: bot.id }, data: { archivedAt: new Date() } }),
+      ...(bot.deployment ? [db.deployment.update({ where: { id: bot.deployment.id }, data: { status: "disabled" } })] : []),
+    ]);
+    return { ok: true };
+  })),
+});
+
 export const twinRouter = t.router({
   /** Who is talking to us over /api/twin. */
   me: studioProcedure.query(({ ctx }) => ctx.user),
@@ -655,6 +758,7 @@ export const twinRouter = t.router({
   users: usersRouter,
   calibrations: calibrationsRouter,
   avatar: avatarRouter,
+  bots: botsRouter,
 });
 
 export type TwinRouter = typeof twinRouter;

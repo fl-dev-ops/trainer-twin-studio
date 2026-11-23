@@ -5,6 +5,7 @@ import { getAgentConfigForAgent } from "@/lib/specs";
 import { readAgentSkillVersion } from "@/lib/skill-history";
 import { ownershipLock, skillOwnership } from "@/lib/skill-ownership";
 import { skillRefusals } from "@/lib/skills";
+import { runsAsMainTwin } from "@/lib/main-twin";
 
 function snapshotRecord(value: Prisma.JsonValue): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value) ? value : null;
@@ -34,7 +35,7 @@ export async function ensureSessionSnapshot(sessionId: string, orgId: string): P
     if (!config) throw skillRefusals.unavailable();
     if (config.agent.slug !== session.agentSlug) throw skillRefusals.unavailable();
     const data = config.agent.data && typeof config.agent.data === "object" && !Array.isArray(config.agent.data) ? config.agent.data : {};
-    if (config.agent.kind === "TWIN" && "source" in data && data.source === "twin") throw skillRefusals.unavailable();
+    if (runsAsMainTwin(config.agent.kind, data)) throw skillRefusals.unavailable();
     if ((config.agent.primarySkillId || "skill" in data) && (await skillOwnership(orgId, tx)).mode === "managed"
       && !await readAgentSkillVersion(orgId, config.agent.id, session.agentVersion, tx)) throw skillRefusals.unavailable();
     const serialized: Prisma.InputJsonObject = JSON.parse(JSON.stringify(config));

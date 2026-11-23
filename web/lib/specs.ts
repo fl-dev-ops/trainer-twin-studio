@@ -71,7 +71,7 @@ export async function listSpecSummaries(type: "personas" | "agents", orgId: stri
 
   const [agents, drafts, assignments] = await Promise.all([
     db.agent.findMany({
-      where: { orgId, archivedAt: null, ...(kind ? { kind } : {}) },
+      where: { orgId, archivedAt: null, ...(kind ? { kind } : { kind: { not: "BOT" } }) },
       orderBy: [{ order: "asc" }, { name: "asc" }],
       select: {
         id: true,
@@ -198,6 +198,8 @@ export async function listRunnableSpecs(type: "personas" | "agents", orgId: stri
 export function isRunnableAgentData(kind: AgentKind, data: Record<string, unknown>) {
   if (typeof data.objective !== "string") return false;
   if (kind === "TWIN") return data.source === "twin" || typeof data.skill === "string";
+  // Bots run only as public calls (lib/public-twin-sessions), never from the talk page or the API.
+  if (kind === "BOT") return false;
   // Builder and recording-authored packages both run from their published skill.
   if (data.source === "roleplay-skill" || data.source === "scenario-ingest") return typeof data.skill === "string" && Boolean(data.skill.trim());
   return typeof data.opening === "string" && isRecord(data.config);
@@ -330,7 +332,7 @@ export type SaveResult = {
  */
 export function assertSpecBuilt(agent: { kind?: AgentKind; primarySkillId?: string | null; data: unknown }) {
   const data = (agent.data && typeof agent.data === "object" ? agent.data : {}) as Record<string, unknown>;
-  if (agent.kind === "TWIN" || agent.primarySkillId || data.source === ROLEPLAY_SOURCE || data.source === "scenario-ingest" || typeof data.skill === "string") {
+  if (agent.kind === "TWIN" || agent.kind === "BOT" || agent.primarySkillId || data.source === ROLEPLAY_SOURCE || data.source === "scenario-ingest" || typeof data.skill === "string") {
     throw refusals.invalidInput("Edit this one in its builder: spec uploads only change older spec-built role plays.");
   }
 }

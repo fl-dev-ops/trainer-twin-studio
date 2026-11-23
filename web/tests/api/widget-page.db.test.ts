@@ -1,21 +1,22 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { GET } from "@/app/embed/[agentId]/route";
 import { BASE_DOMAIN } from "@/lib/base-domain";
-import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "../lib/minutes-test-db";
+import { db, localMinutesDb, minutesFixture, setTwinPublic, type MinutesFixture } from "../lib/minutes-test-db";
 
 describe.skipIf(!localMinutesDb)("hosted widget security (real database)", () => {
   let f: MinutesFixture;
   const origins = ["https://customer.example", "https://other.example:8443", "http://localhost:4312"];
   const xss = '</script><script>alert("xss")</script>&\u2028\u2029';
   const settings = () => ({
-    publicAccess: { enabled: true, maxSeconds: 300 },
-    widget: { enabled: true, allowedOrigins: origins, welcome: xss, accentColor: "#123456" },
-    privateInstructions: "never-expose-private-instructions",
+    publicAccess: { enabled: true, maxSeconds: 300 as const },
+    widget: { allowedOrigins: origins, welcome: xss, accentColor: "#123456" },
   });
   beforeEach(async () => {
     f = minutesFixture();
     await f.create();
-    await db.agent.update({ where: { id: f.twin.id }, data: { name: xss, data: settings() } });
+    // The bot takes the twin's name and data when it is made (lib/bots).
+    await db.agent.update({ where: { id: f.twin.id }, data: { name: xss, data: { privateInstructions: "never-expose-private-instructions" } } });
+    await setTwinPublic(f, settings());
   });
   afterEach(async () => { await f.clean(); });
   const page = (parent: string | null = origins[0], agentId = f.twin.id, host = `${f.org.slug}.${BASE_DOMAIN}`) => {
@@ -56,11 +57,10 @@ describe.skipIf(!localMinutesDb)("hosted widget security (real database)", () =>
     expect(await response.text()).not.toContain("trainertwin-config");
   });
   test.each(["widget-off", "public-off", "archived", "removed-origin"])("unavailable hosted page after %s", async (kind) => {
-    const data = settings();
-    if (kind === "widget-off") data.widget = { ...data.widget, enabled: false, allowedOrigins: [] };
-    if (kind === "public-off") data.publicAccess.enabled = false;
-    if (kind === "removed-origin") data.widget.allowedOrigins = [origins[1]];
-    await db.agent.update({ where: { id: f.twin.id }, data: { data, ...(kind === "archived" ? { archivedAt: new Date() } : {}) } });
+    if (kind === "widget-off") await setTwinPublic(f, { widget: { allowedOrigins: [] } });
+    if (kind === "public-off") await setTwinPublic(f, { publicAccess: { enabled: false } });
+    if (kind === "removed-origin") await setTwinPublic(f, { widget: { allowedOrigins: [origins[1]] } });
+    if (kind === "archived") await db.agent.update({ where: { id: f.twin.id }, data: { archivedAt: new Date() } });
     const response = await page();
     expect(response.status).toBe(kind === "archived" ? 404 : 403);
     expect(response.headers.get("content-security-policy")).toContain("frame-ancestors 'none'");

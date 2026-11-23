@@ -15,7 +15,7 @@ import { studioFetch, type RuntimeSession } from "./studio";
 type SpecRow = { slug: string; version: number; data: Record<string, unknown> };
 
 /** Which module an agent belongs to (web `Agent.kind`). Missing on persona rows. */
-export type AgentKind = "TWIN" | "ROLEPLAY";
+export type AgentKind = "TWIN" | "ROLEPLAY" | "BOT";
 
 export type AttachedDocument = {
   id: string;
@@ -105,10 +105,11 @@ export function twinLinesQuery(heard: string, lastReply?: string | null): string
 
 /**
  * The all-skills twin ("Ask Olga"): an open conversation over every skill of the persona. Skill twins are
- * TWIN too; inside the twin module `data.source` (provenance) tells the two apart.
+ * TWIN too; inside the twin module `data.source` (provenance) tells the two apart. A BOT (the twin's public side for
+ * website visitors) runs the same way.
  */
 export function isAllSkillsTwin(kind: AgentKind | null | undefined, agentData: Record<string, unknown> | null | undefined) {
-  return kind === "TWIN" && agentData?.source === "twin";
+  return (kind === "TWIN" && agentData?.source === "twin") || kind === "BOT";
 }
 
 /** The eve skill name for a playbook: letters, digits, `-` and `_`, starting with a letter, at most 64 chars. */

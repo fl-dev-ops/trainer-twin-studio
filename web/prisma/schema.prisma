@@ -40,6 +40,8 @@ model Persona {
 enum AgentKind {
   TWIN
   ROLEPLAY
+  /// A public agent for signed-out visitors (website widget, public link) on a trainer's persona; specs/public-twins.md.
+  BOT
 
   @@map("agent_kind")
 }
@@ -693,6 +695,12 @@ model Deployment {
   allowedOrigins     Json?
   status             String   @default("active") // active | disabled
   rateLimitPerMinute Int      @default(30)
+  /// api: external apps (role plays). public: a bot's public link and website widget.
+  channel            String   @default("api")
+  /// public: each anonymous call's length limit in seconds.
+  maxCallSeconds     Int?
+  /// public: the widget's look (welcome, accentColor).
+  config             Json?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 

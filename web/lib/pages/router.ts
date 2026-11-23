@@ -163,7 +163,7 @@ export const pageRouter = t.router({
     const orgId = ctx.user.orgId;
     const [personas, agents, kbs, sessions] = await Promise.all([
       db.persona.count({ where: { orgId } }),
-      db.agent.count({ where: { orgId } }),
+      db.agent.count({ where: { orgId, kind: { not: "BOT" } } }),
       db.knowledgeBase.count({ where: { orgId } }),
       db.interviewSession.findMany({
         where: { orgId, deletedAt: null },

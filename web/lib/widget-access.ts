@@ -1,32 +1,28 @@
 import { randomBytes } from "node:crypto";
-import { db } from "@/lib/db";
 import { AppError, refusals } from "@/lib/errors";
 import { getOrgBySlug } from "@/lib/org";
 import { publicHostSlug, publicIpHash, publicRequestHost } from "@/lib/public-twin-request";
-import { publicTwinSettings } from "@/lib/public-twin-settings";
-import { normalizeWidgetOrigin, widgetSettings } from "@/lib/widget-settings";
+import { publicBot, publicSettingsOf, widgetSettingsOf, type PublicBot } from "@/lib/bots";
+import { normalizeWidgetOrigin } from "@/lib/widget-settings";
 import { readWidgetVisitor, widgetCredentialInvalid, widgetStartGrant, widgetVisitorToken } from "@/lib/widget-tokens";
 
 export const widgetUnavailable = () => new AppError("widget_unavailable", "This twin is not available on this website.", 403);
 
-export function assertWidgetAccess(data: unknown, origin: string) {
-  const settings = widgetSettings(data);
-  // The widget is on exactly when the twin is public and lists this website; the stored `enabled` flag is derived from
-  // the list on save (lib/twin/manage), so older rows with websites but `enabled: false` are not consulted.
-  if (!publicTwinSettings(data).enabled || !settings.allowedOrigins.includes(origin)) throw widgetUnavailable();
+/** The widget runs exactly when the bot's public calls are on and its deployment lists this website. */
+export function assertWidgetAccess(bot: Pick<PublicBot, "deployment">, origin: string) {
+  const settings = widgetSettingsOf(bot.deployment);
+  if (!publicSettingsOf(bot.deployment).enabled || !settings.allowedOrigins.includes(origin)) throw widgetUnavailable();
   return settings;
 }
 
+/** The bot a widget names (its id, or an older snippet's twin id), checked for this website. */
 export async function widgetAgent(orgId: string, agentId: string, parentOrigin: string) {
   const normalized = normalizeWidgetOrigin(parentOrigin);
   if (!normalized || normalized !== parentOrigin) throw widgetUnavailable();
-  const agent = await db.agent.findFirst({
-    where: { id: agentId, orgId, kind: "TWIN", archivedAt: null },
-    select: { id: true, orgId: true, name: true, data: true, personaId: true, persona: { select: { name: true } } },
-  });
-  if (!agent) throw refusals.notFound();
-  const settings = assertWidgetAccess(agent.data, parentOrigin);
-  return { agent, settings };
+  const bot = await publicBot(orgId, agentId);
+  if (!bot) throw refusals.notFound();
+  const settings = assertWidgetAccess(bot, parentOrigin);
+  return { agent: bot, settings };
 }
 
 export async function widgetRequestOrg(request: Request) {

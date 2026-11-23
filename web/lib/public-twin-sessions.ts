@@ -5,10 +5,11 @@ import { AppError, refusals } from "@/lib/errors";
 import { pausedReason } from "@/lib/billing/paused";
 import { minutesLock } from "@/lib/minutes";
 import { orgCredits } from "@/lib/org-credits";
-import { publicTwinSettings, publicVisitorNameSchema } from "@/lib/public-twin-settings";
+import { publicVisitorNameSchema } from "@/lib/public-twin-settings";
+import { publicBot, publicSettingsOf } from "@/lib/bots";
 import { browserToken, initializeChatSession, runtimeToken, tokenHash } from "@/lib/interview-sessions";
 import { getAgentConfigForAgent } from "@/lib/specs";
-import { pinTwinSkills, TWIN_SOURCE } from "@/lib/twins";
+import { pinTwinSkills } from "@/lib/twins";
 import { connectVoice } from "@/lib/session-activation";
 import { closeInterviewSession } from "@/lib/session-lifecycle";
 import { closeLiveKitSession } from "@/lib/livekit";
@@ -38,32 +39,30 @@ export async function startPublicTwinSession(input: {
 }) {
   const parsed = publicVisitorNameSchema.safeParse(input.name);
   if (!parsed.success) throw refusals.invalidInput(parsed.error.issues[0].message);
-  const agent = await db.agent.findFirst({
-    where: { id: input.agentId, orgId: input.orgId, kind: "TWIN", archivedAt: null },
-  });
+  // The public side of a twin is its bot (lib/bots): links and older widget snippets may still name the twin.
+  const agent = await publicBot(input.orgId, input.agentId);
   if (!agent) throw refusals.notFound();
-  if (!publicTwinSettings(agent.data).enabled) throw publicCallRefusals.unavailable();
-  if (input.embedOrigin) assertWidgetAccess(agent.data, input.embedOrigin);
+  if (!agent.deployment || !publicSettingsOf(agent.deployment).enabled) throw publicCallRefusals.unavailable();
+  if (input.embedOrigin) assertWidgetAccess(agent, input.embedOrigin);
 
   const config = await getAgentConfigForAgent(agent.id, input.orgId);
   if (!config || config.agent.version !== agent.version) throw new AppError("public_twin_changed", "This twin was updated. Please start again.", 409);
-  const skills = (agent.data as { source?: string } | null)?.source === TWIN_SOURCE
-    ? await pinTwinSkills(input.orgId, agent.personaId) : undefined;
+  // A bot speaks with all of its trainer's twin skills, like the main twin.
+  const skills = await pinTwinSkills(input.orgId, agent.personaId);
   await orgCredits(input.orgId, { fresh: true });
 
   const session = await withLock([minutesLock(input.orgId)], async (tx) => {
     if (input.grantExpiresAt !== undefined && input.grantExpiresAt * 1000 <= Date.now()) throw widgetCredentialInvalid();
-    // The same row lock is taken by settings/version writes, so disabling cannot race a new start.
-    await tx.$queryRaw`SELECT 1 FROM "Agent" WHERE id = ${agent.id} FOR UPDATE`;
-    const current = await tx.agent.findFirst({
-      where: { id: agent.id, orgId: input.orgId, kind: "TWIN", archivedAt: null },
-      select: { data: true, version: true },
-    });
-    if (!current || !publicTwinSettings(current.data).enabled) throw publicCallRefusals.unavailable();
-    if (input.embedOrigin) assertWidgetAccess(current.data, input.embedOrigin);
+    // Settings saves update this deployment row, so turning public calls off cannot race a new start.
+    await tx.$queryRaw`SELECT 1 FROM "Deployment" WHERE id = ${agent.deployment!.id} FOR UPDATE`;
+    const current = await publicBot(input.orgId, agent.id, tx);
+    if (!current?.deployment || current.deployment.id !== agent.deployment!.id || !publicSettingsOf(current.deployment).enabled) {
+      throw publicCallRefusals.unavailable();
+    }
+    if (input.embedOrigin) assertWidgetAccess(current, input.embedOrigin);
     if (current.version !== agent.version) throw new AppError("public_twin_changed", "This twin was updated. Please start again.", 409);
     if (await pausedReason(input.orgId, "studio", tx)) throw publicCallRefusals.unavailable();
-    const settings = publicTwinSettings(current.data);
+    const settings = publicSettingsOf(current.deployment);
     const since = new Date(Date.now() - 60 * 60 * 1000);
     const [recent, orgRecent, live] = await Promise.all([
       tx.interviewSession.count({

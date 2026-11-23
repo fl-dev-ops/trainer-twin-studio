@@ -2,7 +2,8 @@ import { unstable_cache } from "next/cache";
 import { db } from "@/lib/db";
 import { personaBrief } from "@/lib/persona";
 import { findOrgOrGlobalPersona } from "@/lib/specs";
-import { type PinnedTwinSkill, TWIN_SOURCE, twinPlaybooks, sessionTwinPlaybooks } from "@/lib/twins";
+import { type PinnedTwinSkill, twinPlaybooks, sessionTwinPlaybooks } from "@/lib/twins";
+import { runsAsMainTwin } from "@/lib/main-twin";
 import { loadSessionSkills } from "@/lib/session-skills";
 import { hydrateAgentSkill } from "@/lib/skill-history";
 
@@ -103,7 +104,7 @@ export async function buildSessionContext(input: {
 
   // The all-skills twin draws on its persona's skill twins: the ones pinned when the session started (older
   // sessions without a pin get the live list). kind is immutable, so the live row's kind is the session's module.
-  const isAllSkillsTwin = managedSkill ? managedSkill.isMainTwin : liveAgent?.kind === "TWIN" && (agent?.data as Record<string, unknown> | undefined)?.source === TWIN_SOURCE;
+  const isAllSkillsTwin = managedSkill ? managedSkill.isMainTwin : runsAsMainTwin(liveAgent?.kind, agent?.data);
   const playbooks = managedSkill?.isMainTwin
     ? await sessionTwinPlaybooks(input.orgId, managedSkill)
     : isAllSkillsTwin && liveAgent?.personaId

@@ -28,7 +28,7 @@ const cacheKey = (orgId: string, sessionId?: string, agentSlug?: string) => `${o
 async function fetchMode(orgId: string, sessionId?: string, agentSlug?: string): Promise<SessionMode> {
   const { agent } = await studioFetch<{ agent?: { kind?: string | null; slug?: string; data?: unknown } | null }>(orgId, { action: "getSessionContext", sessionId, agentSlug });
   const data = (agent?.data ?? {}) as Record<string, unknown>;
-  const kind = agent?.kind === "TWIN" || agent?.kind === "ROLEPLAY" ? agent.kind : undefined;
+  const kind = agent?.kind === "TWIN" || agent?.kind === "ROLEPLAY" || agent?.kind === "BOT" ? agent.kind : undefined;
   const twin = twinSessionPlaybooks(agent ? { ...agent, kind, data } : null, undefined);
   return sessionMode({
     roleplay: roleplaySkill(agent?.kind, data),

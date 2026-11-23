@@ -3,8 +3,9 @@ import { stableJson } from "@/lib/stable-json";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import { beforeSettings, type BeforeSettings } from "@/lib/context-upload";
 import { findTwinAgent } from "@/lib/twin-access";
-import { publicTwinSettings, type PublicTwinSettings } from "@/lib/public-twin-settings";
-import { widgetSettings, widgetSettingsSchema, type WidgetSettings } from "@/lib/widget-settings";
+import type { PublicTwinSettings } from "@/lib/public-twin-settings";
+import type { WidgetSettings } from "@/lib/widget-settings";
+import { botForTwin, saveBotPublicSettings } from "@/lib/bots";
 import { refusals } from "@/lib/errors";
 import { carryAgentSkillVersion } from "@/lib/skill-history";
 import { ownershipLock, packageFieldsOmitted, skillOwnership } from "@/lib/skill-ownership";
@@ -23,12 +24,16 @@ export async function updateTwin(orgId: string, slug: string, patch: { name?: st
   const current = await tx.agent.findUniqueOrThrow({ where: { id: found.id }, select: { name: true, version: true, data: true, primarySkillId: true } });
   const previous = asRecord(current.data);
   const name = patch.name ?? current.name;
-  // The widget's `enabled` always follows its website list: on with at least one website, off with none.
-  const mergedWidget = patch.widget ? { ...widgetSettings(current.data), ...patch.widget } : null;
-  const widget = mergedWidget
-    ? widgetSettingsSchema.safeParse({ ...mergedWidget, enabled: Array.isArray(mergedWidget.allowedOrigins) && mergedWidget.allowedOrigins.length > 0 })
-    : null;
-  if (widget && !widget.success) throw refusals.invalidInput(widget.error.issues[0].message);
+  // Public calls and the widget belong to the twin's bot (lib/bots), saved under the same lock; they don't change the
+  // twin itself, so its version (and learners' twin) stays put.
+  if (patch.publicAccess || patch.widget) {
+    const before = await botForTwin(orgId, found.id, tx);
+    const after = await saveBotPublicSettings(orgId, found.id, { publicAccess: patch.publicAccess, widget: patch.widget }, tx);
+    const publicChanged = !before || stableJson(before.deployment) !== stableJson(after?.deployment);
+    if (patch.name === undefined && patch.description === undefined && patch.settings === undefined) {
+      return { version: current.version, changed: publicChanged };
+    }
+  }
   // Before settings: read by the session screen (lib/context-upload), enforced by session start and the attach
   // route. An older `twinSettings` key is left as is; `before` wins.
   const data = {
@@ -36,8 +41,6 @@ export async function updateTwin(orgId: string, slug: string, patch: { name?: st
     name,
     objective: patch.description ?? previous.objective,
     before: { ...beforeSettings(current.data), ...patch.settings },
-    ...(patch.publicAccess ? { publicAccess: { ...publicTwinSettings(current.data), ...patch.publicAccess } } : {}),
-    ...(widget?.success ? { widget: widget.data } : {}),
   };
   if (stableJson(data) === stableJson(current.data) && name === current.name) return { version: current.version, changed: false };
   const managed = current.primarySkillId && (await skillOwnership(orgId, tx)).mode === "managed";

@@ -6,18 +6,19 @@ owned by [Public twins](public-twins.md).
 
 ## Configuration
 
-`Agent.data.widget` is versioned alongside the twin and preserved through skill publication:
+The widget is part of the twin's bot's public `Deployment` ([Public twins](public-twins.md)): never versioned with the
+twin.
 
-- `enabled`: false by default; both this and Public access must be enabled.
+- On exactly when `allowedOrigins` is non-empty and public calls are on; there is no separate switch.
 - `allowedOrigins`: up to 20 exact HTTPS origins, normalized/deduplicated. No wildcard, path, trailing slash,
   credentials, query or fragment. HTTP is limited to localhost/127.0.0.1/localhost subdomains for development.
-- `welcome`: nonempty text up to 120 characters.
-- `accentColor`: six-digit hex colour.
+- `config.welcome`: nonempty text up to 120 characters. `config.accentColor`: six-digit hex colour.
 
-The existing `Agent.id` is the public embed ID. Settings provide a floating snippet; it contains no secret.
+The bot's `Agent.id` is the public embed ID (older snippets with the twin's id resolve to its bot). Settings provide a
+floating snippet; it contains no secret.
 Only enabled org studio members may change these settings.
-Code: `web/lib/widget-settings.ts`, `web/lib/twin/manage.ts`, `web/lib/twin/trpc.ts`,
-`web/components/twin/widget-settings.tsx`.
+Code: `web/lib/bots.ts`, `web/lib/widget-settings.ts`, `web/lib/twin/manage.ts`, `web/lib/twin/trpc.ts`,
+`web/components/twin/public-access-panel.tsx`.
 
 ## Hosting and embedding
 

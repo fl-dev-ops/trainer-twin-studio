@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { PageSection, SECTION_CARD, SectionRow } from "@/components/page-section";
 import { SwitchToggle } from "@/components/switch-toggle";
 import { NativeSelect } from "@/components/ui/native-select";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { twinClient } from "@/lib/twin/client";
 import type { TwinOutputs } from "@/lib/twin/trpc";
@@ -15,30 +16,30 @@ import { PUBLIC_CALL_DURATIONS, type PublicTwinSettings } from "@/lib/public-twi
 import { widgetInstallSnippet, widgetSettingsSchema, type WidgetSettings } from "@/lib/widget-settings";
 import { cn } from "@/lib/utils";
 
-type Twin = Pick<TwinOutputs["agents"]["get"], "slug" | "publicAccess" | "widget">;
+type Bot = TwinOutputs["bots"]["get"];
 /** The allowed websites as typed, one per line. Welcome text and accent colour keep their saved values (not editable yet). */
 const draftOf = (config: WidgetSettings) => config.allowedOrigins.join("\n");
 
 /**
- * Public access and the website widget in one place. Save rule: the switch and the duration select save as soon as they
+ * One bot's public calls, own name and purpose, and website widget. Save rule: the switch and the duration select save as soon as they
  * change; the allowed websites are a draft, saved from the bar that appears under them while they differ. The widget has
  * no switch of its own: it is live while anonymous visitors are allowed and at least one website is saved.
  */
-export function PublicAccessPanel({ twin }: { twin: Twin }) {
+export function PublicAccessPanel({ bot }: { bot: Bot }) {
   const refresh = useRefresh();
-  const [access, setAccess] = useState(twin.publicAccess);
-  const [widget, setWidget] = useState(twin.widget.config);
-  const [draft, setDraft] = useState(() => draftOf(twin.widget.config));
+  const [access, setAccess] = useState(bot.publicAccess);
+  const [widget, setWidget] = useState(bot.widget.config);
+  const [draft, setDraft] = useState(() => draftOf(bot.widget.config));
   const [busy, setBusy] = useState<"access" | "websites" | null>(null);
   const dirty = draft !== draftOf(widget);
 
   // Follow fresh server data (e.g. after a refresh) without discarding unsaved typing.
-  const [received, setReceived] = useState(twin);
-  if (received !== twin) {
-    setReceived(twin);
-    setAccess(twin.publicAccess);
-    setWidget(twin.widget.config);
-    if (!dirty) setDraft(draftOf(twin.widget.config));
+  const [received, setReceived] = useState(bot);
+  if (received !== bot) {
+    setReceived(bot);
+    setAccess(bot.publicAccess);
+    setWidget(bot.widget.config);
+    if (!dirty) setDraft(draftOf(bot.widget.config));
   }
 
   useEffect(() => {
@@ -53,7 +54,7 @@ export function PublicAccessPanel({ twin }: { twin: Twin }) {
     setAccess({ ...access, ...patch });
     setBusy("access");
     try {
-      await twinClient.agents.update.mutate({ slug: twin.slug, publicAccess: patch });
+      await twinClient.bots.update.mutate({ slug: bot.slug, publicAccess: patch });
       toast.success(done);
       refresh();
     } catch (error) {
@@ -66,7 +67,7 @@ export function PublicAccessPanel({ twin }: { twin: Twin }) {
 
   async function saveWebsites() {
     const allowedOrigins = draft.split("\n").map((origin) => origin.trim()).filter(Boolean);
-    // Same rule as the server (lib/twin/manage): the widget is on exactly when it lists a website.
+    // Same rule as the server (lib/bots): the widget is on exactly when it lists a website.
     const parsed = widgetSettingsSchema.safeParse({ ...widget, allowedOrigins, enabled: allowedOrigins.length > 0 });
     if (!parsed.success) {
       toast.error(parsed.error.issues[0].message);
@@ -74,7 +75,7 @@ export function PublicAccessPanel({ twin }: { twin: Twin }) {
     }
     setBusy("websites");
     try {
-      await twinClient.agents.update.mutate({ slug: twin.slug, widget: { allowedOrigins: parsed.data.allowedOrigins } });
+      await twinClient.bots.update.mutate({ slug: bot.slug, widget: { allowedOrigins: parsed.data.allowedOrigins } });
       setWidget(parsed.data);
       setDraft(draftOf(parsed.data));
       toast.success("Allowed websites saved");
@@ -93,9 +94,9 @@ export function PublicAccessPanel({ twin }: { twin: Twin }) {
   return (
     <div className="flex min-w-0 flex-col gap-10">
       <PageSection title="Public voice calls"
-        description="Let signed-out visitors talk to this twin. Calls are paid from your organization’s balance, not learner credits. Changes save automatically.">
+        description="Let signed-out visitors talk to this bot. Calls are paid from your organization’s balance, not learner credits. Changes save automatically.">
         <div className={SECTION_CARD}>
-          <SectionRow title="Allow anonymous visitors" detail="Anyone with the twin’s link, or on an allowed website, can start a short voice call.">
+          <SectionRow title="Allow anonymous visitors" detail="Anyone on an allowed website (and, for a twin’s first bot, anyone with the twin’s link) can start a short voice call.">
             <SwitchToggle checked={access.enabled} label="Allow anonymous visitors"
               onChange={(enabled) => { if (!busy) void saveAccess({ enabled }, enabled ? "Anonymous visitors allowed" : "Anonymous visitors turned off"); }} />
           </SectionRow>
@@ -111,7 +112,9 @@ export function PublicAccessPanel({ twin }: { twin: Twin }) {
         </div>
       </PageSection>
 
-      <PageSection title="Website widget" description="Show this twin as a voice widget on your own website.">
+      <BotSection bot={bot} />
+
+      <PageSection title="Website widget" description="Show this bot as a voice widget on your own website.">
         <div className={cn(SECTION_CARD, "min-w-0 overflow-hidden")}>
           {!live ? (
             <p role="status" className="m-0 flex items-center gap-2 border-b border-(--border) px-5 py-3 text-sm text-muted-foreground">
@@ -139,7 +142,7 @@ export function PublicAccessPanel({ twin }: { twin: Twin }) {
               </div>
             ) : null}
           </form>
-          <InstallSection origin={twin.widget.origin} id={twin.widget.id} live={live} />
+          <InstallSection origin={bot.widget.origin} id={bot.widget.id} live={live} />
         </div>
         <p className="m-0 text-xs text-muted-foreground">If your website sets a Content Security Policy, allow this script and its frame, and delegate microphone access.</p>
       </PageSection>
@@ -183,5 +186,71 @@ function InstallSection({ origin, id, live }: { origin: string; id: string; live
       </div>
       <pre className="m-0 min-w-0 whitespace-pre-wrap break-all rounded-tt-md border border-(--border) bg-muted/40 p-4 text-xs leading-6"><code>{displaySnippet}</code></pre>
     </section>
+  );
+}
+
+/**
+ * The bot's own name and purpose: what its signed-out visitors talk to. It speaks with the trainer's voice
+ * and skills, but its name and purpose are its own, so a change here never reaches learners (lib/bots). A draft saved
+ * from its bar, like the website list.
+ */
+function BotSection({ bot }: { bot: Pick<Bot, "slug" | "name" | "objective"> }) {
+  const refresh = useRefresh();
+  const [saved, setSaved] = useState({ name: bot.name, objective: bot.objective });
+  const [draft, setDraft] = useState(saved);
+  const [busy, setBusy] = useState(false);
+  const dirty = draft.name !== saved.name || draft.objective !== saved.objective;
+  const [received, setReceived] = useState(bot);
+  if (received !== bot) {
+    setReceived(bot);
+    setSaved({ name: bot.name, objective: bot.objective });
+    if (!dirty) setDraft({ name: bot.name, objective: bot.objective });
+  }
+  async function save() {
+    const name = draft.name.trim();
+    const objective = draft.objective.trim();
+    if (!name || !objective) {
+      toast.error(!name ? "Enter a name for the bot" : "Describe what the bot is for");
+      return;
+    }
+    setBusy(true);
+    try {
+      await twinClient.bots.update.mutate({ slug: bot.slug, name, objective });
+      setSaved({ name, objective });
+      setDraft({ name, objective });
+      toast.success("Bot saved");
+      refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not save the bot");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <PageSection title="Name and purpose" description="What this bot’s visitors get. It uses the twin’s voice and skills; its name and purpose are its own, so learners aren’t affected.">
+      <form className={cn(SECTION_CARD, "min-w-0 overflow-hidden")} onSubmit={(event) => { event.preventDefault(); if (dirty) void save(); }}>
+        <fieldset disabled={busy} className="m-0 min-w-0">
+          <SectionRow title={<label htmlFor="bot-name">Name</label>} detail="Shown on the call screen and the website widget.">
+            <Input id="bot-name" className="w-full sm:w-80" maxLength={120} value={draft.name}
+              onChange={(event) => setDraft({ ...draft, name: event.target.value })} />
+          </SectionRow>
+          <div className="flex flex-col gap-3 border-t border-(--border) px-5 py-4">
+            <div>
+              <label htmlFor="bot-purpose" className="text-sm font-medium">Purpose</label>
+              <p id="bot-purpose-help" className="m-0 mt-0.5 text-sm text-muted-foreground">What the bot is for and how it should help visitors, e.g. answer questions about your coaching and suggest a next step.</p>
+            </div>
+            <Textarea id="bot-purpose" rows={4} maxLength={2000} value={draft.objective} aria-describedby="bot-purpose-help"
+              onChange={(event) => setDraft({ ...draft, objective: event.target.value })} className="min-h-28" />
+          </div>
+        </fieldset>
+        {dirty ? (
+          <div className="flex items-center justify-end gap-2 border-t border-(--border) bg-muted/30 px-5 py-3">
+            <span className="mr-auto text-sm text-muted-foreground" role="status">Unsaved changes</span>
+            <Button type="button" variant="ghost" disabled={busy} onClick={() => setDraft(saved)}>Discard</Button>
+            <Button type="submit" disabled={busy}>{busy ? "Saving…" : "Save"}</Button>
+          </div>
+        ) : null}
+      </form>
+    </PageSection>
   );
 }

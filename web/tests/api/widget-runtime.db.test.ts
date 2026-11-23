@@ -13,7 +13,7 @@ import { startPublicTwinSession } from "@/lib/public-twin-sessions";
 import { expirePublicCall } from "@/workflows/steps/public-call-deadline";
 import { readWidgetGrant, readWidgetVisitor, widgetEndToken, widgetStartGrant, WIDGET_GRANT_SECONDS } from "@/lib/widget-tokens";
 import { fundOrg, availableOrgSeconds } from "../setup/meteroid";
-import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "../lib/minutes-test-db";
+import { db, localMinutesDb, minutesFixture, setTwinPublic, type MinutesFixture } from "../lib/minutes-test-db";
 
 const bootstrapSchema = z.object({ grant: z.string(), visitorToken: z.string() });
 const openedSchema = z.object({
@@ -31,9 +31,10 @@ describe.skipIf(!localMinutesDb)("widget cookieless lifecycle (real database)", 
   const spies: { mockRestore(): void }[] = [];
   let transport: ReturnType<typeof spyOn<typeof livekit, "activateLiveKitSession">>;
   let scheduling: ReturnType<typeof spyOn<typeof workflow, "start">>;
+  let bot: { id: string; slug: string };
   const config = () => ({
-    publicAccess: { enabled: true, maxSeconds: 300 },
-    widget: { enabled: true, allowedOrigins: [parent, secondParent], welcome: "Talk to us", accentColor: "#123456" },
+    publicAccess: { enabled: true, maxSeconds: 300 as const },
+    widget: { allowedOrigins: [parent, secondParent], welcome: "Talk to us", accentColor: "#123456" },
   });
   beforeEach(async () => {
     f = minutesFixture();
@@ -43,7 +44,8 @@ describe.skipIf(!localMinutesDb)("widget cookieless lifecycle (real database)", 
     previous = process.env.COPILOT_SERVICE_SECRET;
     process.env.COPILOT_SERVICE_SECRET = secret;
     for (const fixture of [f, other]) {
-      await db.agent.update({ where: { id: fixture.twin.id }, data: { data: config() } });
+      const made = (await setTwinPublic(fixture, config()))!;
+      if (fixture === f) bot = made;
       await fundOrg({ orgId: fixture.org.id, minutes: 10 });
     }
     scheduling = spyOn(workflow, "start").mockResolvedValue(undefined as never);
@@ -141,13 +143,13 @@ describe.skipIf(!localMinutesDb)("widget cookieless lifecycle (real database)", 
     })).rejects.toMatchObject({ code: "widget_token_invalid", status: 401 });
     await noStart();
   });
-  test("a grant expiring while blocked on the twin row cannot reserve credits", async () => {
+  test("a grant expiring while blocked on the bot's public deployment row cannot reserve credits", async () => {
     const credentials = await grant();
     const scope = readWidgetGrant(credentials.grant);
     const locked = Promise.withResolvers<number>();
     const release = Promise.withResolvers<void>();
     const holder = db.$transaction(async (tx) => {
-      await tx.$queryRaw`SELECT 1 FROM "Agent" WHERE id = ${f.twin.id} FOR UPDATE`;
+      await tx.$queryRaw`SELECT 1 FROM "Deployment" WHERE "agentId" = ${bot.id} FOR UPDATE`;
       const [backend] = await tx.$queryRaw<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`;
       locked.resolve(backend.pid);
       await release.promise;
@@ -202,11 +204,10 @@ describe.skipIf(!localMinutesDb)("widget cookieless lifecycle (real database)", 
   });
   test.each(["removed-parent", "widget-off", "public-off", "archived"])("recheck after bootstrap: %s denies before charged start", async (kind) => {
     const first = await grant();
-    const data = config();
-    if (kind === "removed-parent") data.widget.allowedOrigins = [secondParent];
-    if (kind === "widget-off") data.widget = { ...data.widget, enabled: false, allowedOrigins: [] };
-    if (kind === "public-off") data.publicAccess.enabled = false;
-    await db.agent.update({ where: { id: f.twin.id }, data: { data, ...(kind === "archived" ? { archivedAt: new Date() } : {}) } });
+    if (kind === "removed-parent") await setTwinPublic(f, { widget: { allowedOrigins: [secondParent] } });
+    if (kind === "widget-off") await setTwinPublic(f, { widget: { allowedOrigins: [] } });
+    if (kind === "public-off") await setTwinPublic(f, { publicAccess: { enabled: false } });
+    if (kind === "archived") await db.agent.update({ where: { id: f.twin.id }, data: { archivedAt: new Date() } });
     await refusal(await launch(first.grant), kind === "archived" ? 404 : 403,
       kind === "archived" ? "not_found" : kind === "public-off" ? "public_twin_unavailable" : "widget_unavailable");
     await noStart();
@@ -249,7 +250,7 @@ describe.skipIf(!localMinutesDb)("widget cookieless lifecycle (real database)", 
     const clock = spyOn(Date, "now").mockReturnValue(Date.now() + (WIDGET_GRANT_SECONDS + 1) * 1000);
     try {
       await refusal(await launch(credentials.grant), 401, "widget_token_invalid");
-      await db.agent.update({ where: { id: f.twin.id }, data: { data: {} } });
+      await setTwinPublic(f, { publicAccess: { enabled: false }, widget: { allowedOrigins: [] } });
       expect((await finish(body.session.id, body.session.embedToken)).status).toBe(200);
     } finally { clock.mockRestore(); }
     expect(await db.minuteLedger.count({ where: { sessionId: body.session.id } })).toBe(1);
@@ -355,11 +356,11 @@ describe.skipIf(!localMinutesDb)("widget cookieless lifecycle (real database)", 
     }
   });
   test("database rejects embedOrigin on signed-in ownership and unallowed anonymous origins", async () => {
-    await expect(Promise.resolve(f.session({ agentId: f.twin.id, agentSlug: f.twin.slug, userId: f.trainer.id, embedOrigin: parent }))).rejects.toThrow("session_embed_owner_check");
+    await expect(Promise.resolve(f.session({ agentId: bot.id, agentSlug: bot.slug, userId: f.trainer.id, embedOrigin: parent }))).rejects.toThrow(/session_embed_owner_check|Bot sessions are for anonymous visitors/);
     await expect(Promise.resolve(f.session({
-      agentId: f.twin.id, agentSlug: f.twin.slug, userId: null, anonymousId: "a".repeat(64),
+      agentId: bot.id, agentSlug: bot.slug, userId: null, anonymousId: "a".repeat(64),
       anonymousIpHash: "b".repeat(64), anonymousName: "Visitor", embedOrigin: "https://evil.example", chargesOrg: true, allowedSeconds: 120,
-    }))).rejects.toThrow("Widget sessions require an enabled twin and allowed origin");
+    }))).rejects.toThrow("Widget sessions require an active bot and an allowed website");
     expect(await db.interviewSession.count({ where: { orgId: f.org.id } })).toBe(0);
   });
   test.each([
@@ -386,7 +387,7 @@ describe.skipIf(!localMinutesDb)("widget cookieless lifecycle (real database)", 
   test.each(["org-hourly", "org-concurrent"])("shared quota %s applies to widgets with independent visitor/IP", async (kind) => {
     const count = kind === "org-hourly" ? 30 : 5;
     for (let i = 0; i < count; i++) await f.session({
-      agentId: f.twin.id, agentSlug: f.twin.slug, userId: null,
+      agentId: bot.id, agentSlug: bot.slug, userId: null,
       anonymousId: String(i).padStart(64, "0"), anonymousIpHash: String(i).padStart(64, "1"), anonymousName: "Existing visitor",
       allowedSeconds: 120, chargesOrg: true, status: kind === "org-hourly" ? "failed" : "active",
       startedAt: new Date(), endedAt: kind === "org-hourly" ? new Date() : null,

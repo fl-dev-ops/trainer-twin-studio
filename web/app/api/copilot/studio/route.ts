@@ -4,7 +4,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { embedTexts, searchKnowledge } from "@/lib/knowledge";
 import { MainCollectionService, type ScenarioScope, type ScenarioStep } from "@/lib/main-collection";
-import { type PinnedTwinSkill, TWIN_SOURCE, twinPlaybooks, sessionTwinPlaybooks, resolveTwinCatalog } from "@/lib/twins";
+import { type PinnedTwinSkill, twinPlaybooks, sessionTwinPlaybooks, resolveTwinCatalog } from "@/lib/twins";
 import { enqueueWorkspaceCommand } from "@/lib/workspace-commands";
 import { buildSessionContext, getCachedSessionContext } from "@/lib/session-context";
 import { recordTurnEvidence, recordTurnLines, turnEvidenceSchema } from "@/lib/twin/evidence";
@@ -16,6 +16,7 @@ import { authorizeRuntimeSession, publicSessionExpired } from "@/lib/interview-s
 import { errorResponse } from "@/lib/errors";
 import { loadSessionSkills, resolveSnapshotSkill } from "@/lib/session-skills";
 import { skillRefusals } from "@/lib/skills";
+import { runsAsMainTwin } from "@/lib/main-twin";
 
 /** How much of a knowledge document one read_knowledge_document call returns (about 3k tokens). */
 const KNOWLEDGE_PAGE_CHARS = 12_000;
@@ -283,10 +284,11 @@ export async function POST(request: Request) {
       if (!previewAgent) return null;
       const data = previewAgent.data && typeof previewAgent.data === "object" && !Array.isArray(previewAgent.data)
         ? previewAgent.data as Record<string, unknown> : {};
-      const isMainTwin = previewAgent.kind === "TWIN" && data.source === TWIN_SOURCE;
+      const isMainTwin = runsAsMainTwin(previewAgent.kind, data);
       if (!isMainTwin && !previewAgent.primarySkillId) return null;
       return db.$transaction(async (tx) => {
         if (!isMainTwin) {
+          if (previewAgent.kind === "BOT") return null;
           const version = await resolveSnapshotSkill(orgId, previewAgent, previewAgent.kind, tx);
           return {
             kind: previewAgent.kind, agentSlug: previewAgent.slug, personaId: previewAgent.personaId, isMainTwin,
@@ -361,7 +363,7 @@ export async function POST(request: Request) {
     const data = agent?.data as { source?: unknown; skill?: unknown; scenario?: { steps?: unknown; situations?: unknown } } | null;
     let exampleData = data;
     let scope: { skills: ScenarioScope[]; steps: ScenarioStep[] };
-    if (agent?.kind === "TWIN" && data?.source === TWIN_SOURCE) {
+    if (agent && runsAsMainTwin(agent.kind, data)) {
       // The all-skills twin searches its persona's skill twins: all of them, or the one the model has loaded.
       const pinned = input.sessionId
         ? (await db.interviewSession.findFirst({ where: { id: input.sessionId, orgId, agentSlug: input.agentSlug }, select: { compiledSnapshot: true } }))

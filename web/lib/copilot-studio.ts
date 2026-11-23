@@ -81,7 +81,8 @@ async function findAgent(d: CopilotStudioDeps, orgId: string, agentSlug: string,
     where: { orgId, slug: agentSlug, ...(opts.archived === undefined ? {} : { archivedAt: opts.archived ? { not: null } : null }) },
     select: { id: true, slug: true, name: true, kind: true, version: true, primarySkillId: true, data: true, archivedAt: true, updatedAt: true },
   });
-  if (!agent) throw new ScenarioIngestError(`"${agentSlug}" was not found${opts.archived ? " among archived items" : ""}`, 404);
+  // Bots are managed from their twin's settings, not by the copilot.
+  if (!agent || agent.kind === "BOT") throw new ScenarioIngestError(`"${agentSlug}" was not found${opts.archived ? " among archived items" : ""}`, 404);
   return agent;
 }
 
@@ -105,7 +106,8 @@ export async function runCopilotStudio(actor: Actor, input: CopilotStudioInput, 
         orderBy: [{ kind: "asc" }, { name: "asc" }],
         select: { id: true, primarySkillId: true, slug: true, name: true, kind: true, version: true, data: true, archivedAt: true, updatedAt: true },
       });
-      const hydrated = await Promise.all(agents.map((agent) => hydrateAgentSkill(orgId, agent, d.db)));
+      // Bots are managed from their twin's settings, not by the copilot.
+      const hydrated = await Promise.all(agents.filter((agent) => agent.kind !== "BOT").map((agent) => hydrateAgentSkill(orgId, agent, d.db)));
       return {
         items: hydrated.map((agent) => ({
           slug: agent.slug,

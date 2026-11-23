@@ -1,5 +1,6 @@
 import { expect, test, type Browser, type BrowserContext, type Page } from "@playwright/test";
 import { e2eUrl } from "./env";
+import { openTwinBot } from "./bots";
 import { as, seed } from "./seed-data";
 
 const publicPath = () => `/t/${seed().twin.slug.replace(`${seed().org.slug}-`, "")}`;
@@ -9,15 +10,14 @@ const startPath = "**/api/public/twins/*/sessions";
 async function settings(browser: Browser) {
   const context = await browser.newContext(as("admin"));
   const page = await context.newPage();
-  await page.goto(e2eUrl("dash", `/twin/${seed().twin.slug}/edit`));
-  await page.getByRole("tab", { name: "Public access", exact: true }).click();
+  await openTwinBot(page);
   return { context, page };
 }
 
 async function setEnabled(page: Page, enabled: boolean) {
   const toggle = page.getByRole("switch", { name: "Allow anonymous visitors", exact: true });
   if ((await toggle.getAttribute("aria-checked")) === String(enabled)) return;
-  const saved = page.waitForResponse((response) => response.url().includes("agents.update") && response.request().method() === "POST");
+  const saved = page.waitForResponse((response) => response.url().includes("bots.update") && response.request().method() === "POST");
   await toggle.click();
   const response = await saved;
   expect(response.ok(), await response.text()).toBe(true);
@@ -57,12 +57,11 @@ test.describe.serial("public twin phase 1", () => {
       await setEnabled(studio.page, true);
       const duration = studio.page.getByLabel("Maximum call duration", { exact: true });
       await expect(duration).toHaveValue("300");
-      const saved = studio.page.waitForResponse((response) => response.url().includes("agents.update") && response.request().method() === "POST");
+      const saved = studio.page.waitForResponse((response) => response.url().includes("bots.update") && response.request().method() === "POST");
       await duration.selectOption("600");
       expect((await saved).ok()).toBe(true);
-      await expect(studio.page.getByRole("tabpanel").getByRole("button", { name: "Save", exact: true })).toHaveCount(0);
+      await expect(studio.page.getByRole("region", { name: "Website bot settings", exact: true }).getByRole("button", { name: "Save", exact: true })).toHaveCount(0);
       await studio.page.reload();
-      await studio.page.getByRole("tab", { name: "Public access", exact: true }).click();
       await expect(toggle).toHaveAttribute("aria-checked", "true");
       await expect(duration).toHaveValue("600");
     } finally {

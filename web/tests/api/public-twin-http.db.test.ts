@@ -13,7 +13,7 @@ import { BASE_DOMAIN } from "@/lib/base-domain";
 import { PUBLIC_VISITOR_COOKIE } from "@/lib/public-twin-request";
 import { browserToken, runtimeToken } from "@/lib/interview-sessions";
 import { fundOrg, availableOrgSeconds } from "../setup/meteroid";
-import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "../lib/minutes-test-db";
+import { db, localMinutesDb, minutesFixture, setTwinPublic, type MinutesFixture } from "../lib/minutes-test-db";
 
 const openedSchema = z.object({
   session: z.object({
@@ -26,6 +26,7 @@ const openedSchema = z.object({
 describe.skipIf(!localMinutesDb)("public twin HTTP lifecycle (real database)", () => {
   let f: MinutesFixture;
   let other: MinutesFixture;
+  let bot: { id: string; slug: string; data: unknown };
   let oldSecret: string | undefined;
   const secret = "public-http-secret";
   const spies: { mockRestore(): void }[] = [];
@@ -39,9 +40,11 @@ describe.skipIf(!localMinutesDb)("public twin HTTP lifecycle (real database)", (
     await other.create();
     oldSecret = process.env.COPILOT_SERVICE_SECRET;
     process.env.COPILOT_SERVICE_SECRET = secret;
+    // Public calls run on the twin's bot (lib/bots); its content is what each call pins.
+    bot = (await setTwinPublic(f, { publicAccess: { enabled: true, maxSeconds: 300 } }))!;
     const agent = await db.agent.update({
-      where: { id: f.twin.id },
-      data: { version: 3, data: { objective: "Pinned original twin", publicAccess: { enabled: true, maxSeconds: 300 } } },
+      where: { id: bot.id },
+      data: { version: 3, data: { ...(bot.data as object), objective: "Pinned original twin" } },
     });
     await db.persona.update({ where: { id: agent.personaId }, data: { version: 2, data: { identity: "Pinned original persona" } } });
     await fundOrg({ orgId: f.org.id, minutes: 10 });
@@ -164,14 +167,14 @@ describe.skipIf(!localMinutesDb)("public twin HTTP lifecycle (real database)", (
   test("compiled config pins the selected agent/persona content and versions across later edits", async () => {
     const result = await open();
     const row = await db.interviewSession.findUniqueOrThrow({ where: { id: result.opened.session.id } });
-    const agent = await db.agent.findUniqueOrThrow({ where: { id: f.twin.id } });
+    const agent = await db.agent.findUniqueOrThrow({ where: { id: bot.id } });
     expect(row.compiledSnapshot).toMatchObject({
       persona: { id: agent.personaId, slug: f.org.id, version: 2, data: { identity: "Pinned original persona" } },
-      agent: { id: f.twin.id, slug: f.twin.slug, version: 3, data: { objective: "Pinned original twin" } },
+      agent: { id: bot.id, slug: bot.slug, version: 3, data: { objective: "Pinned original twin" } },
       context: null, sessionDocumentIds: [], knowledgeBases: [],
     });
     await db.persona.update({ where: { id: agent.personaId }, data: { version: 3, data: { identity: "Changed persona" } } });
-    await db.agent.update({ where: { id: f.twin.id }, data: { version: 4, data: { objective: "Changed twin" } } });
+    await db.agent.update({ where: { id: bot.id }, data: { version: 4, data: { objective: "Changed twin" } } });
     const pinned = await db.interviewSession.findUniqueOrThrow({ where: { id: row.id } });
     expect(pinned.compiledSnapshot).toEqual(row.compiledSnapshot);
     expect(pinned).toMatchObject({ agentVersion: 3, personaVersion: 2 });
