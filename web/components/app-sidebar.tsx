@@ -127,21 +127,21 @@ function Brand() {
   );
 }
 
-/** hideRoleplay: a twin-only org (org metadata flag) gets no Role play group. */
+/** hideRoleplay: a twin-only org (org metadata flag) gets no Role play group; bots: only orgs with bots see Bots. */
 export function AppSidebar({
   hideRoleplay = false,
+  bots = false,
   orgs = [],
   orgId = null,
 }: {
   hideRoleplay?: boolean;
+  bots?: boolean;
   orgs?: SwitchableOrg[];
   orgId?: string | null;
 }) {
   const pathname = usePathname();
   const tab = useSearchParams().get("tab");
-  const groups = hideRoleplay
-    ? NAV_GROUPS.filter((group) => group.label !== "Role play")
-    : NAV_GROUPS;
+  const groups = NAV_GROUPS.filter((group) => !(hideRoleplay && group.label === "Role play") && !(!bots && group.label === "Bots"));
 
   return (
     <Sidebar variant="sidebar" collapsible="icon">

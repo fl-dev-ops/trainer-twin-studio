@@ -31,7 +31,8 @@ export function minutesFixture() {
       // Publish the org with its admin atomically: parallel invariant checks must never see an admin-less fixture.
       await db.$transaction(async (tx) => {
         for (const user of [learner, trainer]) await tx.user.create({ data: { ...user, emailVerified: true } });
-        await tx.organization.create({ data: { ...org, createdAt: new Date(), members: { create: [
+        // Bots on (org metadata flag) so bot tests run; tests/lib/unified-agents covers an org without them.
+        await tx.organization.create({ data: { ...org, metadata: JSON.stringify({ bots: true }), createdAt: new Date(), members: { create: [
           { id: `${trainer.id}-member`, userId: trainer.id, role: "admin", createdAt: new Date() },
           ...(learnerMember ? [{ id: `${learner.id}-member`, userId: learner.id, role: "user", createdAt: new Date() }] : []),
         ] } } });

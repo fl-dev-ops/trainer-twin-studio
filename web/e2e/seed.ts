@@ -35,7 +35,8 @@ await db.voice.deleteMany({ where: { id: "e2e-transport-voice", ...where } });
 await db.organization.deleteMany({ where: { id: ORG.id } });
 await db.user.deleteMany({ where: { id: { in: everyone.map((p) => p.id) } } });
 
-await db.organization.create({ data: { ...ORG, createdAt: new Date() } });
+// The e2e org uses bots (org metadata flag), like the Demo org in production.
+await db.organization.create({ data: { ...ORG, metadata: JSON.stringify({ bots: true }), createdAt: new Date() } });
 for (const p of everyone) {
   await db.user.create({ data: { ...p, emailVerified: true } });
   await db.member.create({ data: { id: `${p.id}-member`, organizationId: ORG.id, userId: p.id, role: p === admin ? "admin" : "user", createdAt: new Date() } });

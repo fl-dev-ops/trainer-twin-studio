@@ -22,7 +22,7 @@ export default async function DashLayout({ children }: { children: ReactNode }) 
     <OrgAccentProvider accentColor={org?.accentColor ?? null}>
       {/* First, so this tab's requests carry its org before any page below loads data. */}
       <OrgPin orgId={org?.id ?? null} />
-      <AppShell hideRoleplay={org?.hideRoleplay ?? false} orgs={orgs} orgId={org?.id ?? null}>
+      <AppShell hideRoleplay={org?.hideRoleplay ?? false} bots={org?.bots ?? false} orgs={orgs} orgId={org?.id ?? null}>
         <ClientOnly fallback={<ShellFallback />}>
           <BillingBanner />
           <NamePrompt />

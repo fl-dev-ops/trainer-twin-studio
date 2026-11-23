@@ -6,6 +6,7 @@ import { DEFAULT_PUBLIC_CALL_SECONDS, PUBLIC_CALL_DURATIONS, publicTwinSettingsS
 import { widgetSettingsSchema, type WidgetSettings } from "@/lib/widget-settings";
 import { setAgentPersonas } from "@/lib/agent-personas";
 import { setSupportingSkills } from "@/lib/agent-skills";
+import { parseBotsEnabled } from "@/lib/org";
 
 /**
  * Bots (specs/agents.md): their own module, like twins and role plays. A BOT agent speaks as exactly one persona (the
@@ -64,6 +65,17 @@ export function widgetSettingsOf(deployment: Pick<DeploymentRow, "allowedOrigins
   };
 }
 
+/** Whether the org may use bots: `{ "bots": true }` in its metadata (lib/org); every other org has none. */
+export async function botsEnabled(orgId: string, client: Prisma.TransactionClient = db) {
+  const org = await client.organization.findUnique({ where: { id: orgId }, select: { metadata: true } });
+  return parseBotsEnabled(org?.metadata ?? null);
+}
+
+/** Refuses (as not found) in an org without bots. */
+export async function requireBots(orgId: string, client: Prisma.TransactionClient = db) {
+  if (!await botsEnabled(orgId, client)) throw refusals.notFound();
+}
+
 /** A live bot by its slug (the bot page). */
 export async function botBySlug(orgId: string, slug: string, client: Prisma.TransactionClient = db) {
   return shape(await client.agent.findFirst({ where: { orgId, slug, kind: "BOT", archivedAt: null }, select: botSelect }));
@@ -71,6 +83,8 @@ export async function botBySlug(orgId: string, slug: string, client: Prisma.Tran
 
 /** The live bot a public request names (its id: the widget snippet's data-twin-id). */
 export async function publicBot(orgId: string, agentId: string, client: Prisma.TransactionClient = db) {
+  // Turning bots off for an org takes its widgets down too.
+  if (!await botsEnabled(orgId, client)) return null;
   return shape(await client.agent.findFirst({ where: { id: agentId, orgId, kind: "BOT", archivedAt: null }, select: botSelect }));
 }
 

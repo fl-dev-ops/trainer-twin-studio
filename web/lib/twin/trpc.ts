@@ -6,7 +6,7 @@ import type { Prisma } from "@/lib/generated/prisma/client";
 import { beforeSettings } from "@/lib/context-upload";
 import { publicTwinSettingsSchema } from "@/lib/public-twin-settings";
 import { widgetSettingsSchema } from "@/lib/widget-settings";
-import { botBySlug, createBot, listBots, publicSettingsOf, saveBotDetails, saveBotPublic, saveBotSkills, widgetSettingsOf, type PublicBot } from "@/lib/bots";
+import { botBySlug, botsEnabled, createBot, listBots, publicSettingsOf, saveBotDetails, saveBotPublic, saveBotSkills, widgetSettingsOf, type PublicBot } from "@/lib/bots";
 import { setSupportingSkills, supportingSkillChoices } from "@/lib/agent-skills";
 import { assignablePeople } from "@/lib/learners";
 import { LEARNER_ROLE } from "@/lib/org";
@@ -700,23 +700,29 @@ async function botPersonaChoices(orgId: string) {
 
 const botMissing = () => new TRPCError({ code: "NOT_FOUND", message: "Bot not found" });
 
+/** Studio members of an org with bots (org metadata flag); elsewhere bots don't exist. */
+const botsProcedure = studioProcedure.use(async ({ ctx, next }) => {
+  if (!await botsEnabled(ctx.user.orgId)) throw new TRPCError({ code: "NOT_FOUND", message: "Bots are not available for this organization" });
+  return next();
+});
+
 /**
  * Bots (sidebar: Bots): their own module (lib/bots). Each speaks as one persona, behaves by its purpose, draws on its
  * supporting skills, and reaches signed-out visitors through its public calls and website widget.
  */
 const botsRouter = t.router({
-  list: studioProcedure.query(async ({ ctx }) => {
+  list: botsProcedure.query(async ({ ctx }) => {
     const [bots, personas] = await Promise.all([listBots(ctx.user.orgId), botPersonaChoices(ctx.user.orgId)]);
     return { bots: bots.map((bot) => botView(bot, ctx.user.orgSlug, personas.faces)), personas: personas.choices };
   }),
-  get: studioProcedure.input(z.object({ slug: z.string().min(1).max(200) })).query(async ({ ctx, input }) => {
+  get: botsProcedure.input(z.object({ slug: z.string().min(1).max(200) })).query(async ({ ctx, input }) => {
     const bot = await botBySlug(ctx.user.orgId, input.slug);
     if (!bot) throw botMissing();
     const [personas, skills] = await Promise.all([botPersonaChoices(ctx.user.orgId), supportingSkillChoices(ctx.user.orgId)]);
     return { ...botView(bot, ctx.user.orgSlug, personas.faces), choices: { personas: personas.choices, skills } };
   }),
   /** A new bot: its persona, name and purpose. Public calls start off; skills are added on its page. */
-  create: studioProcedure
+  create: botsProcedure
     .input(z.object({
       personaId: z.string().min(1).max(100),
       name: z.string().trim().min(1).max(120),
@@ -728,7 +734,7 @@ const botsRouter = t.router({
       return { slug: bot.slug };
     })),
   /** Any part of a bot: name, purpose, persona, supporting skills, public calls, widget websites. */
-  update: studioProcedure
+  update: botsProcedure
     .input(z.object({
       slug: z.string().min(1).max(200),
       name: z.string().trim().min(1).max(120).optional(),
@@ -755,7 +761,7 @@ const botsRouter = t.router({
       return { version: bot.version };
     })),
   /** Takes a bot offline for good: its widget stops on every website; its calls stay. */
-  archive: studioProcedure.input(z.object({ slug: z.string().min(1).max(200) })).mutation(({ ctx, input }) => twinCall(async () => {
+  archive: botsProcedure.input(z.object({ slug: z.string().min(1).max(200) })).mutation(({ ctx, input }) => twinCall(async () => {
     const bot = await botBySlug(ctx.user.orgId, input.slug);
     if (!bot) throw botMissing();
     await db.$transaction([

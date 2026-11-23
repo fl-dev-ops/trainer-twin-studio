@@ -193,4 +193,14 @@ describe.skipIf(!localMinutesDb)("unified agents: supporting skills and personas
     expect(added.sort()).toEqual(["second", "third"]);
   });
 
+
+  test("bots exist only in orgs with the bots flag: API, copilot and widget lookups refuse elsewhere", async () => {
+    const admin = (await import("@/lib/twin/trpc")).twinRouter.createCaller({ user: { ...f.trainer, orgId: f.org.id, orgSlug: f.org.slug, role: "admin" } } as never);
+    const made = await admin.bots.create({ personaId: persona.id, name: "Homepage", objective: "Welcome visitors." });
+    const bot = await db.agent.findUniqueOrThrow({ where: { slug: made.slug }, select: { id: true } });
+    await db.organization.update({ where: { id: f.org.id }, data: { metadata: JSON.stringify({}) } });
+    await expect(admin.bots.list()).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(runCopilotStudio({ org: { id: f.org.id, slug: f.org.slug }, user: { id: f.trainer.id, name: "Trainer" } }, { action: "listBots" })).rejects.toThrow();
+    expect(await (await import("@/lib/bots")).publicBot(f.org.id, bot.id)).toBeNull();
+  });
 });

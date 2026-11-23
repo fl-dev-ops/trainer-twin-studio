@@ -1,6 +1,6 @@
 import { resolveUpload, UploadError } from "@/lib/uploads";
 import { z } from "zod";
-import { botBySlug, createBot, listBots, publicSettingsOf, saveBotDetails, saveBotSkills, type PublicBot } from "@/lib/bots";
+import { botBySlug, createBot, listBots, requireBots, publicSettingsOf, saveBotDetails, saveBotSkills, type PublicBot } from "@/lib/bots";
 import { setAgentPersonas } from "@/lib/agent-personas";
 import { setSupportingSkills } from "@/lib/agent-skills";
 import { toolSettings } from "@/lib/agent-tools";
@@ -363,21 +363,25 @@ export async function runCopilotStudio(actor: Actor, input: CopilotStudioInput, 
     }
 
     case "listBots":
+      await requireBots(orgId);
       return { items: (await listBots(orgId)).map(botSummary) };
 
     case "getBot": {
+      await requireBots(orgId);
       const bot = await botBySlug(orgId, input.slug);
       if (!bot) throw new ScenarioIngestError(`Bot "${input.slug}" was not found`, 404);
       return { ...botSummary(bot), objective: asRecord(bot.data).objective ?? "" };
     }
 
     case "createBot": {
+      await requireBots(orgId);
       const persona = (await personaIdsBySlug(orgId, [input.persona])).get(input.persona)!;
       const bot = await db.$transaction((tx) => createBot(orgId, { personaId: persona, name: input.name, objective: input.objective }, tx));
       return { ok: true, slug: bot?.slug, publicCalls: "off" };
     }
 
     case "updateBot": {
+      await requireBots(orgId);
       const personaId = input.persona ? (await personaIdsBySlug(orgId, [input.persona])).get(input.persona) : undefined;
       const skills = input.skills ? await skillIdsBySlug(orgId, input.skills) : undefined;
       await withLock([`agent:${input.slug}`], async (tx) => {
