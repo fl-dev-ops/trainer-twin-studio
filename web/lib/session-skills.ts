@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { refusals } from "@/lib/errors";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import { skillRefusals } from "@/lib/skills";
+import { runsAsMainTwin } from "@/lib/main-twin";
 
 const runtimeVersionSelect = {
   id: true,
@@ -95,7 +96,7 @@ export async function loadSessionSkills(orgId: string, sessionId: string, agentS
   const snapshotAgent = record(record(session.compiledSnapshot).agent);
   const data = record(snapshotAgent.data);
   const kind = snapshotAgent.kind;
-  const isMainTwin = kind === "TWIN" && data.source === "twin";
+  const isMainTwin = runsAsMainTwin(String(kind), data);
   const rawCatalog = record(session.compiledSnapshot).twinSkills;
   const catalog: SessionSkillCatalogEntry[] = [];
   if (Array.isArray(rawCatalog)) {
@@ -109,7 +110,7 @@ export async function loadSessionSkills(orgId: string, sessionId: string, agentS
   if (agentSlug && agentSlug !== session.agentSlug
     && !(allowCatalogAlias && isMainTwin && catalog.some((entry) => entry.slug === agentSlug))) throw refusals.notFound();
   if (session.skillPinsVersion === null) return null;
-  if (session.skillPinsVersion !== 1 || !["ROLEPLAY", "TWIN"].includes(String(kind))
+  if (session.skillPinsVersion !== 1 || !["ROLEPLAY", "TWIN", "BOT"].includes(String(kind))
     || (isMainTwin && !Array.isArray(rawCatalog))
     || (!isMainTwin && session.skillPins.length !== 1)
     || new Set(catalog.map((entry) => entry.slug)).size !== catalog.length) throw skillRefusals.unavailable();
@@ -126,7 +127,7 @@ export async function loadSessionSkills(orgId: string, sessionId: string, agentS
   if (isMainTwin && catalog.filter((entry) => entry.skillVersionId !== undefined).length !== pins.length) throw skillRefusals.unavailable();
   const version = pins[0]?.version;
   return {
-    kind: kind as "ROLEPLAY" | "TWIN",
+    kind: kind as "ROLEPLAY" | "TWIN" | "BOT",
     agentSlug: session.agentSlug,
     personaId: String(record(record(session.compiledSnapshot).persona).id ?? ""),
     isMainTwin,

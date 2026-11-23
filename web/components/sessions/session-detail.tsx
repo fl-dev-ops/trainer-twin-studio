@@ -9,6 +9,7 @@ import { UserAvatar } from "@/components/user-avatar";
 import type { SessionDetailData } from "@/lib/pages/sessions";
 import type { KeyMoment } from "@/lib/session-report";
 import { cn } from "@/lib/utils";
+import { dashRoute } from "@/lib/routes";
 
 const STATUS_LABEL: Record<string, string> = {
   assigned: "Not started",
@@ -54,7 +55,7 @@ export function SessionDetail({ data: row }: { data: SessionDetailData }) {
   return (
     <PageContainer className="flex flex-col gap-4">
       <Link
-        href={`/sessions?scenario=${encodeURIComponent(row.agentId)}&range=all`}
+        href={dashRoute(`/sessions?scenario=${encodeURIComponent(row.agentId)}&range=all`)}
         className="mb-2 flex w-fit items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
       >
         <ArrowLeft className="size-4" aria-hidden />
@@ -65,9 +66,10 @@ export function SessionDetail({ data: row }: { data: SessionDetailData }) {
       <Card className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 flex-col gap-1">
           <div className="flex items-center gap-2.5">
-            <UserAvatar user={row.user} size="md" />
+            {row.user ? <UserAvatar user={row.user} size="md" /> : null}
             <h1 className="truncate text-lg font-semibold">{learner}</h1>
           </div>
+          {!row.user ? <p className="text-sm text-muted-foreground">Anonymous visitor · self-reported name</p> : null}
           <p className="text-sm text-muted-foreground">{scenario}</p>
           <p className="text-sm text-muted-foreground">
             <SessionTime iso={row.at.toISOString()} />

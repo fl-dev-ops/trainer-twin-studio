@@ -1,3 +1,4 @@
+import type { Route } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { ArrowLeft, Pencil } from "lucide-react";
@@ -5,6 +6,7 @@ import { CARD, PersonaPhoto, RoleChip } from "@/components/persona/persona-parts
 import type { PersonaView } from "@/lib/personas";
 import { cn } from "@/lib/utils";
 import { PageContainer } from "@/components/page-container";
+import { dashRoute } from "@/lib/routes";
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -18,11 +20,11 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 /** One persona: who they are, their voice and photo, and the agents that use it. */
 export function PersonaDetail({ item }: { item: PersonaView }) {
   const { persona } = item;
-  const editHref = `/personas/${encodeURIComponent(item.slug)}/edit`;
+  const editHref = dashRoute(`/personas/${encodeURIComponent(item.slug)}/edit`);
   return (
     <PageContainer>
       <header className="flex min-h-10 items-center justify-between gap-4">
-        <Link href="/personas" className="inline-flex items-center gap-2 text-sm text-foreground transition-colors hover:text-muted-foreground">
+        <Link href={dashRoute("/personas")} className="inline-flex items-center gap-2 text-sm text-foreground transition-colors hover:text-muted-foreground">
           <ArrowLeft className="size-4" aria-hidden />
           Personas
         </Link>
@@ -78,7 +80,7 @@ export function PersonaDetail({ item }: { item: PersonaView }) {
           <Row label="Recorded style">
             <p className="m-0">
               Built from your recordings.{" "}
-              <Link href={`/personas/${encodeURIComponent(item.slug)}?view=spec`} className="font-medium underline-offset-4 hover:underline">Recordings and style</Link>
+              <Link href={dashRoute(`/personas/${encodeURIComponent(item.slug)}?view=spec`)} className="font-medium underline-offset-4 hover:underline">Recordings and style</Link>
             </p>
           </Row>
         ) : null}
@@ -88,10 +90,10 @@ export function PersonaDetail({ item }: { item: PersonaView }) {
 }
 
 /** Missing media with where to add it: the editor, or Twin's brain for the trainer's own photo. */
-function MissingMedia({ href, text }: { href: string | null; text: string }) {
+function MissingMedia({ href, text }: { href: Route | null; text: string }) {
   return (
     <p className="m-0 text-muted-foreground">
-      {text} · <Link href={href ?? "/twin/brain"} className="text-foreground underline-offset-4 hover:underline">{href ? "Add" : "Set up on Twin’s brain"}</Link>
+      {text} · <Link href={href ?? dashRoute("/twin/brain")} className="text-foreground underline-offset-4 hover:underline">{href ? "Add" : "Set up on Twin’s brain"}</Link>
     </p>
   );
 }

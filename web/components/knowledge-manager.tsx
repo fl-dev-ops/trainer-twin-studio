@@ -48,6 +48,7 @@ import { DocxViewerPreview } from "@/components/extend/docx-viewer";
 import { PptxViewerPreview } from "@/components/extend/pptx-viewer";
 import { CsvViewer } from "@/components/extend/csv-viewer";
 import { useRefresh } from "@/lib/use-refresh";
+import { dashRoute } from "@/lib/routes";
 
 type Kb = { slug: string; name: string };
 type Doc = {
@@ -99,7 +100,7 @@ export function KnowledgeIndex({ bases }: { bases: Kb[] }) {
     setCreating(true);
     const slug = await createKb();
     setCreating(false);
-    if (slug) router.push(`/knowledge/${encodeURIComponent(slug)}`);
+    if (slug) router.push(dashRoute(`/knowledge/${encodeURIComponent(slug)}`));
   }
 
   return (
@@ -119,7 +120,7 @@ export function KnowledgeIndex({ bases }: { bases: Kb[] }) {
         {bases.map((kb) => (
           <Link
             key={kb.slug}
-            href={`/knowledge/${encodeURIComponent(kb.slug)}`}
+            href={dashRoute(`/knowledge/${encodeURIComponent(kb.slug)}`)}
             className="group flex min-h-40 min-w-0 flex-col rounded-xl border bg-background p-5 transition-colors hover:border-foreground/20 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
           >
             <span className="flex items-center gap-3">
@@ -235,7 +236,7 @@ export function KnowledgeDetail({ slug }: { slug: string }) {
     const res = await fetch(`/api/knowledge/${slug}`, { method: "DELETE" });
     if (res.ok) {
       toast.success("Knowledge base deleted");
-      router.push("/knowledge");
+      router.push(dashRoute("/twin/knowledge"));
       refresh();
     } else {
       toast.error("Delete failed");
@@ -255,7 +256,7 @@ export function KnowledgeDetail({ slug }: { slug: string }) {
   return (
     <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <header className="flex shrink-0 items-center gap-3 border-b px-4 py-3 sm:px-6">
-        <Button variant="ghost" size="icon-sm" render={<Link href="/knowledge" />} nativeButton={false} aria-label="Back to knowledge bases">
+        <Button variant="ghost" size="icon-sm" render={<Link href={dashRoute("/twin/knowledge")} />} nativeButton={false} aria-label="Back to knowledge bases">
           <ArrowLeft />
         </Button>
         <div className="min-w-0 flex-1">

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "bun run build:widgets && next dev",
     "postinstall": "prisma generate",
     "reindex:knowledge-storage": "bun scripts/reindex-knowledge-storage.ts",
     "check:session-isolation": "bun scripts/session-isolation-check.ts",
@@ -12,6 +12,7 @@
     "migrate:persona-voice": "bun scripts/migrate-persona-voice.ts",
     "migrate:verify": "bun scripts/migrate-verify.ts",
     "migrate:cleanup": "bun scripts/migrate-cleanup.ts",
+    "build:widgets": "bun install --cwd ../widgets --frozen-lockfile && bun ../widgets/build.ts",
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint",

@@ -27,6 +27,7 @@ import type { TwinOutputs } from "@/lib/twin/trpc";
 import { cn } from "@/lib/utils";
 import { PageContainer } from "@/components/page-container";
 import { PageHeader, SectionHeader } from "@/components/page-header";
+import { dashRoute } from "@/lib/routes";
 
 /**
  * Twin Agents library, ported from the reference prototype
@@ -40,7 +41,7 @@ function TwinAllCard({ twin }: { twin: TwinCard }) {
   const [shareOpen, setShareOpen] = useState(false);
   return (
     <Card interactive className="mt-4 flex-row items-center justify-between gap-4 px-5 py-4 text-left">
-      <Link href={`/twin/${twin.slug}`} className="flex flex-1 items-center gap-4 min-w-0 outline-none">
+      <Link href={dashRoute(`/twin/${twin.slug}`)} className="flex flex-1 items-center gap-4 min-w-0 outline-none">
         <TwinFace face={twin.face} size="3xl" shape="rounded" />
         <div className="min-w-0 flex-1">
           <h3 className="m-0 text-page-title leading-6 font-semibold">{twin.name}</h3>
@@ -61,15 +62,15 @@ function TwinAllCard({ twin }: { twin: TwinCard }) {
           </DropdownMenuTrigger>
           <DropdownMenuContent side="bottom" align="end" className="w-44">
             <DropdownMenuGroup>
-              <DropdownMenuItem render={<Link href={`/twin/${twin.slug}/edit`} />}>
+              <DropdownMenuItem render={<Link href={dashRoute(`/twin/${twin.slug}/edit`)} />}>
                 <Settings2 />
                 <span>Configure</span>
               </DropdownMenuItem>
-              <DropdownMenuItem render={<Link href={`/twin/${twin.slug}/calibration`} />}>
+              <DropdownMenuItem render={<Link href={dashRoute(`/twin/${twin.slug}/calibration`)} />}>
                 <Sliders />
                 <span>Calibrate</span>
               </DropdownMenuItem>
-              <DropdownMenuItem render={<Link href={`/twin/${twin.slug}/assign`} />}>
+              <DropdownMenuItem render={<Link href={dashRoute(`/twin/${twin.slug}/assign`)} />}>
                 <UserPlus />
                 <span>Assign</span>
               </DropdownMenuItem>
@@ -92,7 +93,7 @@ function TwinBotCard({ bot, index }: { bot: TwinCard; index: number }) {
   return (
     <Card interactive className="gap-0 overflow-visible py-0 text-left">
       {/* Top gradient banner with centered quote bubble (reference rp-art--twin + rp-quote) */}
-      <Link href={`/twin/${bot.slug}`} className="block outline-none">
+      <Link href={dashRoute(`/twin/${bot.slug}`)} className="block outline-none">
         <div
           className={cn(
             "relative flex min-h-[176px] items-center justify-center rounded-t-tt-md p-4",
@@ -139,19 +140,19 @@ function TwinBotCard({ bot, index }: { bot: TwinCard; index: number }) {
           </DropdownMenuTrigger>
           <DropdownMenuContent side="bottom" align="end" className="w-44">
             <DropdownMenuGroup>
-              <DropdownMenuItem render={<Link href={`/twin/${bot.slug}/edit`} />}>
+              <DropdownMenuItem render={<Link href={dashRoute(`/twin/${bot.slug}/edit`)} />}>
                 <Settings2 />
                 <span>Configure</span>
               </DropdownMenuItem>
-              <DropdownMenuItem render={<Link href={`/twin/${bot.slug}/calibration`} />}>
+              <DropdownMenuItem render={<Link href={dashRoute(`/twin/${bot.slug}/calibration`)} />}>
                 <Sliders />
                 <span>Calibrate</span>
               </DropdownMenuItem>
-              <DropdownMenuItem render={<Link href={`/talk?agent=${encodeURIComponent(bot.slug)}`} />}>
+              <DropdownMenuItem render={<Link href={dashRoute(`/talk?agent=${encodeURIComponent(bot.slug)}`)} />}>
                 <Play />
                 <span>Try as learner</span>
               </DropdownMenuItem>
-              <DropdownMenuItem render={<Link href={`/twin/${bot.slug}/assign`} />}>
+              <DropdownMenuItem render={<Link href={dashRoute(`/twin/${bot.slug}/assign`)} />}>
                 <UserPlus />
                 <span>Assign</span>
               </DropdownMenuItem>
@@ -196,7 +197,7 @@ function CreateSkillDialog({ personaSlug }: { personaSlug: string | null }) {
         text: `USER=${user}\nBuild a twin skill from my knowledge base: ${what.trim()}\nPublish it for persona ${personaSlug}.`,
       }),
     );
-    router.push("/");
+    router.push(dashRoute("/"));
   }
 
   return (

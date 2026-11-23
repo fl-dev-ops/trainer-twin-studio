@@ -1,5 +1,7 @@
 "use client";
 
+import type { Route } from "next";
+
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTransition } from "react";
 import { FilterDropdown } from "@/components/filter-dropdown";
@@ -22,7 +24,8 @@ function FilterSelect({ param, value, options, label }: { param: string; value: 
         onChange={(next) => {
           const params = new URLSearchParams(searchParams);
           params.set(param, next);
-          startTransition(() => router.replace(`${pathname}?${params.toString()}`, { scroll: false }));
+          // The current page with a new query: already a real route, so the cast only drops the type check.
+          startTransition(() => router.replace(`${pathname}?${params.toString()}` as Route, { scroll: false }));
         }}
       />
     </span>

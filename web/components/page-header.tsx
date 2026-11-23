@@ -1,3 +1,4 @@
+import type { Route } from "next";
 import type { ComponentProps, ComponentType, ReactNode } from "react";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
@@ -18,7 +19,7 @@ export function PageHeader({
 }: Omit<ComponentProps<"header">, "title"> & {
   actions?: ReactNode;
   /** Detail pages: where "Back" goes, and an optional label instead of "Back". */
-  back?: { href: string; label?: ReactNode };
+  back?: { href: Route; label?: ReactNode };
   description?: ReactNode;
   /** Usually the page's sidebar icon. */
   icon?: ComponentType<{ className?: string }>;

@@ -9,6 +9,7 @@ import { OrganizationForm, ProfileForm } from "@/components/profile-form";
 import { TeamSection } from "@/components/users/team-section";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api, useApi } from "@/lib/api";
+import { dashRoute } from "@/lib/routes";
 
 const TABS = ["account", "team", "branding"] as const;
 
@@ -18,7 +19,7 @@ export default function SettingsPage() {
   const { user, organization, team } = useApi(["page.settings"], () => api.page.settings.query());
   // Billing moved to its own page; redirect old studio links, but keep learners on Account.
   useEffect(() => {
-    if (requested === "billing" && team) router.replace("/billing");
+    if (requested === "billing" && team) router.replace(dashRoute("/billing"));
   }, [requested, router, team]);
   // Learners only have Account; studio-only tabs fall back to it.
   const tab = TABS.find((name) => name === requested && (name === "account" || team)) ?? "account";

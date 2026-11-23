@@ -94,6 +94,9 @@ const eslintConfig = defineConfig([...nextVitals, ...nextTs, {
 globalIgnores([
   // Default ignores of eslint-config-next:
   ".next/**",
+  // Other dev/test build folders (NEXT_DIST_DIR) and the widget bundles built from ../widgets.
+  ".next-*/**",
+  "public/widgets/**",
   "out/**",
   "build/**",
   "next-env.d.ts",

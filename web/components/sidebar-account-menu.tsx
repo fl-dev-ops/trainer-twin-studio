@@ -24,6 +24,7 @@ import { authClient } from "@/lib/auth-client";
 import { BASE_DOMAIN } from "@/lib/base-domain";
 import { DEFAULT_LEARNER_MINUTES } from "@/lib/minutes-config";
 import { cn } from "@/lib/utils";
+import { dashRoute } from "@/lib/routes";
 
 const DOCS_URL =
   process.env.NEXT_PUBLIC_DOCS_URL ??
@@ -98,31 +99,31 @@ export function SidebarAccountMenu() {
           </DropdownMenuGroup>
           <DropdownMenuSeparator />
           <DropdownMenuGroup>
-            <DropdownMenuItem variant="account" render={<Link href="/usage" />}>
+            <DropdownMenuItem variant="account" render={<Link href={dashRoute("/usage")} />}>
               <CreditsIcon />
               <span>Usage</span>
               {remaining ? <span className={cn("ml-auto text-sm tabular-nums text-muted-foreground", low && "text-caution")}>{remaining}</span> : null}
             </DropdownMenuItem>
-            <DropdownMenuItem variant="account" render={<Link href="/billing" />}>
+            <DropdownMenuItem variant="account" render={<Link href={dashRoute("/billing")} />}>
               <BillingIcon />
               Billing
             </DropdownMenuItem>
           </DropdownMenuGroup>
           <DropdownMenuSeparator />
           <DropdownMenuGroup>
-            <DropdownMenuItem variant="account" render={<Link href="/voice" />}>
+            <DropdownMenuItem variant="account" render={<Link href={dashRoute("/voice")} />}>
               <AudioLines />
               Voices
             </DropdownMenuItem>
-            <DropdownMenuItem variant="account" render={<Link href="/settings?tab=team" />}>
+            <DropdownMenuItem variant="account" render={<Link href={dashRoute("/settings?tab=team")} />}>
               <Users />
               Team
             </DropdownMenuItem>
-            <DropdownMenuItem variant="account" render={<Link href="/developer" />}>
+            <DropdownMenuItem variant="account" render={<Link href={dashRoute("/developer")} />}>
               <KeyRound />
               Developer API
             </DropdownMenuItem>
-            <DropdownMenuItem variant="account" render={<Link href="/settings" />}>
+            <DropdownMenuItem variant="account" render={<Link href={dashRoute("/settings")} />}>
               <SettingsIcon />
               Settings
             </DropdownMenuItem>

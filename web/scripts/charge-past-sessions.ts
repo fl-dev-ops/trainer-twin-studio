@@ -30,6 +30,7 @@ for (const id of ids) {
     select: { id: true, userId: true, startedAt: true, endedAt: true, user: { select: { email: true } } },
   });
   if (!session?.startedAt || !session.endedAt) throw new Error(`${id}: not a finished session of ${slug}`);
+  if (!session.userId || !session.user) throw new Error(`${id}: not an admin/team session`);
   const member = await db.member.findFirst({ where: { organizationId: org.id, userId: session.userId, role: { in: [...STUDIO_ROLES] } }, select: { id: true } });
   if (!member) throw new Error(`${id}: not an admin/team session (learners' sessions use their own minutes)`);
   if (await db.minuteLedger.findFirst({ where: { sessionId: id }, select: { id: true } })) {

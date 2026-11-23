@@ -6,7 +6,7 @@ test.use(as("admin"));
 
 test("Usage: the org's remaining credits, Meteroid grants, and learners' balances (searchable, paged)", async ({ page }) => {
   const { more, learner } = seed();
-  await page.goto("/credits"); // old link: redirects to Usage
+  await page.goto("/usage");
   await expect(page).toHaveURL(/\/usage$/);
   // 500 granted by Meteroid; 30 + 1 + 22 × 10 given out.
   await expect(page.getByText("Remaining credits")).toBeVisible();

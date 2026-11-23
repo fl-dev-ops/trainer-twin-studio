@@ -1,7 +1,7 @@
 import { defineTool, type ToolDefinition } from "eve/tools";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
 import { sessionToolSettings, TOOL_SWITCHED_OFF, workspaceAllowed } from "./agent-tools";
-import { studioFetch } from "./studio";
+import { runtimeFromContext, studioFetch } from "./studio";
 
 /**
  * Browser-executed workspace tools. Chat records a durable command, the page
@@ -28,7 +28,7 @@ export async function executeWorkspaceTool(input: unknown, ctx: any) {
     // Role plays hang up with end_call (it speaks the goodbye and closes the call); finish_session is the twins'.
     const { isRoleplaySession } = await import("./session-mode-lookup");
     if (await isRoleplaySession(ctx)) return { disabled: true, reason: "Role plays end with end_call." };
-    return studioFetch(orgId, { action: "finishSession", sessionId });
+    return studioFetch(orgId, { action: "finishSession", sessionId }, undefined, runtimeFromContext(ctx));
   }
   // Only what the agent's Tools settings switch on (the tool list already omits the rest; this covers replays and the
   // generic surface / workspace_request tools).

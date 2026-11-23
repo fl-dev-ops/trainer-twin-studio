@@ -12,6 +12,7 @@ import type { RoleplayOutputs } from "@/lib/roleplay/trpc";
 import { cn } from "@/lib/utils";
 import { useRefresh } from "@/lib/use-refresh";
 import { PageContainer } from "@/components/page-container";
+import { dashRoute } from "@/lib/routes";
 
 type Detail = RoleplayOutputs["scenarios"]["get"];
 
@@ -52,7 +53,7 @@ export function RoleplayAssignPage({ roleplay, learners }: { roleplay: Detail; l
   return (
     <PageContainer>
       <header className="flex min-h-10 items-center">
-        <Link href={`/roleplay/${roleplay.slug}`} className="inline-flex items-center gap-2 text-sm text-(--foreground) transition-colors hover:text-muted-foreground">
+        <Link href={dashRoute(`/roleplay/${roleplay.slug}`)} className="inline-flex items-center gap-2 text-sm text-(--foreground) transition-colors hover:text-muted-foreground">
           <ArrowLeft className="size-4" />
           <span>Back</span>
         </Link>

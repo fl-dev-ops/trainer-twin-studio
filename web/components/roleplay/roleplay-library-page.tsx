@@ -17,6 +17,7 @@ import type { RoleplayOutputs } from "@/lib/roleplay/trpc";
 import { cn } from "@/lib/utils";
 import { PageContainer } from "@/components/page-container";
 import { Button } from "@/components/ui/button";
+import { dashRoute } from "@/lib/routes";
 
 type Scenario = RoleplayOutputs["scenarios"]["list"][number];
 
@@ -38,23 +39,23 @@ export function RoleplayMenu({ slug, name, trigger }: { slug: string; name: stri
       </DropdownMenuTrigger>
       <DropdownMenuContent side="bottom" align="end" className="w-44">
           <DropdownMenuGroup>
-            <DropdownMenuItem render={<Link href={`/roleplay/${slug}/edit`} />}>
+            <DropdownMenuItem render={<Link href={dashRoute(`/roleplay/${slug}/edit`)} />}>
               <Pencil className="size-4" />
               <span>Edit</span>
             </DropdownMenuItem>
-            <DropdownMenuItem render={<Link href={`/talk?agent=${encodeURIComponent(slug)}`} />}>
+            <DropdownMenuItem render={<Link href={dashRoute(`/talk?agent=${encodeURIComponent(slug)}`)} />}>
               <Play className="size-4" />
               <span>Try as learner</span>
             </DropdownMenuItem>
-            <DropdownMenuItem render={<Link href={`/roleplay/${slug}/assign`} />}>
+            <DropdownMenuItem render={<Link href={dashRoute(`/roleplay/${slug}/assign`)} />}>
               <UserPlus className="size-4" />
               <span>Assign</span>
             </DropdownMenuItem>
-            <DropdownMenuItem render={<Link href={`/roleplay/${slug}`} />}>
+            <DropdownMenuItem render={<Link href={dashRoute(`/roleplay/${slug}`)} />}>
               <BarChart3 className="size-4" />
               <span>Sessions</span>
             </DropdownMenuItem>
-            <DropdownMenuItem render={<Link href={`/roleplay/${slug}/calibrate`} />}>
+            <DropdownMenuItem render={<Link href={dashRoute(`/roleplay/${slug}/calibrate`)} />}>
               <AudioLines className="size-4" />
               <span>Calibrate</span>
             </DropdownMenuItem>
@@ -133,7 +134,7 @@ export function RoleplayLibraryPage({ scenarios }: { scenarios: Scenario[] }) {
             />
           </label>
           <Link
-            href="/roleplay/new"
+            href={dashRoute("/roleplay/new")}
             className="inline-flex h-8 items-center gap-2 rounded-full bg-(--brand) px-3.5 text-body-s leading-5 font-medium text-white transition-colors hover:bg-brand-hover"
           >
             <svg viewBox="0 0 16 16" width={16} height={16} fill="none" aria-hidden>

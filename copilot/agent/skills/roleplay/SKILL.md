@@ -11,6 +11,7 @@ description: Role plays (Scenarios) - listing them, reading one, and changing an
 | `roleplay_list` | Lists role plays: slug, kind (`roleplay-brief`, `roleplay-builder`, `roleplay-recordings`), version, archived. | no |
 | `roleplay_read` | Reads one: Settings, Tools, version, invites, and its brief or builder fields. | no |
 | `roleplay_update` | Changes a **builder** role play's script fields (client, situation, opening, goals, rubric…). | yes |
+| `roleplay_personas_set` | Lets more personas play it: each session picks one active persona at random (main included). Replaces the extras. | yes |
 | `roleplay_settings_update` | Changes Settings: screen share, upload before the call (and whether required), upload during the call, upload title and instruction. | yes |
 | `roleplay_tools_update` | Switches workspace tools on or off. | yes |
 | `roleplay_draft`, `roleplay_publish` | Check and publish a role play written from requirements; used inside `roleplay-creator`. | publish: yes |

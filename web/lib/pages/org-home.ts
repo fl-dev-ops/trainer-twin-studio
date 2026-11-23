@@ -6,6 +6,7 @@ import { parseHideRoleplay } from "@/lib/org";
 import { isStudioMember, trainerProfile, twinAccessFor, twinProfile } from "@/lib/pages/learner";
 import { resolveSessionUser } from "@/lib/session-user";
 import { isAllSkillsTwin, twinSharePath } from "@/lib/twin-access";
+import { orgRoute } from "@/lib/routes";
 
 /**
  * The org's home page (<org>.<base>/): public, so anyone can see what the org is and whose twins it has; signed in
@@ -41,7 +42,7 @@ export async function loadOrgHome(): Promise<OrgHomeView> {
       twinAccessFor(org, user, agent.id),
     ]);
     return {
-      href: `/t/${encodeURIComponent(path)}`,
+      href: orgRoute(`/t/${encodeURIComponent(path)}`),
       ...profile,
       access,
       topics: agents
@@ -79,7 +80,7 @@ export async function loadOrgHome(): Promise<OrgHomeView> {
         name: row.deployment.agent.name,
         // What the learner is told before the call (a role play's learner brief), else the older objective.
         description: text(record(record(row.deployment.agent.data).roleplayBrief).learnerBrief) ?? text(record(row.deployment.agent.data).objective),
-        href: `/s/${encodeURIComponent(row.shareCode)}`,
+        href: orgRoute(`/s/${encodeURIComponent(row.shareCode)}`),
         expiresAt: row.expiresAt.toISOString(),
       })),
     },

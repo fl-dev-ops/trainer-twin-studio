@@ -1,4 +1,4 @@
-// Local dev: run web, copilot, chat and the voice agent under pm2, each logging to logs/<name>.log.
+// Local dev: run the Studio, widget playground and agent services under pm2, each logging to logs/<name>.log.
 //   pm2 start ecosystem.config.cjs     start all (or: pm2 start ecosystem.config.cjs --only web)
 //   pm2 logs [name]                    follow logs live      pm2 monit    dashboard
 //   pm2 restart <name> | pm2 stop all  pm2 delete all       pm2 flush    empty the log files
@@ -30,6 +30,7 @@ const app = (name, cwd, script, args) => ({
 module.exports = {
   apps: [
     app("web", "web", "bun", "run dev"), // :3000, behind portless (*.trainertwin.localhost)
+    app("widgets", "widgets", "bun", "run playground"), // :43190
     app("copilot", "copilot", "bun", "run dev -- --port 2001 --no-ui"),
     app("chat", "chat", "bun", "run dev -- --port 2000 --no-ui"),
     app("agent", "agent", "uv", "run src/agent.py dev"),

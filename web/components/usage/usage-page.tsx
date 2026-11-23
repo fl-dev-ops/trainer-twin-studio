@@ -22,6 +22,7 @@ import { api } from "@/lib/api";
 import type { AppRouter } from "@/lib/app-router";
 import type { UsageCategory } from "@/lib/usage-report";
 import { cn } from "@/lib/utils";
+import { dashRoute } from "@/lib/routes";
 
 export type OrgCredits = inferRouterOutputs<AppRouter>["minutes"]["org"];
 type Activity = inferRouterOutputs<AppRouter>["minutes"]["activity"];
@@ -120,7 +121,7 @@ function BalanceCard({ credits }: { credits: OrgCredits }) {
             {credits.balanceMinutes.toLocaleString()} <span className="text-lg font-normal text-muted-foreground">min</span>
           </p>
         </div>
-        {credits.billed ? <Button variant="outline" render={<Link href="/billing" />} nativeButton={false}>Buy credits</Button> : null}
+        {credits.billed ? <Button variant="outline" render={<Link href={dashRoute("/billing")} />} nativeButton={false}>Buy credits</Button> : null}
       </div>
       {credits.addedMinutes > 0 ? (
         <div className="flex items-center gap-3 text-xs text-muted-foreground">

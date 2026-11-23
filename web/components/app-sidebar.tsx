@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import {
   BrandMark,
+  BotIcon,
   PersonaIcon,
   RoleplayIcon,
   SessionsIcon,
@@ -28,34 +29,42 @@ import {
   SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { dashRoute } from "@/lib/routes";
 
 const NAV_GROUPS = [
   {
     label: "Twin",
     items: [
-      { title: "Twin agents", href: "/twin", icon: SetupIcon },
-      { title: "Twin sessions", href: "/twin/sessions", icon: SessionsIcon },
-      { title: "Twin users", href: "/twin/users", icon: UsersIcon },
+      { title: "Twin agents", href: dashRoute("/twin"), icon: SetupIcon },
+      { title: "Twin sessions", href: dashRoute("/twin/sessions"), icon: SessionsIcon },
+      { title: "Twin users", href: dashRoute("/twin/users"), icon: UsersIcon },
       // Knowledge opens from the brain canvas, so it lights this item too.
       {
         title: "Twin’s brain",
-        href: "/twin/brain",
+        href: dashRoute("/twin/brain"),
         icon: TwinIcon,
         also: ["/twin/knowledge"],
       },
     ],
   },
   {
+    label: "Bots",
+    items: [
+      // A bot is a twin's public side for signed-out visitors (lib/bots).
+      { title: "Website bots", href: dashRoute("/bots"), icon: BotIcon },
+    ],
+  },
+  {
     label: "Role play",
     items: [
-      { title: "Scenarios", href: "/roleplay", icon: RoleplayIcon },
+      { title: "Scenarios", href: dashRoute("/roleplay"), icon: RoleplayIcon },
       {
         title: "Role play sessions",
-        href: "/roleplay/sessions",
+        href: dashRoute("/roleplay/sessions"),
         icon: SessionsIcon,
       },
-      { title: "Roleplay users", href: "/roleplay/users", icon: UsersIcon },
-      { title: "Personas", href: "/personas", icon: PersonaIcon },
+      { title: "Roleplay users", href: dashRoute("/roleplay/users"), icon: UsersIcon },
+      { title: "Personas", href: dashRoute("/personas"), icon: PersonaIcon },
     ],
   },
 ];
@@ -118,21 +127,21 @@ function Brand() {
   );
 }
 
-/** hideRoleplay: a twin-only org (org metadata flag) gets no Role play group. */
+/** hideRoleplay: a twin-only org (org metadata flag) gets no Role play group; bots: only orgs with bots see Bots. */
 export function AppSidebar({
   hideRoleplay = false,
+  bots = false,
   orgs = [],
   orgId = null,
 }: {
   hideRoleplay?: boolean;
+  bots?: boolean;
   orgs?: SwitchableOrg[];
   orgId?: string | null;
 }) {
   const pathname = usePathname();
   const tab = useSearchParams().get("tab");
-  const groups = hideRoleplay
-    ? NAV_GROUPS.filter((group) => group.label !== "Role play")
-    : NAV_GROUPS;
+  const groups = NAV_GROUPS.filter((group) => !(hideRoleplay && group.label === "Role play") && !(!bots && group.label === "Bots"));
 
   return (
     <Sidebar variant="sidebar" collapsible="icon">

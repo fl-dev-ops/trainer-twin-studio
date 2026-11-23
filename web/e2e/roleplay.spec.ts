@@ -10,14 +10,11 @@ test("the retired Domains bookmark is not a Studio route", async ({ page }) => {
   await expect(page).toHaveURL(/\/domains$/);
 });
 
-test("old /agents links land on the same role play under /roleplay", async ({ page }) => {
-  const slug = seed().roleplay.slug;
-  await page.goto("/agents");
-  await expect(page).toHaveURL(/\/roleplay$/);
-  await page.goto(`/agents/${slug}/edit`);
-  await expect(page).toHaveURL(new RegExp(`/roleplay/${slug}/edit$`));
-  await page.goto("/agents/fidelity");
-  await expect(page).toHaveURL(/\/roleplay$/);
+test("retired redirect-only bookmarks are not Studio routes", async ({ page }) => {
+  for (const path of ["/agents", "/credits", "/knowledge", "/voice/cloning/new"]) {
+    const response = await page.goto(path);
+    expect(response?.status(), path).toBe(404);
+  }
 });
 
 test("the library lists role plays only, and each card's menu edits, assigns and calibrates on /roleplay", async ({ page }) => {
@@ -30,6 +27,34 @@ test("the library lists role plays only, and each card's menu edits, assigns and
   await expect(page.getByRole("menuitem", { name: "Edit" })).toHaveAttribute("href", `/roleplay/${slug}/edit`);
   await expect(page.getByRole("menuitem", { name: "Assign" })).toHaveAttribute("href", `/roleplay/${slug}/assign`);
   await expect(page.getByRole("menuitem", { name: "Calibrate" })).toHaveAttribute("href", `/roleplay/${slug}/calibrate`);
+});
+
+test("edit page: all tabs use section panels that fit desktop and mobile", async ({ page }, testInfo) => {
+  const slug = seed().roleplay.slug;
+  await page.goto(`/roleplay/${slug}/edit`);
+  const sections = {
+    General: ["Role play details"],
+    Persona: ["Who the learner talks to"],
+    Script: ["Change the script with the copilot", "Current script"],
+    Settings: ["Before the conversation", "During the conversation", "Workspace tools"],
+  };
+  for (const width of [1280, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const [tab, names] of Object.entries(sections)) {
+      await page.getByRole("tab", { name: tab, exact: true }).click();
+      const panel = page.getByRole("tabpanel", { name: tab, exact: true });
+      for (const name of names) await expect(panel.getByRole("region", { name, exact: true })).toBeVisible();
+      await expect(panel.locator('[data-slot="card"]')).toHaveCount(0);
+      expect(await panel.evaluate((element) => element.scrollWidth)).toBeLessThanOrEqual((await panel.boundingBox())!.width + 1);
+      await panel.screenshot({ path: testInfo.outputPath(`${tab.toLowerCase()}-${width}.png`), animations: "disabled" });
+    }
+  }
+  const script = page.getByRole("tab", { name: "Script", exact: true });
+  await script.click();
+  const ask = page.getByRole("button", { name: "Ask the copilot" });
+  await expect(ask).toBeDisabled();
+  await page.getByRole("textbox", { name: "Change the script with the copilot" }).fill("Ask one more question about the buyer's budget.");
+  await expect(ask).toBeEnabled();
 });
 
 test("edit page: saved upload requirements control whether the learner can join", async ({ page, browser }) => {
@@ -94,6 +119,53 @@ test("edit page: saved upload requirements control whether the learner can join"
   await expect(page.getByText("File upload before the call turned on")).toBeVisible();
   await page.getByRole("switch", { name: "Upload a file before the call" }).click();
   await expect(page.getByText("File upload before the call turned off")).toBeVisible();
+});
+
+test("persona cards select multiple people, save explicitly, and let the trainer replace the original", async ({ page }, testInfo) => {
+  const slug = seed().roleplay.slug;
+  await page.goto(`/roleplay/${slug}/edit`);
+  const open = () => page.getByRole("tab", { name: "Persona", exact: true }).click();
+  const panel = page.getByRole("tabpanel", { name: "Persona", exact: true });
+  const trainer = panel.getByRole("checkbox", { name: /E2E Trainer/ });
+  const buyer = panel.getByRole("checkbox", { name: /E2E Buyer/ });
+  const save = panel.getByRole("button", { name: "Save personas" });
+  async function saveSelection() {
+    const response = page.waitForResponse((r) => r.url().includes("builder.setPersonaPool") && r.request().method() === "POST");
+    await save.click();
+    expect((await response).ok()).toBe(true);
+    await expect(page.getByText("Personas saved", { exact: true }).first()).toBeVisible();
+  }
+  try {
+    await open();
+    await expect(panel.getByRole("region", { name: "Who the learner talks to" })).toHaveCount(1);
+    await expect(panel.getByText("Also played by")).toHaveCount(0);
+    await expect(trainer).toBeChecked();
+    await buyer.focus();
+    await buyer.press("Space");
+    await expect(buyer).toBeChecked();
+    await panel.getByRole("button", { name: "Cancel" }).click();
+    await expect(buyer).not.toBeChecked();
+    await trainer.click();
+    await expect(save).toBeDisabled();
+    await expect(panel.getByText("Select at least one persona.")).toBeVisible();
+    await trainer.click();
+    await buyer.click();
+    await saveSelection();
+    await page.reload();
+    await open();
+    await expect(trainer).toBeChecked();
+    await expect(buyer).toBeChecked();
+    await panel.screenshot({ path: testInfo.outputPath("persona-selection.png"), animations: "disabled" });
+    await trainer.click();
+    await saveSelection();
+    await page.reload();
+    await open();
+    await expect(trainer).not.toBeChecked();
+    await expect(buyer).toBeChecked();
+  } finally {
+    const reset = await page.request.post("/api/roleplay/builder.setPersonaPool", { data: { json: { slug, personas: ["e2e-trainer"] } } });
+    expect(reset.ok()).toBe(true);
+  }
 });
 
 test("calibration opens with the selected persona, without starting a call", async ({ page }) => {

@@ -6,6 +6,7 @@ import { UserAvatar } from "@/components/user-avatar";
 import type { RoleplayOutputs } from "@/lib/roleplay/trpc";
 import { cn } from "@/lib/utils";
 import { PageContainer } from "@/components/page-container";
+import { dashRoute } from "@/lib/routes";
 
 // Inline so the columns never depend on a freshly generated utility class.
 // Name, email, role plays assigned, sessions, credits left.
@@ -41,7 +42,7 @@ export function RoleplayUsersPage({ users }: { users: RoleplayOutputs["users"]["
         {users.map((user) => (
           <Link
             key={user.userId}
-            href={`/users/${encodeURIComponent(user.userId)}`}
+            href={dashRoute(`/users/${encodeURIComponent(user.userId)}`)}
             aria-label={`Open profile for ${user.name}`}
             className={cn(columns, "border-t border-(--border) px-5 py-3.5 text-sm outline-none transition-colors hover:bg-sidebar focus-visible:bg-sidebar focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring")}
           >

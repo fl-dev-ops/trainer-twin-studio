@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowLeft, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { dashRoute } from "@/lib/routes";
 
 export default function NotFound() {
   return (
@@ -22,10 +23,10 @@ export default function NotFound() {
           Error 404. The address may be outdated, or the page may have moved. Return to the studio or start a new training session.
         </p>
         <div className="mt-8 flex flex-wrap gap-3">
-          <Button nativeButton={false} render={<Link href="/" />}>
+          <Button nativeButton={false} render={<Link href={dashRoute("/")} />}>
             <ArrowLeft data-icon="inline-start" /> Back to dashboard
           </Button>
-          <Button variant="outline" nativeButton={false} render={<Link href="/talk" />}>
+          <Button variant="outline" nativeButton={false} render={<Link href={dashRoute("/talk")} />}>
             <Play data-icon="inline-start" /> Start a session
           </Button>
         </div>

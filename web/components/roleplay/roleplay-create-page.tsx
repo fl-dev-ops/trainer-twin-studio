@@ -11,6 +11,7 @@ import { seedCopilot } from "@/lib/copilot-handoff";
 import { encodeCopilotMessage } from "@/lib/copilot-message";
 import type { RoleplayOutputs } from "@/lib/roleplay/trpc";
 import { cn } from "@/lib/utils";
+import { dashRoute } from "@/lib/routes";
 
 type Persona = RoleplayOutputs["builder"]["personas"][number];
 
@@ -41,13 +42,13 @@ export function RoleplayCreatePage({ personas }: { personas: Persona[] }) {
     event.preventDefault();
     if (!what.trim()) return;
     seedCopilot(encodeCopilotMessage({ skill: "roleplay-creator", files: [], text: createRequest(what, persona) }));
-    router.push("/");
+    router.push(dashRoute("/"));
   }
 
   return (
     <PageContainer>
       <header className="flex min-h-10 items-center">
-        <Link href="/roleplay" className="inline-flex items-center gap-2 text-sm text-(--foreground) transition-colors hover:text-muted-foreground">
+        <Link href={dashRoute("/roleplay")} className="inline-flex items-center gap-2 text-sm text-(--foreground) transition-colors hover:text-muted-foreground">
           <ArrowLeft className="size-4" />
           <span>Back</span>
         </Link>

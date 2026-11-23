@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import { voicePrefix } from "@/lib/s3";
 import { testDatabaseUrl } from "../setup/test-db-url";
 import type { Prisma } from "@/lib/generated/prisma/client";
+import { createBot, listBots, saveBotPublic, type BotPublicPatch } from "@/lib/bots";
 
 // Never use a remote database, or a fake left behind by another file's mock.module.
 const testUrl = testDatabaseUrl();
@@ -30,7 +31,8 @@ export function minutesFixture() {
       // Publish the org with its admin atomically: parallel invariant checks must never see an admin-less fixture.
       await db.$transaction(async (tx) => {
         for (const user of [learner, trainer]) await tx.user.create({ data: { ...user, emailVerified: true } });
-        await tx.organization.create({ data: { ...org, createdAt: new Date(), members: { create: [
+        // Bots on (org metadata flag) so bot tests run; tests/lib/unified-agents covers an org without them.
+        await tx.organization.create({ data: { ...org, metadata: JSON.stringify({ bots: true }), createdAt: new Date(), members: { create: [
           { id: `${trainer.id}-member`, userId: trainer.id, role: "admin", createdAt: new Date() },
           ...(learnerMember ? [{ id: `${learner.id}-member`, userId: learner.id, role: "user", createdAt: new Date() }] : []),
         ] } } });
@@ -74,3 +76,22 @@ const unexpectedMeteroid: string[] = [];
 meteroidServer.events.on("request:unhandled", ({ request }) => { if (request.url.includes("meteroid")) unexpectedMeteroid.push(request.url); });
 beforeAll(() => meteroidServer.listen({ onUnhandledRequest: "bypass" }));
 afterAll(() => { meteroidServer.close(); expect(unexpectedMeteroid).toEqual([]); });
+
+/**
+ * The fixture org's bot (lib/bots): made on first use, speaking as the fixture twin's persona; later calls change its
+ * public call and widget settings.
+ */
+export async function setTwinPublic(
+  f: { org: { id: string }; twin: { id: string } },
+  settings: BotPublicPatch,
+) {
+  return db.$transaction(async (tx) => {
+    let bot = (await listBots(f.org.id, tx))[0];
+    if (!bot) {
+      const twin = await tx.agent.findUniqueOrThrow({ where: { id: f.twin.id }, select: { personaId: true, name: true, data: true } });
+      const objective = (twin.data as { objective?: string } | null)?.objective ?? "Talk with visitors.";
+      bot = (await createBot(f.org.id, { personaId: twin.personaId, name: twin.name, objective }, tx))!;
+    }
+    return saveBotPublic(bot, settings, tx);
+  });
+}

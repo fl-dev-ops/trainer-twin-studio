@@ -37,6 +37,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Item, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } from "@/components/ui/item";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { dashRoute } from "@/lib/routes";
 
 type TwinDetail = TwinOutputs["agents"]["get"];
 
@@ -116,15 +117,15 @@ export function TwinAgentDetailPage({ twin }: { twin: TwinDetail }) {
   return (
     <PageContainer>
       <PageHeader
-        back={{ href: "/twin" }}
+        back={{ href: dashRoute("/twin") }}
         actions={
           <>
             <FilterDropdown value={dateFilter} onChange={setDateFilter} options={DATE_RANGES} align="end" />
-            <Button variant="secondary" nativeButton={false} render={<Link href={`/twin/${id}/edit`} />}>
+            <Button variant="secondary" nativeButton={false} render={<Link href={dashRoute(`/twin/${id}/edit`)} />}>
               <Settings2 data-icon="inline-start" />
               Configure
             </Button>
-            <Button variant="brand" nativeButton={false} render={<Link href={`/twin/${id}/calibration`} />}>
+            <Button variant="brand" nativeButton={false} render={<Link href={dashRoute(`/twin/${id}/calibration`)} />}>
               <Sliders data-icon="inline-start" />
               Calibrate
             </Button>
@@ -134,15 +135,15 @@ export function TwinAgentDetailPage({ twin }: { twin: TwinDetail }) {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-44">
                 <DropdownMenuGroup>
-                  <DropdownMenuItem render={<Link href={`/twin/${id}/edit`} />}>
+                  <DropdownMenuItem render={<Link href={dashRoute(`/twin/${id}/edit`)} />}>
                     <Settings2 className="size-4" />
                     <span>Configure</span>
                   </DropdownMenuItem>
-                  <DropdownMenuItem render={<Link href={`/talk?agent=${encodeURIComponent(id)}`} />}>
+                  <DropdownMenuItem render={<Link href={dashRoute(`/talk?agent=${encodeURIComponent(id)}`)} />}>
                     <Play className="size-4" />
                     <span>Try as learner</span>
                   </DropdownMenuItem>
-                  <DropdownMenuItem render={<Link href={`/twin/${id}/assign`} />}>
+                  <DropdownMenuItem render={<Link href={dashRoute(`/twin/${id}/assign`)} />}>
                     <UserPlus className="size-4" />
                     <span>Assign</span>
                   </DropdownMenuItem>
@@ -191,7 +192,7 @@ export function TwinAgentDetailPage({ twin }: { twin: TwinDetail }) {
                   <ul className="m-0 mt-2 flex list-none flex-col gap-2 p-0">
                     {twin.skills.slice(0, SKILLS_SHOWN).map((skill) => (
                       <li key={skill.slug}>
-                        <Link href={`/twin/${encodeURIComponent(skill.slug)}`} className="flex items-center gap-2 text-body leading-6 text-(--text-secondary) hover:text-foreground">
+                        <Link href={dashRoute(`/twin/${encodeURIComponent(skill.slug)}`)} className="flex items-center gap-2 text-body leading-6 text-(--text-secondary) hover:text-foreground">
                           <Sparkles className="size-4 shrink-0 text-muted-foreground" aria-hidden />
                           <span className="truncate">{skill.name}</span>
                         </Link>
@@ -199,7 +200,7 @@ export function TwinAgentDetailPage({ twin }: { twin: TwinDetail }) {
                     ))}
                     {twin.skills.length > SKILLS_SHOWN ? (
                       <li>
-                        <Link href="/twin" className="text-sm font-medium text-muted-foreground hover:text-foreground">
+                        <Link href={dashRoute("/twin")} className="text-sm font-medium text-muted-foreground hover:text-foreground">
                           +{twin.skills.length - SKILLS_SHOWN} more
                         </Link>
                       </li>
@@ -276,7 +277,7 @@ export function TwinAgentDetailPage({ twin }: { twin: TwinDetail }) {
               <div className="flex items-center justify-between gap-2">
                 <p className={OVERLINE}>Sessions</p>
                 <Link
-                  href="/twin/sessions"
+                  href={dashRoute("/twin/sessions")}
                   className="inline-flex items-center gap-1 text-xs font-semibold hover:underline"
                 >
                   View <ArrowUpRight className="size-3.5" />
@@ -336,7 +337,7 @@ export function TwinAgentDetailPage({ twin }: { twin: TwinDetail }) {
                     <ItemContent>
                       <ItemTitle>
                         {doc.exists ? (
-                          <Link href={`/twin/knowledge?doc=${encodeURIComponent(doc.documentId)}`} className="hover:underline">
+                          <Link href={dashRoute(`/twin/knowledge?doc=${encodeURIComponent(doc.documentId)}`)} className="hover:underline">
                             {doc.title}
                           </Link>
                         ) : (
@@ -439,7 +440,7 @@ export function TwinAgentDetailPage({ twin }: { twin: TwinDetail }) {
               {calibrations.map((item, idx) => (
                 <Link
                   key={item.id}
-                  href={`/twin/${id}/calibration/${item.id}`}
+                  href={dashRoute(`/twin/${id}/calibration/${item.id}`)}
                   className={cn(
                     "flex items-center justify-between py-3.5 transition-colors hover:text-brand",
                     idx > 0 && "border-t border-border"

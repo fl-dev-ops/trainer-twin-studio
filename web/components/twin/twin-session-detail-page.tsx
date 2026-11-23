@@ -8,6 +8,7 @@ import { useSessionReportState } from "@/components/twin/use-report-polling";
 import type { TwinOutputs } from "@/lib/twin/trpc";
 import { cn } from "@/lib/utils";
 import { PageContainer } from "@/components/page-container";
+import { dashRoute } from "@/lib/routes";
 
 type SessionDetail = TwinOutputs["sessions"]["get"];
 
@@ -20,7 +21,7 @@ export function TwinSessionDetailPage({ session }: { session: SessionDetail }) {
       {/* Back navigation */}
       <header className="flex min-h-10 items-center justify-between gap-4">
         <Link
-          href="/twin/sessions"
+          href={dashRoute("/twin/sessions")}
           className="inline-flex items-center gap-2 text-sm text-(--text-secondary) hover:text-(--foreground) transition-colors"
         >
           <ArrowLeft className="size-4" />
@@ -37,6 +38,8 @@ export function TwinSessionDetailPage({ session }: { session: SessionDetail }) {
             </span>
             <div className="flex flex-col min-w-0">
               <h1 className="m-0 text-xl font-semibold leading-7">{session.learner}</h1>
+              {session.anonymous ? <p className="text-sm text-muted-foreground">Anonymous visitor · self-reported name</p> : null}
+              {session.embedOrigin ? <p className="break-all text-sm text-muted-foreground">Website widget · {session.embedOrigin}</p> : null}
               <p className="mt-0.5 text-sm font-medium text-(--foreground)">{session.agentName}</p>
               <p className="mt-0.5 text-xs text-muted-foreground">
                 <SessionTime iso={session.at} />

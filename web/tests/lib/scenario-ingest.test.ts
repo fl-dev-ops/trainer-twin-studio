@@ -38,6 +38,11 @@ const fakeDb = {
       const row = agents.find((a) => a.slug === where.slug);
       return row ? { ...row } : null;
     },
+    // A published twin skill looks up its owner and the trainer's main twin (lib/agent-skills); none here is merged.
+    findFirst: async ({ where }: { where: { slug?: string; id?: string } }) => {
+      const row = agents.find((a) => (where.slug !== undefined && a.slug === where.slug) || (where.id !== undefined && a.id === where.id));
+      return row ? { ...row } : null;
+    },
     create: async ({ data }: { data: Row }) => {
       log.push("agent.create");
       const row = { id: crypto.randomUUID(), updatedAt: new Date(), ...data };

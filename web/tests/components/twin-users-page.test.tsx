@@ -42,8 +42,11 @@ test("twin users include all-time session counts once per learner and zero for i
     by: ["userId"],
     where: {
       orgId: "org", deletedAt: null, startedAt: { not: null }, status: { not: "failed" },
-      twinCalibration: { is: null }, agent: { kind: "TWIN" },
-      user: { members: { some: { organizationId: "org", role: "user" } } },
+      twinCalibration: { is: null }, agent: { kind: { in: ["TWIN", "BOT"] } },
+      AND: [{ OR: [
+        { user: { members: { some: { organizationId: "org", role: "user" } } } },
+        { userId: null, anonymousId: { not: null } },
+      ] }],
     },
     _count: true,
   });

@@ -6,11 +6,12 @@ import { AppError, errorResponse, refusals } from "@/lib/errors";
 import { ORG_PIN_HEADER } from "@/lib/org-pin";
 
 import { isStudioRole } from "@/lib/roles";
+import { crossHostRoute, dashRoute } from "@/lib/routes";
 
 export { isStudioRole, LEARNER_ROLE, STUDIO_ROLES, type OrgRole } from "@/lib/roles";
 
 /** hideRoleplay: org metadata flag for twin-only orgs (no Role play menus or pages). */
-export type SessionOrg = { id: string; slug: string; accentColor: string | null; hideRoleplay?: boolean };
+export type SessionOrg = { id: string; slug: string; accentColor: string | null; hideRoleplay?: boolean; bots?: boolean };
 export type TrainerOrg = SessionOrg & {
   role: string;
   user: { id: string; name: string; email: string };
@@ -91,6 +92,11 @@ export async function studioOrgsOf(userId: string) {
     .map(({ organization }) => ({ id: organization.id, name: organization.name, slug: organization.slug }));
 }
 
+/** `{ "bots": true }` in the org metadata: the org may use bots (lib/bots); off for every other org (set per org). */
+export function parseBotsEnabled(metadata: string | null): boolean {
+  return orgMetadata(metadata).bots === true;
+}
+
 /**
  * The signed-in person's current organization (pickMembership), any role.
  * Null when unauthenticated or not yet part of an organization.
@@ -103,6 +109,7 @@ export async function getSessionOrg(): Promise<SessionOrg | null> {
     slug: member.organization.slug,
     accentColor: parseAccentColor(member.organization.metadata),
     hideRoleplay: parseHideRoleplay(member.organization.metadata),
+    bots: parseBotsEnabled(member.organization.metadata),
   };
 }
 
@@ -121,6 +128,7 @@ export async function studioOrg(): Promise<TrainerOrg> {
     slug: member.organization.slug,
     accentColor: parseAccentColor(member.organization.metadata),
     hideRoleplay: parseHideRoleplay(member.organization.metadata),
+    bots: parseBotsEnabled(member.organization.metadata),
     role: member.role,
     user: { id: session.user.id, name: session.user.name, email: session.user.email },
   };
@@ -141,14 +149,14 @@ export const getTrainerOrg = () => studioOrg().catch((error: unknown) => {
  */
 export async function requireStudioMember(): Promise<TrainerOrg> {
   const org = await getTrainerOrg();
-  if (!org) redirect("/auth/no-org");
+  if (!org) redirect(crossHostRoute("/auth/no-org"));
   return org;
 }
 
 /** Page guard for Role play pages (scenarios, personas): studio members of an org that has role play. */
 export async function requireRoleplayOrg(): Promise<TrainerOrg> {
   const org = await requireStudioMember();
-  if (org.hideRoleplay) redirect("/twin");
+  if (org.hideRoleplay) redirect(dashRoute("/twin"));
   return org;
 }
 

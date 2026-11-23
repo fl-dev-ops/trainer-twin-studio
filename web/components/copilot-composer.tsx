@@ -11,6 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { COPILOT_SKILLS, type CopilotSkillName, type PickedFile } from "@/lib/copilot-message";
 import { renderPdfThumbnailUrl } from "@/lib/pdf-thumbnail-utils";
 import { cn } from "@/lib/utils";
+import { dashRoute } from "@/lib/routes";
 
 /** The copilot composer's extras (plans/copilot-v2.md): Files from the knowledge base, the "/" skill menu, chips. */
 
@@ -78,7 +79,7 @@ export function KnowledgeFilePicker({ selected, onChange, disabled }: { selected
               </CommandGroup>
             )}
           </CommandList>
-          <Link href="/twin/knowledge" className="flex items-center gap-2 border-t px-3 py-2 text-sm text-muted-foreground hover:text-foreground">
+          <Link href={dashRoute("/twin/knowledge")} className="flex items-center gap-2 border-t px-3 py-2 text-sm text-muted-foreground hover:text-foreground">
             <Library className="size-4" aria-hidden="true" />
             Browse all
             <ArrowUpRight className="ml-auto size-3.5" aria-hidden="true" />

@@ -261,7 +261,7 @@ export async function writeSessionUsage(tx: Tx, sessionId: string) {
   if (!row || row.allowedSeconds == null || !row.endedAt || row.status === "failed" || row.status === "revoked") return { report: null };
   const seconds = sessionUsageSeconds(row);
   const { count } = await tx.minuteLedger.createMany({
-    data: [{ orgId: row.orgId, email: lower(row.user.email), userId: row.userId, type: row.chargesOrg ? "org_usage" : "usage", seconds: -seconds, sessionId: row.id }],
+    data: [{ orgId: row.orgId, email: row.user ? lower(row.user.email) : null, userId: row.userId, type: row.chargesOrg ? "org_usage" : "usage", seconds: -seconds, sessionId: row.id }],
     skipDuplicates: true,
   });
   return { report: count && row.chargesOrg && seconds > 0 ? row.orgId : null };

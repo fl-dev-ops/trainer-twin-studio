@@ -34,6 +34,7 @@ import { PptxViewerPreview } from "@/components/extend/pptx-viewer";
 import { CsvViewer } from "@/components/extend/csv-viewer";
 import { PreviewWrapper } from "./preview-wrapper";
 import type { KnowledgeDoc } from "./types";
+import { dashRoute } from "@/lib/routes";
 
 type UsedIn = { slug: string; name: string; kind: "twin" | "roleplay"; version: number; items: number };
 
@@ -164,7 +165,7 @@ export function DocumentDetailDrawer({
             <DropdownMenuGroup>
               <DropdownMenuLabel>Built from this document</DropdownMenuLabel>
               {usedIn.map((use) => (
-                <DropdownMenuItem key={use.slug} render={<Link href={`/${use.kind === "twin" ? "twin" : "roleplay"}/${encodeURIComponent(use.slug)}`} />}>
+                <DropdownMenuItem key={use.slug} render={<Link href={dashRoute(`/${use.kind === "twin" ? "twin" : "roleplay"}/${encodeURIComponent(use.slug)}`)} />}>
                   <span className="min-w-0 flex-1 truncate">{use.name}</span>
                   <span className="text-xs tabular-nums text-muted-foreground">
                     v{use.version} · {use.items} {use.items === 1 ? "item" : "items"}

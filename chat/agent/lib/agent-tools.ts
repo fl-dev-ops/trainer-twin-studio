@@ -1,4 +1,4 @@
-import { studioFetch } from "./studio";
+import { runtimeFromContext, studioFetch } from "./studio";
 
 /**
  * Which workspace surfaces an agent (role play or twin) may use: Agent.data.tools, saved from the role play's Tools tab.
@@ -105,6 +105,7 @@ const cache = new Map<string, { at: number; value: Promise<ToolSettings> }>();
 export function sessionToolSettings(ctx: SessionCtx): Promise<ToolSettings> {
   const auth = ctx.session?.auth;
   const attributes = auth?.current?.attributes ?? {};
+  if (runtimeFromContext(ctx)) return Promise.resolve(NO_TOOLS);
   const orgId = (typeof attributes.orgId === "string" && attributes.orgId) || auth?.initiator?.principalId || auth?.current?.principalId;
   const sessionId = typeof attributes.sessionId === "string" ? attributes.sessionId : undefined;
   const agentSlug = typeof attributes.agentSlug === "string" ? attributes.agentSlug : undefined;

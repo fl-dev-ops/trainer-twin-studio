@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { twinClient } from "@/lib/twin/client";
 import { cn } from "@/lib/utils";
 import { useRefresh } from "@/lib/use-refresh";
+import { dashRoute } from "@/lib/routes";
 
 const PHOTO_SIZE = 720;
 const VERSIONS = 4; // one per HEADSHOT_STYLES look
@@ -130,7 +131,7 @@ export function TwinAvatarCapture({ personaName }: { personaName: string | null 
       const picked = typeof choice === "number" ? versions[choice] : null;
       await twinClient.avatar.save.mutate({ photo, headshotKey: picked?.state === "ready" ? picked.key : null });
       toast.success("Your avatar is saved.");
-      router.push("/twin/brain");
+      router.push(dashRoute("/twin/brain"));
       refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not save. Please try again.");
@@ -146,7 +147,7 @@ export function TwinAvatarCapture({ personaName }: { personaName: string | null 
     <main className="min-h-svh bg-muted p-2">
       <div className="min-h-[calc(100svh-1.1rem)] rounded-2xl bg-background">
         <header className="flex items-center justify-between gap-4 px-5 py-5 sm:px-9 sm:py-7">
-          <Link href="/twin/brain" className="-ml-2 inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-base font-medium transition-colors hover:bg-muted [&_svg]:size-4">
+          <Link href={dashRoute("/twin/brain")} className="-ml-2 inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-base font-medium transition-colors hover:bg-muted [&_svg]:size-4">
             <ArrowLeft data-icon="inline-start" /> Avatar
           </Link>
         </header>

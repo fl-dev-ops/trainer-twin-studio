@@ -16,6 +16,7 @@ import { SessionTime } from "@/components/sessions/session-time";
 import type { UsersRow } from "@/lib/learners";
 import { LOW_LEARNER_MINUTES } from "@/lib/minutes-config";
 import { cn } from "@/lib/utils";
+import { dashRoute } from "@/lib/routes";
 
 function formatPractice(seconds: number) {
   const minutes = Math.round(seconds / 60);
@@ -98,7 +99,7 @@ export function UsersTable({ users }: { users: UsersRow[] }) {
                 {/* Stretched link: the whole row opens the user's page (their credits and twin sessions). */}
                 {user.userId ? (
                   <Link
-                    href={`/users/${user.userId}`}
+                    href={dashRoute(`/users/${user.userId}`)}
                     aria-label={`Open ${user.name}`}
                     className="absolute inset-0 outline-none transition-colors hover:bg-(--sidebar) focus-visible:bg-(--sidebar)"
                   />

@@ -28,13 +28,15 @@ await db.minuteLedger.deleteMany({ where });
 await db.interviewSession.deleteMany({ where });
 await db.rolePlayAssignment.deleteMany({ where });
 await db.deployment.deleteMany({ where });
+await db.specVersion.deleteMany({ where });
 await db.agent.deleteMany({ where });
 await db.persona.deleteMany({ where });
 await db.voice.deleteMany({ where: { id: "e2e-transport-voice", ...where } });
 await db.organization.deleteMany({ where: { id: ORG.id } });
 await db.user.deleteMany({ where: { id: { in: everyone.map((p) => p.id) } } });
 
-await db.organization.create({ data: { ...ORG, createdAt: new Date() } });
+// The e2e org uses bots (org metadata flag), like the Demo org in production.
+await db.organization.create({ data: { ...ORG, metadata: JSON.stringify({ bots: true }), createdAt: new Date() } });
 for (const p of everyone) {
   await db.user.create({ data: { ...p, emailVerified: true } });
   await db.member.create({ data: { id: `${p.id}-member`, organizationId: ORG.id, userId: p.id, role: p === admin ? "admin" : "user", createdAt: new Date() } });
@@ -55,6 +57,7 @@ if (localVoice) await db.voice.create({ data: {
   s3AudioKey: `${voicePrefix(ORG.id, voiceId)}/unused.wav`,
 } });
 const persona = await db.persona.create({ data: { orgId: ORG.id, slug: "e2e-trainer", name: "E2E Trainer", data: {}, isOwn: true, voiceId: localVoice ? voiceId : null } });
+await db.persona.create({ data: { orgId: ORG.id, slug: "e2e-buyer", name: "E2E Buyer", data: { role: "Buyer" } } });
 const roleplay = await db.agent.create({
   data: { id: "e2e-roleplay", orgId: ORG.id, personaId: persona.id, kind: "ROLEPLAY", slug: "e2e-pitch", name: "Pitch practice", data: { source: ROLEPLAY_SOURCE, objective: "Pitch the product in two minutes." } },
 });

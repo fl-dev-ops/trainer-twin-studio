@@ -27,6 +27,12 @@ type Fact = { type: string; data: Record<string, unknown> };
 async function complete(budget?: string, facts?: Fact[]) {
   const logs: unknown[][] = [];
   const originalInfo = console.info;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (_input: string | URL | Request, init?: RequestInit) => {
+    const payload = JSON.parse(String(init?.body));
+    assert.equal(payload.action, "authorizeRuntimeSession");
+    return Response.json({ valid: true, anonymous: false });
+  };
   const originalWarn = console.warn;
   let sentAttributes: Record<string, string> | undefined;
   console.info = console.warn = (...args: unknown[]) => { logs.push(args); };
@@ -55,6 +61,7 @@ async function complete(budget?: string, facts?: Fact[]) {
     return { response, body: await response.text(), logs, sentAttributes };
   } finally {
     console.info = originalInfo;
+    globalThis.fetch = originalFetch;
     console.warn = originalWarn;
   }
 }
@@ -72,6 +79,57 @@ test("keeps spoken content in SSE but not logs, with one trace per output", asyn
   assert.equal(terminal.brain_trace.spoken_text, undefined);
   assert.equal(terminal.timing_breakdown.brain_trace, undefined);
   assert.ok(!JSON.stringify(terminal.brain_trace).includes(privateText));
+});
+
+test("public completions require server validation on every turn and carry trusted runtime attributes", async () => {
+  const originalFetch = globalThis.fetch;
+  let valid = true;
+  const admissions: Record<string, string>[] = [];
+  const validations: unknown[] = [];
+  globalThis.fetch = async (_input: string | URL | Request, init?: RequestInit) => {
+    validations.push(JSON.parse(String(init?.body)));
+    const headers = new Headers(init?.headers);
+    assert.equal(headers.get("x-trainertwin-session-id"), "public-session");
+    assert.equal(headers.get("x-trainertwin-runtime-token"), "runtime-secret");
+    return Response.json({ valid, anonymous: true });
+  };
+  const request = (mode = "voice", token = "runtime-secret") => new Request("http://localhost/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Basic ${Buffer.from("org-test:test-secret").toString("base64")}`,
+      "x-trainertwin-session-id": "public-session",
+      "x-trainertwin-runtime-token": token,
+      "x-trainertwin-mode": mode,
+    },
+    body: JSON.stringify({ messages: [{ role: "user", content: "How should I handle this buyer?" }] }),
+  });
+  const transport = {
+    from: () => ({
+      send: async (_text: string, { auth }: { auth: { attributes: Record<string, string> } }) => {
+        admissions.push(auth.attributes);
+        return { deliveryId: "public-delivery", stream: async function* () {
+          yield { type: "delivery.settled", data: { outcome: "completed" } };
+        } };
+      },
+    }),
+  };
+  try {
+    const first = await handler(request(), transport);
+    assert.equal(first.status, 200);
+    await first.text();
+    assert.equal(admissions[0]?.anonymous, "1");
+    assert.equal(admissions[0]?.runtimeToken, "runtime-secret");
+    valid = false;
+    assert.equal((await handler(request(), transport)).status, 403);
+    valid = true;
+    assert.equal((await handler(request("chat"), transport)).status, 403);
+    assert.equal((await handler(request("voice", ""), transport)).status, 403);
+    assert.equal(admissions.length, 1);
+    assert.equal(validations.length, 4);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 for (const [name, outcome, result, spoken, expected] of [

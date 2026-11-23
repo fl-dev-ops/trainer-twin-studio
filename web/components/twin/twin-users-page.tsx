@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { PageContainer } from "@/components/page-container";
 import { UserAvatar } from "@/components/user-avatar";
 import { AccessUntil } from "@/components/twin/access-until";
+import { dashRoute } from "@/lib/routes";
 
 export function TwinUsersPage({ learners }: { learners: TwinOutputs["users"]["list"] }) {
   return (
@@ -52,7 +53,7 @@ export function TwinUsersPage({ learners }: { learners: TwinOutputs["users"]["li
           return (
             <Link
               key={l.userId}
-              href={`/users/${encodeURIComponent(l.userId)}`}
+              href={dashRoute(`/users/${encodeURIComponent(l.userId)}`)}
               aria-label={`Open profile for ${l.name}`}
               className="grid min-w-[960px] grid-cols-[minmax(0,1.2fr)_minmax(0,1.5fr)_110px_80px_120px_130px_minmax(0,1.3fr)] items-center gap-3 border-t border-(--border) px-5 py-3.5 text-sm outline-none transition-colors hover:bg-sidebar focus-visible:bg-sidebar focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
             >

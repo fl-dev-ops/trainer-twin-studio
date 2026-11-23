@@ -21,7 +21,7 @@ export type TurnEvidenceInput = z.infer<typeof turnEvidenceSchema>;
 /** Stores one turn's evidence when the session is a twin session of the org; anything else is ignored. */
 export async function recordTurnEvidence(orgId: string, input: TurnEvidenceInput) {
   const session = await db.interviewSession.findFirst({
-    where: { id: input.sessionId, orgId, agent: { kind: "TWIN" } },
+    where: { id: input.sessionId, orgId, agent: { kind: { in: ["TWIN", "BOT"] } } },
     select: { id: true },
   });
   if (!session) return { stored: false };
@@ -59,7 +59,7 @@ export async function recordTurnLines(
   sessionId: string,
   input: { heard: string; situation: string; examples: unknown[] },
 ) {
-  const session = await db.interviewSession.findFirst({ where: { id: sessionId, orgId, agent: { kind: "TWIN" } }, select: { id: true } });
+  const session = await db.interviewSession.findFirst({ where: { id: sessionId, orgId, agent: { kind: { in: ["TWIN", "BOT"] } } }, select: { id: true } });
   if (!session) return;
   const calls = [{ tool: "scenario_examples", input: { situation: input.situation }, output: { examples: input.examples } }];
   await db.twinTurnEvidence.create({

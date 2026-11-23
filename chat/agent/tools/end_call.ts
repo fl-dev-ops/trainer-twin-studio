@@ -1,10 +1,11 @@
-import { defineTool } from "eve/tools";
+import { defineDynamic, defineTool } from "eve/tools";
 import { z } from "zod";
 import { isRoleplaySession } from "../lib/session-mode-lookup";
-import { studioFetch } from "../lib/studio";
+import { runtimeFromContext, studioFetch } from "../lib/studio";
 
 /** Skill-based role plays end here; twins and legacy interviews keep finish_session. */
-export default defineTool({
+/** The tool itself, for tests; the default export hides it from anonymous public calls. */
+export const endCallTool = defineTool({
   description: `Skill-based role play only: end the call when the published skill's ending condition is reached.
 
 Call it in the SAME reply as your short goodbye, after the goodbye words. A builder's client call ends when you agree to a next step, decline, or your guard reaches 5. An authored practice ends when its own procedure is complete.
@@ -25,3 +26,5 @@ After it returns, say nothing more.`,
     return { status: "ended", outcome: input.outcome, instruction: "The call has ended. If you have not said goodbye yet, say one short goodbye in character; otherwise say nothing. Never mention the role play, the practice or the call having ended." };
   },
 });
+
+export default defineDynamic((ctx) => runtimeFromContext(ctx) ? null : endCallTool);

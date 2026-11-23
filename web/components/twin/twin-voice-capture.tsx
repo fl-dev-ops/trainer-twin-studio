@@ -10,6 +10,7 @@ import { twinClient } from "@/lib/twin/client";
 import { randomPassage, VOICE_PASSAGES } from "@/lib/voice-passage";
 import { recordingToWav } from "@/lib/wav";
 import { useRefresh } from "@/lib/use-refresh";
+import { dashRoute } from "@/lib/routes";
 
 const MIN_SECONDS = 10;
 const TARGET_SECONDS = 20;
@@ -150,7 +151,7 @@ export function TwinVoiceCapture({ personaName }: { personaName: string | null }
       setProgress("Saving\u2026");
       await twinClient.avatar.saveVoice.mutate({ voiceId: body.voice.id, videoKey: upload.key });
       toast.success("Your voice is saved. Your twins speak with it now.");
-      router.push("/twin/brain");
+      router.push(dashRoute("/twin/brain"));
       refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not save. Please try again.");
@@ -162,7 +163,7 @@ export function TwinVoiceCapture({ personaName }: { personaName: string | null }
     <main className="min-h-svh bg-muted p-2">
       <div className="min-h-[calc(100svh-1.1rem)] rounded-2xl bg-background">
         <header className="flex items-center justify-between gap-4 px-5 py-5 sm:px-9 sm:py-7">
-          <Link href="/twin/brain" className="-ml-2 inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-base font-medium transition-colors hover:bg-muted [&_svg]:size-4">
+          <Link href={dashRoute("/twin/brain")} className="-ml-2 inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-base font-medium transition-colors hover:bg-muted [&_svg]:size-4">
             <ArrowLeft data-icon="inline-start" /> Voice
           </Link>
         </header>

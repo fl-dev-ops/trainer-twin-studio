@@ -1,9 +1,13 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { db } from "@/lib/db";
+import { db, withLock } from "@/lib/db";
 import { builtFrom } from "@/lib/skill-sources";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import { beforeSettings } from "@/lib/context-upload";
+import { publicTwinSettingsSchema } from "@/lib/public-twin-settings";
+import { widgetSettingsSchema } from "@/lib/widget-settings";
+import { botBySlug, botsEnabled, createBot, listBots, publicSettingsOf, saveBotDetails, saveBotPublic, saveBotSkills, widgetSettingsOf, type PublicBot } from "@/lib/bots";
+import { setSupportingSkills, supportingSkillChoices } from "@/lib/agent-skills";
 import { assignablePeople } from "@/lib/learners";
 import { LEARNER_ROLE } from "@/lib/org";
 import { LEARNER, orgPeople, orgPerson } from "@/lib/org-people";
@@ -30,6 +34,7 @@ import { sessionEvidence } from "@/lib/twin/evidence";
 import { updateTwin } from "@/lib/twin/manage";
 import { attachRatings, durationSeconds, firstExchange, lastSevenDays, likeRateByWeek, mostAsked, titleFrom, transcriptTurns } from "@/lib/twin/stats";
 import { hydrateAgentSkill } from "@/lib/skill-history";
+import { listPersonas } from "@/lib/personas";
 
 /**
  * Twin-scoped tRPC surface, mounted at /api/twin. Studio members (admin, team) only; every query is
@@ -60,8 +65,12 @@ const learnerSessions = (orgId: string, agentId?: string): Prisma.InterviewSessi
   startedAt: { not: null },
   status: { not: "failed" },
   twinCalibration: { is: null },
-  agent: { kind: "TWIN" },
-  user: { members: { some: { organizationId: orgId, role: LEARNER_ROLE } } },
+  // Bot calls are the twin's public calls: listed with its sessions.
+  agent: { kind: { in: ["TWIN", "BOT"] } },
+  AND: [{ OR: [
+    { user: { members: { some: { organizationId: orgId, role: LEARNER_ROLE } } } },
+    { userId: null, anonymousId: { not: null } },
+  ] }],
   ...(agentId ? { agentId } : {}),
 });
 
@@ -74,6 +83,8 @@ const sessionRowSelect = {
   reportStatus: true,
   feedbackRating: true,
   transcript: true,
+  anonymousName: true,
+  embedOrigin: true,
   agent: { select: { slug: true, name: true } },
   user: { select: { id: true, name: true, email: true, image: true } },
   report: true,
@@ -86,8 +97,10 @@ function sessionItem(row: SessionRow) {
   const { question, answer } = firstExchange(transcriptTurns(row.transcript));
   return {
     id: row.id,
-    learner: row.user.name || row.user.email,
-    learnerEmail: row.user.email,
+    learner: row.user ? row.user.name || row.user.email : row.anonymousName || "Anonymous visitor",
+    learnerEmail: row.user?.email ?? null,
+    anonymous: row.user === null,
+    embedOrigin: row.embedOrigin ?? null,
     agentSlug: row.agent.slug,
     agentName: row.agent.name,
     at: (row.startedAt ?? row.createdAt).toISOString(),
@@ -113,7 +126,7 @@ export function learnerActivity(
 ) {
   return assignments
     .map((row) => {
-      const mine = sessions.filter((session) => session.user.id === row.user.id);
+      const mine = sessions.filter((session) => session.user?.id === row.user.id);
       const rated = mine.map((session) => session.feedbackRating).filter((r): r is number => r !== null);
       return {
         email: row.email,
@@ -276,6 +289,12 @@ const agentsRouter = t.router({
         ? skillAgents.map((skill) => ({ agentId: skill.id, version: skill.version }))
         : [{ agentId: found.id, version: agent.version }]),
       settings: beforeSettings(data),
+      /** The main twin's supporting skills (specs/agents.md), in order with their switches; empty = all its persona's. */
+      supportingSkills: allSkills ? (await db.agentSkill.findMany({
+        where: { agentId: found.id }, orderBy: { position: "asc" },
+        select: { active: true, skill: { select: { id: true, name: true, ownerSlug: true } } },
+      })).map((row) => ({ id: row.skill.id, slug: row.skill.ownerSlug, name: row.skill.name, active: row.active })) : [],
+      skillChoices: allSkills ? await supportingSkillChoices(orgId) : [],
       credit: {
         // Minutes of this twin's learners (each learner's own, shared with their other twins and role plays).
         minutes: active.reduce((sum, row) => sum + row.minutesGiven, 0),
@@ -315,8 +334,8 @@ const agentsRouter = t.router({
   /** Name, description and conversation settings. Saved like any spec change: snapshot, then version + 1. */
   update: studioProcedure
     .input(slugInput.extend({
-      name: z.string().trim().min(1).max(120),
-      description: z.string().trim().max(2000),
+      name: z.string().trim().min(1).max(120).optional(),
+      description: z.string().trim().max(2000).optional(),
       settings: z.object({
         preScreenshare: z.boolean(),
         preUpload: z.boolean(),
@@ -324,16 +343,29 @@ const agentsRouter = t.router({
         duringUpload: z.boolean(),
         uploadTitle: z.string().trim().max(80),
         uploadInstruction: z.string().trim().max(300),
-      }).strict(),
+      }).strict().optional(),
     }))
     .mutation(({ ctx, input }) => twinCall(async () => {
       const { version } = await updateTwin(ctx.user.orgId, input.slug, { name: input.name, description: input.description, settings: input.settings });
       return { version };
     })),
 
+  /** The main twin's supporting skills: which topic skills it draws on, in order, each switchable (specs/agents.md). */
+  setSkills: studioProcedure
+    .input(slugInput.extend({ skills: z.array(z.object({ skillId: z.string().min(1).max(100), active: z.boolean() })).max(50) }))
+    .mutation(({ ctx, input }) => twinCall(async () => {
+      const found = await findTwinAgent(ctx.user.orgId, input.slug);
+      const twin = await db.agent.findUniqueOrThrow({ where: { id: found.id }, select: { data: true } });
+      if ((twin.data as Record<string, unknown> | null)?.source !== TWIN_SOURCE) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Only a main twin has supporting skills" });
+      }
+      await withLock([`agent:${found.slug}`], (tx) => setSupportingSkills(ctx.user.orgId, found.id, input.skills, tx));
+      return { ok: true };
+    })),
+
   /**
    * The twin's readable link (/t/<username> or /t/<short slug>). Creates nothing: the link only opens for people in
-   * the org with an active assignment on this twin (their own minutes), so sharing it grants no access.
+   * the org with an active assignment on this twin, or signed-out visitors when public access is enabled.
    */
   shareLink: studioProcedure.input(slugInput).mutation(({ ctx, input }) => twinCall(async () => {
     const found = await findTwinAgent(ctx.user.orgId, input.slug);
@@ -632,6 +664,114 @@ const avatarRouter = t.router({
     .mutation(({ ctx, input }) => twinCall(() => savePersonaVoice(ctx.user.orgId, input))),
 });
 
+/** A bot as the bot pages show it: who it speaks as, its purpose, skills and public settings. */
+function botView(bot: PublicBot, orgSlug: string, faces: Map<string, { role: string | null; photoUrl: string | null }>) {
+  const face = faces.get(bot.persona.slug);
+  return {
+    slug: bot.slug,
+    name: bot.name,
+    objective: text((bot.data as Record<string, unknown> | null)?.objective) ?? "",
+    persona: { ...bot.persona, role: face?.role ?? null, photoUrl: face?.photoUrl ?? null },
+    skills: bot.supportingSkills.map((row) => ({ id: row.skill.id, slug: row.skill.ownerSlug, name: row.skill.name, active: row.active })),
+    publicAccess: publicSettingsOf(bot.deployment),
+    widget: { id: bot.id, config: widgetSettingsOf(bot.deployment), origin: new URL(twinShareUrl(orgSlug, "")).origin },
+  };
+}
+
+/** The personas a bot can speak as: the org's (own and custom) and the global library. */
+async function botPersonaChoices(orgId: string) {
+  const [rows, views] = await Promise.all([
+    db.persona.findMany({
+      where: { OR: [{ orgId }, { orgId: null }] },
+      orderBy: [{ isOwn: "desc" }, { name: "asc" }],
+      select: { id: true, slug: true, name: true, isOwn: true, orgId: true },
+    }),
+    listPersonas(orgId),
+  ]);
+  const faces = new Map(views.map((view) => [view.slug, { role: view.persona.role ?? null, photoUrl: view.photoUrl ?? null }]));
+  return {
+    faces,
+    choices: rows.map((row) => ({
+      id: row.id, slug: row.slug, name: row.name, own: row.isOwn, global: row.orgId === null,
+      role: faces.get(row.slug)?.role ?? null, photoUrl: faces.get(row.slug)?.photoUrl ?? null,
+    })),
+  };
+}
+
+const botMissing = () => new TRPCError({ code: "NOT_FOUND", message: "Bot not found" });
+
+/** Studio members of an org with bots (org metadata flag); elsewhere bots don't exist. */
+const botsProcedure = studioProcedure.use(async ({ ctx, next }) => {
+  if (!await botsEnabled(ctx.user.orgId)) throw new TRPCError({ code: "NOT_FOUND", message: "Bots are not available for this organization" });
+  return next();
+});
+
+/**
+ * Bots (sidebar: Bots): their own module (lib/bots). Each speaks as one persona, behaves by its purpose, draws on its
+ * supporting skills, and reaches signed-out visitors through its public calls and website widget.
+ */
+const botsRouter = t.router({
+  list: botsProcedure.query(async ({ ctx }) => {
+    const [bots, personas] = await Promise.all([listBots(ctx.user.orgId), botPersonaChoices(ctx.user.orgId)]);
+    return { bots: bots.map((bot) => botView(bot, ctx.user.orgSlug, personas.faces)), personas: personas.choices };
+  }),
+  get: botsProcedure.input(z.object({ slug: z.string().min(1).max(200) })).query(async ({ ctx, input }) => {
+    const bot = await botBySlug(ctx.user.orgId, input.slug);
+    if (!bot) throw botMissing();
+    const [personas, skills] = await Promise.all([botPersonaChoices(ctx.user.orgId), supportingSkillChoices(ctx.user.orgId)]);
+    return { ...botView(bot, ctx.user.orgSlug, personas.faces), choices: { personas: personas.choices, skills } };
+  }),
+  /** A new bot: its persona, name and purpose. Public calls start off; skills are added on its page. */
+  create: botsProcedure
+    .input(z.object({
+      personaId: z.string().min(1).max(100),
+      name: z.string().trim().min(1).max(120),
+      objective: z.string().trim().min(1).max(2000),
+    }))
+    .mutation(({ ctx, input }) => twinCall(async () => {
+      const bot = await db.$transaction((tx) => createBot(ctx.user.orgId, input, tx));
+      if (!bot) throw botMissing();
+      return { slug: bot.slug };
+    })),
+  /** Any part of a bot: name, purpose, persona, supporting skills, public calls, widget websites. */
+  update: botsProcedure
+    .input(z.object({
+      slug: z.string().min(1).max(200),
+      name: z.string().trim().min(1).max(120).optional(),
+      objective: z.string().trim().min(1).max(2000).optional(),
+      personaId: z.string().min(1).max(100).optional(),
+      skills: z.array(z.object({ skillId: z.string().min(1).max(100), active: z.boolean() })).max(50).optional(),
+      publicAccess: publicTwinSettingsSchema.partial().optional(),
+      // `enabled` follows the website list (lib/bots), so it isn't accepted here.
+      widget: z.object(widgetSettingsSchema.shape).omit({ enabled: true }).strict().partial().optional(),
+    }))
+    .mutation(({ ctx, input }) => twinCall(async () => {
+      const orgId = ctx.user.orgId;
+      const bot = await withLock([`agent:${input.slug}`], async (tx) => {
+        let current = await botBySlug(orgId, input.slug, tx);
+        if (!current) throw botMissing();
+        if (input.name !== undefined || input.objective !== undefined || input.personaId !== undefined) {
+          current = await saveBotDetails(current, { name: input.name, objective: input.objective, personaId: input.personaId }, tx);
+        }
+        if (current && input.skills) current = await saveBotSkills(current, input.skills, tx);
+        if (current && (input.publicAccess || input.widget)) current = await saveBotPublic(current, { publicAccess: input.publicAccess, widget: input.widget }, tx);
+        if (!current) throw botMissing();
+        return current;
+      });
+      return { version: bot.version };
+    })),
+  /** Takes a bot offline for good: its widget stops on every website; its calls stay. */
+  archive: botsProcedure.input(z.object({ slug: z.string().min(1).max(200) })).mutation(({ ctx, input }) => twinCall(async () => {
+    const bot = await botBySlug(ctx.user.orgId, input.slug);
+    if (!bot) throw botMissing();
+    await db.$transaction([
+      db.agent.update({ where: { id: bot.id }, data: { archivedAt: new Date() } }),
+      ...(bot.deployment ? [db.deployment.update({ where: { id: bot.deployment.id }, data: { status: "disabled" } })] : []),
+    ]);
+    return { ok: true };
+  })),
+});
+
 export const twinRouter = t.router({
   /** Who is talking to us over /api/twin. */
   me: studioProcedure.query(({ ctx }) => ctx.user),
@@ -641,6 +781,7 @@ export const twinRouter = t.router({
   users: usersRouter,
   calibrations: calibrationsRouter,
   avatar: avatarRouter,
+  bots: botsRouter,
 });
 
 export type TwinRouter = typeof twinRouter;

@@ -3,7 +3,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join, resolve, relative } from "node:path";
 import ts from "typescript";
 
-type Guard = "public" | "signed_in" | "studio" | "internal/cron secret" | "api_key" | "webhook signature" | "runtime_token" | "browser_token" | "portal";
+type Guard = "public" | "signed_in" | "studio" | "internal/cron secret" | "api_key" | "webhook signature" | "runtime_token" | "browser_token" | "widget_token" | "portal";
 // Reviewed from route code, not inferred at test time. tRPC transports are public; each procedure guards itself.
 // TTS speech also accepts a service secret, and sessions/:id a browser token; code/run needs an enabled member of the org.
 const classification: Record<string, Guard> = {
@@ -84,6 +84,9 @@ const classification: Record<string, Guard> = {
   "GET onboarding": "public",
   "POST onboarding": "signed_in",
   "PATCH org/settings": "studio",
+  "POST public/widgets/[agentId]/bootstrap": "public",
+  "POST public/widgets/[agentId]/sessions": "widget_token",
+  "POST public/widgets/sessions/[sessionId]/end": "widget_token",
   "GET personas/[slug]/avatar": "signed_in",
   "POST personas/[slug]/media": "studio",
   "PATCH personas/[slug]": "studio",

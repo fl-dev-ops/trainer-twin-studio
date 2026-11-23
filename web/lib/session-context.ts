@@ -2,7 +2,8 @@ import { unstable_cache } from "next/cache";
 import { db } from "@/lib/db";
 import { personaBrief } from "@/lib/persona";
 import { findOrgOrGlobalPersona } from "@/lib/specs";
-import { type PinnedTwinSkill, TWIN_SOURCE, twinPlaybooks, sessionTwinPlaybooks } from "@/lib/twins";
+import { type PinnedTwinSkill, twinPlaybooks, sessionTwinPlaybooks } from "@/lib/twins";
+import { runsAsMainTwin } from "@/lib/main-twin";
 import { loadSessionSkills } from "@/lib/session-skills";
 import { hydrateAgentSkill } from "@/lib/skill-history";
 
@@ -39,6 +40,7 @@ export async function buildSessionContext(input: {
     : null;
 
   const agentSlug = session?.agentSlug ?? input.agentSlug;
+  const anonymous = Boolean(session?.anonymousId);
   const personaSlug = session?.personaSlug ?? input.personaSlug;
   const snapshot = session?.compiledSnapshot as Snapshot | null;
   const [savedAgent, livePersona, sharedKnowledgeBase] = await Promise.all([
@@ -48,7 +50,7 @@ export async function buildSessionContext(input: {
     personaSlug
       ? findOrgOrGlobalPersona(input.orgId, { equals: personaSlug, mode: "insensitive" }, { slug: true, version: true, data: true, isOwn: true })
       : null,
-    db.knowledgeBase.findFirst({
+    anonymous ? null : db.knowledgeBase.findFirst({
       where: {
         slug: SHARED_KNOWLEDGE_BASE_SLUG,
         orgId: input.orgId,
@@ -71,7 +73,7 @@ export async function buildSessionContext(input: {
     summary?: string;
     headings?: string[];
   }>();
-  for (const doc of [session?.context, ...(session?.documents?.map((item) => item.document) ?? [])]) {
+  for (const doc of anonymous ? [] : [session?.context, ...(session?.documents?.map((item) => item.document) ?? [])]) {
     if (!doc) continue;
     const manifest = doc.manifest as { pageCount?: number; summary?: string; headings?: string[] } | null;
     docMap.set(doc.id, {
@@ -86,10 +88,10 @@ export async function buildSessionContext(input: {
     });
   }
 
-  const user = session?.userId
+  const user = !anonymous && session?.userId
     ? await db.user.findUnique({ where: { id: session.userId }, select: { name: true } })
     : null;
-  const learnerName = (session?.runtimeState as Record<string, unknown> | null)?.learner_name ?? user?.name ?? null;
+  const learnerName = anonymous ? session?.anonymousName ?? null : (session?.runtimeState as Record<string, unknown> | null)?.learner_name ?? user?.name ?? null;
 
   const agent = managedSkill
     ? { slug: session!.agentSlug, version: session!.agentVersion, data: managedSkill.data }
@@ -102,7 +104,7 @@ export async function buildSessionContext(input: {
 
   // The all-skills twin draws on its persona's skill twins: the ones pinned when the session started (older
   // sessions without a pin get the live list). kind is immutable, so the live row's kind is the session's module.
-  const isAllSkillsTwin = managedSkill ? managedSkill.isMainTwin : liveAgent?.kind === "TWIN" && (agent?.data as Record<string, unknown> | undefined)?.source === TWIN_SOURCE;
+  const isAllSkillsTwin = managedSkill ? managedSkill.isMainTwin : runsAsMainTwin(liveAgent?.kind, agent?.data);
   const playbooks = managedSkill?.isMainTwin
     ? await sessionTwinPlaybooks(input.orgId, managedSkill)
     : isAllSkillsTwin && liveAgent?.personaId
@@ -119,8 +121,9 @@ export async function buildSessionContext(input: {
     knowledgeBases: sharedKnowledgeBase ? [sharedKnowledgeBase] : [],
     documents: Array.from(docMap.values()),
     learnerName,
-    warmOpening: session?.warmOpening ?? null,
-    uiState: (session?.runtimeState as Record<string, unknown> | null)?.uiState ?? null,
+    ...(anonymous ? { visitor: { kind: "anonymous" as const, name: session?.anonymousName ?? "" } } : {}),
+    warmOpening: anonymous ? null : session?.warmOpening ?? null,
+    uiState: anonymous ? null : (session?.runtimeState as Record<string, unknown> | null)?.uiState ?? null,
   };
 }
 

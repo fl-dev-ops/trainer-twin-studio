@@ -4,6 +4,7 @@ import { composeInstructions, FALLBACK_INSTRUCTIONS } from "../lib/compose-instr
 import { sessionMode } from "../lib/session-mode";
 import { primeSessionMode } from "../lib/session-mode-lookup";
 import { loadWorkspaceState } from "../lib/workspace-state";
+import { runtimeFromContext } from "../lib/studio";
 
 /**
  * The session's instructions (lib/compose-instructions.ts): the platform rules, the session mode's operating
@@ -15,6 +16,7 @@ export default defineDynamic(async (ctx) => {
   const attributes = (auth?.attributes ?? {}) as Record<string, string | undefined>;
   const orgId = attributes.orgId;
   if (typeof orgId !== "string" || !orgId) return defineInstructions({ content: FALLBACK_INSTRUCTIONS });
+  const runtime = runtimeFromContext(ctx);
 
   const content = await ctx.memo(["session-spec", ctx.session.id], async () => {
     const sessionId = typeof attributes.sessionId === "string" ? attributes.sessionId : undefined;
@@ -23,16 +25,17 @@ export default defineDynamic(async (ctx) => {
     const mode = (attributes.mode === "chat" ? "chat" : "voice") as "voice" | "chat";
     const clientTools = (attributes.clientTools ?? "").split(",").filter(Boolean);
     try {
-      const specs = await loadSessionContext(orgId, sessionId, agentSlug, personaSlug, mode, clientTools);
+      const specs = await loadSessionContext(orgId, sessionId, agentSlug, personaSlug, mode, clientTools, runtime);
       // The channel and tools ask for the mode later; answer from the context already loaded.
       primeSessionMode(orgId, sessionId, agentSlug, sessionMode(specs));
       return composeInstructions({ ...specs, uiState: null });
     } catch (err) {
+      if (runtime) throw err;
       console.error("Failed to load session context for brain grounding:", err);
       return FALLBACK_INSTRUCTIONS;
     }
   });
   const sessionId = attributes.sessionId;
-  const workspace = sessionId ? await loadWorkspaceState(orgId, sessionId) : "";
+  const workspace = sessionId && !runtime ? await loadWorkspaceState(orgId, sessionId) : "";
   return defineInstructions({ content: `${content}\n\n${workspace}` });
 });

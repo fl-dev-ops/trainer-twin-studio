@@ -36,6 +36,7 @@ export async function loadSessionsList(orgId: string, params: SessionsFilters, k
         createdAt: true,
         startedAt: true,
         transcript: true,
+        anonymousName: true,
         agentSlug: true,
         agent: { select: { name: true } },
         user: { select: { id: true, name: true, email: true, image: true } },
@@ -56,7 +57,7 @@ export async function loadSessionsList(orgId: string, params: SessionsFilters, k
     pageSize: PAGE_SIZE,
     scenarios: scenarios.map((a) => ({ value: a.id, label: a.name })),
     learners: learners
-      .map(({ user }) => ({ value: user.id, label: user.name || user.email }))
+      .flatMap(({ user }) => user ? [{ value: user.id, label: user.name || user.email }] : [])
       .sort((a, b) => a.label.localeCompare(b.label)),
     // The transcript stays on the server: the list only shows its first exchange.
     sessions: sessions.map(({ transcript, ...session }) => ({ ...session, ...firstExchange(transcript) })),
@@ -80,6 +81,7 @@ export async function loadSessionDetail(orgId: string, id: string) {
       startedAt: true,
       endedAt: true,
       transcript: true,
+      anonymousName: true,
       evidence: true,
       videoEgressId: true,
       report: true,
@@ -97,7 +99,7 @@ export async function loadSessionDetail(orgId: string, id: string) {
     agentId: row.agentId,
     status: row.status,
     user: row.user,
-    learner: row.user.name || row.user.email,
+    learner: row.user ? row.user.name || row.user.email : row.anonymousName || "Anonymous visitor",
     trainer: row.agent.persona.name || "Trainer",
     scenario: row.agent.name || row.agentSlug,
     at: row.startedAt ?? row.createdAt,

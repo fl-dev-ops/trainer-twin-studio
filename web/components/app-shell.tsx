@@ -34,9 +34,11 @@ export function ShellFallback() {
   return isFullscreen(usePathname()) ? null : <LoadingTable />;
 }
 
-export function AppShell({ children, hideRoleplay = false, orgs = [], orgId = null }: {
+export function AppShell({ children, hideRoleplay = false, bots = false, orgs = [], orgId = null }: {
   children: ReactNode;
   hideRoleplay?: boolean;
+  /** The org may use bots (org metadata flag). */
+  bots?: boolean;
   /** The studio orgs this person can switch between, and the one this page is in. */
   orgs?: SwitchableOrg[];
   orgId?: string | null;
@@ -50,7 +52,7 @@ export function AppShell({ children, hideRoleplay = false, orgs = [], orgId = nu
       className="h-svh min-h-0 overflow-hidden"
       style={{ "--sidebar-width-left": "18rem" } as CSSProperties}
     >
-      <AppSidebar hideRoleplay={hideRoleplay} orgs={orgs} orgId={orgId} />
+      <AppSidebar hideRoleplay={hideRoleplay} bots={bots} orgs={orgs} orgId={orgId} />
       {/* Prototype: flat content panel, flush against the rail (reference .main). */}
       <SidebarInset className="min-h-0 overflow-hidden">
         {/* Desktop collapses via the sidebar logo; on mobile the sidebar is a drawer and needs an opener. */}

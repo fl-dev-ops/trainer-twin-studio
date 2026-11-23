@@ -1,6 +1,6 @@
 import { BEFORE_UPLOAD_REFUSED } from "@/lib/context-upload";
 import { db, withLock } from "@/lib/db";
-import { activateSession, resolveVoiceForSession } from "@/lib/interview-sessions";
+import { activateSession, publicSessionExpired, resolveVoiceForSession } from "@/lib/interview-sessions";
 import { activateLiveKitSession, closeLiveKitSession } from "@/lib/livekit";
 import { AppError, refusals } from "@/lib/errors";
 import { MinutesError } from "@/lib/minutes";
@@ -71,7 +71,7 @@ export async function startSessionNow(input: StartSessionInput): Promise<Session
 export async function connectVoice(input: StartSessionInput, session: OpenedSession): Promise<{ participantToken: string; room: string }> {
   requireVoiceMode(input.mode);
   const row = await db.interviewSession.findFirst({
-    where: { id: session.id, orgId: input.orgId, userId: input.userId },
+    where: { id: session.id, ...sessionOwner(input) },
     select: {
       id: true,
       mode: true,
@@ -83,6 +83,9 @@ export async function connectVoice(input: StartSessionInput, session: OpenedSess
       livekitDispatchId: true,
       audioEgressId: true,
       videoEgressId: true,
+      startedAt: true,
+      allowedSeconds: true,
+      anonymousId: true,
     },
   });
   if (!row) throw refusals.notFound();
@@ -92,7 +95,7 @@ export async function connectVoice(input: StartSessionInput, session: OpenedSess
   try {
     const voiceId = await withLock([`session-voice:${session.id}`], async (tx) => {
       const current = await tx.interviewSession.findFirst({
-        where: { id: session.id, orgId: input.orgId, userId: input.userId },
+        where: { id: session.id, ...sessionOwner(input) },
         select: { resolvedVoiceId: true, mode: true },
       });
       if (!current) throw refusals.notFound();
@@ -127,14 +130,24 @@ export async function connectVoice(input: StartSessionInput, session: OpenedSess
       runtimeToken: session.agentToken,
       orgId: input.orgId,
       agentSlug: row.agentSlug,
-      holdOpening: Boolean(agentData?.introVideo) || Boolean(input.holdOpening),
+      holdOpening: row.anonymousId ? false : Boolean(agentData?.introVideo) || Boolean(input.holdOpening),
       voice: voiceId,
       // Learner minutes: the voice agent ends the call at this moment (absolute, so agent and web count the same span).
-      endsAt: "secondsLeft" in session && session.secondsLeft != null
-        ? Math.floor(Date.now() / 1000) + session.secondsLeft
-        : undefined,
+      endsAt: row.startedAt && row.allowedSeconds != null
+        ? Math.floor(row.startedAt.getTime() / 1000) + row.allowedSeconds
+        : "secondsLeft" in session && session.secondsLeft != null
+          ? Math.floor(Date.now() / 1000) + session.secondsLeft
+          : undefined,
       agentKind: row.agent.kind,
+      anonymous: Boolean(row.anonymousId),
     });
+    if (row.anonymousId) {
+      const current = await db.interviewSession.findUnique({
+        where: { id: session.id },
+        select: { status: true, anonymousId: true, allowedSeconds: true, startedAt: true, deletedAt: true },
+      });
+      if (!current || current.status !== "active" || publicSessionExpired(current)) throw refusals.notFound();
+    }
     await db.interviewSession.update({
       where: { id: session.id },
       data: {
@@ -156,7 +169,7 @@ export async function connectVoice(input: StartSessionInput, session: OpenedSess
     // Joining a live call (a resume) failing never fails that call (specs/practice.md rule 18).
     if ("resumed" in session && session.resumed) throw error;
     await closeLiveKitSession({
-      room: row.livekitRoom,
+      room: row.livekitRoom ?? session.id,
       dispatchId: row.livekitDispatchId,
       videoEgressId: row.videoEgressId,
     }).catch(() => {});
@@ -166,6 +179,11 @@ export async function connectVoice(input: StartSessionInput, session: OpenedSess
     });
     throw error;
   }
+}
+
+/** The learner's own session, or an anonymous public call (no user; started by lib/public-twin-sessions.ts). */
+function sessionOwner(input: StartSessionInput) {
+  return { orgId: input.orgId, OR: [{ userId: input.userId }, { userId: null, anonymousId: { not: null } }] };
 }
 
 function requireVoiceMode(mode: string) {

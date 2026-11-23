@@ -1,6 +1,6 @@
 import { defineTool } from "eve/tools";
 import { z } from "zod";
-import { studioFetch } from "../lib/studio";
+import { callStudio, runtimeFromContext } from "../lib/studio";
 
 export default defineTool({
   description:
@@ -21,15 +21,15 @@ export default defineTool({
     if (typeof agentSlug !== "string" || !agentSlug) return { examples: [], note: "This session has no scenario." };
     // An all-skills twin session searches only the skills pinned when it started.
     const sessionId = typeof attributes?.sessionId === "string" && attributes.sessionId ? attributes.sessionId : undefined;
-    return studioFetch(orgId, {
+    return callStudio({
       action: "searchScenarioItems",
       agentSlug,
       query: input.situation,
       step: input.step,
-      role: input.role, // The server selects the AI's side from the pinned package when omitted.
+      role: runtimeFromContext(ctx) ? "trainer" : input.role, // The server selects the AI's side from the pinned package when omitted.
       limit: input.limit,
       playbook: input.playbook,
       sessionId,
-    });
+    }, ctx);
   },
 });

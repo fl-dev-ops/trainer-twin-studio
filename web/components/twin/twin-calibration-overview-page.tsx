@@ -7,6 +7,7 @@ import { TwinFace } from "@/components/twin/twin-face";
 import type { TwinOutputs } from "@/lib/twin/trpc";
 import { accuracyOf } from "@/lib/twin/stats";
 import { cn } from "@/lib/utils";
+import { dashRoute } from "@/lib/routes";
 
 export function TwinCalibrationOverviewPage({ id, data }: { id: string; data: TwinOutputs["calibrations"]["list"] }) {
   const twinTitle = data.name;
@@ -24,7 +25,7 @@ export function TwinCalibrationOverviewPage({ id, data }: { id: string; data: Tw
         {/* Header Back navigation */}
         <header className="flex min-h-10 items-center justify-between gap-4">
           <Link
-            href={`/twin/${id}`}
+            href={dashRoute(`/twin/${id}`)}
             className="inline-flex items-center gap-2 text-sm text-(--foreground) hover:text-muted-foreground transition-colors"
           >
             <ArrowLeft className="size-4" />
@@ -73,7 +74,7 @@ export function TwinCalibrationOverviewPage({ id, data }: { id: string; data: Tw
               <p className="mt-1 text-sm text-muted-foreground">Conversations you’ve had with this twin</p>
             </div>
             <Link
-              href={`/twin/${id}/calibrate`}
+              href={dashRoute(`/twin/${id}/calibrate`)}
               className="inline-flex h-9 shrink-0 items-center rounded-full bg-(--brand) px-4 text-sm font-medium text-white transition-colors hover:bg-brand-hover outline-none focus-visible:ring-2 focus-visible:ring-(--brand) focus-visible:ring-offset-2"
             >
               Calibrate now
@@ -87,7 +88,7 @@ export function TwinCalibrationOverviewPage({ id, data }: { id: string; data: Tw
             {calibrations.map((c, idx) => (
               <Link
                 key={c.id}
-                href={`/twin/${id}/calibration/${c.id}`}
+                href={dashRoute(`/twin/${id}/calibration/${c.id}`)}
                 className={cn(
                   "flex items-center justify-between p-4 px-5 text-left transition-colors hover:bg-(--sidebar) outline-none focus-visible:bg-(--sidebar)",
                   idx > 0 && "border-t border-(--border)"

@@ -22,6 +22,8 @@ import { durationSeconds, transcriptTurns } from "@/lib/twin/stats";
 import { toolSettings, toolSettingsInput } from "@/lib/agent-tools";
 import { hydrateAgentSkill } from "@/lib/skill-history";
 import { skillRefusals } from "@/lib/skills";
+import { dashRoute } from "@/lib/routes";
+import { setAgentPersonas } from "@/lib/agent-personas";
 
 /**
  * Role-play tRPC surface, mounted at /api/roleplay (the twin module's twin, plans/roleplay-skill.md step 6).
@@ -153,6 +155,7 @@ const sessionSelect = {
 type SessionRow = Prisma.InterviewSessionGetPayload<{ select: typeof sessionSelect }>;
 
 function sessionItem(row: SessionRow) {
+  if (!row.user) throw new Error("Role-play sessions require an account");
   const report = roleplayReport(row.report);
   return {
     id: row.id,
@@ -164,7 +167,7 @@ function sessionItem(row: SessionRow) {
     score: typeof report?.score === "number" ? report.score : null,
     summary: report?.summary ?? null,
     reportState: reportState(row),
-    href: `/roleplay/sessions/${row.id}`,
+    href: dashRoute(`/roleplay/sessions/${row.id}`),
   };
 }
 
@@ -216,7 +219,7 @@ const scenariosRouter = t.router({
       return {
         slug: agent.slug,
         name: agent.name,
-        href: `/roleplay/${agent.slug}`,
+        href: dashRoute(`/roleplay/${agent.slug}`),
         description: text(scenario.description),
         opening: text(asRecord(scenario.roleplay).opening) ?? text(brief?.start.openingLine),
         client: clientOf(agent.persona, agent.data),
@@ -289,7 +292,7 @@ const builderRouter = t.router({
     const builder = roleplayBuilderFrom(agent.data);
     return {
       slug: agent.slug,
-      builder,
+      builder: builder ? { ...builder, persona: agent.persona.slug } : null,
       before: beforeSettings(agent.data),
       tools: toolSettings(agent.data),
       // A role play the copilot wrote: its core fields (editable here) and its script (changed through the copilot).
@@ -305,7 +308,7 @@ const builderRouter = t.router({
       } : builder ? {
         // Made in the older form: the same simple page (no time limit; its script is changed through the copilot).
         kind: "builder" as const,
-        persona: builder.persona,
+        persona: agent.persona.slug,
         title: builder.name,
         learnerBrief: builder.whatToExpect ?? "",
         aiStarts: true,
@@ -333,7 +336,7 @@ const builderRouter = t.router({
    */
   saveBrief: studioProcedure
     .input(slugInput.extend({
-      persona: z.string().trim().min(1).max(200),
+      persona: z.string().trim().min(1).max(200).optional(),
       title: z.string().trim().min(1).max(120),
       learnerBrief: z.string().trim().max(1000),
       openingLine: z.string().trim().max(400),
@@ -344,21 +347,22 @@ const builderRouter = t.router({
       const brief = briefOf(agent.data);
       if (!brief && !roleplayBuilderFrom(agent.data)) {
         // An authored skill: its name, persona and learner brief are edited here; the skill through the copilot.
-        const persona = await db.persona.findFirst({ where: { orgId: ctx.user.orgId, slug: { equals: input.persona, mode: "insensitive" } }, select: { id: true } });
-        if (!persona) throw new TRPCError({ code: "NOT_FOUND", message: `Persona "${input.persona}" was not found in this organization` });
         let changed = false;
         await withLock([ownershipLock(ctx.user.orgId), `agent:${agent.slug}`], async (tx) => {
           const current = await tx.agent.findFirst({ where: { id: agent.id, archivedAt: null }, select: { name: true, personaId: true, data: true, primarySkillId: true } });
           if (!current) throw refusals.notFound();
+          const persona = input.persona && await tx.persona.findFirst({ where: { orgId: ctx.user.orgId, slug: { equals: input.persona, mode: "insensitive" } }, select: { id: true } });
+          if (input.persona && !persona) throw new TRPCError({ code: "NOT_FOUND", message: `Persona "${input.persona}" was not found in this organization` });
+          const personaId = persona ? persona.id : current.personaId;
           const data = (current.data && typeof current.data === "object" ? current.data : {}) as Record<string, unknown>;
           const managed = current.primarySkillId && (await skillOwnership(ctx.user.orgId, tx)).mode === "managed";
-          changed = input.title !== current.name || persona.id !== current.personaId || (text(data.learnerBrief) ?? "") !== input.learnerBrief;
+          changed = input.title !== current.name || personaId !== current.personaId || (text(data.learnerBrief) ?? "") !== input.learnerBrief;
           if (!changed) return;
           const stored = managed ? packageFieldsOmitted(data) : data;
           const rest = Object.fromEntries(Object.entries(stored).filter(([key]) => key !== "learnerBrief"));
           await tx.agent.update({
             where: { id: agent.id },
-            data: { name: input.title, personaId: persona.id, data: { ...rest, name: input.title, ...(input.learnerBrief ? { learnerBrief: input.learnerBrief } : {}) } as Prisma.InputJsonValue },
+            data: { name: input.title, personaId, data: { ...rest, name: input.title, ...(input.learnerBrief ? { learnerBrief: input.learnerBrief } : {}) } as Prisma.InputJsonValue },
           });
         });
         return { slug: agent.slug, version: agent.version, changed };
@@ -368,7 +372,7 @@ const builderRouter = t.router({
         // Made in the older form: the same basics, saved through its builder fields.
         if (!roleplayBuilderFrom(agent.data)) throw new TRPCError({ code: "BAD_REQUEST", message: "This role play can't be edited here" });
         try {
-          const saved = await updateRoleplay(ctx.user.orgId, agent.slug, { builder: { name: input.title, persona: input.persona, whatToExpect: input.learnerBrief, opening: input.openingLine } });
+          const saved = await updateRoleplay(ctx.user.orgId, agent.slug, { builder: { name: input.title, ...(input.persona ? { persona: input.persona } : {}), whatToExpect: input.learnerBrief, opening: input.openingLine } });
           return { slug: saved.slug, version: "version" in saved ? saved.version ?? agent.version : agent.version, changed: "version" in saved && saved.version !== agent.version };
         } catch (error) {
           if (error instanceof ScenarioIngestError) throw new TRPCError({ code: error.status === 404 ? "NOT_FOUND" : "BAD_REQUEST", message: error.message });
@@ -383,7 +387,7 @@ const builderRouter = t.router({
         ending: { ...brief.ending, limit: input.limit || undefined },
       };
       try {
-        const saved = await publishRoleplayBrief(ctx.user.orgId, { personaSlug: input.persona, brief: next });
+        const saved = await publishRoleplayBrief(ctx.user.orgId, { personaSlug: input.persona ?? agent.persona.slug, brief: next });
         if (saved.slug !== agent.slug) throw new TRPCError({ code: "CONFLICT", message: "The role play's id changed; edit it through the copilot" });
         return { slug: saved.slug, version: saved.version, changed: saved.version !== agent.version };
       } catch (error) {
@@ -392,6 +396,37 @@ const builderRouter = t.router({
         }
         throw error;
       }
+    }),
+
+  /** Each new session picks one of the active personas at random (specs/agents.md). */
+  personaPool: studioProcedure.input(slugInput).query(async ({ ctx, input }) => {
+    const agent = await findRoleplay(ctx.user.orgId, input.slug);
+    const rows = await db.agentPersona.findMany({
+      where: { agentId: agent.id, active: true }, orderBy: { position: "asc" },
+      select: { persona: { select: { slug: true } } },
+    });
+    return rows.map((row) => row.persona.slug);
+  }),
+  setPersonaPool: studioProcedure
+    .input(slugInput.extend({ personas: z.array(z.string().trim().min(1).max(200)).min(1).max(21) }))
+    .mutation(async ({ ctx, input }) => {
+      const orgId = ctx.user.orgId;
+      const slugs = [...new Set(input.personas)];
+      await withLock([`agent:${input.slug}`], async (tx) => {
+        const agent = await tx.agent.findFirst({ where: { ...roleplaysOf(orgId), slug: input.slug, archivedAt: null }, select: { id: true, personaId: true } });
+        if (!agent) throw refusals.notFound();
+        const personas = await tx.persona.findMany({ where: { orgId, slug: { in: slugs } }, select: { id: true, slug: true } });
+        const idOf = new Map(personas.map((row) => [row.slug, row.id]));
+        const missing = slugs.find((slug) => !idOf.has(slug));
+        if (missing) throw new TRPCError({ code: "NOT_FOUND", message: `Persona "${missing}" was not found in this organization` });
+        const ids = slugs.map((slug) => idOf.get(slug)!);
+        if (ids.includes(agent.personaId)) {
+          ids.splice(ids.indexOf(agent.personaId), 1);
+          ids.unshift(agent.personaId);
+        }
+        await setAgentPersonas(agent.id, ids.map((personaId) => ({ personaId, active: true })), tx);
+      });
+      return { ok: true };
     }),
 
   /** The org's personas the client can be (Persona Library), with photo and role. */
@@ -461,7 +496,7 @@ const sessionsRouter = t.router({
     ]);
     const builderIds = new Set(builder.map((agent) => agent.id));
     // A session run by the legacy interview runtime (before its role play was converted) keeps its interview report page.
-    return rows.map((row) => ({ ...sessionItem(row), ...(builderIds.has(row.agentId) && !legacyReport(row.report) ? {} : { href: `/sessions/${row.id}` }) }));
+    return rows.map((row) => ({ ...sessionItem(row), ...(builderIds.has(row.agentId) && !legacyReport(row.report) ? {} : { href: dashRoute(`/sessions/${row.id}`) }) }));
   }),
 
   /** One session: learner, client, report (goals, rubric, notes) and transcript. */
@@ -522,6 +557,7 @@ const usersRouter = t.router({
       if (member) person(member).roleplays.add(row.agentId);
     }
     for (const row of sessions) {
+      if (!row.userId) continue;
       const member = byUser.get(row.userId);
       if (!member) continue;
       const found = person(member);

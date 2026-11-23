@@ -7,11 +7,14 @@ import hashlib
 import hmac
 import json
 import logging
+import math
 import os
 import sys
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 from dotenv import load_dotenv
 from livekit import agents, api, rtc
@@ -21,7 +24,7 @@ from livekit.plugins import noise_cancellation
 import telemetry
 from recording import post_completion_webhook
 from screen_feedback import ScreenFeedbackRuntime
-from session import build_agent_session
+from session import DEFAULT_LLM_BASE_URL, build_agent_session
 from usage import UsageReporter
 
 load_dotenv(override=True)
@@ -83,7 +86,7 @@ def parse_metadata(raw: str | None) -> dict[str, Any]:
 def seconds_until_end(metadata: dict[str, Any], now: float) -> float | None:
     """Learner minutes: seconds left until `ends_at` (unix seconds, set by the web), or None when not metered."""
     ends_at = metadata.get("ends_at")
-    if isinstance(ends_at, bool) or not isinstance(ends_at, (int, float)) or ends_at <= 0:
+    if isinstance(ends_at, bool) or not isinstance(ends_at, (int, float)) or not math.isfinite(ends_at) or ends_at <= 0:
         return None
     return max(0.0, float(ends_at) - now)
 
@@ -129,6 +132,7 @@ class TrainerAgent(Agent):
         opening_release: asyncio.Event,
         hold_opening: bool = False,
         pending_input: list[str] | None = None,
+        input_allowed: Callable[[], bool] = lambda: True,
     ) -> None:
         super().__init__(
             instructions=COMMON_VOICE_INSTRUCTIONS,
@@ -139,11 +143,15 @@ class TrainerAgent(Agent):
         self.hold_opening = hold_opening
         self.opening_complete = False
         self.pending_input = pending_input if pending_input is not None else []
+        self.input_allowed = input_allowed
 
     def _resume_user_input(self) -> None:
         """Re-enable the mic and flush user messages buffered during the intro.
         Called only after the opening reply is fully spoken so the trainer
         always speaks first."""
+        if not self.input_allowed():
+            self.pending_input.clear()
+            return
         try:
             self.session.input.set_audio_enabled(True)
         except Exception as exc:
@@ -187,6 +195,8 @@ class TrainerAgent(Agent):
             self.opening_complete = True
 
     async def _generate_opening(self) -> None:
+        if not self.input_allowed():
+            return
         try:
             await self.session.generate_reply(instructions="session-start")
         except Exception as exc:
@@ -196,7 +206,7 @@ class TrainerAgent(Agent):
 def register_inactivity_nudge(session: Any, agent: TrainerAgent) -> None:
     @session.on("user_state_changed")
     def on_user_state_changed(event: Any) -> None:
-        if event.new_state != "away" or not agent.opening_complete:
+        if event.new_state != "away" or not agent.opening_complete or not agent.input_allowed():
             return
         logger.info("User inactive for 60s in room %s; sending nudge", agent.room_name)
         asyncio.create_task(session.generate_reply(instructions=USER_INACTIVE_SIGNAL))
@@ -266,11 +276,31 @@ async def entrypoint(ctx: agents.JobContext) -> None:
 
     raw_meta = ctx.job.metadata or ctx.job.room.metadata or ctx.room.metadata
     metadata = parse_metadata(raw_meta)
+    anonymous = metadata.get("anonymous") is True
+    initial_limit = seconds_until_end(metadata, time.time())
+    if anonymous and (initial_limit is None or initial_limit <= 0):
+        logger.error("Public session missing a live absolute deadline room=%s", ctx.room.name)
+        await ctx.api.room.delete_room(api.DeleteRoomRequest(room=ctx.room.name))
+        return
 
     session_id = str(metadata.get("sessionId") or metadata.get("session_id") or ctx.room.name).strip()
     runtime_token = str(metadata.get("runtimeToken") or metadata.get("runtime_token") or "").strip()
     if not runtime_token:
         logger.error("Runtime token missing from job metadata for session %s", session_id)
+        return
+    configured_llm_base = os.getenv("LLM_BASE_URL", "").strip()
+    # The chat service runs every session (session.py); the web's own runtime is gone.
+    llm_base = (configured_llm_base or DEFAULT_LLM_BASE_URL).rstrip("/")
+    parsed_llm_base = urlsplit(llm_base)
+    if anonymous and (
+        not configured_llm_base
+        or parsed_llm_base.scheme not in ("http", "https")
+        or not parsed_llm_base.netloc
+        or parsed_llm_base.path.rstrip("/").endswith("/api/v1")
+        or not os.getenv("COPILOT_SERVICE_SECRET", "").strip()
+    ):
+        logger.error("Public sessions require a chat LLM_BASE_URL and service authentication room=%s", ctx.room.name)
+        await ctx.api.room.delete_room(api.DeleteRoomRequest(room=ctx.room.name))
         return
     voice = str(metadata.get("voice") or "").strip()
     org_id = str(metadata.get("orgId") or metadata.get("org_id") or "shared").strip()
@@ -292,9 +322,47 @@ async def entrypoint(ctx: agents.JobContext) -> None:
     pending_code_submissions: dict[str, dict[str, Any]] = {}
     accepted_whiteboard_signatures: set[str] = set()
     participant_identity: str | None = None
-    hold_opening = bool(metadata.get("hold_opening"))
+    hold_opening = not anonymous and bool(metadata.get("hold_opening"))
+    deadline_expired = False
+
+    def input_allowed() -> bool:
+        remaining = seconds_until_end(metadata, time.time())
+        return not deadline_expired and (remaining is None or remaining > 0)
+
+    async def end_at_deadline(limit: float) -> None:
+        nonlocal deadline_expired
+        notice = goodbye_delay(limit)
+        if notice is not None:
+            await asyncio.sleep(notice)
+            if active_session is not None and input_allowed():
+                try:
+                    handle = active_session.say(goodbye_line(metadata), allow_interruptions=False)
+                    remaining = seconds_until_end(metadata, time.time()) or 0.0
+                    await asyncio.wait_for(handle.wait_for_playout(), timeout=min(GOODBYE_LEAD_SECONDS, remaining))
+                    active_session.input.set_audio_enabled(False)
+                except Exception as exc:
+                    logger.warning("Deadline goodbye failed room=%s error=%s", ctx.room.name, exc)
+        await asyncio.sleep(seconds_until_end(metadata, time.time()) or 0.0)
+        deadline_expired = True
+        pending_chat_messages.clear()
+        if active_session is not None:
+            active_session.input.set_audio_enabled(False)
+            active_session.shutdown(drain=False)
+        logger.info("Room %s reached its minutes limit; ending session", ctx.room.name)
+        await ctx.api.room.delete_room(api.DeleteRoomRequest(room=ctx.room.name))
+
+    deadline_task = asyncio.create_task(end_at_deadline(initial_limit)) if initial_limit is not None else None
+
+    async def cancel_deadline() -> None:
+        if deadline_task is not None and not deadline_task.done():
+            deadline_task.cancel()
+            await asyncio.gather(deadline_task, return_exceptions=True)
+
+    ctx.add_shutdown_callback(cancel_deadline)
 
     def submit_user_input(text: str) -> None:
+        if anonymous or not input_allowed():
+            return
         # While the intro video holds the opening, buffer learner input so the
         # trainer still speaks first; flushed by TrainerAgent._resume_user_input.
         if hold_opening and not opening_release.is_set():
@@ -313,6 +381,8 @@ async def entrypoint(ctx: agents.JobContext) -> None:
         if not isinstance(msg, dict):
             return
         msg_type = msg.get("type")
+        if not input_allowed() or (anonymous and msg_type != "begin-opening"):
+            return
         if msg_type == "begin-opening":
             opening_release.set()
         elif msg_type == "chat-message":
@@ -446,6 +516,8 @@ async def entrypoint(ctx: agents.JobContext) -> None:
     logger.info("Agent connected to room %s for session %s", ctx.room.name, session_id)
 
     for _ in range(60):
+        if not input_allowed():
+            return
         for p in ctx.room.remote_participants.values():
             participant_identity = p.identity
             break
@@ -462,6 +534,7 @@ async def entrypoint(ctx: agents.JobContext) -> None:
         "x-trainertwin-org-id": org_id,
         "x-trainertwin-agent-slug": agent_slug,
         "x-trainertwin-mode": "voice",
+        "x-trainertwin-runtime-token": runtime_token,
     }
     copilot_secret = os.getenv("COPILOT_SERVICE_SECRET", "").strip()
     # The chat bridge authenticates with Basic org:secret.
@@ -509,10 +582,11 @@ async def entrypoint(ctx: agents.JobContext) -> None:
         opening_release=opening_release,
         hold_opening=hold_opening,
         pending_input=pending_chat_messages,
+        input_allowed=input_allowed,
     )
     register_inactivity_nudge(session, agent)
     register_latency_logging(session, session_id=session_id, room_name=ctx.room.name)
-    screen_feedback = ScreenFeedbackRuntime(
+    screen_feedback = None if anonymous else ScreenFeedbackRuntime(
         room=ctx.room,
         participant_identity=participant_identity,
         note_sink=agent.inject_screen_note,
@@ -543,51 +617,37 @@ async def entrypoint(ctx: agents.JobContext) -> None:
                     logger.debug("Room teardown note: %s", exc)
                 return
 
-    async def end_at_deadline(limit: float) -> None:
-        """Learner minutes: say goodbye shortly before the balance runs out, then close the room at the limit;
-        on_session_end posts the completion webhook as for any other ending."""
-        started = time.monotonic()
-        notice = goodbye_delay(limit)
-        if notice is not None:
-            await asyncio.sleep(notice)
-            try:
-                handle = session.say(goodbye_line(metadata), allow_interruptions=False)
-                await asyncio.wait_for(handle.wait_for_playout(), timeout=GOODBYE_LEAD_SECONDS)
-                # No new turn after the goodbye: a reply started now would be cut off mid-sentence.
-                session.input.set_audio_enabled(False)
-            except Exception as exc:
-                logger.warning("Goodbye before the minutes limit failed room=%s error=%s", ctx.room.name, exc)
-        await asyncio.sleep(max(0.0, limit - (time.monotonic() - started)))
-        logger.info("Room %s reached its minutes limit; ending session", ctx.room.name)
-        try:
-            await ctx.api.room.delete_room(api.DeleteRoomRequest(room=ctx.room.name))
-        except Exception as exc:
-            logger.debug("Room teardown note: %s", exc)
-
+    if not input_allowed():
+        return
     active_session = session
     await session.start(
         room=ctx.room,
         agent=agent,
         room_options=room_io.RoomOptions(
+            text_input=not anonymous,
+            video_input=False,
             audio_input=room_io.AudioInputOptions(
                 noise_cancellation=noise_cancellation.BVC(),
             ),
             close_on_disconnect=False,
         ),
+        session_host=not anonymous,
     )
     if hold_opening:
         # Keep the learner's mic out of the session until the opening has been
         # spoken; otherwise speech during the intro races the greeting.
         session.input.set_audio_enabled(False)
-    await screen_feedback.start(session)
+    if not input_allowed():
+        session.input.set_audio_enabled(False)
+        session.shutdown(drain=False)
+        return
+    if screen_feedback is not None:
+        await screen_feedback.start(session)
     if not (hold_opening and not opening_release.is_set()):
         for pending_text in pending_chat_messages:
             asyncio.create_task(session.generate_reply(user_input=pending_text))
         pending_chat_messages.clear()
     asyncio.create_task(watch_empty_room())
-    limit = seconds_until_end(metadata, time.time())
-    if limit is not None:
-        asyncio.create_task(end_at_deadline(limit))
 
 
 async def on_session_end(ctx: agents.JobContext) -> None:

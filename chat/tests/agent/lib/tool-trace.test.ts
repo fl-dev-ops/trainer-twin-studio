@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { summarizeToolInput, summarizeToolOutput, withoutImageBytes } from "../../../agent/lib/tool-trace";
-import readDocument from "../../../agent/tools/read_document";
+import { documentModelOutput } from "../../../agent/tools/read_document";
 
 test("other tools and errors never include free-text prefixes", () => {
   assert.deepEqual(
@@ -20,7 +20,7 @@ test("statuses, wrapped outputs and errors", () => {
 
 test("read_document: an image reaches the model as an image; evidence keeps a note, not the bytes", () => {
   const image = { documentId: "d1", name: "chat.png", kind: "image", image: { mediaType: "image/png", data: "aGVsbG8=" }, chunks: [] };
-  const toModel = (readDocument as unknown as { toModelOutput: (output: unknown) => { type: string; value: unknown } }).toModelOutput;
+  const toModel = documentModelOutput;
   const shown = toModel(image) as { type: string; value: { type: string; data?: unknown; mediaType?: string }[] };
   assert.equal(shown.type, "content");
   assert.equal(shown.value[1].type, "file");

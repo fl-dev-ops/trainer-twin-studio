@@ -4,6 +4,7 @@ import { useParams } from "next/navigation";
 import { CalibrationReview } from "@/components/calibration/calibration-review";
 import { DEMO_CALIBRATION } from "@/components/calibration/mock";
 import { api, pageNotFound, useApi } from "@/lib/api";
+import { dashRoute } from "@/lib/routes";
 
 export default function RoleplayCalibrationPage() {
   const { id, calibration } = useParams<{ id: string; calibration: string }>();
@@ -16,7 +17,7 @@ function DemoCalibration({ slug }: { slug: string }) {
   const agent = useApi(["page.calibrationAgent", slug], () => api.page.calibrationAgent.query({ slug }));
   return (
     <CalibrationReview
-      backHref={`/roleplay/${encodeURIComponent(agent.slug)}`}
+      backHref={dashRoute(`/roleplay/${encodeURIComponent(agent.slug)}`)}
       twinName={agent.twinName}
       startedAt={DEMO_CALIBRATION.startedAt}
       turns={DEMO_CALIBRATION.turns}

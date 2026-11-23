@@ -61,7 +61,7 @@ export async function alertIssueReport(input: IssueAlert, deps = defaultDeps) {
   }
 
   const session = input.sessionId && input.org ? await deps.findSession(input.sessionId, input.org.id) : null;
-  const sessionUrl = session ? `https://dash.${BASE_DOMAIN}/${session.agent.kind === "TWIN" ? "twin" : "roleplay"}/sessions/${session.id}` : null;
+  const sessionUrl = session ? `https://dash.${BASE_DOMAIN}/${session.agent.kind === "ROLEPLAY" ? "roleplay" : "twin"}/sessions/${session.id}` : null;
   const sent = await deps.sendIssueReportEmail({
     to: ISSUE_REPORT_TO,
     cc: ISSUE_REPORT_CC,

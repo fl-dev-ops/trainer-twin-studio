@@ -90,6 +90,7 @@ describe.skipIf(!localMinutesDb)("managed-only skill publication (real Postgres)
     if (secret === undefined) delete process.env.COPILOT_SERVICE_SECRET;
     else process.env.COPILOT_SERVICE_SECRET = secret;
     await db.interviewSession.deleteMany({ where: { orgId: f.org.id } });
+    await db.agentSkill.deleteMany({ where: { orgId: f.org.id } });
     await db.agentSkillVersion.deleteMany({ where: { orgId: f.org.id } });
     await db.skillVersionSource.deleteMany({ where: { orgId: f.org.id } });
     await db.agent.updateMany({ where: { orgId: f.org.id }, data: { primarySkillId: null } });
@@ -397,6 +398,24 @@ describe.skipIf(!localMinutesDb)("managed-only skill publication (real Postgres)
     expect(versions[0].version).toMatchObject({ status: "ready", indexStatus: "failed", contentHash: original.version.contentHash });
     expect(versions[1].version.indexStatus).toBe("ready");
     noPackage((await agent(first.slug)).data);
+  });
+
+  test("publication attaches new topics to a merged twin but never re-adds a removed topic on edit", async () => {
+    const first = await agent((await publish("twin")).slug);
+    await db.agent.update({ where: { id: f.twin.id }, data: { data: { source: "twin" } } });
+    await db.agentSkill.create({ data: { agentId: f.twin.id, orgId: f.org.id, skillId: first.primarySkillId!, position: 1, active: false } });
+    const extra = (skill: string) => ingestTwinSkill(f.org.id, {
+      personaSlug: f.org.slug, skill,
+      manifest: { skill: "another-topic", name: "Another topic", description: "Follow-ups", situations: [{ id: "explore", name: "Explore" }] },
+      items: [],
+    });
+    const created = await extra("# New topic\n");
+    const topic = await agent(created.slug);
+    const read = () => db.agentSkill.findMany({ where: { agentId: f.twin.id }, orderBy: { position: "asc" }, select: { active: true, skillId: true } });
+    expect(await read()).toEqual([{ active: false, skillId: first.primarySkillId! }, { active: true, skillId: topic.primarySkillId! }]);
+    await db.agentSkill.deleteMany({ where: { agentId: f.twin.id, skillId: topic.primarySkillId! } });
+    expect((await extra("# Revised topic\n")).created).toBe(false);
+    expect(await read()).toEqual([{ active: false, skillId: first.primarySkillId! }]);
   });
 
   test("zero examples and provenance-only changes preserve the package identity contract", async () => {

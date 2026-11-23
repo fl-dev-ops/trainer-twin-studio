@@ -22,6 +22,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { api, useApi } from "@/lib/api";
+import { dashRoute } from "@/lib/routes";
 
 const STATUS_VARIANT: Record<string, "default" | "secondary" | "outline"> = {
   active: "default",
@@ -33,9 +34,9 @@ export default function DashboardPage() {
   const { personas, agents, kbs, sessions } = useApi(["page.overview"], () => api.page.overview.query());
 
   const stats = [
-    { label: "Personas", value: personas, href: "/personas", icon: UserRound },
-    { label: "Scenarios", value: agents, href: "/roleplay", icon: MessagesSquare },
-    { label: "Knowledge bases", value: kbs, href: "/twin/knowledge", icon: BookOpen },
+    { label: "Personas", value: personas, href: dashRoute("/personas"), icon: UserRound },
+    { label: "Scenarios", value: agents, href: dashRoute("/roleplay"), icon: MessagesSquare },
+    { label: "Knowledge bases", value: kbs, href: dashRoute("/twin/knowledge"), icon: BookOpen },
   ];
 
   return (
@@ -45,7 +46,7 @@ export default function DashboardPage() {
       title="Dashboard"
       description="Build and version personas and scenarios, then review their sessions."
       actions={
-        <Button nativeButton={false} render={<Link href="/talk" />}>
+        <Button nativeButton={false} render={<Link href={dashRoute("/talk")} />}>
           Start session <ArrowUpRight data-icon="inline-end" />
         </Button>
       }
@@ -77,7 +78,7 @@ export default function DashboardPage() {
         {sessions.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             No sessions yet.{" "}
-            <Link href="/talk" className="underline">
+            <Link href={dashRoute("/talk")} className="underline">
               Run your first interview
             </Link>
             .

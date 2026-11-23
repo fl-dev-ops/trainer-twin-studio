@@ -27,9 +27,10 @@ export async function enqueueWorkspaceCommand(input: {
 }) {
   const session = await db.interviewSession.findFirst({
     where: { id: input.sessionId, orgId: input.orgId, status: { in: ["activating", "active"] } },
-    select: { id: true },
+    select: { id: true, anonymousId: true },
   });
   if (!session) throw new Error("Session not found");
+  if (session.anonymousId && input.tool !== "finish_session") throw new Error("Workspaces are not available in public calls");
 
   const payload = input.payload;
 
@@ -40,7 +41,8 @@ export async function enqueueWorkspaceCommand(input: {
       sessionId: session.id,
       tool: input.tool,
       input: (payload ?? {}) as object,
-      status: "pending",
+      status: session.anonymousId ? "completed" : "pending",
+      ...(session.anonymousId ? { result: { ok: true }, completedAt: new Date() } : {}),
     },
     update: {},
   });

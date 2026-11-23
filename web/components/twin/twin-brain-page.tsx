@@ -1,5 +1,7 @@
 "use client";
 
+import type { Route } from "next";
+
 import Link from "next/link";
 import { useState, type ReactNode, type CSSProperties } from "react";
 import {
@@ -8,6 +10,7 @@ import {
 import { toast } from "sonner";
 import { generateSpeech, playPcmStream, stopPlayback } from "@/lib/audio-playback";
 import { cn } from "@/lib/utils";
+import { dashRoute } from "@/lib/routes";
 
 /** What the play button says in her cloned voice. */
 const SAMPLE_LINE = "Hi, this is my twin. Tell me what is going on with your client, and I will help you with the next step.";
@@ -101,7 +104,7 @@ export function TwinBrainPage({ knowledge, avatar }: { knowledge: BrainKnowledge
   return (
     <div className="relative h-full w-full overflow-hidden bg-dot-grid">
       <header className="relative z-10 flex h-16 items-center justify-between gap-4 px-5">
-        <Link href="/twin" className="inline-flex items-center gap-2 text-sm text-foreground transition-colors hover:text-muted-foreground">
+        <Link href={dashRoute("/twin")} className="inline-flex items-center gap-2 text-sm text-foreground transition-colors hover:text-muted-foreground">
           <ArrowLeft className="size-4" aria-hidden />
           Back
         </Link>
@@ -109,7 +112,7 @@ export function TwinBrainPage({ knowledge, avatar }: { knowledge: BrainKnowledge
           Twin’s brain <span aria-hidden>·</span> Last updated 2 days ago
         </h1>
         <Link
-          href="/twin"
+          href={dashRoute("/twin")}
           className="inline-flex h-9 items-center rounded-full bg-(--brand) px-5 text-sm font-medium text-white transition-colors hover:bg-brand-hover"
         >
           Done
@@ -124,7 +127,7 @@ export function TwinBrainPage({ knowledge, avatar }: { knowledge: BrainKnowledge
           >
             <Node
               tag="Knowledge" tone="blue" title="Knowledge"
-              footer={<EditLink href="/twin/knowledge" />}
+              footer={<EditLink href={dashRoute("/twin/knowledge")} />}
             >
               {knowledge.connectors.length ? (
                 <ul aria-label="Connected sources" className="m-0 flex list-none flex-col gap-2 p-0">
@@ -184,8 +187,8 @@ export function TwinBrainPage({ knowledge, avatar }: { knowledge: BrainKnowledge
               tag="Voice and avatar" tone="green" title="Voice and avatar"
               footer={
                 <div className="flex gap-2">
-                  <Link href="/twin/brain/voice" className={pill}><Mic className="size-4" aria-hidden /> Voice</Link>
-                  <Link href="/twin/brain/avatar" className={pill}><Camera className="size-4" aria-hidden /> Avatar</Link>
+                  <Link href={dashRoute("/twin/brain/voice")} className={pill}><Mic className="size-4" aria-hidden /> Voice</Link>
+                  <Link href={dashRoute("/twin/brain/avatar")} className={pill}><Camera className="size-4" aria-hidden /> Avatar</Link>
                 </div>
               }
             >
@@ -240,7 +243,7 @@ export function TwinBrainPage({ knowledge, avatar }: { knowledge: BrainKnowledge
 const pill = "inline-flex h-9 items-center gap-2 rounded-full border border-(--card-border) px-4 text-sm font-medium transition-colors hover:bg-(--tone-control) outline-none focus-visible:ring-2 focus-visible:ring-(--brand)";
 const zoomButton = "grid size-8 place-items-center rounded-full transition-colors hover:bg-(--tone-control) disabled:opacity-40 outline-none focus-visible:ring-2 focus-visible:ring-(--brand)";
 
-function EditLink({ href }: { href: string }) {
+function EditLink({ href }: { href: Route }) {
   return <Link href={href} className={pill}><Pencil className="size-4" aria-hidden /> Edit</Link>;
 }
 

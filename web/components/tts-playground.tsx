@@ -17,6 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { dashRoute } from "@/lib/routes";
 
 type Voice = { id: string; name: string; kind: "sample" | "cloned"; status: string };
 
@@ -72,7 +73,7 @@ export function TtsPlayground({ voiceId }: { voiceId: string }) {
           <h1 className="text-sm font-semibold">
             {voices.find((voice) => voice.id === selected)?.name ?? "Text to Speech"}
           </h1>
-          <Button variant="ghost" size="xs" render={<Link href="/voice" />} nativeButton={false}>
+          <Button variant="ghost" size="xs" render={<Link href={dashRoute("/voice")} />} nativeButton={false}>
             All voices
           </Button>
         </header>
@@ -111,7 +112,7 @@ export function TtsPlayground({ voiceId }: { voiceId: string }) {
           <div className="grid gap-1.5">
             <div className="flex items-center justify-between">
               <Label htmlFor="voice-picker">Voice</Label>
-              <Button variant="ghost" size="xs" render={<Link href="/voice/cloning" />} nativeButton={false}>
+              <Button variant="ghost" size="xs" render={<Link href={dashRoute("/voice/cloning")} />} nativeButton={false}>
                 <Mic data-icon="inline-start" /> Clone new
               </Button>
             </div>

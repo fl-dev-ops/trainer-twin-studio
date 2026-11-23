@@ -16,10 +16,11 @@ import { orgCredits } from "@/lib/org-credits";
 import { BEFORE_UPLOAD_REFUSED, uploadAllowed } from "@/lib/context-upload";
 import { resolveSnapshotSkill } from "@/lib/session-skills";
 import { assertVoiceObjectKeys, availableVoiceWhere, listAvailableVoices } from "@/lib/voices";
+import { confirmSessionPersona, pickSessionPersona } from "@/lib/agent-personas";
 
 const shareCode = () => randomBytes(18).toString("base64url");
-const tokenHash = (token: string) => createHash("sha256").update(token).digest("hex");
-const runtimeToken = (sessionId: string) => {
+export const tokenHash = (token: string) => createHash("sha256").update(token).digest("hex");
+export const runtimeToken = (sessionId: string) => {
   const secret = process.env.COPILOT_SERVICE_SECRET;
   if (!secret) throw new Error("COPILOT_SERVICE_SECRET is not configured");
   return createHmac("sha256", secret).update(`session:${sessionId}`).digest("base64url");
@@ -167,7 +168,7 @@ export async function resolveVoiceForSession(orgId: string, configuredVoiceId: s
   return voice.id;
 }
 
-async function initializeChatSession(input: { sessionId: string; orgId: string; mode: DeliveryMode }) {
+export async function initializeChatSession(input: { sessionId: string; orgId: string; mode: DeliveryMode }) {
   const secret = process.env.COPILOT_SERVICE_SECRET;
   if (!secret) throw new Error("COPILOT_SERVICE_SECRET is not configured");
   const url = new URL("/internal/sessions", process.env.CHAT_URL ?? "http://localhost:2000");
@@ -345,7 +346,9 @@ export async function activateSession(input: {
   }
   const primaryId = snapshot.docIds[0];
   const primary = snapshot.documents.find((document) => document.id === primaryId);
-  const compiledConfig = await getAgentConfigForAgent(agentId, input.orgId, primaryId, snapshot.docIds);
+  // A role play with several personas plays one at random per session (lib/agent-personas); the session records it.
+  const personaId = snapshot.agent.kind === "ROLEPLAY" ? await pickSessionPersona(agentId) ?? undefined : undefined;
+  const compiledConfig = await getAgentConfigForAgent(agentId, input.orgId, primaryId, snapshot.docIds, undefined, undefined, personaId);
   // The org's balance from Meteroid now, before the lock (no network calls while it's held).
   if (studio && mode === "voice") await orgCredits(input.orgId, { fresh: true });
 
@@ -374,14 +377,15 @@ export async function activateSession(input: {
     if (eligibleAgent.kind === "TWIN" || (eligibleAgent.kind === "ROLEPLAY" && eligibleAgent.primarySkillId)) {
       // Non-key publication updates must proceed: pin insertion also locks Skill, which publishers update first.
       await tx.$queryRaw`SELECT 1 FROM "Agent" WHERE "id" = ${agentId} AND "orgId" = ${input.orgId} FOR KEY SHARE`;
-      const reread = await getAgentConfigForAgent(agentId, input.orgId, primaryId, snapshot.docIds, tx);
+      const lockedPersonaId = eligibleAgent.kind === "ROLEPLAY" ? await confirmSessionPersona(agentId, personaId, tx) : undefined;
+      const reread = await getAgentConfigForAgent(agentId, input.orgId, primaryId, snapshot.docIds, tx, undefined, lockedPersonaId);
       if (!reread || reread.agent.archivedAt) throw refusals.notFound();
       if (snapshot.docIds.length && usesBeforeSettings(reread.agent.data, reread.agent.kind) && !beforeSettings(reread.agent.data).preUpload) {
         throw refusals.invalidInput(reread.agent.kind === "TWIN" ? "This twin does not take documents" : "This role play does not take documents");
       }
       coherentConfig = reread;
       if (reread.agent.kind === "TWIN" && jsonRecord(reread.agent.data).source === TWIN_SOURCE) {
-        const selected = await resolveTwinCatalog(input.orgId, reread.persona.id, tx);
+        const selected = await resolveTwinCatalog(input.orgId, reread.persona.id, tx, reread.agent.id);
         managed = true;
         pins = selected.pins;
         twinSkills = selected.catalog;
@@ -495,7 +499,7 @@ export async function activateSession(input: {
 }
 
 /** The browser's token for its own call's live features (commands, UI state, snapshot): never the agent's (rule 26). */
-const browserToken = (sessionId: string) => {
+export const browserToken = (sessionId: string) => {
   const secret = process.env.COPILOT_SERVICE_SECRET;
   if (!secret) throw new Error("COPILOT_SERVICE_SECRET is not configured");
   return createHmac("sha256", secret).update(`browser:${sessionId}`).digest("base64url");
@@ -506,17 +510,24 @@ export async function authorizeBrowserSession(sessionId: string, token: string) 
   const expected = Buffer.from(browserToken(sessionId));
   const given = Buffer.from(token);
   if (!token || given.length !== expected.length || !timingSafeEqual(given, expected)) return null;
-  return db.interviewSession.findFirst({
+  const session = await db.interviewSession.findFirst({
     where: { id: sessionId, status: { in: ["activating", "active"] } },
-    select: { id: true, orgId: true, userId: true, status: true, evidence: true, runtimeState: true, runtimeRevision: true },
+    select: { id: true, orgId: true, userId: true, status: true, evidence: true, runtimeState: true, runtimeRevision: true,
+      anonymousId: true, startedAt: true, allowedSeconds: true, deletedAt: true },
   });
+  return session && !publicSessionExpired(session) ? session : null;
+}
+
+export function publicSessionExpired(session: { anonymousId?: string | null; startedAt?: Date | null; allowedSeconds?: number | null; deletedAt?: Date | null }, now = Date.now()) {
+  return Boolean(session.anonymousId) && (Boolean(session.deletedAt) || !session.startedAt || session.allowedSeconds == null
+    || session.startedAt.getTime() + session.allowedSeconds * 1000 <= now);
 }
 
 /** The agent's runtime token (its model calls): the live call it belongs to, or null. */
 export async function authorizeRuntimeSession(idOrToken: string, tokenParam?: string) {
   const token = tokenParam || idOrToken;
   if (!token) return null;
-  return db.interviewSession.findFirst({
+  const session = await db.interviewSession.findFirst({
     where: {
       runtimeTokenHash: tokenHash(token),
       ...(tokenParam && idOrToken ? { id: idOrToken } : {}),
@@ -540,6 +551,11 @@ export async function authorizeRuntimeSession(idOrToken: string, tokenParam?: st
       livekitRoom: true,
       livekitDispatchId: true,
       videoEgressId: true,
+      anonymousId: true,
+      startedAt: true,
+      allowedSeconds: true,
+      deletedAt: true,
     },
   });
+  return session && !publicSessionExpired(session) ? session : null;
 }

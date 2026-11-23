@@ -1,6 +1,6 @@
 import type { MessageContent } from "eve/channels";
 import { attachmentError } from "eve/channels";
-import { studioFetch } from "./studio";
+import { runtimeFromContext, studioFetch } from "./studio";
 
 /**
  * Files attached during a conversation (plans/uploads-to-s3.md). The browser sends "I've attached a file: <name>
@@ -30,6 +30,7 @@ type FetchContext = {
 
 /** eve's fetchFile for this channel: a file attached to this session (the studio checks the link), or null. */
 export async function fetchUpload(url: string, context?: FetchContext) {
+  if (context && runtimeFromContext(context)) throw attachmentError("Files are unavailable in public calls.");
   if (!url.startsWith(UPLOAD_SCHEME)) return null;
   const id = url.slice(UPLOAD_SCHEME.length);
   const principal = context?.session.auth.initiator ?? context?.session.auth.current;

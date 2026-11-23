@@ -20,6 +20,9 @@ const sessionRow = () => ({
   livekitRoom: "old-room",
   livekitDispatchId: "old-dispatch",
   videoEgressId: null,
+  startedAt: new Date("2026-11-18T10:00:00Z") as Date | null,
+  allowedSeconds: 300 as number | null,
+  anonymousId: null as string | null,
 });
 let row = sessionRow();
 const voice = (id = "voice", orgId: string | null = "org"): Voice => ({
@@ -95,7 +98,7 @@ test("startSessionNow opens before connecting voice and returns credentials with
   expect(await startSessionNow(input)).toEqual({ ok: true, session, participantToken: "participant", room: "room" });
   expect(activate).toHaveBeenCalledWith(input);
   expect(activate.mock.invocationCallOrder[0]).toBeLessThan(connect.mock.invocationCallOrder[0]);
-  expect(connect).toHaveBeenCalledWith(expect.objectContaining({ sessionId: session.id, runtimeToken: session.agentToken, agentKind: "ROLEPLAY", endsAt: expect.any(Number) }));
+  expect(connect).toHaveBeenCalledWith(expect.objectContaining({ sessionId: session.id, runtimeToken: session.agentToken, agentKind: "ROLEPLAY", endsAt: Math.floor(new Date("2026-11-18T10:00:00Z").getTime() / 1000) + 300 }));
 });
 
 test("startSessionNow chat returns the conversation token without LiveKit", async () => {
@@ -187,7 +190,7 @@ test("a missing sample default refuses instead of dispatching an unconfigured vo
 test("connectVoice scopes the session to its organization and owner before any voice resolution", async () => {
   db.interviewSession.findFirst.mockResolvedValue(null);
   await expect(connectVoice(input, session)).rejects.toMatchObject({ code: "not_found", status: 404 });
-  expect(db.interviewSession.findFirst.mock.calls[0][0]).toMatchObject({ where: { id: "session", orgId: "org", userId: "learner" } });
+  expect(db.interviewSession.findFirst.mock.calls[0][0]).toMatchObject({ where: { id: "session", orgId: "org", OR: [{ userId: "learner" }, { userId: null, anonymousId: { not: null } }] } });
   expect(db.voice.findFirst).not.toHaveBeenCalled();
   expect(connect).not.toHaveBeenCalled();
   expect(db.interviewSession.update).not.toHaveBeenCalled();

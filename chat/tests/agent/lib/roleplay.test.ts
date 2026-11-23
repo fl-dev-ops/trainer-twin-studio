@@ -4,7 +4,7 @@ import { z } from "zod";
 import { formatSessionSpec, type SessionSpecs } from "../../../agent/lib/brain";
 import { roleplaySkill } from "../../../agent/lib/roleplay";
 import scenarioExamples from "../../../agent/tools/scenario_examples";
-import endCall from "../../../agent/tools/end_call";
+import { endCallTool as endCall } from "../../../agent/tools/end_call";
 import { clearSessionModeCache, isRoleplaySession, primeSessionMode, roleplayGuard } from "../../../agent/lib/session-mode-lookup";
 
 // What web's role-play builder stores (lib/roleplay/skill.ts renderRoleplay), trimmed.
@@ -128,7 +128,7 @@ describe("client role play (kind ROLEPLAY with a SKILL.md)", () => {
       calls.push(JSON.parse(body));
       return Response.json({ examples: [] });
     }) as typeof fetch;
-    const ctx = { session: { auth: { current: { principalId: "org1", attributes: { sessionId: "call1", agentSlug: "acme-authored" } } } } } as unknown as Parameters<NonNullable<typeof scenarioExamples.execute>>[1];
+    const ctx = { session: { auth: { current: { principalType: "organization", principalId: "org1", attributes: { sessionId: "call1", agentSlug: "acme-authored" } } } } } as unknown as Parameters<NonNullable<typeof scenarioExamples.execute>>[1];
     await scenarioExamples.execute!({ situation: "candidate explains closures", limit: 3 }, ctx);
     assert.deepEqual(calls[0], { action: "searchScenarioItems", agentSlug: "acme-authored", query: "candidate explains closures", limit: 3, sessionId: "call1" });
     await scenarioExamples.execute!({ situation: "candidate explains closures", role: "learner", limit: 3 }, ctx);

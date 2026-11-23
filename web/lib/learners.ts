@@ -129,14 +129,14 @@ export async function listLearners(orgId: string, kind: AgentKind): Promise<Lear
         }).then((rows) => rows.map((a) => ({ userId: a.member.userId, agentId: a.deployment.agentId })))
       : db.twinAssignment.findMany({ where: { orgId, status: "active" }, select: { userId: true, agentId: true } }),
     db.interviewSession.findMany({
-      where: { orgId, deletedAt: null, agent: { kind } },
+      where: { orgId, deletedAt: null, agent: { kind }, userId: { not: null } },
       select: { agentId: true, startedAt: true, endedAt: true, createdAt: true, user: { select: { id: true } } },
     }),
   ]);
   return summarizeLearners({
     learners: learners.map((person) => ({ id: person.userId, name: person.name, email: person.email, image: person.image })),
     assignments,
-    sessions,
+    sessions: sessions.flatMap((row) => row.user ? [{ ...row, user: row.user }] : []),
   });
 }
 

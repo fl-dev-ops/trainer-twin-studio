@@ -35,7 +35,9 @@ const fakeDb = {
   interviewSession: { findFirst: async ({ where }: { where: Row }) => savedSession && Object.entries(where).every(([key, value]) => savedSession![key] === value) ? savedSession : null },
   knowledgeBase: { findFirst: async () => null },
   agent: {
-    findFirst: async ({ where }: { where: { orgId: string; slug: string | { equals: string } } }) => agents.find(agent => agent.orgId === where.orgId && agent.slug === (typeof where.slug === "string" ? where.slug : where.slug.equals)) ?? null,
+    // By slug, or (the main-twin lookup after a twin skill publish) by id; anything else has no match here.
+    findFirst: async ({ where }: { where: { orgId: string; id?: string; slug?: string | { equals: string } } }) => agents.find(agent => agent.orgId === where.orgId
+      && (where.slug !== undefined ? agent.slug === (typeof where.slug === "string" ? where.slug : where.slug.equals) : where.id !== undefined && (agent as { id?: string }).id === where.id)) ?? null,
     findUnique: async ({ where }: { where: { slug: string } }) => {
       const row = agents.find((a) => a.slug === where.slug);
       return row ? { ...row } : null;

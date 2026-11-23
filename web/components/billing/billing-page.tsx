@@ -26,6 +26,7 @@ import { api, useApi } from "@/lib/api";
 import { countries, INDIAN_STATES, taxIdLabel, type BillingDetails } from "@/lib/billing/details";
 import { formatMoney, formatUsd } from "@/lib/billing/pricing";
 import { cn } from "@/lib/utils";
+import { dashRoute } from "@/lib/routes";
 
 /**
  * Billing (specs/billing.md), for admin and team: the plan and its status, minute packs (Paid plan), every invoice with
@@ -213,7 +214,7 @@ function AddOnsSection({ overview }: { overview: Billed }) {
           title="Minute packs"
           detail={blocked ?? `${overview.pack.credits} credits for ${formatUsd(overview.pack.cents)}, tax included. Added when the invoice is paid; they expire a year later.`}
         >
-          <Button variant="ghost" size="sm" render={<Link href="/usage" />} nativeButton={false}>See usage</Button>
+          <Button variant="ghost" size="sm" render={<Link href={dashRoute("/usage")} />} nativeButton={false}>See usage</Button>
           <Button variant="brand" size="sm" disabled={Boolean(blocked)} onClick={() => setOpen(true)}>Buy credits</Button>
         </SectionRow>
       </div>

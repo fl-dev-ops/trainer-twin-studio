@@ -49,7 +49,7 @@ async def test_inactivity_nudge_only_runs_after_opening():
             self.replies.append(instructions)
 
     session = Session()
-    trainer = SimpleNamespace(opening_complete=False, room_name="room-1")
+    trainer = SimpleNamespace(opening_complete=False, room_name="room-1", input_allowed=lambda: True)
     agent.register_inactivity_nudge(session, trainer)
 
     session.callback(SimpleNamespace(new_state="away"))
