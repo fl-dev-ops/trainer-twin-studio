@@ -112,8 +112,7 @@ export function PublicAccessPanel({ twin }: { twin: Twin }) {
       </PageSection>
 
       <PageSection title="Website widget" description="Show this twin as a voice widget on your own website.">
-        <form className={cn(SECTION_CARD, "min-w-0 overflow-hidden")}
-          onSubmit={(event) => { event.preventDefault(); if (dirty) void saveWebsites(); }}>
+        <div className={cn(SECTION_CARD, "min-w-0 overflow-hidden")}>
           {!live ? (
             <p role="status" className="m-0 flex items-center gap-2 border-b border-(--border) px-5 py-3 text-sm text-muted-foreground">
               <span aria-hidden="true" className="size-2 shrink-0 rounded-full bg-(--tone-control)" />
@@ -121,27 +120,29 @@ export function PublicAccessPanel({ twin }: { twin: Twin }) {
                 : <span>Off. Add a website below to show the widget.</span>}
             </p>
           ) : null}
-          <fieldset disabled={widgetLocked || busy === "websites"} className={cn("min-w-0 transition-opacity", widgetLocked && "opacity-50")}>
-            <div className="flex flex-col gap-2 px-5 py-4">
-              <label htmlFor="widget-origins" className="text-sm font-medium">Allowed websites</label>
-              <Textarea id="widget-origins" rows={3} value={draft} onChange={(event) => setDraft(event.target.value)}
-                placeholder={"https://example.com\nhttps://www.example.com"} aria-describedby="widget-origins-help" className="min-h-20 resize-y font-mono text-sm" />
-              <p id="widget-origins-help" className="m-0 text-xs text-muted-foreground">
-                One per line, up to 20 — scheme and host only, e.g. https://example.com. Remove a website to take the widget off it.
-              </p>
-            </div>
-          </fieldset>
-          {dirty ? (
-            <div className="flex items-center justify-end gap-2 border-t border-(--border) bg-muted/30 px-5 py-3">
-              <span className="mr-auto text-sm text-muted-foreground" role="status">Unsaved changes</span>
-              <Button type="button" variant="ghost" disabled={busy === "websites"} onClick={() => setDraft(draftOf(widget))}>Discard</Button>
-              <Button type="submit" disabled={busy === "websites"}>{busy === "websites" ? "Saving…" : "Save"}</Button>
-            </div>
-          ) : null}
-        </form>
+          <form className="min-w-0" onSubmit={(event) => { event.preventDefault(); if (dirty) void saveWebsites(); }}>
+            <fieldset disabled={widgetLocked || busy === "websites"} className={cn("m-0 min-w-0 transition-opacity", widgetLocked && "opacity-50")}>
+              <div className="flex flex-col gap-2 px-5 py-4">
+                <label htmlFor="widget-origins" className="text-sm font-medium">Allowed websites</label>
+                <Textarea id="widget-origins" rows={3} value={draft} onChange={(event) => setDraft(event.target.value)}
+                  placeholder={"https://example.com\nhttps://www.example.com"} aria-describedby="widget-origins-help" className="min-h-20 resize-y font-mono text-sm" />
+                <p id="widget-origins-help" className="m-0 text-xs text-muted-foreground">
+                  One per line, up to 20 — scheme and host only, e.g. https://example.com. Remove a website to take the widget off it.
+                </p>
+              </div>
+            </fieldset>
+            {dirty ? (
+              <div className="flex items-center justify-end gap-2 border-t border-(--border) bg-muted/30 px-5 py-3">
+                <span className="mr-auto text-sm text-muted-foreground" role="status">Unsaved changes</span>
+                <Button type="button" variant="ghost" disabled={busy === "websites"} onClick={() => setDraft(draftOf(widget))}>Discard</Button>
+                <Button type="submit" disabled={busy === "websites"}>{busy === "websites" ? "Saving…" : "Save"}</Button>
+              </div>
+            ) : null}
+          </form>
+          <InstallSection origin={twin.widget.origin} id={twin.widget.id} live={live} />
+        </div>
+        <p className="m-0 text-xs text-muted-foreground">If your website sets a Content Security Policy, allow this script and its frame, and delegate microphone access.</p>
       </PageSection>
-
-      <InstallSection origin={twin.widget.origin} id={twin.widget.id} live={live} />
     </div>
   );
 }
@@ -167,14 +168,20 @@ function InstallSection({ origin, id, live }: { origin: string; id: string; live
   }
 
   return (
-    <PageSection title="Install"
-      description={live ? "Paste this once before your page’s closing </body> tag. It contains no credentials."
-        : "Paste this once before your page’s closing </body> tag. The widget appears after it’s turned on above."}
-      action={<Button variant="outline" size="lg" onClick={() => void copy()}>
-        {copied ? <Check data-icon="inline-start" /> : <Copy data-icon="inline-start" />}{copied ? "Copied" : "Copy code"}
-      </Button>}>
-      <pre className={cn(SECTION_CARD, "m-0 min-w-0 whitespace-pre-wrap break-all p-5 text-xs leading-6")}><code>{displaySnippet}</code></pre>
-      <p className="m-0 text-xs text-muted-foreground">If your website sets a Content Security Policy, allow this script and its frame, and delegate microphone access.</p>
-    </PageSection>
+    <section aria-label="Install" className="flex min-w-0 flex-col gap-3 border-t border-(--border) px-5 py-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+        <div className="min-w-0">
+          <div className="text-sm font-medium">Install code</div>
+          <div className="mt-0.5 text-sm text-muted-foreground">
+            {live ? "Paste this once before your page’s closing </body> tag. It contains no credentials."
+              : "Paste this once before your page’s closing </body> tag. The widget appears after it’s turned on above."}
+          </div>
+        </div>
+        <Button type="button" variant="outline" size="lg" onClick={() => void copy()}>
+          {copied ? <Check data-icon="inline-start" /> : <Copy data-icon="inline-start" />}{copied ? "Copied" : "Copy code"}
+        </Button>
+      </div>
+      <pre className="m-0 min-w-0 whitespace-pre-wrap break-all rounded-tt-md border border-(--border) bg-muted/40 p-4 text-xs leading-6"><code>{displaySnippet}</code></pre>
+    </section>
   );
 }
