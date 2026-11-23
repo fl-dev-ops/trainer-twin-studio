@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { AppShell, ShellFallback } from "@/components/app-shell";
 import { BillingBanner } from "@/components/billing/billing-banner";
 import { ClientOnly } from "@/components/client-only";
+import { NamePrompt } from "@/components/name-prompt";
 import { OrgAccentProvider } from "@/components/org-accent-provider";
 import { OrgPin } from "@/components/org-pin";
 import { auth } from "@/lib/auth";
@@ -24,6 +25,7 @@ export default async function DashLayout({ children }: { children: ReactNode }) 
       <AppShell hideRoleplay={org?.hideRoleplay ?? false} orgs={orgs} orgId={org?.id ?? null}>
         <ClientOnly fallback={<ShellFallback />}>
           <BillingBanner />
+          <NamePrompt />
           {children}
         </ClientOnly>
       </AppShell>

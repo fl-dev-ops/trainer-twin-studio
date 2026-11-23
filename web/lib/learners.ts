@@ -43,7 +43,7 @@ export function summarizeLearners({ learners, assignments, sessions }: Inputs): 
 
   for (const { userId, agentId } of assignments) rows.get(userId)?.scenarios.add(agentId);
   for (const session of sessions) {
-    const entry = rows.get(session.user.id);
+    const entry = session.user && rows.get(session.user.id);
     if (!entry) continue;
     entry.scenarios.add(session.agentId);
     entry.sessionCount += 1;

@@ -40,7 +40,7 @@ export async function pullSources(user: string): Promise<{ path: string; text: s
 }
 
 /** A studio session's organization: its knowledge base is read through the TrainerTwin web app. */
-export type KnowledgeBaseSource = { url: string; secret: string; orgId: string };
+export type KnowledgeBaseSource = { url: string; secret: string; orgId: string; userId: string };
 type Fetch = (url: string, init?: RequestInit) => Promise<Response>;
 
 /** Folder-safe title for a source path; the [docId] suffix keeps ids and item refs stable. */
@@ -53,7 +53,7 @@ const safeTitle = (title: string) => title.replace(/[\\/\[\]\x00-\x1f]/g, " ").r
 /** The org knowledge base's fingerprint (web /api/internal/knowledge-sources?versionOnly=1): changes when a document does. */
 export async function knowledgeBaseVersion(kb: KnowledgeBaseSource, fetcher: Fetch = fetch): Promise<string> {
   const response = await fetcher(new URL("/api/internal/knowledge-sources?versionOnly=1", kb.url).toString(), {
-    headers: { authorization: `Bearer ${kb.secret}`, "x-trainertwin-org-id": kb.orgId },
+    headers: { authorization: `Bearer ${kb.secret}`, "x-trainertwin-org-id": kb.orgId, "x-trainertwin-user-id": kb.userId },
   });
   const body = (await response.json().catch(() => null)) as { version?: string; error?: string } | null;
   if (!response.ok || typeof body?.version !== "string") throw new Error(`knowledge base unavailable: ${body?.error ?? `HTTP ${response.status}`}`);
@@ -62,7 +62,7 @@ export async function knowledgeBaseVersion(kb: KnowledgeBaseSource, fetcher: Fet
 
 export async function pullKnowledgeBase(kb: KnowledgeBaseSource, fetcher: Fetch = fetch): Promise<{ path: string; text: string }[]> {
   const response = await fetcher(new URL("/api/internal/knowledge-sources", kb.url).toString(), {
-    headers: { authorization: `Bearer ${kb.secret}`, "x-trainertwin-org-id": kb.orgId },
+    headers: { authorization: `Bearer ${kb.secret}`, "x-trainertwin-org-id": kb.orgId, "x-trainertwin-user-id": kb.userId },
   });
   const body = (await response.json().catch(() => null)) as { files?: { docId: string; title: string; url: string }[]; error?: string } | null;
   if (!response.ok || !Array.isArray(body?.files)) throw new Error(`knowledge base unavailable: ${body?.error ?? `HTTP ${response.status}`}`);

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { LowCreditsBadge } from "@/components/credits/low-credits-badge";
 import { UsersIcon } from "@/components/icons";
 import { LOW_LEARNER_MINUTES } from "@/lib/minutes-config";
@@ -38,7 +39,12 @@ export function RoleplayUsersPage({ users }: { users: RoleplayOutputs["users"]["
           <p className="border-t border-(--border) px-5 py-6 text-center text-sm text-muted-foreground">Nobody yet. Assign a role play to invite people.</p>
         ) : null}
         {users.map((user) => (
-          <div key={user.email} className={cn(columns, "border-t border-(--border) px-5 py-3.5 text-sm")}>
+          <Link
+            key={user.userId}
+            href={`/users/${encodeURIComponent(user.userId)}`}
+            aria-label={`Open profile for ${user.name}`}
+            className={cn(columns, "border-t border-(--border) px-5 py-3.5 text-sm outline-none transition-colors hover:bg-sidebar focus-visible:bg-sidebar focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring")}
+          >
             <span className="flex min-w-0 items-center gap-3 font-medium">
               <UserAvatar user={user} size="sm" />
               <span className="truncate">{user.name}</span>
@@ -56,7 +62,7 @@ export function RoleplayUsersPage({ users }: { users: RoleplayOutputs["users"]["
                 {user.creditsLeft < LOW_LEARNER_MINUTES ? <LowCreditsBadge /> : null}
               </span>
             )}
-          </div>
+          </Link>
         ))}
       </div>
     </PageContainer>

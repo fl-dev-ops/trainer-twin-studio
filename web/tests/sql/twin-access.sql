@@ -110,6 +110,7 @@ BEGIN
 END $$;
 
 -- A session never carries both assignment kinds (CHECK; triggers off to reach it).
+SET CONSTRAINTS ALL IMMEDIATE;
 ALTER TABLE "InterviewSession" DISABLE TRIGGER USER;
 DO $$ BEGIN
   BEGIN

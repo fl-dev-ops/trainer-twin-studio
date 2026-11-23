@@ -41,6 +41,11 @@ export function voicePrefix(orgId: string | null, voiceId: string) {
   return `${orgId ? orgPrefix(orgId) : `${basePrefix}/global`}/tts-voices/${voiceId}`;
 }
 
+/** Where the built-in sample voices live: `shared/` at the root of the bucket's app folder (the first segment of the base prefix, e.g. trainertwin-dev/shared even when the base is trainertwin-dev/kb). */
+export function sampleVoicePrefix(voiceId: string) {
+  return `${basePrefix.split("/")[0]}/shared/tts-voices/${voiceId}`;
+}
+
 /** Persona avatar reference files (image + video). Global presets (no org) live under `global/`. */
 export function avatarPrefix(orgId: string | null, avatarId: string) {
   return `${orgId ? orgPrefix(orgId) : `${basePrefix}/global`}/avatars/${avatarId}`;
@@ -50,11 +55,6 @@ export function recordingKey(orgId: string, sessionId: string) {
   return `${orgPrefix(orgId)}/recordings/${sessionId}.wav`;
 }
 
-export function fidelityReportKey(orgId: string, reportId = "latest") {
-  return reportId === "latest"
-    ? `${orgPrefix(orgId)}/fidelity/latest.json`
-    : `${orgPrefix(orgId)}/fidelity/runs/${reportId}.json`;
-}
 
 export function personaSourcePrefix(orgId: string, personaId: string, sourceId?: string) {
   return sourceId

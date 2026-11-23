@@ -2,441 +2,28 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
-import yaml from "js-yaml";
-import {
-  ArrowLeft,
-  History,
-  Plus,
-  RotateCcw,
-  Save,
-  Sparkles,
-  Trash2,
-} from "lucide-react";
-import { MessagesSquareIcon } from "@/components/icons/messages-square-icon";
-import { UserRoundIcon } from "@/components/icons/user-round-icon";
-import { PageContainer } from "@/components/page-container";
-import { RoleplayIcon } from "@/components/icons";
-import { PageHeader, SectionHeader } from "@/components/page-header";
-import { ScenarioCard, type ScenarioCardData } from "@/components/roleplay/scenario-card";
-import { TwinCard } from "@/components/roleplay/twin-card";
+import { useState } from "react";
+import { ArrowLeft, History, RotateCcw, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
-import { seedCopilot } from "@/lib/copilot-handoff";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PersonaBaselinePanel } from "@/components/persona-baseline-panel";
 import type { PersonaBaseline } from "@/lib/persona-baseline";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Field,
-  FieldDescription,
-  FieldError,
-  FieldGroup,
-  FieldLabel,
-} from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Spinner } from "@/components/ui/spinner";
 import { PersonaSourcePanel } from "@/components/persona-source-panel";
 import { useRefresh } from "@/lib/use-refresh";
 
-type ResourceType = "personas" | "agents";
-type Summary = ScenarioCardData & { version: number };
 type VersionInfo = { version: number; createdAt: string; label: string };
 
 const COPY = {
-  personas: {
-    single: "persona",
-    title: "Personas",
-    description: "Reusable behavior, communication style, and decision preferences.",
-  },
-  agents: {
-    single: "scenario",
-    title: "Scenarios",
-    description: "Bounded experiences that bring personas, voices, knowledge, and progression rules together.",
-  },
+  single: "persona",
+  title: "Personas",
+  description: "Reusable behavior, communication style, and decision preferences.",
 } as const;
 
-type VoiceOption = { id: string; name: string; status: string };
-type KnowledgeOption = { slug: string; name: string };
-type AgentField = "name" | "voiceId" | "knowledgeBase";
-
-function readAgentSettings(text: string, fallbackName: string) {
-  try {
-    const agent = (yaml.load(text) as Record<string, Record<string, unknown>> | null)?.agent;
-    return {
-      name: typeof agent?.name === "string" ? agent.name : fallbackName,
-      voiceId: typeof agent?.voiceId === "string" ? agent.voiceId : "",
-      knowledgeBase: typeof agent?.knowledgeBase === "string" ? agent.knowledgeBase : "",
-    };
-  } catch {
-    return { name: fallbackName, voiceId: "", knowledgeBase: "" };
-  }
-}
-
-function updateAgentText(text: string, field: AgentField, value: string) {
-  try {
-    const doc = yaml.load(text) as Record<string, Record<string, unknown>> | null;
-    if (!doc?.agent || typeof doc.agent !== "object") return null;
-    if ((field === "voiceId" || field === "knowledgeBase") && !value) delete doc.agent[field];
-    else doc.agent[field] = value;
-    return yaml.dump(doc, { lineWidth: -1 });
-  } catch {
-    return null;
-  }
-}
-
-function AgentSettingsPanel({
-  name,
-  voiceId,
-  voices,
-  knowledgeBase,
-  knowledgeBases,
-  disabled,
-  onChange,
-}: {
-  name: string;
-  voiceId: string;
-  voices: VoiceOption[];
-  knowledgeBase: string;
-  knowledgeBases: KnowledgeOption[];
-  disabled?: boolean;
-  onChange: (field: AgentField, value: string) => void;
-}) {
-  return (
-    <aside className="bg-muted/20 border-t p-4 sm:p-6 lg:overflow-y-auto lg:border-t-0 lg:border-l">
-      <h2 className="text-sm font-semibold">Scenario settings</h2>
-      <p className="text-muted-foreground mt-1 text-xs leading-5">
-        Configure how this scenario appears and speaks.
-      </p>
-      <FieldGroup className="mt-6">
-        <Field data-invalid={!name.trim()}>
-          <FieldLabel htmlFor="agent-name">Name</FieldLabel>
-          <Input
-            id="agent-name"
-            value={name}
-            disabled={disabled}
-            aria-invalid={!name.trim()}
-            required
-            onChange={(event) => onChange("name", event.target.value)}
-          />
-          <FieldDescription>Shown wherever this scenario is available.</FieldDescription>
-          {!name.trim() ? <FieldError>Enter a scenario name.</FieldError> : null}
-        </Field>
-        <Field>
-          <FieldLabel>Knowledge base</FieldLabel>
-          <Select
-            value={knowledgeBase || "none"}
-            disabled={disabled}
-            onValueChange={(value) =>
-              value !== null && onChange("knowledgeBase", value === "none" ? "" : value)
-            }
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Choose a knowledge base" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                <SelectLabel>Workspace knowledge</SelectLabel>
-                <SelectItem value="none">No attached knowledge</SelectItem>
-                {knowledgeBases.map((base) => (
-                  <SelectItem key={base.slug} value={base.slug}>
-                    {base.name}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-          <FieldDescription>
-            Only this collection is searched while the scenario runs. <Link href="/knowledge">Manage knowledge</Link>.
-          </FieldDescription>
-        </Field>
-        <Field>
-          <FieldLabel>Voice</FieldLabel>
-          <Select
-            value={voiceId || "none"}
-            disabled={disabled}
-            onValueChange={(value) =>
-              value !== null && onChange("voiceId", value === "none" ? "" : value)
-            }
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Choose a voice" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                <SelectLabel>Available voices</SelectLabel>
-                <SelectItem value="none">No assigned voice</SelectItem>
-                {voices.map((voice) => (
-                  <SelectItem key={voice.id} value={voice.id}>
-                    {voice.name}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-          <FieldDescription>
-            Used whenever this scenario speaks. <Link href="/voice">Manage voices</Link>.
-          </FieldDescription>
-        </Field>
-      </FieldGroup>
-    </aside>
-  );
-}
-
-function SpecCard({
-  type,
-  spec,
-}: {
-  type: ResourceType;
-  spec: Summary;
-}) {
-  const iconRef = useRef<{ startAnimation: () => void; stopAnimation: () => void }>(null);
-  const objective =
-    spec.objective ||
-    (type === "agents"
-      ? "A guided conversational scenario."
-      : "A reusable behavioral persona.");
-
-  return (
-    <Link
-      href={`/${type}/${encodeURIComponent(spec.slug)}`}
-      className="group block rounded-xl focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-      onMouseEnter={() => iconRef.current?.startAnimation()}
-      onMouseLeave={() => iconRef.current?.stopAnimation()}
-    >
-      <Card className="flex h-full min-h-48 flex-col" interactive>
-        <CardHeader>
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <span className="grid size-10 place-items-center rounded-lg bg-muted text-muted-foreground transition-colors group-hover:bg-primary/10 group-hover:text-primary">
-              {type === "personas" ? (
-                <UserRoundIcon ref={iconRef} size={20} />
-              ) : (
-                <MessagesSquareIcon ref={iconRef} size={20} />
-              )}
-            </span>
-            {type === "agents" && (spec.status === "draft" ? (
-              <Badge variant="outline">Draft r{spec.version}</Badge>
-            ) : spec.draftRevision ? (
-              <Badge variant="outline">Draft r{spec.draftRevision}</Badge>
-            ) : (
-              <Badge variant="secondary">Published</Badge>
-            ))}
-          </div>
-          <CardTitle className="text-base font-semibold">
-            {spec.name}
-          </CardTitle>
-          <CardDescription className="line-clamp-3 leading-5 text-xs sm:text-sm">
-            {objective}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="mt-auto">
-          <p className="truncate text-xs text-muted-foreground">
-            {type === "agents"
-              ? spec.status === "draft"
-                ? `Draft revision ${spec.version}`
-                : `Published version ${spec.version}`
-              : `Version ${spec.version}`}
-          </p>
-        </CardContent>
-      </Card>
-    </Link>
-  );
-}
-
-export function SpecResourceIndex({ type, specs }: { type: ResourceType; specs: Summary[] }) {
-  const router = useRouter();
-  const copy = COPY[type];
-  const [createOpen, setCreateOpen] = useState(false);
-  const [newScenarioName, setNewScenarioName] = useState("");
-  const [creating, setCreating] = useState(false);
-
-  async function createNew(agentName?: string) {
-    if (type === "agents") {
-      // Instruction-first: create routes to the editor; domain and specs are
-      // generated on the first save.
-      const name = agentName?.trim();
-      if (!name) return;
-      const base = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60);
-      if (!base || !/^[a-z0-9][a-z0-9._-]*$/i.test(base)) return toast.error("Could not derive a valid id from that name");
-      let slug = base;
-      for (let n = 2; ; n++) {
-        const [spec, draft] = await Promise.all([
-          fetch(`/api/spec/agents/${encodeURIComponent(slug)}`),
-          fetch(`/api/spec-drafts/${encodeURIComponent(slug)}/agent`),
-        ]);
-        if ([spec, draft].some((response) => !response.ok && response.status !== 404)) {
-          throw new Error("Could not check scenario availability");
-        }
-        if (!spec.ok && !draft.ok) break;
-        slug = `${base}-${n}`;
-      }
-      setCreateOpen(false);
-      router.push(`/agents/${encodeURIComponent(slug)}/edit?new=1`);
-      return;
-    }
-    const slug = prompt(`New ${copy.single} id (for example, my-${copy.single}):`);
-    if (!slug || !/^[a-z0-9][a-z0-9._-]*$/i.test(slug)) return;
-    const key = type === "personas" ? "persona" : "agent";
-    const text = `schema_version: 1\nkind: ${key}\n\n${key}:\n  id: ${slug}\n  name: ${slug}\n  version: 1\n`;
-    const response = await fetch(`/api/spec/${type}/${encodeURIComponent(slug)}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
-    });
-    const result = await response.json();
-    if (!response.ok) return toast.error(result.error ?? `Could not create ${copy.single}`);
-    toast.success(`Created ${slug}`);
-    router.push(`/${type}/${encodeURIComponent(slug)}`);
-  }
-
-  async function submitNewScenario() {
-    if (!newScenarioName.trim() || creating) return;
-    setCreating(true);
-    try {
-      await createNew(newScenarioName);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not create scenario");
-    } finally {
-      setCreating(false);
-    }
-  }
-
-  return (
-    <PageContainer>
-      <PageHeader
-        className={type === "agents" ? undefined : "border-b pb-6"}
-        icon={type === "agents" ? RoleplayIcon : undefined}
-        title={type === "agents" ? "Roleplay" : copy.title}
-        description={type === "agents" ? undefined : copy.description}
-        actions={
-          <>
-            <Button
-              onClick={() => type === "agents" ? setCreateOpen(true) : void createNew()}
-            >
-              <Plus data-icon="inline-start" /> {type === "agents" ? "Create new" : `New ${copy.single}`}
-            </Button>
-          </>
-        }
-      />
-
-      {type === "agents" ? (
-        <>
-          {specs.some((spec) => spec.twin) ? (
-            <section className="mt-6 flex flex-col gap-3">
-              <SectionHeader title="Twin for all use cases" note="Helps learners with real situations, the way you would" />
-              <div className="flex flex-col gap-4">
-                {specs.filter((spec) => spec.twin).map((spec) => (
-                  <TwinCard key={spec.slug} twin={spec} />
-                ))}
-              </div>
-            </section>
-          ) : null}
-          <section className="mt-6 flex flex-col gap-3">
-            <SectionHeader title="All scenarios" note="Role plays your learners practise, twin-based or not" />
-            {specs.some((spec) => !spec.twin) ? (
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                {specs.filter((spec) => !spec.twin).map((spec) => (
-                  <ScenarioCard key={spec.slug} scenario={spec} />
-                ))}
-              </div>
-            ) : (
-              <div className="rounded-2xl border bg-card px-5 py-16 text-center">
-                <p className="text-sm font-medium">No scenarios yet</p>
-                <p className="mt-1 text-sm text-muted-foreground">Create the first role play to get started.</p>
-              </div>
-            )}
-          </section>
-        </>
-      ) : (
-        <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {specs.map((spec) => (
-            <SpecCard key={spec.slug} type={type} spec={spec} />
-          ))}
-          {!specs.length && (
-            <div className="rounded-xl border px-5 py-16 text-center md:col-span-2 xl:col-span-3">
-              <p className="text-sm font-medium">No {copy.title.toLowerCase()} yet</p>
-              <p className="mt-1 text-sm text-muted-foreground">Create the first {copy.single} to get started.</p>
-            </div>
-          )}
-        </div>
-      )}
-
-      {type === "agents" && (
-        <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Create scenario</DialogTitle>
-              <DialogDescription>
-                Start with a name. You will describe the scenario on the next screen.
-              </DialogDescription>
-            </DialogHeader>
-            <form
-              className="space-y-5"
-              onSubmit={(event) => {
-                event.preventDefault();
-                void submitNewScenario();
-              }}
-            >
-              <Field>
-                <FieldLabel htmlFor="new-scenario-name">Name</FieldLabel>
-                <Input
-                  id="new-scenario-name"
-                  value={newScenarioName}
-                  maxLength={120}
-                  autoFocus
-                  onChange={(event) => setNewScenarioName(event.target.value)}
-                  placeholder="React mock interview"
-                />
-              </Field>
-              <DialogFooter>
-                <DialogClose render={<Button variant="outline" disabled={creating} />}>Cancel</DialogClose>
-                <Button type="submit" disabled={!newScenarioName.trim() || creating}>
-                  {creating ? <Spinner data-icon="inline-start" /> : <Plus data-icon="inline-start" />}
-                  Continue
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
-      )}
-    </PageContainer>
-  );
-}
-
+/** A persona's spec page: sources, recorded baseline and the advanced YAML. */
 export function SpecResourceEditor({
   type,
   slug,
@@ -448,7 +35,7 @@ export function SpecResourceEditor({
   sources = [],
   baseline = null,
 }: {
-  type: ResourceType;
+  type: "personas";
   slug: string;
   name: string;
   text: string;
@@ -467,31 +54,8 @@ export function SpecResourceEditor({
   const [saving, setSaving] = useState(false);
   const historical = shownVersion !== currentVersion;
   const basePath = `/${type}/${encodeURIComponent(slug)}`;
-  const editPath = type === "agents" ? `${basePath}/edit` : basePath;
-  const copy = COPY[type];
-
-  const [voices, setVoices] = useState<VoiceOption[]>([]);
-  const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeOption[]>([]);
-  useEffect(() => {
-    if (type !== "agents") return;
-    fetch("/api/tts/voices")
-      .then((r) => r.json())
-      .then((d) => setVoices((d.voices ?? []).filter((voice: { status?: string }) => voice.status === "ready")))
-      .catch(() => setVoices([]));
-    fetch("/api/knowledge")
-      .then((response) => response.json())
-      .then((data) => setKnowledgeBases(data.knowledgeBases ?? []))
-      .catch(() => setKnowledgeBases([]));
-  }, [type]);
-
-  const settings = readAgentSettings(text, name);
-
-  function setAgentField(field: AgentField, value: string) {
-    const next = updateAgentText(text, field, value);
-    if (!next) return toast.error("Fix the YAML before changing scenario settings");
-    setText(next);
-    setDirty(true);
-  }
+  const editPath = basePath;
+  const copy = COPY;
 
   async function save(value = text) {
     if (saving) return;
@@ -513,7 +77,10 @@ export function SpecResourceEditor({
   async function remove() {
     if (!confirm(`Delete ${slug}? Its version history will also be removed.`)) return;
     const response = await fetch(`/api/spec/${type}/${encodeURIComponent(slug)}`, { method: "DELETE" });
-    if (!response.ok) return toast.error(`Could not delete ${slug}`);
+    if (!response.ok) {
+      const result = await response.json().catch(() => null) as { error?: string } | null;
+      return toast.error(response.status === 409 && result?.error ? result.error : `Could not delete ${slug}`);
+    }
     toast.success(`Deleted ${slug}`);
     router.push(`/${type}`);
     refresh();
@@ -527,13 +94,13 @@ export function SpecResourceEditor({
   return (
     <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <header className="flex shrink-0 items-center gap-3 border-b px-4 py-3 sm:px-6">
-        <Button variant="ghost" size="icon-sm" render={<Link href={type === "agents" ? basePath : `/${type}`} />} nativeButton={false} aria-label={`Back to ${type === "agents" ? "preview" : copy.title}`}>
+        <Button variant="ghost" size="icon-sm" render={<Link href={`/${type}`} />} nativeButton={false} aria-label={`Back to ${copy.title}`}>
           <ArrowLeft />
         </Button>
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-2">
             <h1 className="truncate text-sm font-semibold">
-              {type === "agents" ? settings.name || name : name}
+              {name}
             </h1>
             <Badge variant={historical ? "outline" : "secondary"}>{historical ? `History v${shownVersion}` : `Current v${currentVersion}`}</Badge>
           </div>
@@ -541,21 +108,6 @@ export function SpecResourceEditor({
         </div>
 
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-          {type === "agents" && (
-            <Button
-              variant="outline"
-              size="sm"
-              aria-label="Refine this scenario with Copilot"
-              onClick={() => {
-                seedCopilot(
-                  `Help me revise "${slug}". Read it first, and update it on top of its current version.`,
-                );
-                router.push("/");
-              }}
-            >
-              <Sparkles data-icon="inline-start" /> Refine with Copilot
-            </Button>
-          )}
           <DropdownMenu>
           <DropdownMenuTrigger render={<Button variant="outline" size="sm" />}>
             <History data-icon="inline-start" /> History
@@ -586,11 +138,11 @@ export function SpecResourceEditor({
             <Button variant="outline" size="sm" onClick={remove}>
               <Trash2 data-icon="inline-start" /> Delete
             </Button>
-            {(type === "agents" || dirty) && (
+            {dirty && (
               <Button
                 size="sm"
                 onClick={() => save()}
-                disabled={!dirty || saving || (type === "agents" && !settings.name.trim())}
+                disabled={!dirty || saving}
               >
                 {saving ? <Spinner data-icon="inline-start" /> : <Save data-icon="inline-start" />}
                 Save
@@ -607,33 +159,7 @@ export function SpecResourceEditor({
         </div>
       )}
 
-      {type === "agents" ? (
-        <div className="min-h-0 flex-1 overflow-y-auto lg:grid lg:grid-cols-[minmax(0,7fr)_minmax(19.8rem,3fr)] lg:overflow-hidden">
-          <section className="flex min-h-[35.2rem] min-w-0 flex-col p-4 sm:p-6 lg:min-h-0 lg:overflow-hidden">
-            <div className="mb-3 shrink-0">
-              <h2 className="text-sm font-medium">Scenario definition</h2>
-              <p className="mt-1 text-xs text-muted-foreground">Advanced behavior, stages, and progression policy.</p>
-            </div>
-            <textarea
-              value={text}
-              readOnly={historical}
-              onChange={(event) => { setText(event.target.value); setDirty(true); }}
-              spellCheck={false}
-              aria-label={`${name} YAML specification`}
-              className="min-h-80 w-full flex-1 resize-none rounded-xl border bg-background p-4 font-mono text-xs leading-relaxed outline-none focus-visible:ring-3 focus-visible:ring-ring/50 read-only:bg-muted"
-            />
-          </section>
-          <AgentSettingsPanel
-            name={settings.name}
-            voiceId={settings.voiceId}
-            voices={voices}
-            knowledgeBase={settings.knowledgeBase}
-            knowledgeBases={knowledgeBases}
-            disabled={historical}
-            onChange={setAgentField}
-          />
-        </div>
-      ) : (
+      {(
         <Tabs defaultValue={initialAsideTab} className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <div className="shrink-0 border-b px-4 py-2 sm:px-6">
             <TabsList>

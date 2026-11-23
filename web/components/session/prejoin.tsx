@@ -65,6 +65,7 @@ export function PreJoin({
   contextLabel,
   sessionCode,
   minutesLeft = null,
+  learnerBrief,
   onJoin,
 }: {
   scenarioName: string;
@@ -84,6 +85,8 @@ export function PreJoin({
   sessionCode: string;
   /** The learner's practice minutes left (null: not metered); the call stops when they run out. */
   minutesLeft?: number | null;
+  /** The role play's learner brief, read before joining. */
+  learnerBrief?: string;
   onJoin: (settings: PreJoinMediaSettings, contextId?: string) => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -363,6 +366,12 @@ export function PreJoin({
             <p className="mb-8 text-center text-sm text-muted-foreground tabular-nums">
               {minutesLeft} min of practice left · the call ends when they run out
             </p>
+          ) : null}
+          {learnerBrief ? (
+            <section aria-label="Your brief" className="mx-auto mb-8 max-w-xl rounded-tt-md border border-(--border) bg-card p-5">
+              <p className="m-0 text-overline font-medium tracking-overline text-muted-foreground uppercase">Your brief</p>
+              <p className="m-0 mt-1.5 whitespace-pre-line text-sm leading-6 text-foreground">{learnerBrief}</p>
+            </section>
           ) : null}
 
         <div

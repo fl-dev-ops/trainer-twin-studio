@@ -45,7 +45,7 @@ test("public context isolates memory and documents while retaining pinned twin s
     assert.deepEqual(specs.documents, []);
     assert.deepEqual(specs.tools, NO_TOOLS);
     assert.equal(specs.learnerHistory, undefined);
-    assert.equal(specs.resume, null);
+    assert.deepEqual(specs.call, { screenShare: false, preUpload: false, duringUpload: false });
     assert.deepEqual(specs.knowledgeBases, []);
     const prompt = formatSessionSpec(specs);
     assert.ok(prompt.includes(JSON.stringify({ kind: "anonymous", name })));

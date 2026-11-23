@@ -20,6 +20,9 @@ dist/
 tsconfig.tsbuildinfo
 *.tsbuildinfo
 
+# local agent state
+.pi/
+
 # local data / build caches
 chroma-data/
 bench/results/

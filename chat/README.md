@@ -35,12 +35,14 @@ tool calls on the learner's screen.
 
 Accepts an OpenAI chat-completions request and maps it onto a durable eve session:
 
-- Address = `x-trainertwin-session-id` header (or the Bearer token). One address = one
-  durable session with the full history; callers send only the latest message.
+- Send `x-trainertwin-session-id` on every turn to keep the same durable session and
+  its history. Callers send only the latest message.
 - `role: "tool"` messages are forwarded as `[TOOL RESULT]` user messages.
 - `"session-start"` maps to `[OPENING]` (generate the session opening).
-- Auth: `Basic base64(orgId:COPILOT_SERVICE_SECRET)` (same as the eve channel), or
-  `Bearer <any>` + `x-trainertwin-org-id` header.
+- Auth: `Basic base64(orgId:COPILOT_SERVICE_SECRET)` (same as the eve channel).
+- A stream can fail after HTTP 200. An SSE `error` with code `chat_turn_failed`
+  means the reply did not complete, even if some text already arrived. `[DONE]`
+  marks the end of the stream, not success.
 - Scenario/persona grounding: `x-trainertwin-agent-slug` + `x-trainertwin-persona-slug`
   headers (case-sensitive slugs, e.g. `Vasanth`).
 
@@ -69,6 +71,8 @@ SECRET=...; ORG=...; curl -N -X POST http://localhost:2001/v1/chat/completions \
 ```bash
 bun install && bunx eve dev   # http://localhost:2001
 bunx tsc --noEmit             # typecheck
+bun test                      # deterministic checks, no running web app needed
+bun scripts/check-text-roleplay.ts  # live model, synthetic studio, no LiveKit
 ```
 
 ## What lives where
@@ -77,11 +81,10 @@ bunx tsc --noEmit             # typecheck
 |---|---|
 | `agent/agent.ts` | model wiring (OpenRouter) + session limits |
 | `agent/instrumentation.ts` | Eve OpenTelemetry export to Langfuse |
-| `prompts/base-instructions.md` (via `agent/instructions/session-spec.ts`) | trainer identity, move logic, persona fidelity, workspace conduct |
+| `prompts/platform.md`, `prompts/twin*.md` (via `agent/instructions/session-spec.ts`) | platform rules and the twin contract; role plays: `agent/lib/roleplay.ts` |
 | `agent/instructions/session-spec.ts` | dynamic per-session grounding from studio specs |
-| `agent/tools/search_style.ts` | trainer's real speech for the current move (studio) |
-| `agent/tools/search_knowledge.ts` | domain references for factual grounding (studio) |
-| `agent/tools/*.ts` (15 others) | transport-executed workspace tools (forwarded via bridge) |
+| `agent/tools/search_knowledge.ts` | domain references for factual grounding (studio; role plays with Knowledge search on) |
+| `agent/tools/*.ts` (others) | transport-executed workspace tools (forwarded via bridge) |
 | `agent/lib/brain.ts` | spec loading + session-spec formatting |
 | `agent/lib/studio.ts` | studio HTTP bridge (auth + org principal) |
 | `agent/lib/workspace-tools.ts` | factory for transport-executed tool declarations |

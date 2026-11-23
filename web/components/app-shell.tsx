@@ -48,8 +48,7 @@ export function AppShell({ children, hideRoleplay = false, orgs = [], orgId = nu
   return (
     <SidebarProvider
       className="h-svh min-h-0 overflow-hidden"
-      // Reference rail: 248px expanded / 72px collapsed.
-      style={{ "--sidebar-width-left": "17.05rem", "--sidebar-width-icon": "4.95rem" } as CSSProperties}
+      style={{ "--sidebar-width-left": "18rem" } as CSSProperties}
     >
       <AppSidebar hideRoleplay={hideRoleplay} orgs={orgs} orgId={orgId} />
       {/* Prototype: flat content panel, flush against the rail (reference .main). */}

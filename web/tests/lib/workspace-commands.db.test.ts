@@ -65,19 +65,6 @@ describe.skipIf(!localMinutesDb)("workspace commands: real database and browser-
     await expect(enqueue(row.id, "get_code_state", { action: "close_surface" })).rejects.toThrow("identity conflict");
   });
 
-  test("completed resume requests replay without re-consuming a used claim", async () => {
-    const row = await insert({ tool: "start_resume_question", status: "completed", result: { status: "highlighted" },
-      input: { action: "highlight_document", question: "What did you build?", payload: { claimId: "already-used", fileId: "doc1", exactHighlight: true } },
-    });
-    expect(await enqueue(row.id, "start_resume_question", { claimId: "already-used", question: "What did you build?" })).toEqual({ status: "completed", result: { status: "highlighted" } });
-  });
-
-  test("a normalized resume PDF command replays the original request", async () => {
-    const row = await insert({ status: "completed", result: { ok: true }, input: { action: "open_pdf", payload: { fileId: "resume1", resumeDocument: true } } });
-    expect(await enqueue(row.id, "surface", { action: "open_pdf", payload: { fileId: "resume1" } })).toMatchObject({ status: "completed" });
-    await expect(enqueue(row.id, "surface", { action: "open_pdf", payload: { fileId: "wrong-doc" } })).rejects.toThrow("identity conflict");
-  });
-
   test("a lost browser still gets a server-side call end, without faking a successful browser command", async () => {
     const closed = spyOn(lifecycle, "closeInterviewSession").mockResolvedValue(null);
     try {

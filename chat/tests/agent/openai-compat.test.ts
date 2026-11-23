@@ -22,7 +22,9 @@ test("refuses a completion without the service secret, even with an org header",
 });
 const privateText = "Private learner project and interview details";
 
-async function complete(budget?: string) {
+type Fact = { type: string; data: Record<string, unknown> };
+
+async function complete(budget?: string, facts?: Fact[]) {
   const logs: unknown[][] = [];
   const originalInfo = console.info;
   const originalFetch = globalThis.fetch;
@@ -31,8 +33,9 @@ async function complete(budget?: string) {
     assert.equal(payload.action, "authorizeRuntimeSession");
     return Response.json({ valid: true, anonymous: false });
   };
+  const originalWarn = console.warn;
   let sentAttributes: Record<string, string> | undefined;
-  console.info = (...args: unknown[]) => { logs.push(args); };
+  console.info = console.warn = (...args: unknown[]) => { logs.push(args); };
   try {
     // eve 0.91 (v27) facts for one turn: a bridged question call, its result, usage, then the delivery settles.
     const events = [
@@ -46,19 +49,20 @@ async function complete(budget?: string) {
     ];
     const request = new Request("http://localhost/v1/chat/completions", {
       method: "POST",
-      headers: { "content-type": "application/json", authorization: `Basic ${Buffer.from("org-test:test-secret").toString("base64")}`, "x-trainertwin-session-id": crypto.randomUUID(), ...(budget !== undefined ? { "x-thinking-budget": budget } : {}) },
+      headers: { "content-type": "application/json", authorization: `Basic ${Buffer.from("org-test:test-secret").toString("base64")}`, ...(!facts ? { "x-trainertwin-session-id": crypto.randomUUID() } : {}), ...(budget !== undefined ? { "x-thinking-budget": budget } : {}) },
       body: JSON.stringify({ messages: [{ role: "user", content: privateText }] }),
     });
     const response: Response = await handler(request, {
       from: () => ({ cancel: async () => {}, send: async (_message: string, { auth }: { auth: { attributes: Record<string, string> } }) => {
         sentAttributes = auth.attributes;
-        return { sessionId: "s1", deliveryId: "d1", stream: async function* () { yield* events; } };
+        return { sessionId: "s1", deliveryId: "d1", stream: async function* () { yield* facts ?? events; } };
       } }),
     });
     return { response, body: await response.text(), logs, sentAttributes };
   } finally {
     console.info = originalInfo;
     globalThis.fetch = originalFetch;
+    console.warn = originalWarn;
   }
 }
 
@@ -127,6 +131,57 @@ test("public completions require server validation on every turn and carry trust
     globalThis.fetch = originalFetch;
   }
 });
+
+for (const [name, outcome, result, spoken, expected] of [
+  ["client agrees", "agreed", "ended", "", "Okay, speak then. Bye for now."],
+  ["client declines", "declined", "ended", "", "Sorry, I have to go. Bye."],
+  ["client runs out of patience", "guard_ran_out", "ended", "", "Sorry, I have to go. Bye."],
+  ["authored practice completes", "completed", "ended", "", "Okay, thank you."],
+  ["the model gives its own goodbye", "completed", "ended", "Thanks for walking me through it.", "Thanks for walking me through it."],
+  ["the tool is disabled", "completed", "disabled", "", ""],
+  ["closing the session fails", "completed", "failed", "", ""],
+] as const) {
+  test(`end_call SSE: ${name}`, async () => {
+    const { response, body } = await complete(undefined, [
+      { type: "turn.started", data: { turnId: "t1" } },
+      { type: "call.requested", data: { callId: "hangup", capability: { kind: "tool", name: "end_call" }, input: { outcome } } },
+      { type: "call.settled", data: {
+        callId: "hangup", outcome: result === "failed" ? "failed" : "completed",
+        output: result === "disabled" ? { disabled: true } : { status: result, outcome },
+      } },
+      { type: "content.delta", data: { partId: "p1", kind: "text", delta: spoken || "  " } },
+      { type: "delivery.settled", data: { deliveryId: "d1", outcome: "completed" } },
+    ]);
+    assert.equal(response.status, 200);
+    const frames = body.trim().split("\n\n");
+    assert.equal(frames.pop(), "data: [DONE]");
+    const choices = frames.map((frame) => JSON.parse(frame.slice(6)).choices[0]);
+    assert.equal(choices.map((choice) => choice.delta.content ?? "").join(""), expected);
+    assert.equal(choices.at(-1)?.finish_reason, "stop");
+  });
+}
+
+for (const [name, facts] of [
+  ["provider fails before any reply", [
+    { type: "turn.settled", data: { turnId: "t1", outcome: "failed", error: { message: "private provider error" } } },
+    { type: "delivery.settled", data: { deliveryId: "d1", outcome: "handled" } },
+  ]],
+  ["stream breaks after partial text", [
+    { type: "content.delta", data: { partId: "p1", kind: "text", delta: "One moment" } },
+  ]],
+  ["turn produces only reasoning", [
+    { type: "content.delta", data: { partId: "p1", kind: "reasoning", delta: "private reasoning" } },
+    { type: "delivery.settled", data: { deliveryId: "d1", outcome: "handled" } },
+  ]],
+] satisfies [string, Fact[]][]) {
+  test(`a text client can retry when the ${name}`, async () => {
+    const { response, body } = await complete(undefined, [{ type: "turn.started", data: { turnId: "t1" } }, ...facts]);
+    assert.equal(response.status, 200);
+    assert.match(body, /"code":"chat_turn_failed"/);
+    assert.doesNotMatch(body, /"finish_reason":"stop"|private provider error|private reasoning/);
+    assert.ok(body.trimEnd().endsWith("data: [DONE]"));
+  });
+}
 
 test("rejects invalid thinking-budget headers without sending an Eve turn", async () => {
   for (const budget of ["invalid", "", "NaN", "Infinity", "1.5", "-2", "9007199254740992"]) {

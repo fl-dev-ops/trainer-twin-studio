@@ -24,7 +24,7 @@ from livekit.plugins import noise_cancellation
 import telemetry
 from recording import post_completion_webhook
 from screen_feedback import ScreenFeedbackRuntime
-from session import build_agent_session
+from session import DEFAULT_LLM_BASE_URL, build_agent_session
 from usage import UsageReporter
 
 load_dotenv(override=True)
@@ -289,7 +289,8 @@ async def entrypoint(ctx: agents.JobContext) -> None:
         logger.error("Runtime token missing from job metadata for session %s", session_id)
         return
     configured_llm_base = os.getenv("LLM_BASE_URL", "").strip()
-    llm_base = (configured_llm_base or f"{WEB_URL}/api/v1").rstrip("/")
+    # The chat service runs every session (session.py); the web's own runtime is gone.
+    llm_base = (configured_llm_base or DEFAULT_LLM_BASE_URL).rstrip("/")
     parsed_llm_base = urlsplit(llm_base)
     if anonymous and (
         not configured_llm_base
@@ -536,10 +537,8 @@ async def entrypoint(ctx: agents.JobContext) -> None:
         "x-trainertwin-runtime-token": runtime_token,
     }
     copilot_secret = os.getenv("COPILOT_SERVICE_SECRET", "").strip()
-    # Only the chat bridge wants Basic org:secret. The web runtime must keep the
-    # runtime-token Bearer (api_key) — per-request headers override the client's
-    # default Authorization, so Basic here would break web-runtime auth (401).
-    if copilot_secret and org_id and not parsed_llm_base.path.rstrip("/").endswith("/api/v1"):
+    # The chat bridge authenticates with Basic org:secret.
+    if copilot_secret and org_id:
         import base64
         b64_auth = base64.b64encode(f"{org_id}:{copilot_secret}".encode()).decode()
         extra_headers["Authorization"] = f"Basic {b64_auth}"

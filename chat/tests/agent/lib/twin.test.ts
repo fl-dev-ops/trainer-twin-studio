@@ -28,7 +28,7 @@ describe("twin", () => {
     assert.ok(prompt.includes("You are Olga's twin"));
     assert.ok(prompt.includes("- `off-plan`: Off-plan coaching"));
     assert.ok(prompt.includes("- `objections`: Objections"));
-    assert.ok(prompt.includes("Do not call session_plan"));
+    assert.ok(prompt.includes("There is no agenda, question quota or evidence grading."));
     assert.ok(prompt.includes("Do not call search_knowledge"));
     assert.ok(prompt.includes("comes to you with a real situation"));
     assert.ok(prompt.includes("the exact words to say to their client"));
@@ -46,8 +46,7 @@ describe("twin-creator skills", () => {
   };
 
   test("a single twin skill advises from its own topic: it is its only playbook, and never a scenario runner", async () => {
-    const { scenarioPlaybook, twinSessionPlaybooks } = await import("../../../agent/lib/brain");
-    assert.equal(scenarioPlaybook("TWIN", skillData), undefined);
+    const { twinSessionPlaybooks } = await import("../../../agent/lib/brain");
     const [own] = twinSessionPlaybooks({ slug: "olga-off-plan-waiting", kind: "TWIN", data: skillData }, undefined)!;
     assert.deepEqual(own, {
       slug: "olga-off-plan-waiting", id: "off-plan-waiting", name: "Buyers who wait for prices", description: "When a buyer says they will wait",

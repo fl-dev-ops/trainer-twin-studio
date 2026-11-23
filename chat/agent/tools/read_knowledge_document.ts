@@ -1,6 +1,6 @@
 import { defineDynamic, defineTool } from "eve/tools";
 import { z } from "zod";
-import { roleplayGuard } from "../lib/session-mode-lookup";
+import { knowledgeGuard } from "../lib/session-mode-lookup";
 import { callStudio, runtimeFromContext } from "../lib/studio";
 
 const tool = defineTool({
@@ -11,7 +11,7 @@ const tool = defineTool({
     page: z.number().int().min(1).optional().describe("Page to read (default 1)"),
   }),
   async execute(input, ctx) {
-    const disabled = await roleplayGuard(ctx);
+    const disabled = await knowledgeGuard(ctx);
     if (disabled) return disabled;
     return callStudio<Record<string, unknown>>({ action: "readKnowledgeDocument", documentId: input.documentId, page: input.page }, ctx);
   },

@@ -9,7 +9,6 @@ import { publicTwinSettings, publicVisitorNameSchema } from "@/lib/public-twin-s
 import { browserToken, initializeChatSession, runtimeToken, tokenHash } from "@/lib/interview-sessions";
 import { getAgentConfigForAgent } from "@/lib/specs";
 import { pinTwinSkills, TWIN_SOURCE } from "@/lib/twins";
-import { initRuntimeState } from "@/lib/runtime/runtime";
 import { connectVoice } from "@/lib/session-activation";
 import { closeInterviewSession } from "@/lib/session-lifecycle";
 import { closeLiveKitSession } from "@/lib/livekit";
@@ -97,7 +96,7 @@ export async function startPublicTwinSession(input: {
         agentSlug: agent.slug, agentVersion: agent.version,
         personaSlug: config.persona.slug, personaVersion: config.persona.version,
         compiledSnapshot: JSON.parse(JSON.stringify({ ...config, ...(skills ? { twinSkills: skills } : {}) })),
-        runtimeState: JSON.parse(JSON.stringify(initRuntimeState())),
+        runtimeState: {},
       },
     });
   }, { timeout: 15_000, maxWait: 15_000 });

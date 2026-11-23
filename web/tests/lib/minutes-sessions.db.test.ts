@@ -15,7 +15,7 @@ describe.skipIf(!localMinutesDb)("metered sessions (local database)", () => {
   let secret: string | undefined;
   beforeEach(async () => {
     f = minutesFixture();
-    await f.create();
+    await f.create({ voice: true });
     const deployment = await ensureDeployment(f.org.id, f.roleplay.id);
     await db.rolePlayAssignment.create({ data: { orgId: f.org.id, deploymentId: deployment.id, memberId: `${f.learner.id}-member`, shareCode: `${f.org.id}-roleplay`, assignedByUserId: f.trainer.id, expiresAt: new Date(0) } });
     secret = process.env.COPILOT_SERVICE_SECRET;

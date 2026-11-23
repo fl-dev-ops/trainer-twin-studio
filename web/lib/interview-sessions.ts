@@ -1,20 +1,21 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { db, withLock } from "@/lib/db";
-import { refusals } from "@/lib/errors";
+import { AppError, refusals } from "@/lib/errors";
 import { practicePerson, practiceRefusals, startAllowance } from "@/lib/practice";
 import { roleplayAccessByCode, roleplayRefusals } from "@/lib/roleplay-access";
 import { Prisma } from "@/lib/generated/prisma/client";
 import { ensureDeployment, type DeliveryMode } from "@/lib/deployments";
-import { initRuntimeState } from "@/lib/runtime/runtime";
 import { getAgentConfigForAgent } from "@/lib/specs";
 import { isStudioRole } from "@/lib/org";
 import { twinAccessByAgent, twinAccessByCode, twinRefusals, withinAccess } from "@/lib/twin-access";
-import { pinTwinSkills, TWIN_SOURCE } from "@/lib/twins";
+import { resolveTwinCatalog, TWIN_SOURCE } from "@/lib/twins";
 import { beforeSettings, usesBeforeSettings } from "@/lib/context-upload";
 import { minutesLock, writeSessionUsage } from "@/lib/minutes";
 import { scheduleOrgUsage } from "@/lib/schedule-org-credits";
 import { orgCredits } from "@/lib/org-credits";
 import { BEFORE_UPLOAD_REFUSED, uploadAllowed } from "@/lib/context-upload";
+import { resolveSnapshotSkill } from "@/lib/session-skills";
+import { assertVoiceObjectKeys, availableVoiceWhere, listAvailableVoices } from "@/lib/voices";
 
 const shareCode = () => randomBytes(18).toString("base64url");
 export const tokenHash = (token: string) => createHash("sha256").update(token).digest("hex");
@@ -146,6 +147,26 @@ async function sessionSnapshot(orgId: string, agentId: string, contextId?: strin
   return { agent, documents, docIds };
 }
 
+/** Resolve under the same transaction/row lock that persists the session's native FK. */
+export async function resolveVoiceForSession(orgId: string, configuredVoiceId: string | null, tx: Prisma.TransactionClient) {
+  const unavailable = () => new AppError(
+    "voice_unavailable",
+    configuredVoiceId
+      ? "The selected voice is not available. Choose a ready voice before starting a voice session."
+      : "No ready sample voice is available. Choose a voice before starting a voice session.",
+    400,
+  );
+  const voiceId = configuredVoiceId ?? (await listAvailableVoices(null, tx)).find((voice) => voice.kind === "sample")?.id;
+  if (!voiceId) throw unavailable();
+  await tx.$queryRaw`SELECT id FROM "Voice" WHERE id = ${voiceId} FOR SHARE`;
+  const voice = await tx.voice.findFirst({
+    where: { id: voiceId, AND: [availableVoiceWhere(orgId)] },
+  });
+  if (!voice) throw unavailable();
+  assertVoiceObjectKeys(voice);
+  return voice.id;
+}
+
 export async function initializeChatSession(input: { sessionId: string; orgId: string; mode: DeliveryMode }) {
   const secret = process.env.COPILOT_SERVICE_SECRET;
   if (!secret) throw new Error("COPILOT_SERVICE_SECRET is not configured");
@@ -186,6 +207,7 @@ export async function createAssignedSession(input: {
         contextId: primary?.id,
         contextName: primary?.name,
         status: "assigned",
+        skillPinsVersion: null,
       },
       select: { id: true, shareCode: true, agentSlug: true, status: true },
     });
@@ -282,11 +304,20 @@ export async function activateSession(input: {
   // All twin sessions go through LiveKit (also enforced by a DB trigger); the agent cuts metered calls at the deadline.
   if (twin && mode !== "voice") throw practiceRefusals.voiceOnly();
   let existing = await db.interviewSession.findUnique({ where: { activationKey } });
+  if (existing && (existing.orgId !== input.orgId || existing.userId !== input.userId || existing.agentId !== agentId)) {
+    throw refusals.notFound();
+  }
+  if (existing && existing.mode !== mode) {
+    throw new AppError("session_mode_mismatch", "Start a new session to change between chat and voice.", 409);
+  }
   if (existing && ["activating", "active"].includes(existing.status)) {
     // Resume (rule 18): under the credits lock, and only while it is still live (an ended call never comes back).
     const token = runtimeToken(existing.id);
     const { count } = await withLock([minutesLock(input.orgId)], (tx) =>
-      tx.interviewSession.updateMany({ where: { id: existing!.id, status: { in: ["activating", "active"] } }, data: { runtimeTokenHash: tokenHash(token) } }));
+      tx.interviewSession.updateMany({
+        where: { id: existing!.id, orgId: input.orgId, userId: input.userId, agentId, mode, status: { in: ["activating", "active"] } },
+        data: { runtimeTokenHash: tokenHash(token) },
+      }));
     if (count) {
       // A resumed call keeps its deadline: what's left of the minutes it started with.
       const secondsLeft = existing.allowedSeconds == null
@@ -309,17 +340,12 @@ export async function activateSession(input: {
     if (document.ownerUserId && document.ownerUserId !== input.userId) throw new Error("Context not found");
   }
   // Documents at the start only when the agent's before settings turn pre-session uploads on (twins, new role plays).
-  if (snapshot.docIds.length && usesBeforeSettings(snapshot.agent.data, snapshot.agent.kind) && !beforeSettings(snapshot.agent.data).preUpload) {
-    throw refusals.invalidInput(snapshot.agent.kind === "TWIN" ? "This twin does not take documents" : "This role play does not take documents");
+  if (!(snapshot.agent.primarySkillId || snapshot.agent.kind === "TWIN") && snapshot.docIds.length && usesBeforeSettings(snapshot.agent.data, snapshot.agent.kind) && !beforeSettings(snapshot.agent.data).preUpload) {
+    throw refusals.invalidInput("This role play does not take documents");
   }
   const primaryId = snapshot.docIds[0];
   const primary = snapshot.documents.find((document) => document.id === primaryId);
   const compiledConfig = await getAgentConfigForAgent(agentId, input.orgId, primaryId, snapshot.docIds);
-  // The all-skills twin keeps the skills (and versions) it started with for the whole session.
-  const twinSkills = snapshot.agent.kind === "TWIN" && (snapshot.agent.data as Record<string, unknown> | null)?.source === TWIN_SOURCE
-    ? await pinTwinSkills(input.orgId, snapshot.agent.personaId)
-    : undefined;
-  const sessionSnapshotData = compiledConfig || twinSkills ? { ...(compiledConfig ?? {}), ...(twinSkills ? { twinSkills } : {}) } : undefined;
   // The org's balance from Meteroid now, before the lock (no network calls while it's held).
   if (studio && mode === "voice") await orgCredits(input.orgId, { fresh: true });
 
@@ -336,7 +362,53 @@ export async function activateSession(input: {
       if (!link || link.status !== "active") throw twinRefusals.revoked();
       if (!withinAccess(link.accessUntil)) throw twinRefusals.ended();
     }
-    if (!(await tx.agent.findFirst({ where: { id: agentId, archivedAt: null }, select: { id: true } }))) throw refusals.notFound();
+    const eligibleAgent = await tx.agent.findFirst({
+      where: { id: agentId, orgId: input.orgId, archivedAt: null },
+      select: { id: true, kind: true, primarySkillId: true, data: true, personaId: true },
+    });
+    if (!eligibleAgent) throw refusals.notFound();
+    let coherentConfig = compiledConfig;
+    let managed = false;
+    let pins: { skillVersionId: string; alias: string; position: number }[] = [];
+    let twinSkills;
+    if (eligibleAgent.kind === "TWIN" || (eligibleAgent.kind === "ROLEPLAY" && eligibleAgent.primarySkillId)) {
+      // Non-key publication updates must proceed: pin insertion also locks Skill, which publishers update first.
+      await tx.$queryRaw`SELECT 1 FROM "Agent" WHERE "id" = ${agentId} AND "orgId" = ${input.orgId} FOR KEY SHARE`;
+      const reread = await getAgentConfigForAgent(agentId, input.orgId, primaryId, snapshot.docIds, tx);
+      if (!reread || reread.agent.archivedAt) throw refusals.notFound();
+      if (snapshot.docIds.length && usesBeforeSettings(reread.agent.data, reread.agent.kind) && !beforeSettings(reread.agent.data).preUpload) {
+        throw refusals.invalidInput(reread.agent.kind === "TWIN" ? "This twin does not take documents" : "This role play does not take documents");
+      }
+      coherentConfig = reread;
+      if (reread.agent.kind === "TWIN" && jsonRecord(reread.agent.data).source === TWIN_SOURCE) {
+        const selected = await resolveTwinCatalog(input.orgId, reread.persona.id, tx);
+        managed = true;
+        pins = selected.pins;
+        twinSkills = selected.catalog;
+      } else if (reread.agent.primarySkillId && (reread.agent.kind === "ROLEPLAY" || reread.agent.kind === "TWIN")) {
+        const version = await resolveSnapshotSkill(input.orgId, reread.agent, reread.agent.kind, tx);
+        managed = true;
+        pins = [{ skillVersionId: version.id, alias: reread.agent.slug, position: 0 }];
+      }
+    }
+    let resolvedVoiceId: string | null = null;
+    if (mode === "voice") {
+      const agentVoiceId = jsonRecord(coherentConfig?.agent.data ?? eligibleAgent.data).voiceId;
+      if (agentVoiceId != null && agentVoiceId !== "" && typeof agentVoiceId !== "string") {
+        throw refusals.invalidInput("The selected voice is invalid. Choose a ready voice before starting a voice session.");
+      }
+      const persona = await tx.persona.findUnique({
+        where: { id: coherentConfig?.persona.id ?? eligibleAgent.personaId },
+        select: { voiceId: true },
+      });
+      if (!persona) throw refusals.notFound();
+      resolvedVoiceId = await resolveVoiceForSession(
+        input.orgId,
+        typeof agentVoiceId === "string" && agentVoiceId ? agentVoiceId : persona.voiceId,
+        tx,
+      );
+    }
+    const storedSnapshot = coherentConfig ? { ...coherentConfig, ...(twinSkills ? { twinSkills } : {}) } : undefined;
     // One live call per person (rule 5): their others end now, charged, before the balance is counted.
     const live = await tx.interviewSession.findMany({
       where: { orgId: input.orgId, userId: input.userId, status: { in: ["activating", "active"] } },
@@ -358,15 +430,18 @@ export async function activateSession(input: {
         shareCode: shareCode(),
         activationKey,
         mode,
-        personaSlug: snapshot.agent.persona.slug,
-        personaVersion: snapshot.agent.persona.version,
-        agentSlug: snapshot.agent.slug,
-        agentVersion: snapshot.agent.version,
+        resolvedVoiceId,
+        personaSlug: coherentConfig?.persona.slug ?? snapshot.agent.persona.slug,
+        personaVersion: coherentConfig?.persona.version ?? snapshot.agent.persona.version,
+        agentSlug: coherentConfig?.agent.slug ?? snapshot.agent.slug,
+        agentVersion: coherentConfig?.agent.version ?? snapshot.agent.version,
         contextId: primary?.id,
         contextName: primary?.name,
         status: "activating",
-        compiledSnapshot: sessionSnapshotData ? JSON.parse(JSON.stringify(sessionSnapshotData)) : undefined,
-        runtimeState: JSON.parse(JSON.stringify(initRuntimeState())),
+        compiledSnapshot: storedSnapshot ? JSON.parse(JSON.stringify(storedSnapshot)) : undefined,
+        skillPinsVersion: managed ? 1 : null,
+        ...(pins.length ? { skillPins: { create: pins } } : {}),
+        runtimeState: {},
         lastCompletion: Prisma.DbNull,
       },
     });

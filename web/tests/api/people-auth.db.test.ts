@@ -221,6 +221,9 @@ describe.skipIf(!localMinutesDb)("people sign in with email codes, never passwor
     expect(await db.interviewSession.findUniqueOrThrow({ where: { id: pastRoleplay.id } })).toEqual({ ...pastRoleplay, assignmentId: isLearner ? roleplay.id : null });
     expect(await listTwinAssignments(f.org.id, f.twin.id)).toHaveLength(isLearner ? 1 : 0);
     const caller = roleplayRouter.createCaller({ user: { ...f.trainer, orgId: f.org.id, orgSlug: f.org.slug, role: "admin" } });
+    // The library lists skill role plays only (old interviews are converted first, plans/agents-to-roleplay.md).
+    const rp = await db.agent.findUniqueOrThrow({ where: { id: f.roleplay.id } });
+    await db.agent.update({ where: { id: rp.id }, data: { data: { ...(rp.data as object), source: "scenario-ingest" } } });
     expect((await caller.scenarios.list()).find((a) => a.slug === f.roleplay.slug)?.learners).toHaveLength(isLearner ? 1 : 0);
     expect((await listSpecSummaries("agents", f.org.id)).find((a) => a.slug === f.roleplay.slug)?.learners).toHaveLength(isLearner ? 1 : 0);
   });

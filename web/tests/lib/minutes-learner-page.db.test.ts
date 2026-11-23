@@ -19,7 +19,7 @@ describe.skipIf(!localMinutesDb)("learner pages with minutes (local database)", 
   let identity: ReturnType<typeof spyOn<typeof sessionUser, "resolveSessionUser">>;
   let code: string;
   beforeEach(async () => {
-    f = minutesFixture(); await f.create();
+    f = minutesFixture(); await f.create({ voice: true });
     headers = spyOn(nextHeaders, "headers").mockResolvedValue(new Headers({ host: `${f.org.slug}.example.com` }));
     identity = spyOn(sessionUser, "resolveSessionUser").mockResolvedValue({ org: { ...f.org, accentColor: null }, user: f.learner, signInUrl: "/sign-in" });
     const deployment = await ensureDeployment(f.org.id, f.roleplay.id);

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { PersonaError } from "@/lib/personas";
 import { studioOrRefusal } from "@/lib/org";
 import {
   deleteSpec,
@@ -64,7 +65,9 @@ export async function DELETE(_req: Request, { params }: Params) {
   try {
     await deleteSpec(type, id.join("/"), org.id);
     return NextResponse.json({ ok: true });
-  } catch {
+  } catch (error) {
+    // A persona in use is refused with its reason; anything else stays a plain not-found.
+    if (error instanceof PersonaError && error.status === 409) return NextResponse.json({ error: error.message }, { status: 409 });
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 }

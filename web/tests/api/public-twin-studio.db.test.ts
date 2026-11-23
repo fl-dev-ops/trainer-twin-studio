@@ -65,7 +65,6 @@ describe.skipIf(!localMinutesDb)("public twin studio service boundary (real data
     { action: "searchKnowledge", knowledgeBase: "private", query: "secret", limit: 1 },
     { action: "resolveUpload", sessionId: "placeholder", documentId: "private-doc" },
     { action: "getWorkspaceState", sessionId: "placeholder" },
-    { action: "listResumeClaims", sessionId: "placeholder" },
     { action: "enqueueWorkspaceCommand", sessionId: "placeholder", callId: "command", tool: "read_file" },
   ])("anonymous allowlist rejects $action", async (body) => {
     expect((await request({ ...body, ...("sessionId" in body ? { sessionId: call.id } : {}) })).status).toBe(403);

@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { getAgentConfigForAgent } from "@/lib/specs";
+import { ensureSessionSnapshot } from "@/lib/session-snapshot";
 import { MainCollectionService } from "@/lib/main-collection";
 import { redactLearnerNames } from "@/lib/persona-voice";
 import { getCachedSessionContext } from "@/lib/session-context";
@@ -48,14 +48,7 @@ export async function warmChatOpening(sessionId: string, orgId: string): Promise
     // 1. Pin the compiled snapshot (also used by getSessionContext and the old voice runtime).
     let snapshot = session.compiledSnapshot as Record<string, unknown> | null;
     if (!snapshot) {
-      snapshot = (await getAgentConfigForAgent(session.agentSlug, orgId, session.contextId ?? undefined)) as
-        | Record<string, unknown>
-        | null;
-      if (!snapshot) return;
-      await db.interviewSession.update({
-        where: { id: sessionId },
-        data: { compiledSnapshot: JSON.parse(JSON.stringify(snapshot)) },
-      });
+      snapshot = await ensureSessionSnapshot(session.id, orgId);
     }
 
     const personaId = (snapshot as { persona?: { id?: string } }).persona?.id;

@@ -4,7 +4,6 @@ import { db } from "@/lib/db";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import { prepareContextDocument, type DocumentManifest, type PreparedContextDocument } from "@/lib/context-document-service";
 import { uploadAllowed, uploadProblem, type UploadWhen } from "@/lib/context-upload";
-import { scheduleResumeClaimExtraction } from "@/lib/resume-claims";
 import { uploadBytes } from "@/lib/upload-bytes";
 import { deleteObject, getObjectBytes, orgPrefix, presignedGetUrl, presignedPutUrl, putObject } from "@/lib/s3";
 
@@ -118,7 +117,6 @@ export async function completeUpload(input: { id: string; orgId: string; userId:
       data: { ...(await finalFields(doc.id, key, prepared, bytes)), status: "ready" },
       select: { id: true, name: true, kind: true, size: true, manifest: true },
     });
-    scheduleResumeClaimExtraction(saved.id, saved.kind);
     return saved;
   } catch (error) {
     await deleteObject(key).catch(() => {});
@@ -148,7 +146,6 @@ export async function saveUploadToS3(input: { orgId: string; userId: string; nam
     },
     select: { id: true, name: true, size: true, kind: true, manifest: true, createdAt: true },
   });
-  scheduleResumeClaimExtraction(id, prepared.kind);
   return { ...doc, manifest: doc.manifest as unknown as DocumentManifest };
 }
 

@@ -31,6 +31,7 @@ import { rawScore, type CalibrationScore } from "@/lib/twin/calibration-score";
 import { sessionEvidence } from "@/lib/twin/evidence";
 import { updateTwin } from "@/lib/twin/manage";
 import { attachRatings, durationSeconds, firstExchange, lastSevenDays, likeRateByWeek, mostAsked, titleFrom, transcriptTurns } from "@/lib/twin/stats";
+import { hydrateAgentSkill } from "@/lib/skill-history";
 
 /**
  * Twin-scoped tRPC surface, mounted at /api/twin. Studio members (admin, team) only; every query is
@@ -245,8 +246,8 @@ const agentsRouter = t.router({
   get: studioProcedure.input(slugInput).query(({ ctx, input }) => twinCall(async () => {
     const orgId = ctx.user.orgId;
     const found = await findTwinAgent(orgId, input.slug);
-    const [agent, assignments, sessions, calibrations, skillAgents] = await Promise.all([
-      db.agent.findUniqueOrThrow({ where: { id: found.id }, select: { data: true, version: true } }),
+    const [savedAgent, assignments, sessions, calibrations, skillAgents] = await Promise.all([
+      db.agent.findUniqueOrThrow({ where: { id: found.id }, select: { id: true, slug: true, primarySkillId: true, data: true, version: true } }),
       listTwinAssignments(orgId, found.id),
       db.interviewSession.findMany({
         where: learnerSessions(orgId, found.id),
@@ -262,6 +263,7 @@ const agentsRouter = t.router({
         select: { id: true, slug: true, name: true, version: true },
       }),
     ]);
+    const agent = savedAgent.primarySkillId ? await hydrateAgentSkill(orgId, savedAgent) : savedAgent;
     const data = asRecord(agent.data);
     const allSkills = data.source === TWIN_SOURCE;
     const active = assignments.filter((row) => row.status === "active");
@@ -481,15 +483,17 @@ async function sessionReportState(orgId: string, id: string) {
 const laterEnd = (a: Date | null, b: Date | null) => (a && b ? (a > b ? a : b) : null);
 
 const usersRouter = t.router({
-  /** The org's learners with twin access: how many twins, and their minutes (given and used, shared by twins and role plays). */
+  /** The org's learners with twin access: twin and session counts, and their shared minutes (given and used). */
   list: studioProcedure.query(async ({ ctx }) => {
-    const [learners, rows] = await Promise.all([
+    const [learners, rows, sessions] = await Promise.all([
       orgPeople(ctx.user.orgId, { roles: [LEARNER] }),
       db.twinAssignment.findMany({ where: { orgId: ctx.user.orgId, status: "active" }, select: { userId: true, accessUntil: true } }),
+      db.interviewSession.groupBy({ by: ["userId"], where: learnerSessions(ctx.user.orgId), _count: true }),
     ]);
+    const sessionsByUser = new Map(sessions.map((row) => [row.userId, row._count]));
     const minutes = await learnerMinutes(ctx.user.orgId, learners.map((person) => person.email));
     // until: when this person's access ends; the latest of their twins, null when any twin has no end date.
-    const people = new Map<string, { email: string; name: string; image: string | null; agents: number; minutes: number; used: number; until: Date | null }>();
+    const people = new Map<string, { email: string; name: string; image: string | null; agents: number; sessions: number; minutes: number; used: number; until: Date | null }>();
     const learnerById = new Map(learners.map((person) => [person.userId, person]));
     for (const row of rows) {
       const learner = learnerById.get(row.userId);
@@ -498,15 +502,15 @@ const usersRouter = t.router({
       const own = minutes.get(learner.email);
       const person = known
         ?? {
-          email: learner.email, name: learner.name, image: learner.image, agents: 0,
+          email: learner.email, name: learner.name, image: learner.image, agents: 0, sessions: sessionsByUser.get(row.userId) ?? 0,
           minutes: Math.floor((own?.grantedSeconds ?? 0) / 60), used: Math.round((own?.usedSeconds ?? 0) / 60), until: row.accessUntil,
         };
       if (known) person.until = laterEnd(person.until, row.accessUntil);
       person.agents += 1;
       people.set(row.userId, person);
     }
-    return [...people.values()]
-      .map((person) => ({ ...person, until: person.until?.toISOString() ?? null }))
+    return [...people.entries()]
+      .map(([userId, person]) => ({ ...person, userId, until: person.until?.toISOString() ?? null }))
       .sort((a, b) => a.name.localeCompare(b.name));
   }),
 

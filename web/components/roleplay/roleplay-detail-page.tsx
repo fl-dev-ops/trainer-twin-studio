@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, Pencil } from "lucide-react";
+import { ArrowLeft, Pencil, Play } from "lucide-react";
+import { ScriptView } from "@/components/roleplay/roleplay-brief-edit-page";
 import { SessionTime } from "@/components/sessions/session-time";
 import { RoleplayMenu } from "@/components/roleplay/roleplay-library-page";
 import { RoleplaySessionItem } from "@/components/roleplay/roleplay-session-item";
@@ -33,6 +34,13 @@ export function RoleplayDetailPage({ roleplay }: { roleplay: Detail }) {
           <span>Back</span>
         </Link>
         <div className="flex items-center gap-3">
+          <Link
+            href={`/talk?agent=${encodeURIComponent(roleplay.slug)}`}
+            className="inline-flex h-8 items-center gap-2 rounded-full border border-(--border) px-4 text-body-s font-medium transition-colors hover:bg-(--sidebar)"
+          >
+            <Play className="size-3.5" />
+            <span>Try it</span>
+          </Link>
           <Link
             href={`/roleplay/${roleplay.slug}/edit`}
             className="inline-flex h-8 items-center gap-2 rounded-full bg-(--brand) px-4 text-body-s font-medium text-white transition-colors hover:bg-brand-hover"
@@ -86,10 +94,13 @@ export function RoleplayDetailPage({ roleplay }: { roleplay: Detail }) {
                 {stats.averageScore ?? "—"} {stats.averageScore !== null ? <span className="text-sm font-normal opacity-70">/ 100</span> : null}
               </p>
             </div>
-            <div className="rounded-tt-md bg-info-subtle p-4 text-info">
-              <p className="text-overline font-medium tracking-overline uppercase">Difficulty</p>
-              <p className="mt-2 text-2xl font-semibold capitalize">{roleplay.difficulty ?? "—"}</p>
-            </div>
+            {/* Role plays the copilot wrote have no difficulty setting. */}
+            {roleplay.difficulty ? (
+              <div className="rounded-tt-md bg-info-subtle p-4 text-info">
+                <p className="text-overline font-medium tracking-overline uppercase">Difficulty</p>
+                <p className="mt-2 text-2xl font-semibold capitalize">{roleplay.difficulty}</p>
+              </div>
+            ) : null}
             <div className="rounded-tt-md bg-(--sidebar) p-4 text-(--foreground)">
               <p className="text-overline font-medium tracking-overline text-muted-foreground uppercase">Avg session length</p>
               <p className="mt-2 text-2xl font-semibold tabular-nums">
@@ -98,6 +109,19 @@ export function RoleplayDetailPage({ roleplay }: { roleplay: Detail }) {
             </div>
           </div>
         </article>
+
+        {roleplay.script ? (
+          <article className={cn(card, "md:col-span-2")}>
+            <h2 className="m-0 mb-4 text-title-s font-semibold tracking-title">Script</h2>
+            {roleplay.description ? (
+              <div className="mb-6 rounded-tt-md bg-(--sidebar) p-4">
+                <p className={kicker}>Learner brief</p>
+                <p className="m-0 mt-1 whitespace-pre-line text-sm leading-6">{roleplay.description}</p>
+              </div>
+            ) : null}
+            <ScriptView script={roleplay.script} />
+          </article>
+        ) : null}
 
         <article className={cn(card, "md:col-span-2")}>
           <div className="flex items-center justify-between gap-4">

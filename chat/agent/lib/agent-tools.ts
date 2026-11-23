@@ -2,35 +2,32 @@ import { runtimeFromContext, studioFetch } from "./studio";
 
 /**
  * Which workspace surfaces an agent (role play or twin) may use: Agent.data.tools, saved from the role play's Tools tab.
- * Missing or partial switches are off, except legacy interviews with no tools field retain their original workspace.
- * The web resolves the same policy (web/lib/agent-tools.ts).
+ * Missing or partial settings are off. The web parses the same shape (web/lib/agent-tools.ts).
  */
-export type ToolSettings = { canvas: boolean; codeEditor: boolean; preview: boolean; choice: boolean };
-export const NO_TOOLS: ToolSettings = { canvas: false, codeEditor: false, preview: false, choice: false };
+export type ToolSettings = {
+  canvas: boolean; codeEditor: boolean; preview: boolean; choice: boolean;
+  /** Knowledge-base search (search_knowledge, read_knowledge_document) in a role play. Not a screen surface. */
+  knowledge?: boolean;
+};
+export const NO_TOOLS: ToolSettings = { canvas: false, codeEditor: false, preview: false, choice: false, knowledge: false };
 
-const asRecord = (value: unknown): Record<string, unknown> =>
-  value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+const recordOrNull = (value: unknown): Record<string, unknown> | null =>
+  value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+const asRecord = (value: unknown) => recordOrNull(value) ?? {};
 
-export function toolSettings(agentData: unknown, kind?: string | null): ToolSettings {
-  const data = asRecord(agentData);
-  const interview = asRecord(asRecord(data.config).interview);
-  // Older interviews predate the Tools tab; do not apply its opt-in default to them.
-  if (kind === "ROLEPLAY" && data.tools === undefined && data.skill === undefined &&
-      (interview.type === "technical" || interview.type === "resume")) {
-    return { canvas: true, codeEditor: true, preview: true, choice: true };
-  }
-  const tools = asRecord(data.tools);
+export function toolSettings(agentData: unknown): ToolSettings {
+  const tools = asRecord(asRecord(agentData).tools);
   return {
     canvas: tools.canvas === true,
     codeEditor: tools.codeEditor === true,
     preview: tools.preview === true,
     choice: tools.choice === true,
+    knowledge: tools.knowledge === true,
   };
 }
 
 /** Which switch each workspace tool belongs to. `surface` and `workspace_request` are checked by action / method. */
 const TOOL_SWITCH: Record<string, keyof ToolSettings> = {
-  start_resume_question: "preview",
   get_presentation_state: "preview",
   set_presentation_slide: "preview",
   next_presentation_slide: "preview",
@@ -116,8 +113,8 @@ export function sessionToolSettings(ctx: SessionCtx): Promise<ToolSettings> {
   const key = `${orgId}:${sessionId ?? ""}:${agentSlug ?? ""}`;
   const cached = cache.get(key);
   if (cached && Date.now() - cached.at < CACHE_TTL_MS) return cached.value;
-  const value = studioFetch<{ agent?: { kind?: string | null; data?: unknown } | null }>(orgId, { action: "getSessionContext", sessionId, agentSlug })
-    .then((result) => toolSettings(result.agent?.data, result.agent?.kind))
+  const value = studioFetch<{ agent?: { data?: unknown } | null }>(orgId, { action: "getSessionContext", sessionId, agentSlug })
+    .then((result) => toolSettings(result.agent?.data))
     .catch(() => {
       cache.delete(key);
       return NO_TOOLS;
@@ -136,7 +133,7 @@ export function formatWorkspaceBlock(tools: ToolSettings, { client }: { client: 
   const who = client ? "Stay in character as the client while you use it" : "Keep talking to the learner while you use it";
   const lines = [
     tools.canvas &&
-      "- Whiteboard: open it with surface({ action: \"open_whiteboard\" }) when a quick sketch helps (numbers, a comparison, a plan). Use read_canvas_scene when the learner says they drew or changed something, and highlight_whiteboard to point at one label they wrote.",
+      "- Whiteboard: open it with surface({ action: \"open_whiteboard\", payload: { question } }), where question is the problem they are drawing for, when a quick sketch helps (numbers, a comparison, a plan). Use read_canvas_scene when the learner says they drew or changed something, and highlight_whiteboard to point at one label they wrote.",
     tools.codeEditor &&
       "- Code editor: open it with surface({ action: \"open_code_editor\", payload: { questionId, question, language, starterCode, readOnly } }) when the conversation calls for code. Read what they wrote with get_code_state or read_code_range before reacting, and run it with run_code.",
     tools.preview &&
@@ -147,4 +144,38 @@ export function formatWorkspaceBlock(tools: ToolSettings, { client }: { client: 
   return `# Workspace for this call
 You can show these on the learner's screen. Open one only when it genuinely helps the conversation or the learner asks for it, never as a gimmick. ${who}, and never describe it as a tool or a system. Close it with surface({ action: "close_surface" }) when you move on.
 ${lines.join("\n")}`;
+}
+
+/**
+ * The call settings saved on the role play's (or twin's) Settings tab, Agent.data.before (older twins:
+ * data.twinSettings). The browser enforces them (web/lib/context-upload.ts); the prompt states them so the AI never
+ * asks for something the call can't do (a screen share that is off, a file nobody can send).
+ */
+export type CallSettings = { screenShare: boolean; preUpload: boolean; duringUpload: boolean };
+export const NO_CALL_SETTINGS: CallSettings = { screenShare: false, preUpload: false, duringUpload: false };
+
+export function callSettings(agentData: unknown): CallSettings {
+  const data = asRecord(agentData);
+  const before = recordOrNull(data.before) ?? asRecord(data.twinSettings);
+  return { screenShare: before.preScreenshare === true, preUpload: before.preUpload === true, duringUpload: before.duringUpload === true };
+}
+
+/** Whether documents can reach this call (attached before it, or during it). */
+export const documentsOn = (call: CallSettings, attached = 0) => call.preUpload || call.duringUpload || attached > 0;
+
+/** The prompt's lines for the screen, documents and knowledge search of this call: what is on, and what is not. */
+export function formatCallBlock(call: CallSettings, tools: ToolSettings, { attached = 0, knowledgeSwitch = true }: { attached?: number; knowledgeSwitch?: boolean } = {}): string {
+  const lines = [
+    call.screenShare
+      ? "- Screen: the learner shares their whole screen. You see it only through [SCREEN OBSERVER CONTEXT] notes; never claim to see more than they describe."
+      : "- Screen: screen sharing is off for this call. Never ask the learner to share or show their screen.",
+    documentsOn(call, attached)
+      ? `- Documents: ${attached > 0 ? "the ones listed under ATTACHED ARTIFACTS" : "none attached yet"}${call.duringUpload ? "; the learner may also attach one during the call (it arrives as [ATTACHED <id>])" : ""}. Read one with read_document before you refer to it; quote only what it says.${call.duringUpload ? "" : " Never ask the learner to attach a file during the call."}`
+      : "- Documents: the learner cannot attach files in this call. Never ask them to upload or send a document.",
+    knowledgeSwitch &&
+      (tools.knowledge
+        ? "- Knowledge search: on. Call search_knowledge before you judge a technical answer as right, wrong or incomplete, and read_knowledge_document to read a result in full. If nothing relevant comes back, ask a neutral question instead of judging."
+        : "- Knowledge search: off."),
+  ].filter(Boolean);
+  return `# This call's settings\n${lines.join("\n")}`;
 }

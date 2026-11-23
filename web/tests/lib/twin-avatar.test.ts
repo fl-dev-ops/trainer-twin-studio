@@ -14,6 +14,7 @@ let writes: { op: string; args: Row }[];
 let puts: string[];
 let deleted: string[];
 let nextId = 0;
+let beforeAgentLock: (() => void) | null = null;
 
 const personaView = () => ({
   ...persona,
@@ -21,10 +22,8 @@ const personaView = () => ({
   voice: persona.voiceId ? { name: "Olga voice" } : null,
 });
 
-mock.module("@/lib/db", () => ({
-  withLock: async () => { throw new Error("Unexpected locked write in read-only fixture"); },
-  isUniqueViolation: (error: unknown) => typeof error === "object" && error !== null && "code" in error && error.code === "P2002",
-  db: {
+const fakeDb = {
+    $queryRaw: async () => [],
     agent: {
       findFirst: async () => ({ persona: personaView() }),
       findMany: async () => twins,
@@ -36,6 +35,7 @@ mock.module("@/lib/db", () => ({
       findUniqueOrThrow: async () => ({ avatarId: persona.avatarId }),
       updateMany: async ({ where, data }: { where: Row; data: Row }) => {
         if (where.avatarId === null && persona.avatarId !== null) return { count: 0 };
+        if ("voiceId" in where && where.voiceId !== persona.voiceId) return { count: 0 };
         Object.assign(persona, data);
         return { count: 1 };
       },
@@ -47,16 +47,22 @@ mock.module("@/lib/db", () => ({
       delete: async ({ where }: { where: { id: string } }) => avatars.delete(where.id),
     },
     voice: {
-      findFirst: async ({ where }: { where: { id: string; orgId: string } }) => {
-        const voice = voices.find((v) => v.id === where.id && v.orgId === where.orgId && v.status === "ready");
-        if (!voice) return null;
-        return voice.ownedBy && voice.ownedBy !== persona.id ? null : { id: voice.id };
-      },
+      findFirst: async ({ where }: { where: { id: string; OR: { orgId: string | null; kind?: string }[] } }) =>
+        voices.find((voice) => voice.id === where.id && voice.status === "ready" && voice.s3AudioKey !== ""
+          && where.OR.some((scope) => voice.orgId === scope.orgId && (!scope.kind || voice.kind === scope.kind))) ?? null,
       deleteMany: async ({ where }: { where: { id: string } }) => { voices = voices.filter((v) => v.id !== where.id); return { count: 1 }; },
     },
     specVersion: { create: (args: Row) => (writes.push({ op: "specVersion.create", args }), args) },
     $transaction: async (ops: unknown[]) => ops,
+};
+mock.module("@/lib/db", () => ({
+  withLock: async (keys: string[], work: (tx: typeof fakeDb) => Promise<unknown>) => {
+    expect(keys).toEqual(["skill-ownership:o1", ...twins.map((twin) => `agent:${twin.slug}`).sort()]);
+    beforeAgentLock?.();
+    return work(fakeDb);
   },
+  isUniqueViolation: (error: unknown) => typeof error === "object" && error !== null && "code" in error && error.code === "P2002",
+  db: fakeDb,
 }));
 const realS3 = await import("@/lib/s3");
 mock.module("@/lib/s3", () => ({
@@ -83,16 +89,25 @@ mock.module("@/lib/headshot", () => ({
   },
 }));
 
-const { AvatarError, avatarImageKey, avatarState, avatarVideoUpload, decodePhoto, makeHeadshot, saveAvatar, savePersonaVoice } = await import("@/lib/twin/avatar");
+const { AvatarError, avatarImageKey, avatarState, avatarVideoUpload, decodePhoto, makeHeadshot, saveAvatar, savePersonaVoice, selectOwnPersonaVoice } = await import("@/lib/twin/avatar");
 const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]).toString("base64");
+const voiceRow = (id: string, orgId: string | null = "o1", patch: Row = {}) => ({
+  id, orgId, name: id, kind: "cloned", status: "ready",
+  s3AudioKey: `${realS3.voicePrefix(orgId, id)}/reference.wav`, s3TranscriptKey: null, ...patch,
+});
 
 beforeEach(() => {
+  beforeAgentLock = null;
   persona = { id: "p1", slug: "olga", name: "Olga", isOwn: true, voiceId: null, avatarId: null };
   avatars = new Map();
   voices = [
-    { id: "v1", orgId: "o1", status: "ready" },
-    { id: "v-other", orgId: "o2", status: "ready" },
-    { id: "v-taken", orgId: "o1", status: "ready", ownedBy: "p-someone-else" },
+    voiceRow("v1"),
+    voiceRow("v-other", "o2"),
+    voiceRow("v-taken", "o1", { ownedBy: "p-someone-else" }),
+    voiceRow("v-failed", "o1", { status: "failed" }),
+    voiceRow("v-empty", "o1", { s3AudioKey: "" }),
+    voiceRow("v-global", null),
+    voiceRow("v-sample", null, { kind: "sample" }),
   ];
   twins = [
     { id: "a1", slug: "acme-olga-twin", version: 5, data: { source: "twin", voiceId: "old" } },
@@ -157,12 +172,30 @@ test("avatar save without an avatar yet creates it; rejects an AI photo that isn
   expect(deleted).toContain(oldImage);
 });
 
-test("voice save: video must be in the avatar's folder; only this org's free voices", async () => {
+test("voice save validates the video and refuses foreign, failed, empty and non-sample global voices", async () => {
   const { key } = await avatarVideoUpload("o1", "video/mp4");
   await expect(savePersonaVoice("o1", { voiceId: "v1", videoKey: "elsewhere/x.webm" })).rejects.toThrow("Unknown video");
-  await expect(savePersonaVoice("o1", { voiceId: "v-other", videoKey: key })).rejects.toThrow("Unknown voice");
-  await expect(savePersonaVoice("o1", { voiceId: "v-taken", videoKey: key })).rejects.toThrow("Unknown voice");
+  for (const voiceId of ["v-other", "v-failed", "v-empty", "v-global"]) {
+    await expect(savePersonaVoice("o1", { voiceId, videoKey: key })).rejects.toMatchObject({ code: "voice_unavailable" });
+  }
   expect(writes).toHaveLength(0);
+});
+
+test("capture accepts an eligible voice already shared with another persona without copying audio", async () => {
+  const { key } = await avatarVideoUpload("o1", "video/webm");
+  const before = voices.map((voice) => ({ ...voice }));
+  await savePersonaVoice("o1", { voiceId: "v-taken", videoKey: key });
+  expect(persona.voiceId).toBe("v-taken");
+  expect(voices).toEqual(before);
+  expect(puts).toEqual([]);
+  expect(deleted).toEqual([]);
+});
+
+test("capture accepts a ready global sample without changing the sample", async () => {
+  const { key } = await avatarVideoUpload("o1", "video/webm");
+  await savePersonaVoice("o1", { voiceId: "v-sample", videoKey: key });
+  expect(persona.voiceId).toBe("v-sample");
+  expect(voices.find((voice) => voice.id === "v-sample")).toMatchObject({ orgId: null, kind: "sample", name: "v-sample" });
 });
 
 test("voice save sets the persona's voice, keeps the video on the avatar and clears twins' copied voice", async () => {
@@ -180,20 +213,43 @@ test("voice save sets the persona's voice, keeps the video on the avatar and cle
   expect(await avatarState("o1")).toMatchObject({ hasReference: true, voiceName: "Olga voice" });
 });
 
-test("recording again replaces the old video and deletes the previous voice when nothing else uses it", async () => {
-  voices.push({ id: "v2", orgId: "o1", status: "ready" });
+test("library voice selection clears copied twin overrides without creating or editing an avatar", async () => {
+  const result = await selectOwnPersonaVoice("o1", "olga", "v1");
+  expect(result).toEqual({ voiceId: "v1", name: "v1", twins: 1 });
+  expect(persona.voiceId).toBe("v1");
+  expect(persona.avatarId).toBeNull();
+  expect(avatars.size).toBe(0);
+  expect(writes.filter((write) => write.op === "avatar.update")).toEqual([]);
+  expect(writes.filter((write) => write.op === "agent.update")).toHaveLength(1);
+  expect(writes.filter((write) => write.op === "specVersion.create")).toHaveLength(1);
+  expect(puts).toEqual([]);
+  expect(deleted).toEqual([]);
+});
+
+test("recording again replaces the old video but preserves the previous voice and recording", async () => {
+  voices.push(voiceRow("v2"));
   const first = await avatarVideoUpload("o1", "video/webm");
   await savePersonaVoice("o1", { voiceId: "v1", videoKey: first.key });
   const second = await avatarVideoUpload("o1", "video/webm");
   await savePersonaVoice("o1", { voiceId: "v2", videoKey: second.key });
   expect(persona.voiceId).toBe("v2");
   expect(deleted).toContain(first.key);
-  expect(voices.find((v) => v.id === "v1")).toBeUndefined();
-  expect(deleted.some((key) => key.includes("/tts-voices/v1/"))).toBe(true);
+  expect(voices.find((v) => v.id === "v1")).toBeDefined();
+  expect(deleted.some((key) => key.includes("/tts-voices/v1/"))).toBe(false);
+});
+
+test("voice cleanup re-reads published skill data under the agent lock", async () => {
+  const { key } = await avatarVideoUpload("o1", "video/webm");
+  beforeAgentLock = () => {
+    twins[0] = { ...twins[0], version: 6, data: { source: "twin-creator", skill: "# Newly published", voiceId: "old" } };
+  };
+  await savePersonaVoice("o1", { voiceId: "v1", videoKey: key });
+  const update = writes.find((write) => write.op === "agent.update")!.args;
+  expect(update.data).toEqual({ version: 7, data: { source: "twin-creator", skill: "# Newly published" } });
 });
 
 test("a previous voice still named by an agent is kept", async () => {
-  voices.push({ id: "v2", orgId: "o1", status: "ready" });
+  voices.push(voiceRow("v2"));
   const first = await avatarVideoUpload("o1", "video/webm");
   await savePersonaVoice("o1", { voiceId: "v1", videoKey: first.key });
   agentVoiceRefs = ["v1"];

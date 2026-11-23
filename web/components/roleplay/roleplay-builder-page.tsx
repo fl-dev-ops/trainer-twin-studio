@@ -117,7 +117,7 @@ function ListField({ id, items, onChange, max, placeholder, addLabel }: {
 }
 
 /** Pick the client (reference rolePersonaPicker): the org's personas with photo, first name and role. */
-function PersonaPicker({ personas, value, onChange }: { personas: Persona[]; value: string; onChange: (slug: string) => void }) {
+export function PersonaPicker({ personas, value, onChange }: { personas: Persona[]; value: string; onChange: (slug: string) => void }) {
   if (!personas.length) {
     return (
       <p className="text-sm text-muted-foreground">
@@ -162,11 +162,12 @@ function PersonaPicker({ personas, value, onChange }: { personas: Persona[]; val
 }
 
 /** The Tools tab's switches (Agent.data.tools); the chat agent loads only what's on for a call. */
-const TOOL_ROWS: { key: keyof ToolSettings; label: string; description: string }[] = [
+export const TOOL_ROWS: { key: keyof ToolSettings; label: string; description: string }[] = [
   { key: "canvas", label: "Canvas", description: "A whiteboard the client can sketch on and read what the learner draws." },
   { key: "codeEditor", label: "Code editor", description: "An editor the client can open with code, read and run." },
   { key: "preview", label: "Preview", description: "Show PDFs, images and presentations, and point at document text or slides." },
   { key: "choice", label: "Multiple choice", description: "A short question with options, checked when the learner picks one." },
+  { key: "knowledge", label: "Knowledge search", description: "Look up facts in your knowledge base during the call before judging an answer." },
 ];
 
 /**
@@ -495,7 +496,7 @@ export function RoleplayBuilderPage({ slug, initial, before: initialBefore, tool
                 description={row.description}
                 control={
                   <SwitchToggle
-                    checked={tools[row.key]}
+                    checked={tools[row.key] === true}
                     onChange={(on) => saveSettings({ tools: { ...tools, [row.key]: on } }, `${row.label} turned ${on ? "on" : "off"}`)}
                     label={row.label}
                   />

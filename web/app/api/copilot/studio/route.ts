@@ -4,17 +4,18 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { embedTexts, searchKnowledge } from "@/lib/knowledge";
 import { MainCollectionService, type ScenarioScope, type ScenarioStep } from "@/lib/main-collection";
-import { type PinnedTwinSkill, TWIN_SOURCE, twinPlaybooks } from "@/lib/twins";
-import { redactLearnerNames } from "@/lib/persona-voice";
+import { type PinnedTwinSkill, TWIN_SOURCE, twinPlaybooks, sessionTwinPlaybooks, resolveTwinCatalog } from "@/lib/twins";
 import { enqueueWorkspaceCommand } from "@/lib/workspace-commands";
 import { buildSessionContext, getCachedSessionContext } from "@/lib/session-context";
-import { unusedResumeClaims } from "@/lib/resume-interview";
 import { recordTurnEvidence, recordTurnLines, turnEvidenceSchema } from "@/lib/twin/evidence";
 import { modelImage } from "@/lib/model-image";
 import { uploadBytes } from "@/lib/upload-bytes";
 import { resolveUpload, UploadError } from "@/lib/uploads";
 import { getObjectText } from "@/lib/s3";
 import { authorizeRuntimeSession, publicSessionExpired } from "@/lib/interview-sessions";
+import { errorResponse } from "@/lib/errors";
+import { loadSessionSkills, resolveSnapshotSkill } from "@/lib/session-skills";
+import { skillRefusals } from "@/lib/skills";
 
 /** How much of a knowledge document one read_knowledge_document call returns (about 3k tokens). */
 const KNOWLEDGE_PAGE_CHARS = 12_000;
@@ -34,18 +35,6 @@ const requestSchema = z.discriminatedUnion("action", [
     query: z.string().trim().min(2).max(500),
     limit: z.number().int().min(1).max(8),
     topics: z.array(z.string().trim().min(1)).optional(),
-  }).strict(),
-  z.object({
-    action: z.literal("searchStyleEpisodes"),
-    personaSlug: slug,
-    query: z.string().trim().min(2).max(500),
-    sessionPhase: z.enum(["opening", "middle", "closing"]).optional(),
-    limit: z.number().int().min(1).max(10).optional(),
-    styleFilters: z.object({
-      usesLearnerName: z.boolean().optional(),
-      startsWithThanks: z.boolean().optional(),
-      hasDoubledAcknowledgement: z.boolean().optional(),
-    }).optional(),
   }).strict(),
   z.object({
     action: z.literal("searchScenarioItems"),
@@ -88,25 +77,6 @@ const requestSchema = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("getWorkspaceState"),
     sessionId: z.string().trim().min(1),
-  }).strict(),
-  z.object({
-    action: z.literal("listResumeClaims"),
-    sessionId: z.string().trim().min(1),
-    cursor: z.number().int().min(0).optional(),
-  }).strict(),
-  z.object({
-    action: z.literal("getResumeClaim"),
-    sessionId: z.string().trim().min(1),
-    claimId: z.string().trim().min(1),
-  }).strict(),
-  z.object({
-    action: z.literal("resolvePendingResumeQuestion"),
-    sessionId: z.string().trim().min(1),
-    candidateLocated: z.boolean(),
-  }).strict(),
-  z.object({
-    action: z.literal("getPersonaStyleMoments"),
-    personaSlug: slug,
   }).strict(),
   z.object({
     action: z.literal("enqueueWorkspaceCommand"),
@@ -162,8 +132,12 @@ export async function POST(request: Request) {
       where: { id: sessionId, orgId },
       select: { id: true, anonymousId: true, personaSlug: true, agentSlug: true },
     });
-    if (!session) return Response.json({ error: "Session not found" }, { status: 404 });
-    if (session.anonymousId) {
+    // A public call (it sends its runtime token) must name a live session of this org; any other caller falls through
+    // to the action's own session checks.
+    if (!session && request.headers.get("x-trainertwin-runtime-token")) {
+      return Response.json({ error: "Session is no longer available" }, { status: 401 });
+    }
+    if (session?.anonymousId) {
       const token = request.headers.get("x-trainertwin-runtime-token") || "";
       if (!token || (await authorizeRuntimeSession(session.id, token))?.orgId !== orgId) {
         return Response.json({ error: "Session is no longer available" }, { status: 401 });
@@ -256,66 +230,23 @@ export async function POST(request: Request) {
   }
 
   if (input.action === "getSessionContext") {
-    const startedAt = performance.now();
-    const context = input.sessionId
-      ? await getCachedSessionContext(orgId, input.sessionId)
-      : await buildSessionContext({
-          orgId,
-          agentSlug: input.agentSlug,
-          personaSlug: input.personaSlug,
-        });
-    console.info("[session-context]", {
-      sessionId: input.sessionId ?? null,
-      durationMs: Math.round(performance.now() - startedAt),
-    });
-    return Response.json(context);
-  }
-
-  if (input.action === "listResumeClaims") {
-    const claims = await unusedResumeClaims(orgId, input.sessionId);
-    const offset = input.cursor ?? 0;
-    const page = claims.slice(offset, offset + 20);
-    return Response.json({
-      claims: page.map((claim) => ({
-        claimId: claim.id,
-        section: claim.section,
-        kind: claim.kind,
-        summary: claim.text.slice(0, 300),
-        metric: claim.metric,
-      })),
-      nextCursor: offset + page.length < claims.length ? offset + page.length : null,
-    });
-  }
-
-  if (input.action === "getResumeClaim") {
-    const claim = (await unusedResumeClaims(orgId, input.sessionId)).find((item) => item.id === input.claimId);
-    if (!claim) return Response.json({ error: "Eligible resume claim not found" }, { status: 404 });
-    return Response.json({
-      claimId: claim.id,
-      section: claim.section,
-      kind: claim.kind,
-      text: claim.text.slice(0, 4_000),
-      metric: claim.metric,
-    });
-  }
-
-  if (input.action === "resolvePendingResumeQuestion") {
-    await unusedResumeClaims(orgId, input.sessionId);
-    const pending = await db.workspaceCommand.findFirst({
-      where: { sessionId: input.sessionId, tool: "start_resume_question", status: "completed" },
-      orderBy: { createdAt: "desc" },
-      select: { id: true, input: true, result: true },
-    });
-    const result = pending?.result as { status?: string } | null;
-    const question = (pending?.input as { question?: string } | null)?.question;
-    if (result?.status !== "not_found" || !question) {
-      return Response.json({ error: "No pending resume question" }, { status: 409 });
+    try {
+      const startedAt = performance.now();
+      const context = input.sessionId
+        ? await getCachedSessionContext(orgId, input.sessionId)
+        : await buildSessionContext({
+            orgId,
+            agentSlug: input.agentSlug,
+            personaSlug: input.personaSlug,
+          });
+      console.info("[session-context]", {
+        sessionId: input.sessionId ?? null,
+        durationMs: Math.round(performance.now() - startedAt),
+      });
+      return Response.json(context);
+    } catch (error) {
+      return errorResponse(error);
     }
-    await db.workspaceCommand.update({
-      where: { id: pending!.id },
-      data: { result: { status: input.candidateLocated ? "located" : "claim_cancelled" } },
-    });
-    return Response.json({ status: input.candidateLocated ? "ready" : "claim_cancelled", question: input.candidateLocated ? question : null });
   }
 
   if (input.action === "recordTurnEvidence") {
@@ -340,24 +271,95 @@ export async function POST(request: Request) {
     }));
   }
 
-  if (input.action === "getPersonaStyleMoments") {
-    const persona = await db.persona.findFirst({
-      where: { slug: { equals: input.personaSlug, mode: "insensitive" }, orgId },
-      select: { id: true, name: true, slug: true },
-    });
-    if (!persona) return Response.json({ error: `No persona named "${input.personaSlug}"` });
-    const moments = await MainCollectionService.getRawStyleEpisodesForPersona(orgId, persona.id);
-    return Response.json({ personaSlug: persona.slug, personaName: persona.name, moments });
-  }
-
   // Real lines from a scenario-ingest scenario (items.json), for the chat tool scenario_examples.
   if (input.action === "searchScenarioItems") {
+    try {
+    const previewAgent = !input.sessionId
+      ? await db.agent.findFirst({ where: { slug: input.agentSlug, orgId }, select: {
+        id: true, slug: true, primarySkillId: true, data: true, personaId: true, kind: true, version: true,
+      } })
+      : null;
+    const previewSkills = async () => {
+      if (!previewAgent) return null;
+      const data = previewAgent.data && typeof previewAgent.data === "object" && !Array.isArray(previewAgent.data)
+        ? previewAgent.data as Record<string, unknown> : {};
+      const isMainTwin = previewAgent.kind === "TWIN" && data.source === TWIN_SOURCE;
+      if (!isMainTwin && !previewAgent.primarySkillId) return null;
+      return db.$transaction(async (tx) => {
+        if (!isMainTwin) {
+          const version = await resolveSnapshotSkill(orgId, previewAgent, previewAgent.kind, tx);
+          return {
+            kind: previewAgent.kind, agentSlug: previewAgent.slug, personaId: previewAgent.personaId, isMainTwin,
+            catalog: [{ slug: previewAgent.slug, version: previewAgent.version, skillVersionId: version.id }],
+            pins: [{ alias: previewAgent.slug, position: 0, version }], data,
+          };
+        }
+        const selected = await resolveTwinCatalog(orgId, previewAgent.personaId, tx);
+        const versions = await tx.skillVersion.findMany({
+          where: { id: { in: selected.pins.map((pin) => pin.skillVersionId) }, status: "ready", indexStatus: "ready", skill: { orgId } },
+          select: {
+            id: true, version: true, skillId: true, status: true, indexStatus: true, format: true, skillText: true,
+            manifest: true, artifacts: true, itemCount: true, skill: { select: { orgId: true, ownerSlug: true } },
+          },
+        });
+        const pins = selected.pins.map((pin) => {
+          const version = versions.find((version) => version.id === pin.skillVersionId && version.skill.ownerSlug === pin.alias);
+          if (!version) throw skillRefusals.unavailable();
+          return { alias: pin.alias, position: pin.position, version };
+        });
+        return { kind: previewAgent.kind, agentSlug: previewAgent.slug, personaId: previewAgent.personaId, isMainTwin, catalog: selected.catalog, pins, data };
+      });
+    };
+    const managedSkill = input.sessionId
+      ? await loadSessionSkills(orgId, input.sessionId, input.agentSlug, true)
+      : await previewSkills();
+    if (managedSkill) {
+      const all = managedSkill.isMainTwin ? await sessionTwinPlaybooks(orgId, managedSkill) : [];
+      const named = input.playbook ? all.filter((p) => p.id === input.playbook || p.slug === input.playbook) : [];
+      const chosen = input.agentSlug !== managedSkill.agentSlug
+        ? all.filter((p) => p.slug === input.agentSlug)
+        : named.length ? named : all;
+      const aliases = new Set(chosen.map((p) => p.slug));
+      const pins = managedSkill.pins.filter((pin) => !managedSkill.isMainTwin || aliases.has(pin.alias));
+      const steps = managedSkill.isMainTwin ? chosen.flatMap((p) => p.steps as ScenarioStep[]) : pins.flatMap(({ version }) => {
+        const manifest = version.manifest as { steps?: unknown; situations?: unknown };
+        const steps = manifest.steps ?? manifest.situations;
+        return Array.isArray(steps) ? steps as ScenarioStep[] : [];
+      });
+      const options = {
+        step: input.step,
+        role: input.role ?? (pins[0]?.version.format === "builder-roleplay" ? "client" : "trainer"),
+        limit: input.limit,
+        steps,
+      };
+      const legacyScope = managedSkill.isMainTwin
+        ? managedSkill.catalog.filter((entry) => !entry.skillVersionId && aliases.has(entry.slug)).map(({ slug, version }) => ({ slug, version }))
+        : [];
+      const [managedExamples, legacyExamples] = await Promise.all([
+        pins.length ? MainCollectionService.searchSkillItems(orgId, pins.map(({ version }) => ({
+          skillVersionId: version.id,
+          indexScope: version.artifacts,
+          itemCount: version.itemCount,
+        })), input.query, options) : [],
+        legacyScope.length ? MainCollectionService.searchScenarioItems(orgId, legacyScope, input.query, options) : [],
+      ]);
+      const examples = [...managedExamples, ...legacyExamples].sort((a, b) => b.score - a.score).slice(0, input.limit ?? 3);
+      const turnLines = input.recordTurnLines;
+      if (turnLines && input.sessionId) {
+        const sessionId = input.sessionId;
+        after(() => recordTurnLines(orgId, sessionId, { ...turnLines, examples }).catch((error) => {
+          console.error("[twin-evidence] turn lines failed", error);
+        }));
+      }
+      return Response.json({ query: input.query, examples });
+    }
     // The embedding needs only the query: start it now so it runs alongside the DB lookups below.
     const queryEmbedding = embedTexts([input.query]).then(([embedding]) => embedding);
     queryEmbedding.catch(() => {}); // awaited in searchScenarioItems; this only stops an early DB error leaving it unhandled
     // scenario.json's steps map the newer items' `action` to a step, and a step to its moves.
-    const agent = await db.agent.findFirst({ where: { slug: input.agentSlug, orgId }, select: { data: true, personaId: true, kind: true, version: true } });
-    const data = agent?.data as { source?: unknown; scenario?: { steps?: unknown; situations?: unknown } } | null;
+    const agent = previewAgent ?? await db.agent.findFirst({ where: { slug: input.agentSlug, orgId }, select: { data: true, personaId: true, kind: true, version: true } });
+    const data = agent?.data as { source?: unknown; skill?: unknown; scenario?: { steps?: unknown; situations?: unknown } } | null;
+    let exampleData = data;
     let scope: { skills: ScenarioScope[]; steps: ScenarioStep[] };
     if (agent?.kind === "TWIN" && data?.source === TWIN_SOURCE) {
       // The all-skills twin searches its persona's skill twins: all of them, or the one the model has loaded.
@@ -372,18 +374,19 @@ export async function POST(request: Request) {
       // Each skill at the version the call pinned (or the live one).
       scope = { skills: chosen.map((p) => ({ slug: p.slug, version: p.version })), steps: chosen.flatMap((p) => p.steps as ScenarioStep[]) };
     } else {
-      // A twin-creator skill lists situations where a scenario lists steps.
-      const steps = data?.scenario?.steps ?? data?.scenario?.situations;
-      // A call reads the version it started on (a publish mid-call doesn't change its examples); no call: the live one.
+      // Pin the example role and step mapping as well as its version; publishing must not change a running call.
       const started = input.sessionId
-        ? (await db.interviewSession.findFirst({ where: { id: input.sessionId, orgId, agentSlug: input.agentSlug }, select: { agentVersion: true } }))?.agentVersion
-        : undefined;
-      const version = started ?? agent?.version;
+        ? await db.interviewSession.findFirst({ where: { id: input.sessionId, orgId, agentSlug: input.agentSlug }, select: { agentVersion: true, compiledSnapshot: true } })
+        : null;
+      const snapshot = started?.compiledSnapshot as { agent?: { data?: typeof data } } | null | undefined;
+      exampleData = snapshot?.agent?.data ?? data;
+      const steps = exampleData?.scenario?.steps ?? exampleData?.scenario?.situations;
+      const version = started?.agentVersion ?? agent?.version;
       scope = { skills: version ? [{ slug: input.agentSlug, version }] : [], steps: Array.isArray(steps) ? (steps as ScenarioStep[]) : [] };
     }
     const examples = await MainCollectionService.searchScenarioItems(orgId, scope.skills, input.query, {
       step: input.step,
-      role: input.role,
+      role: input.role ?? (agent?.kind === "ROLEPLAY" && typeof exampleData?.skill === "string" && exampleData.source !== "scenario-ingest" ? "client" : "trainer"),
       limit: input.limit,
       steps: scope.steps,
       queryEmbedding,
@@ -397,54 +400,9 @@ export async function POST(request: Request) {
       }));
     }
     return Response.json({ query: input.query, examples });
-  }
-
-  if (input.action === "searchStyleEpisodes") {
-    const persona = await db.persona.findFirst({
-      where: { slug: { equals: input.personaSlug, mode: "insensitive" }, orgId },
-      select: { id: true, name: true },
-    });
-    if (!persona) return Response.json({ error: `No persona named "${input.personaSlug}"` });
-
-    const [styleHits, episodeHits] = await Promise.all([
-      MainCollectionService.searchStyleEpisodes(orgId, input.query, {
-        personaId: persona.id,
-        sessionPhase: input.sessionPhase,
-        limit: input.limit,
-        diversify: true,
-        styleFilters: input.styleFilters,
-      }),
-      MainCollectionService.searchPersonaEpisodes(orgId, input.query, {
-        personaId: persona.id,
-        sessionPhase: input.sessionPhase,
-        limit: 2,
-        diversify: true,
-      }),
-    ]);
-
-    return Response.json({
-      query: input.query,
-      persona: persona.name,
-      pastExchanges: episodeHits.map((hit) => ({
-        exchange: redactLearnerNames(hit.text, []),
-        score: hit.score,
-      })),
-      phrasingStyle: styleHits.map((hit) => {
-        const pastName = hit.pastLearnerName;
-        return {
-          text: redactLearnerNames(hit.text, [pastName]),
-          score: hit.score,
-          metadata: {
-            sessionPhase: hit.sessionPhase,
-            styleFunction: redactLearnerNames(hit.styleFunction ?? "", [pastName]),
-            styleShape: redactLearnerNames(hit.styleShape ?? "", [pastName]),
-            usesLearnerName: hit.usesLearnerName,
-            startsWithThanks: hit.startsWithThanks,
-            hasDoubledAcknowledgement: hit.hasDoubledAcknowledgement,
-          },
-        };
-      }),
-    });
+    } catch (error) {
+      return errorResponse(error);
+    }
   }
 
   try {

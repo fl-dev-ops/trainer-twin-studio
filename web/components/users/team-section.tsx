@@ -67,7 +67,7 @@ function MembersTable({ members, empty, currentUserId, busy, onToggle }: {
                           {member.name}
                         </Link>
                       ) : <span className="truncate font-medium">{member.name}</span>}
-                      {you ? <span className="shrink-0 text-muted-foreground">(you)</span> : null}
+                      {you ? <span className="shrink-0 text-muted-foreground">(you <span aria-hidden="true">😉</span>)</span> : null}
                       {member.disabledAt ? <Badge variant="error" title={`Disabled ${day(member.disabledAt)}`}>Disabled</Badge> : null}
                     </span>
                   </TableCell>
@@ -155,34 +155,32 @@ export function TeamSection(props: {
             label={group.title}
             title={<>{group.title} <span className="text-muted-foreground font-normal">· {all.filter((m) => !m.disabledAt).length}</span></>}
             description={group.hint}
-            action={(
-              <>
-                {all.length ? (
-                  <div className="w-56 max-w-full">
-                    <SearchInput
-                      aria-label={`Search ${group.title.toLowerCase()}`}
-                      placeholder="Search by name or email"
-                      value={query[group.role] ?? ""}
-                      onChange={(event) => setQuery((current) => ({ ...current, [group.role]: event.target.value }))}
-                    />
-                  </div>
-                ) : null}
-                <Dialog open={inviting === group.role} onOpenChange={(open) => setInviting(open ? group.role : null)}>
-                  <DialogTrigger render={<Button size="sm" />}>
-                    <Plus />
-                    Add
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-md">
-                    <DialogHeader>
-                      <DialogTitle>{group.invite}</DialogTitle>
-                      <DialogDescription>{group.hint} Add one or more emails, separated by commas. They&apos;re in right away and get an email; they sign in with Google or an email code.</DialogDescription>
-                    </DialogHeader>
-                    <InviteUser role={group.role} onDone={() => setInviting(null)} />
-                  </DialogContent>
-                </Dialog>
-              </>
-            )}
           >
+            <div className="flex flex-wrap items-center gap-3">
+              {all.length ? (
+                <div className="w-56 max-w-full">
+                  <SearchInput
+                    aria-label={`Search ${group.title.toLowerCase()}`}
+                    placeholder="Search by name or email"
+                    value={query[group.role] ?? ""}
+                    onChange={(event) => setQuery((current) => ({ ...current, [group.role]: event.target.value }))}
+                  />
+                </div>
+              ) : null}
+              <Dialog open={inviting === group.role} onOpenChange={(open) => setInviting(open ? group.role : null)}>
+                <DialogTrigger render={<Button size="sm" />}>
+                  <Plus />
+                  Add
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>{group.invite}</DialogTitle>
+                    <DialogDescription>{group.hint} Add one or more emails, separated by commas. They&apos;re in right away and get an email; they sign in with Google or an email code.</DialogDescription>
+                  </DialogHeader>
+                  <InviteUser role={group.role} onDone={() => setInviting(null)} />
+                </DialogContent>
+              </Dialog>
+            </div>
             <MembersTable
               members={members}
               empty={needle ? "No one matches that search." : "No one yet."}

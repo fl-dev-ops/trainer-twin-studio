@@ -121,14 +121,13 @@
     link keeps it. The API's move of a link to another learner or role play cancels the old link and creates a new
     one (`assignment_exists` when the target already has one). Practice is counted from calls; a link's status is
     `pending` until cancelled (no `used` step), and disabling someone cancels their open links.
-20. **Saving a role play** (builder, settings, draft publish, spec upload) runs one at a time per role play
+20. **Saving a role play** (builder, settings, spec upload) runs one at a time per role play
     (`agent:<slug>` lock, held across its files and examples): the version only moves when the content changes, its
     files and examples belong to that version, and settings saves never move the version or bring back an older
     script (a settings save of an archived role play is `not_found`; publishing it again from the builder or the
-    copilot brings it back). Draft publish and spec upload refuse builder role plays
-    and twins (`invalid_input`); they are for older spec-built role plays only.
-21. **A role play's id is its org's.** Generating or importing one whose id belongs to another org is refused
-    (`name_taken`), and one that is a twin (`invalid_input`), before any model is called.
+    copilot brings it back).
+21. **A role play's id is its org's.** Publishing one whose id belongs to another org is refused before anything is
+    written.
 
 ## Ending, reports and the call's tokens
 
@@ -188,7 +187,6 @@ Same columns as [People](people.md#refusals). **Where**: PG page loader (`/t/`, 
 | `roleplay_access_removed` | 403 | Your access to this role play was removed. Ask your trainer. | Link cancelled or expired | PG, ST |
 | `mode_not_allowed` | 400 | This role play can't be started as {mode}. | Mode outside the deployment's allowed modes, or a learner not calling by voice | ST |
 | `assignment_exists` | 409 | That learner already has this role play. | REST API moving a link to someone who has one | R |
-| `name_taken` | 409 | That name is used by another organization. Pick another. | A role play's id belongs to another org | S |
 | `runtime_token_invalid` | 401 | This call is no longer available. | Runtime token missing, wrong, or its call has ended | RT |
 
 ## Open questions

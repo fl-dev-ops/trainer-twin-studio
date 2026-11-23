@@ -2,12 +2,13 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import type { Prisma } from "@/lib/generated/prisma/client";
-import { avatarPrefix, deleteObject, getObjectBytes, getObjectText, presignedGetUrl, putObject, voicePrefix } from "@/lib/s3";
+import { avatarPrefix, deleteObject, getObjectText, presignedGetUrl, putObject } from "@/lib/s3";
+import { attachPersonaVoice, createVoice, findAvailableVoice, listAvailableVoices, VOICE_AUDIO_LIMITS } from "@/lib/voices";
 
 /**
  * A persona = voice + avatar + prompt fields (Persona.data) + program settings (Persona.settings).
  * Voice: reference audio (+ transcript) sent to voice cloning. Avatar: reference image and video for the
- * AI avatar model. Each persona owns its own voice and avatar (unique FKs, same org: DB trigger).
+ * AI avatar model. Voices are reusable; each persona still owns its avatar.
  * `orgId: null` targets a global preset persona.
  */
 
@@ -19,12 +20,11 @@ export class PersonaMediaError extends Error {
 
 const MB = 1024 * 1024;
 export const MEDIA_LIMITS = {
-  audio: { maxBytes: 25 * MB, types: ["audio/wav", "audio/x-wav", "audio/mpeg", "audio/mp4", "audio/x-m4a", "audio/webm", "audio/ogg"] },
+  audio: VOICE_AUDIO_LIMITS,
   image: { maxBytes: 10 * MB, types: ["image/jpeg", "image/png", "image/webp"] },
   video: { maxBytes: 100 * MB, types: ["video/mp4", "video/webm", "video/quicktime"] },
 } as const;
 const EXTENSION: Record<string, string> = {
-  "audio/wav": "wav", "audio/x-wav": "wav", "audio/mpeg": "mp3", "audio/mp4": "m4a", "audio/x-m4a": "m4a", "audio/webm": "webm", "audio/ogg": "ogg",
   "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp",
   "video/mp4": "mp4", "video/webm": "webm", "video/quicktime": "mov",
 };
@@ -35,7 +35,7 @@ export const personaSettingsSchema = z.object({
 }).strict();
 export type PersonaSettings = z.infer<typeof personaSettingsSchema>;
 
-function checkFile(file: File, kind: keyof typeof MEDIA_LIMITS) {
+function checkFile(file: File, kind: "image" | "video") {
   const limit = MEDIA_LIMITS[kind];
   if (!file.size) throw new PersonaMediaError(`The ${kind} file is empty.`);
   if (file.size > limit.maxBytes) throw new PersonaMediaError(`The ${kind} file must be ${limit.maxBytes / MB} MB or smaller.`);
@@ -48,7 +48,7 @@ function checkFile(file: File, kind: keyof typeof MEDIA_LIMITS) {
 async function findPersona(orgId: string | null, slug: string) {
   const persona = await db.persona.findFirst({
     where: { orgId, slug },
-    select: { id: true, orgId: true, name: true, voiceId: true, avatarId: true, settings: true },
+    select: { id: true, orgId: true, name: true, isOwn: true, voiceId: true, avatarId: true, settings: true },
   });
   if (!persona) throw new PersonaMediaError("Persona not found", 404);
   return persona;
@@ -60,71 +60,29 @@ async function removeOld(key: string | null | undefined) {
   await deleteObject(key).catch((error) => console.warn("[persona-media] could not delete replaced file", key, error));
 }
 
-/** Sets the persona's voice: its reference audio (and optional transcript). Creates the voice on first use. */
 export async function setPersonaVoice(orgId: string | null, slug: string, input: { audio: File; transcript?: string }) {
-  const ext = checkFile(input.audio, "audio");
-  const transcript = input.transcript?.trim() ?? "";
-  if (transcript.length > 5000) throw new PersonaMediaError("The transcript must be 5000 characters or fewer.");
   const persona = await findPersona(orgId, slug);
-
-  const created = !persona.voiceId;
-  const voice = persona.voiceId
-    ? await db.voice.findUniqueOrThrow({ where: { id: persona.voiceId }, select: { id: true, s3AudioKey: true, s3TranscriptKey: true } })
-    : await db.voice.create({ data: { orgId, name: `${persona.name} voice`, kind: "cloned", s3AudioKey: "" }, select: { id: true, s3AudioKey: true, s3TranscriptKey: true } });
-
-  // Unique keys per upload: a failed replacement never touches the voice in use, and caches can't serve stale audio.
-  const stamp = randomUUID();
-  const prefix = voicePrefix(orgId, voice.id);
-  const audioKey = `${prefix}/reference-${stamp}.${ext}`;
-  const transcriptKey = transcript ? `${prefix}/transcript-${stamp}.txt` : null;
-  try {
-    await putObject(audioKey, new Uint8Array(await input.audio.arrayBuffer()), input.audio.type);
-    if (transcriptKey) await putObject(transcriptKey, transcript, "text/plain; charset=utf-8");
-    await db.voice.update({ where: { id: voice.id }, data: { s3AudioKey: audioKey, s3TranscriptKey: transcriptKey, status: "ready" } });
-    // Conditional: a parallel first upload may have linked its own voice already.
-    if (created && (await db.persona.updateMany({ where: { id: persona.id, voiceId: null }, data: { voiceId: voice.id } })).count !== 1) {
-      throw new PersonaMediaError("The voice changed while uploading. Try again.", 409);
-    }
-  } catch (error) {
-    await removeOld(audioKey);
-    if (transcriptKey) await removeOld(transcriptKey);
-    if (created) await db.voice.delete({ where: { id: voice.id } }).catch(() => {});
-    throw error;
-  }
-  await removeOld(voice.s3AudioKey);
-  if (voice.s3TranscriptKey !== transcriptKey) await removeOld(voice.s3TranscriptKey);
+  const voice = await createVoice(orgId, { ...input, name: `${persona.name} voice`.slice(0, 60) });
+  await selectPersonaVoice(orgId, slug, persona, voice.id);
   return { voiceId: voice.id };
 }
 
-/**
- * Voices a role-play persona can take from the voice library: built-in samples and the org's cloned voices that no
- * persona owns (a persona's own voice is not offered to another).
- */
-export function pickableVoices(orgId: string) {
-  return db.voice.findMany({
-    where: { status: "ready", persona: null, OR: [{ orgId: null, kind: "sample" }, { orgId, kind: "cloned" }] },
-    orderBy: [{ kind: "desc" }, { name: "asc" }],
-    select: { id: true, name: true, kind: true },
-  });
+export async function pickableVoices(orgId: string) {
+  return (await listAvailableVoices(orgId)).map(({ id, name, kind }) => ({ id, name, kind }));
 }
 
-/**
- * Gives the persona a voice from the library. A persona owns its voice (one persona per voice, same org), so the
- * chosen voice's reference audio + transcript are copied into the persona's own voice, which takes its name.
- */
 export async function setPersonaVoiceFrom(orgId: string, slug: string, sourceVoiceId: string) {
-  const source = (await pickableVoices(orgId)).find((voice) => voice.id === sourceVoiceId);
-  if (!source) throw new PersonaMediaError("That voice is not available.", 404);
-  const row = await db.voice.findUniqueOrThrow({ where: { id: source.id }, select: { s3AudioKey: true, s3TranscriptKey: true } });
-  const [audio, transcript] = await Promise.all([
-    getObjectBytes(row.s3AudioKey),
-    row.s3TranscriptKey ? getObjectText(row.s3TranscriptKey) : Promise.resolve(""),
-  ]);
-  const ext = row.s3AudioKey.split(".").pop()?.toLowerCase() ?? "wav";
-  const type = Object.entries(EXTENSION).find(([mime, e]) => e === ext && MEDIA_LIMITS.audio.types.includes(mime as never))?.[0] ?? "audio/wav";
-  const { voiceId } = await setPersonaVoice(orgId, slug, { audio: new File([new Uint8Array(audio)], `reference.${ext}`, { type }), transcript });
-  await db.voice.update({ where: { id: voiceId }, data: { name: source.name } });
-  return { voiceId, name: source.name };
+  const persona = await findPersona(orgId, slug);
+  return selectPersonaVoice(orgId, slug, persona, sourceVoiceId);
+}
+
+async function selectPersonaVoice(orgId: string | null, slug: string, persona: { isOwn: boolean }, voiceId: string) {
+  if (orgId !== null && persona.isOwn) {
+    const { selectOwnPersonaVoice } = await import("@/lib/twin/avatar");
+    const selected = await selectOwnPersonaVoice(orgId, slug, voiceId);
+    return { voiceId: selected.voiceId, name: selected.name };
+  }
+  return attachPersonaVoice(orgId, slug, voiceId);
 }
 
 /** Sets the persona's avatar reference image and/or video. Creates the avatar on first use. */
@@ -196,21 +154,22 @@ export async function getPersonaMedia(orgId: string | null, slug: string) {
     where: { orgId, slug },
     select: {
       settings: true,
-      voice: { select: { id: true, s3AudioKey: true, s3TranscriptKey: true } },
+      voiceId: true,
       avatar: { select: { id: true, s3ImageKey: true, s3VideoKey: true } },
     },
   });
   if (!persona) throw new PersonaMediaError("Persona not found", 404);
+  const voice = persona.voiceId ? await findAvailableVoice(orgId, persona.voiceId) : null;
   const link = (key: string | null | undefined) => (key ? presignedGetUrl(key) : Promise.resolve(null));
   const [audioUrl, transcript, imageUrl, videoUrl] = await Promise.all([
-    link(persona.voice?.s3AudioKey),
-    persona.voice?.s3TranscriptKey ? getObjectText(persona.voice.s3TranscriptKey) : Promise.resolve(null),
+    link(voice?.s3AudioKey),
+    voice?.s3TranscriptKey ? getObjectText(voice.s3TranscriptKey) : Promise.resolve(null),
     link(persona.avatar?.s3ImageKey),
     link(persona.avatar?.s3VideoKey),
   ]);
   const settings = personaSettingsSchema.safeParse(persona.settings ?? {});
   return {
-    voice: persona.voice && audioUrl ? { id: persona.voice.id, audioUrl, transcript } : null,
+    voice: voice && audioUrl ? { id: voice.id, audioUrl, transcript } : null,
     avatar: persona.avatar && (imageUrl || videoUrl) ? { id: persona.avatar.id, imageUrl, videoUrl } : null,
     settings: settings.success ? settings.data : personaSettingsSchema.parse({}),
   };

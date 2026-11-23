@@ -1,15 +1,17 @@
 # Copilot
 
-> The studio copilot helps a trainer turn their knowledge into twin skills or practice role plays. It can also read the studio, change a twin or role play's settings, invite learners, and archive or restore skills and role plays. The web app supplies the signed-in trainer and organization; the separate `copilot/` Eve app does the conversation and calls narrow studio endpoints. Building and changing content use tools, source checks, and approval cards, not the old blueprint editor (`copilot/agent/instructions/copilot.md`, `web/components/copilot-chat.tsx`, `web/lib/copilot-studio.ts`).
+> The Studio Copilot creates and updates twins, twin skills, role plays, and role-play personas with trainer approval. Knowledge access is read-only and scoped to its organization. Enabled admins and team can also read their organization's user names, roles, disabled status, and current twin and role-play assignments (`list_users`). Contact emails, invite links, credits, and session history are not returned. Learner and team management, billing, archive/restore/delete, and a general shell are not available. The trainer's own persona is set up and edited in Personas, not Copilot.
+
+The permission policy above supersedes the older implementation notes below where they describe removed tools or legacy authorization.
 
 ## Who uses it
 
 | Role | Access |
 | --- | --- |
-| Org admin (`admin`) and team (`team`) | Same copilot access, in their enabled studio organization. They can read, build, approve changes, invite learners, archive and restore. |
+| Org admin (`admin`) and team (`team`) | Same Copilot access, scoped to their enabled Studio organization. They can read knowledge and approve content changes. |
 | Learner (`user`), disabled member, unauthenticated visitor | Cannot use the studio copilot through its identity endpoint or Eve proxy. |
-| Copilot service | Calls internal studio actions with a service secret and the session's org and acting trainer. The internal action route rechecks enabled admin/team membership. |
-| Local developer / deployment operator | Eve also accepts `localDev()` and `vercelOidc()` authentication. These are not studio role grants; studio actions require an organization principal and acting trainer. |
+| Copilot service | Calls Studio actions, knowledge reads, and publishing with a service secret and the session's org and acting trainer. Each route rechecks enabled admin/team membership (`web/lib/copilot-actor.ts`). Approval is enforced by Eve; the service credential remains trusted server-side. |
+| Local developer / deployment operator | Development can use `localDev()`. It does not grant access to Studio; Studio actions require an organization principal and acting trainer. |
 
 Rules for this boundary are in [API rules](api.md), with shared [People](people.md) and [Practice](practice.md) checks. Sources: `web/lib/org.ts` (`isStudioRole`, `enabledMemberships`, `getTrainerOrg`), `web/app/api/copilot/me/route.ts` GET, `web/app/api/eve/v1/[[...path]]/route.ts` (`proxy`), `web/app/api/internal/copilot-studio/route.ts` POST, `copilot/agent/channels/eve.ts`, `copilot/agent/lib/studio.ts` (`studio`). See [Organizations and roles](orgs-and-roles.md) for membership and per-tab org selection.
 

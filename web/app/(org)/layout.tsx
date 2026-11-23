@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { ClientOnly } from "@/components/client-only";
+import { NamePrompt } from "@/components/name-prompt";
 import { OrgAccentProvider } from "@/components/org-accent-provider";
 import { LoadingCenteredCard } from "@/components/page-skeletons";
 import { db } from "@/lib/db";
@@ -21,7 +22,10 @@ export default async function LearnerLayout({ children }: { children: ReactNode 
   return (
     <OrgAccentProvider accentColor={parseAccentColor(org.metadata)}>
       {/* Learner pages render only in the browser and load through /api/trpc (lib/api.ts). */}
-      <ClientOnly fallback={<LoadingCenteredCard />}>{children}</ClientOnly>
+      <ClientOnly fallback={<LoadingCenteredCard />}>
+        <NamePrompt />
+        {children}
+      </ClientOnly>
     </OrgAccentProvider>
   );
 }

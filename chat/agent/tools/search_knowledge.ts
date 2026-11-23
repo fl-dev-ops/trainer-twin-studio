@@ -1,6 +1,6 @@
 import { defineDynamic, defineTool } from "eve/tools";
 import { z } from "zod";
-import { roleplayGuard } from "../lib/session-mode-lookup";
+import { knowledgeGuard } from "../lib/session-mode-lookup";
 import { callStudio, runtimeFromContext } from "../lib/studio";
 
 const SHARED_KNOWLEDGE_BASE_SLUG = "acme-knowledge";
@@ -14,7 +14,7 @@ const tool = defineTool({
     topics: z.array(z.string().trim().min(1)).optional(),
   }),
   async execute(input, ctx) {
-    const disabled = await roleplayGuard(ctx);
+    const disabled = await knowledgeGuard(ctx);
     if (disabled) return disabled;
     return callStudio<Record<string, unknown>>({
       action: "searchKnowledge",

@@ -10,13 +10,16 @@ import { db } from "@/lib/db";
 import { ensureDeployment } from "@/lib/deployments";
 import { recordSessionUsage } from "@/lib/minutes";
 import { ROLEPLAY_SOURCE } from "@/lib/scenario-ingest";
+import { voicePrefix } from "@/lib/s3";
+import { localVoice } from "./env";
 
 const ORG = { id: "e2e-org", slug: "e2e", name: "E2E Academy" };
 const person = (key: string, name: string) => ({ id: `e2e-${key}`, name, email: `e2e-${key}@example.com` });
 const admin = person("admin", "Ada Admin");
 const learner = person("learner", "Lena Learner");
 const broke = person("broke", "Brook Broke");
-const more = Array.from({ length: 22 }, (_, i) => person(`learner-${String(i + 1).padStart(2, "0")}`, `Learner ${String(i + 1).padStart(2, "0")}`));
+const namePrompt = person("learner-22", "e2e-learner-22");
+const more = [...Array.from({ length: 21 }, (_, i) => person(`learner-${String(i + 1).padStart(2, "0")}`, `Learner ${String(i + 1).padStart(2, "0")}`)), namePrompt];
 const everyone = [admin, learner, broke, ...more];
 
 // Start clean: everything the last run made, children first (not all of it cascades from the org).
@@ -28,6 +31,7 @@ await db.deployment.deleteMany({ where });
 await db.specVersion.deleteMany({ where });
 await db.agent.deleteMany({ where });
 await db.persona.deleteMany({ where });
+await db.voice.deleteMany({ where: { id: "e2e-transport-voice", ...where } });
 await db.organization.deleteMany({ where: { id: ORG.id } });
 await db.user.deleteMany({ where: { id: { in: everyone.map((p) => p.id) } } });
 
@@ -46,7 +50,12 @@ const purchase = await db.creditPurchase.create({
   data: { orgId: ORG.id, kind: "payment_link", razorpayId: "plink_e2e_credits", currency: "INR", credits: 100, amount: 80000 },
 });
 
-const persona = await db.persona.create({ data: { orgId: ORG.id, slug: "e2e-trainer", name: "E2E Trainer", data: {}, isOwn: true } });
+const voiceId = "e2e-transport-voice";
+if (localVoice) await db.voice.create({ data: {
+  id: voiceId, orgId: ORG.id, name: "Local transport test voice", kind: "cloned", status: "ready",
+  s3AudioKey: `${voicePrefix(ORG.id, voiceId)}/unused.wav`,
+} });
+const persona = await db.persona.create({ data: { orgId: ORG.id, slug: "e2e-trainer", name: "E2E Trainer", data: {}, isOwn: true, voiceId: localVoice ? voiceId : null } });
 const roleplay = await db.agent.create({
   data: { id: "e2e-roleplay", orgId: ORG.id, personaId: persona.id, kind: "ROLEPLAY", slug: "e2e-pitch", name: "Pitch practice", data: { source: ROLEPLAY_SOURCE, objective: "Pitch the product in two minutes." } },
 });
@@ -72,11 +81,12 @@ const codes = Object.fromEntries((await db.rolePlayAssignment.findMany({ where: 
   .map((row) => [row.member.user.email, row.shareCode]));
 // Sign-in codes for the people the tests sign in as (server-only API; the setup signs in with them over HTTP, the way
 // a person does). Sign-in is Google or an email code: there are no passwords.
-const otps = Object.fromEntries(await Promise.all([admin, learner, broke].map(async (p) =>
+const recipient = more[0];
+const otps = Object.fromEntries(await Promise.all([admin, learner, broke, recipient, namePrompt].map(async (p) =>
   [p.id, await auth.api.createVerificationOTP({ body: { email: p.email, type: "sign-in" } })] as const)));
 mkdirSync(new URL("./.state", import.meta.url), { recursive: true });
 writeFileSync(new URL("./.state/seed.json", import.meta.url), JSON.stringify({
-  org: ORG, otps, admin, learner, broke, more,
+  org: ORG, otps, admin, learner, broke, more, recipient, namePrompt,
   roleplay: { slug: roleplay.slug }, twin: { slug: twin.slug },
   purchase: { id: purchase.id, razorpayId: purchase.razorpayId, paymentId: `pay_e2e_${purchase.id}`, refundId: `rfnd_e2e_${purchase.id}` },
   codes: { learner: codes[learner.email], broke: codes[broke.email] },

@@ -306,7 +306,7 @@ describe.skipIf(!localMinutesDb)("widget cookieless lifecycle (real database)", 
     })));
     expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
     const rejected = results.find((result) => result.status === "rejected");
-    expect(rejected).toMatchObject({ status: "rejected", reason: { code: "public_twin_unavailable" } });
+    expect(rejected).toMatchObject({ status: "rejected", reason: { code: "public_call_credits_exhausted" } });
     expect(await availableOrgSeconds(f.org.id)).toBe(0);
     expect(await db.interviewSession.count({ where: { orgId: f.org.id } })).toBe(1);
   });

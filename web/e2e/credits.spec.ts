@@ -19,7 +19,7 @@ test("Usage: the org's remaining credits, Meteroid grants, and learners' balance
   const rows = page.getByRole("region", { name: "Learners" }).locator("ul li");
   await expect(rows).toHaveCount(20);
   await expect(page.getByText(`1–20 of ${more.length + 2}`)).toBeVisible();
-  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await page.getByRole("region", { name: "Learners" }).getByRole("button", { name: "Next", exact: true }).click();
   await expect(rows).toHaveCount(more.length + 2 - 20);
 
   await page.getByLabel("Search learners").fill(learner.name);
@@ -32,7 +32,7 @@ test("Usage: an external balance sync updates the sidebar and Remaining credits 
   await page.goto("/usage");
   await firstVersion;
   const remaining = page.locator("section").filter({ has: page.getByText("Remaining credits", { exact: true }) }).locator("p").nth(1);
-  const sidebar = page.getByRole("link", { name: /^Usage/ });
+  const sidebar = page.getByRole("button", { name: /^Account menu for / });
   await expect(remaining).toHaveText(/[\d,]+ min/);
   const before = Number((await remaining.innerText()).replace(/[^\d]/g, ""));
   await expect(sidebar).toContainText(`${before} min`);
