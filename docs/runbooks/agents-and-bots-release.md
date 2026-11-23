@@ -4,8 +4,33 @@ Branch `feat/public-twin-voice` → `v2` (PR #25). Production: Vercel (web, chat
 (`lk agent deploy` from `agent/`), Neon project `bitter-forest-93765083`, branch `production`, database `neondb`.
 Model and rules: [specs/agents.md](../../specs/agents.md). Widget and public calls: [public-twins-and-widgets.md](public-twins-and-widgets.md).
 
-**Not ready to release.** Finish the open UI work at the end first, then follow these steps in order. Every step that
-writes to production needs the owner's go-ahead at that moment.
+## Release record: 2026-11-23
+
+Released: PR #25 merged into `v2` as `695646b1`. Every production write was preceded by a Neon backup branch.
+
+| Step | Result |
+|---|---|
+| Backup before merge | `pre-agents-release-2026-11-23` (`br-icy-bread-azg431u6`) |
+| Rehearsal | All 9 migrations on a fresh branch of production: 45/45 agents backfilled, 0 mismatched; branch deleted |
+| Deploy | Web, chat, copilot Ready on Vercel; the web build applied the 9 migrations; `dash.` and `olga.trainertwin.com` health 200 |
+| Voice agent | `lk agent deploy`: version `6kgZRPyaVsPj` running (was `RofWANs8mH6T`) |
+| Backup before data | `pre-agents-data-2026-11-23` (`br-jolly-frost-azqto2iz`) |
+| Bots flag | Demo org (`latencytest`) metadata `{"bots": true}`; every other org has no bots |
+| Olga skills | Imported (objection handling v1–v5, 70 items; client goes silent v1–v6, 77 items) and merged into `olga-olga-twin` as active supporting skills; topic twins live; 57 sessions and 14 assignments unchanged |
+| Backup before role plays | `pre-pooled-roleplays-2026-11-23` (`br-polished-cake-azkkloj8`) |
+| Demo role plays | 18 Olga-spec role plays (9 personas × 2 scenarios) replaced by 2 pooled role plays with all 9 personas each; the 18 archived (no sessions or assignments) |
+
+Notes from the release:
+- **Previews:** every `trainer-twin-studio` preview fails (no `DATABASE_URL` in previews, so `env.ts` rejects the build).
+  This predates the release; the gate is a local production build (`NEXT_DIST_DIR=.next-buildcheck bunx next build`).
+- **Widget bundles:** the web build ships the committed `web/public/widgets/*` (the widgets tests check they match a
+  fresh build). Vercel's bun can't read the widgets lockfile, so `build` no longer runs `build:widgets`; `dev` still does.
+- **Backfill noise:** `backfill-skill-sources` logs "Published artifacts must belong to the organization" for Demo org
+  role plays stored under the legacy `trainertwin/kb` prefix. Non-fatal; those packages can't be imported into the
+  skill library until re-published.
+- **Skill import prefix:** run `scripts/migrate-skills.ts` with `S3_BASE_PREFIX=prod/trainertwin/kb` (local
+  `.env.prod` has the dev prefix). Each import writes the org's Chroma items under new skill version ids.
+- Delete the backup branches once the release has settled.
 
 ## What changes in production
 
@@ -76,6 +101,30 @@ Only merge when every live topic twin of the persona has a `primarySkillId` (imp
 out of the twin's calls. Olga (`olga`, main twin `olga-olga-twin`): 2 topic skills (objection handling, 70 items; client
 goes silent, 77 items); 9 older role-play packages fail import under a legacy prefix and are not needed for the twin.
 
+## 3b. Turn bots on for an org
+
+Bots exist only in orgs whose metadata has `"bots": true`; elsewhere the Bots menu is hidden, the bots API and copilot
+bot tools answer not found, and widgets find no bot. Merge the flag into the existing metadata, never overwrite it:
+
+```sql
+UPDATE organization SET metadata = (coalesce(nullif(metadata, ''), '{}')::jsonb || '{"bots": true}'::jsonb)::text
+WHERE slug = '<org slug>' RETURNING slug, metadata;
+```
+
+## 3c. Role plays with a persona pool (from files)
+
+A role play file in `web/data/roleplays/<set>/` may list `personas` (slugs, the builder's persona first); seeding sets
+the pool so each session plays one of them at random. Olga's spec: `node scripts/gen-olga-spec-roleplays.mjs
+data/roleplays/olga-spec` writes the 18 single-persona files and `olga-spec-pooled` (2 role plays, 9 personas each).
+
+```bash
+set -a; . ./.env.prod; set +a
+S3_BASE_PREFIX=prod/trainertwin/kb DATABASE_URL=<production> DATABASE_URL_UNPOOLED=<production> \
+  bun scripts/seed-roleplays.ts --org <org slug> --set olga-spec-pooled --dry-run   # then without --dry-run
+```
+
+Archive replaced role plays only when they have no sessions or assignments, in one transaction that checks the count.
+
 ## 4. Verify
 
 ```sql
@@ -98,11 +147,12 @@ behaves as before; `/bots` opens and a new bot can be created with public calls 
   returns to every topic skill of its persona).
 - Chroma items written by the import are keyed by new skill version ids; they are unused after a rollback.
 
-## Open work before merge
+## Open work
 
-- **UI:** finish the Bots pages (bot list and detail polish, persona and skills section design), the role play
-  "Also played by" section and the twin Skills tab against real data with several personas and skills, and the twin
-  library page (show topic skills inside the main twin).
+- **UI:** check the role play "Also played by" section and the twin Skills tab against real data (several personas and
+  skills), and show topic skills inside the main twin on the twin library page.
+- **Live checks:** a learner call on Olga's twin (both skills in use) and a few runs of the Demo pooled role plays.
+- **Merge the other orgs' twins** once their skills are imported (step 3).
 - **Skills:** the bot's own SKILL.md (`bot` package format) and the twin's main coaching skill (authoring + publishing);
   supporting skills for role plays (the database still allows one role-play pin).
 - **Cleanup after every org is merged:** remove the "every topic skill of the persona" fallback (`resolveTwinCatalog`).
