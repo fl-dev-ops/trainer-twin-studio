@@ -320,6 +320,7 @@ const agentsRouter = t.router({
       settings: z.object({
         preScreenshare: z.boolean(),
         preUpload: z.boolean(),
+        preUploadRequired: z.boolean().optional(),
         duringUpload: z.boolean(),
         uploadTitle: z.string().trim().max(80),
         uploadInstruction: z.string().trim().max(300),

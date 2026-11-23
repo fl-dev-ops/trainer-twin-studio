@@ -86,8 +86,8 @@ export function TwinSessionItem({
           {session.topics.length ? (
             <>
               {session.topics.slice(0, 2).map((topic) => (
-                <Badge key={topic} className="max-w-full truncate" variant="outline">
-                  {topic}
+                <Badge key={topic} className="max-w-full" variant="outline">
+                  <span className="truncate">{topic}</span>
                 </Badge>
               ))}
               {session.topics.length > 2 ? <Badge className="shrink-0" variant="outline">+{session.topics.length - 2}</Badge> : null}
