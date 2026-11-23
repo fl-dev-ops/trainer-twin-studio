@@ -1,5 +1,7 @@
 "use client";
 
+import type { Route } from "next";
+
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
@@ -34,6 +36,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { attachedMessage, uploadFile } from "@/lib/upload-client";
 import { DURING_UPLOAD_ACCEPT, DURING_UPLOAD_RULE, duringUploadProblem } from "@/lib/context-upload";
+import { dashRoute } from "@/lib/routes";
 
 /** ready: the pre-join (mic access, Start); leaving: a saved twin calibration on its way to its page. */
 type Phase = "ready" | "connecting" | "live" | "ended" | "leaving" | "error";
@@ -154,7 +157,7 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
   const [calibrationFailed, setCalibrationFailed] = useState(false);
   /** Rating saves still in flight; ending the call or leaving waits for them. */
   const pendingRatings = useRef(new Set<Promise<unknown>>());
-  const backHref = twin ? `/twin/${encodeURIComponent(slug)}/calibration` : `/roleplay/${encodeURIComponent(slug)}`;
+  const backHref = twin ? dashRoute(`/twin/${encodeURIComponent(slug)}/calibration`) : dashRoute(`/roleplay/${encodeURIComponent(slug)}`);
   const connectionRef = useRef<Connection | null>(null);
   const startedRef = useRef(false);
   const endingRef = useRef(false);
@@ -228,7 +231,7 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
         // (that page shows the raw count meanwhile).
         setPhase("leaving");
         void queryClient.invalidateQueries();
-        router.replace(`/twin/${encodeURIComponent(slug)}/calibration/${encodeURIComponent(savedId)}`);
+        router.replace(dashRoute(`/twin/${encodeURIComponent(slug)}/calibration/${encodeURIComponent(savedId)}`));
         return;
       }
       setPhase("ended");
@@ -580,8 +583,8 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
           <CallSummary
             transcriptHref={
               twin
-                ? calibrationId ? `/twin/${encodeURIComponent(slug)}/calibration/${encodeURIComponent(calibrationId)}` : undefined
-                : connection?.sessionId ? `/sessions/${encodeURIComponent(connection.sessionId)}` : undefined
+                ? calibrationId ? dashRoute(`/twin/${encodeURIComponent(slug)}/calibration/${encodeURIComponent(calibrationId)}`) : undefined
+                : connection?.sessionId ? dashRoute(`/sessions/${encodeURIComponent(connection.sessionId)}`) : undefined
             }
             backHref={backHref}
             backLabel={twin ? "All calibrations" : "Go to Roleplay"}
@@ -912,8 +915,8 @@ function CallSummary({
   turns,
   onRestart,
 }: {
-  transcriptHref?: string;
-  backHref: string;
+  transcriptHref?: Route;
+  backHref: Route;
   backLabel: string;
   twinName: string;
   photoUrl: string | null;

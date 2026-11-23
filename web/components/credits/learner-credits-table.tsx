@@ -5,6 +5,7 @@ import { CreditsPager, usePage } from "@/components/credits/credits-pager";
 import { LowCreditsBadge } from "@/components/credits/low-credits-badge";
 import { UserAvatar } from "@/components/user-avatar";
 import { LOW_LEARNER_MINUTES } from "@/lib/minutes-config";
+import { dashRoute } from "@/lib/routes";
 
 export type LearnerCreditsRow = {
   email: string;
@@ -47,7 +48,7 @@ export function LearnerCreditsTable({ rows, empty }: { rows: LearnerCreditsRow[]
                 <UserAvatar user={{ name: row.name ?? row.email, email: row.email, image: row.image }} size="sm" />
                 <span className="flex min-w-0 flex-col">
                   {row.userId ? (
-                    <Link href={`/users/${row.userId}`} className="truncate font-medium outline-none after:absolute after:inset-0 hover:underline focus-visible:after:ring-2 focus-visible:after:ring-ring">
+                    <Link href={dashRoute(`/users/${row.userId}`)} className="truncate font-medium outline-none after:absolute after:inset-0 hover:underline focus-visible:after:ring-2 focus-visible:after:ring-ring">
                       {row.name || row.email}
                     </Link>
                   ) : (

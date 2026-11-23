@@ -2,6 +2,7 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { SwitchAccountButton } from "@/components/auth/switch-account-button";
 import { auth } from "@/lib/auth";
+import { authRoute } from "@/lib/routes";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +30,7 @@ export default async function NoOrgPage() {
             <SwitchAccountButton returnTo="/sign-in" label="Sign out" />
           </>
         ) : (
-          <Link href="/sign-in" className="text-foreground text-sm underline underline-offset-4">
+          <Link href={authRoute("/sign-in")} className="text-foreground text-sm underline underline-offset-4">
             Sign in
           </Link>
         )}

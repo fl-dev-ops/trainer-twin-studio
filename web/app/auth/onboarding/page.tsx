@@ -6,6 +6,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { FounderForm } from "@/components/auth/founder-form";
 import { OnboardingHeader } from "@/components/auth/onboarding-header";
+import { authRoute, crossHostRoute } from "@/lib/routes";
 
 export const dynamic = "force-dynamic";
 
@@ -33,7 +34,7 @@ export default async function OnboardingPage({
     : null;
   const newOrg = Boolean(invite && !invite.acceptedAt);
   // Founders sign in first (Google or an email code: there are no passwords), then come back here to set up.
-  if (newOrg && !session) redirect(signInUrl((await headers()).get("host") ?? "", `/onboarding?t=${encodeURIComponent(token!)}`));
+  if (newOrg && !session) redirect(crossHostRoute(signInUrl((await headers()).get("host") ?? "", `/onboarding?t=${encodeURIComponent(token!)}`)));
 
   // 2. Otherwise an admin continues setting up their organization (connectors): the one they're working in.
   let userOrg: { id: string; name: string; slug: string } | null = null;
@@ -105,7 +106,7 @@ export default async function OnboardingPage({
             </p>
             <div className="mt-6">
               <Link
-                href="/sign-in"
+                href={authRoute("/sign-in")}
                 className="inline-flex items-center justify-center rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-2 text-xs font-medium transition-colors"
               >
                 Go to Sign in

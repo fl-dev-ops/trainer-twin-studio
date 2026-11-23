@@ -1,5 +1,7 @@
 "use client";
 
+import type { Route } from "next";
+
 import { useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -38,14 +40,14 @@ const hostOf = (url: string) => {
 const LABEL = "m-0 text-overline font-medium tracking-overline text-muted-foreground uppercase";
 
 type OrgHomeTwin = {
-  href: string;
+  href: Route;
   trainer: Trainer;
   twin: Twin;
   access: LearnerAccess;
   /** The trainer's skill twins: what they coach on (names only; their descriptions are written for trainers). */
   topics: { name: string }[];
 };
-type OrgHomeRoleplay = { name: string; description: string | null; href: string; expiresAt: string };
+type OrgHomeRoleplay = { name: string; description: string | null; href: Route; expiresAt: string };
 
 /**
  * The org's home page (<org>.<base>/, lib/pages/org-home.ts), laid out like a Delphi profile: the trainer (photo, role,

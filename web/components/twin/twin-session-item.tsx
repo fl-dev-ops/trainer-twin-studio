@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { UserAvatar } from "@/components/user-avatar";
 import type { TwinOutputs } from "@/lib/twin/trpc";
 import { cn } from "@/lib/utils";
+import { dashRoute } from "@/lib/routes";
 
 /** Learner feedback is 1-5, read as three levels: green / neutral / red (only the poles carry hue). Means round first. */
 export function helpfulTone(score: number) {
@@ -57,7 +58,7 @@ export function TwinSessionItem({
   return (
     <li className={cn(divider && "border-t border-border", className)}>
       <Link
-        href={`/twin/sessions/${session.id}`}
+        href={dashRoute(`/twin/sessions/${session.id}`)}
         className={cn(
           TWIN_SESSION_GRID,
           "w-full items-center p-4 px-5 text-left transition-colors hover:bg-(--sidebar) outline-none focus-visible:bg-(--sidebar)",

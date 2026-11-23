@@ -22,6 +22,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { AccessUntil } from "@/components/twin/access-until";
 import { TWIN_UPLOAD_TITLE_DEFAULT } from "@/lib/context-upload";
 import { PublicAccessPanel } from "@/components/twin/public-access-panel";
+import { dashRoute } from "@/lib/routes";
 
 type LearnerAssign = TwinOutputs["assignments"]["list"][number];
 
@@ -183,7 +184,7 @@ export function TwinEditPage({
       {/* Header Back navigation */}
       <header className="flex min-h-10 items-center justify-between gap-4">
         <Link
-          href={`/twin/${id}`}
+          href={dashRoute(`/twin/${id}`)}
           className="inline-flex items-center gap-2 text-sm text-(--foreground) hover:text-muted-foreground transition-colors"
         >
           <ArrowLeft className="size-4" />
@@ -232,7 +233,7 @@ export function TwinEditPage({
               </div>
             </fieldset>
             <div className="flex items-center justify-end gap-3">
-              <Button variant="ghost" nativeButton={false} render={<Link href={`/twin/${id}`} />}>Cancel</Button>
+              <Button variant="ghost" nativeButton={false} render={<Link href={dashRoute(`/twin/${id}`)} />}>Cancel</Button>
               <Button variant="brand" type="submit" disabled={saving || !name.trim()}>
                 {saved && <Check data-icon="inline-start" />}
                 {saving ? "Saving…" : saved ? "Saved" : "Save changes"}

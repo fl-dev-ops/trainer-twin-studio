@@ -10,14 +10,11 @@ test("the retired Domains bookmark is not a Studio route", async ({ page }) => {
   await expect(page).toHaveURL(/\/domains$/);
 });
 
-test("old /agents links land on the same role play under /roleplay", async ({ page }) => {
-  const slug = seed().roleplay.slug;
-  await page.goto("/agents");
-  await expect(page).toHaveURL(/\/roleplay$/);
-  await page.goto(`/agents/${slug}/edit`);
-  await expect(page).toHaveURL(new RegExp(`/roleplay/${slug}/edit$`));
-  await page.goto("/agents/fidelity");
-  await expect(page).toHaveURL(/\/roleplay$/);
+test("retired redirect-only bookmarks are not Studio routes", async ({ page }) => {
+  for (const path of ["/agents", "/credits", "/knowledge", "/voice/cloning/new"]) {
+    const response = await page.goto(path);
+    expect(response?.status(), path).toBe(404);
+  }
 });
 
 test("the library lists role plays only, and each card's menu edits, assigns and calibrates on /roleplay", async ({ page }) => {

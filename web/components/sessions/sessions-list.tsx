@@ -10,6 +10,7 @@ import { SessionTime } from "@/components/sessions/session-time";
 import { UserAvatar } from "@/components/user-avatar";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import type { SessionsListData } from "@/lib/pages/sessions";
+import { dashRoute } from "@/lib/routes";
 
 const STATUS_LABEL: Record<string, string> = {
   assigned: "Not started",
@@ -66,7 +67,7 @@ export function SessionsList({ data: { range, scenario, learner, scenarios, lear
               return (
                 <li key={session.id}>
                   <Link
-                    href={`/sessions/${session.id}`}
+                    href={dashRoute(`/sessions/${session.id}`)}
                     className="group flex items-start gap-3.5 px-5 py-4 outline-none transition-colors hover:bg-muted/40 focus-visible:bg-muted/40"
                   >
                     {session.user ? <UserAvatar user={session.user} size="lg" /> : <span className="grid size-10 place-items-center rounded-full bg-muted">{name.charAt(0).toUpperCase()}</span>}

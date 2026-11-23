@@ -8,6 +8,7 @@ import { useSessionReportState } from "@/components/twin/use-report-polling";
 import type { TwinOutputs } from "@/lib/twin/trpc";
 import { cn } from "@/lib/utils";
 import { PageContainer } from "@/components/page-container";
+import { dashRoute } from "@/lib/routes";
 
 type SessionDetail = TwinOutputs["sessions"]["get"];
 
@@ -20,7 +21,7 @@ export function TwinSessionDetailPage({ session }: { session: SessionDetail }) {
       {/* Back navigation */}
       <header className="flex min-h-10 items-center justify-between gap-4">
         <Link
-          href="/twin/sessions"
+          href={dashRoute("/twin/sessions")}
           className="inline-flex items-center gap-2 text-sm text-(--text-secondary) hover:text-(--foreground) transition-colors"
         >
           <ArrowLeft className="size-4" />

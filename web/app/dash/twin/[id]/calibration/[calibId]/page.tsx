@@ -3,6 +3,7 @@
 import { useParams } from "next/navigation";
 import { CalibrationReview } from "@/components/calibration/calibration-review";
 import { api, pageNotFound, useApi } from "@/lib/api";
+import { dashRoute } from "@/lib/routes";
 
 export default function TwinCalibrationReviewRoute() {
   const { id, calibId } = useParams<{ id: string; calibId: string }>();
@@ -10,7 +11,7 @@ export default function TwinCalibrationReviewRoute() {
   if (calibration.slug !== id) pageNotFound();
   return (
     <CalibrationReview
-      backHref={`/twin/${id}/calibration`}
+      backHref={dashRoute(`/twin/${id}/calibration`)}
       twinName={calibration.twinName}
       photoUrl={calibration.photoUrl}
       startedAt={calibration.startedAt}

@@ -16,6 +16,7 @@ import { InviteUser } from "@/components/users/invite-user";
 import { DEFAULT_LEARNER_MINUTES } from "@/lib/minutes-config";
 import { useRefresh } from "@/lib/use-refresh";
 import { SearchInput } from "@/components/search-input";
+import { dashRoute } from "@/lib/routes";
 
 export type TeamMember = {
   id: string;
@@ -63,7 +64,7 @@ function MembersTable({ members, empty, currentUserId, busy, onToggle }: {
                       <UserAvatar user={{ name: member.name, email: member.email }} size="sm" />
                       {learner ? (
                         // A learner's row opens their page (/users/<id>): the name is the link, stretched over the row.
-                        <Link href={`/users/${member.userId}`} className="truncate font-medium outline-none after:absolute after:inset-0 hover:underline focus-visible:after:ring-2 focus-visible:after:ring-ring">
+                        <Link href={dashRoute(`/users/${member.userId}`)} className="truncate font-medium outline-none after:absolute after:inset-0 hover:underline focus-visible:after:ring-2 focus-visible:after:ring-ring">
                           {member.name}
                         </Link>
                       ) : <span className="truncate font-medium">{member.name}</span>}

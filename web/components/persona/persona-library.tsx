@@ -4,6 +4,7 @@ import { CARD, PersonaPhoto, RoleChip } from "@/components/persona/persona-parts
 import type { PersonaView } from "@/lib/personas";
 import { cn } from "@/lib/utils";
 import { PageContainer } from "@/components/page-container";
+import { dashRoute } from "@/lib/routes";
 
 /**
  * Persona Library: the people learners practise with (photo, role, about, voice, where each is used).
@@ -22,7 +23,7 @@ export function PersonaLibrary({ personas }: { personas: PersonaView[] }) {
           Persona Library
         </h1>
         <Link
-          href="/personas/new"
+          href={dashRoute("/personas/new")}
           className="inline-flex h-8 items-center gap-2 rounded-full bg-(--brand) px-3.5 text-body-s leading-5 font-medium text-white transition-colors hover:bg-brand-hover"
         >
           <svg viewBox="0 0 16 16" width={16} height={16} fill="none" aria-hidden>
@@ -55,7 +56,7 @@ export function PersonaLibrary({ personas }: { personas: PersonaView[] }) {
           <p className="m-0 text-sm text-muted-foreground">
             {own.length ? "Create a client or interviewer for your role plays to use." : "Create the first person your learners will talk to."}
           </p>
-          <Link href="/personas/new" className="mt-1 inline-flex h-8 items-center rounded-full border border-(--card-border) px-4 text-body-s font-medium hover:bg-(--tone-control)">
+          <Link href={dashRoute("/personas/new")} className="mt-1 inline-flex h-8 items-center rounded-full border border-(--card-border) px-4 text-body-s font-medium hover:bg-(--tone-control)">
             Create persona
           </Link>
         </div>
@@ -70,7 +71,7 @@ function PersonaCard({ item }: { item: PersonaView }) {
   return (
     <article className={cn(CARD, "relative flex flex-col gap-4 p-5 transition-shadow hover:shadow-elevation-2")}>
       <Link
-        href={`/personas/${encodeURIComponent(item.slug)}`}
+        href={dashRoute(`/personas/${encodeURIComponent(item.slug)}`)}
         aria-label={`Open ${persona.name}`}
         className="absolute inset-0 rounded-tt-lg outline-none focus-visible:ring-2 focus-visible:ring-(--brand)"
       />

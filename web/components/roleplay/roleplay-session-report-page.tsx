@@ -12,6 +12,7 @@ import type { RoleplayOutputs } from "@/lib/roleplay/trpc";
 import { cn } from "@/lib/utils";
 import { useRefresh } from "@/lib/use-refresh";
 import { PageContainer } from "@/components/page-container";
+import { dashRoute } from "@/lib/routes";
 
 type Session = RoleplayOutputs["sessions"]["get"];
 
@@ -55,7 +56,7 @@ export function RoleplaySessionReportPage({ session }: { session: Session }) {
   return (
     <PageContainer>
       <header className="flex min-h-10 items-center">
-        <Link href={`/roleplay/${session.roleplay.slug}`} className="inline-flex items-center gap-2 text-sm text-(--foreground) transition-colors hover:text-muted-foreground">
+        <Link href={dashRoute(`/roleplay/${session.roleplay.slug}`)} className="inline-flex items-center gap-2 text-sm text-(--foreground) transition-colors hover:text-muted-foreground">
           <ArrowLeft className="size-4" />
           <span>{session.roleplay.name}</span>
         </Link>

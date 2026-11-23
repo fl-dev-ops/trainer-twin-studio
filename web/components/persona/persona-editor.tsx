@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { useRefresh } from "@/lib/use-refresh";
 import { PageContainer } from "@/components/page-container";
 import { AddVoiceDialog } from "@/components/voice-library";
+import { dashRoute } from "@/lib/routes";
 
 type LibraryVoice = { id: string; name: string; kind: string };
 type SavedVoice = { id: string; name: string } | null;
@@ -44,7 +45,7 @@ export function PersonaEditor({ slug, initial, voice = null, photoUrl = null, vo
   const [photo, setPhoto] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const update = (patch: Partial<PersonaFields>) => setForm((current) => ({ ...current, ...patch }));
-  const back = slug ? `/personas/${encodeURIComponent(slug)}` : "/personas";
+  const back = slug ? dashRoute(`/personas/${encodeURIComponent(slug)}`) : dashRoute("/personas");
   const roles = useId();
 
   function choosePhoto(file: File | null) {
@@ -74,7 +75,7 @@ export function PersonaEditor({ slug, initial, voice = null, photoUrl = null, vo
         }
       }
       toast.success(slug ? "Persona saved" : "Persona created");
-      router.push(`/personas/${encodeURIComponent(result.slug)}`);
+      router.push(dashRoute(`/personas/${encodeURIComponent(result.slug)}`));
       refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not save the persona");
@@ -123,7 +124,7 @@ export function PersonaEditor({ slug, initial, voice = null, photoUrl = null, vo
             {isOwn ? (
               <p className="m-0 text-sm text-(--text-secondary)">
                 Your photo is set up on{" "}
-                <Link href="/twin/brain" className="font-medium text-foreground underline-offset-4 hover:underline">Twin’s brain</Link>.
+                <Link href={dashRoute("/twin/brain")} className="font-medium text-foreground underline-offset-4 hover:underline">Twin’s brain</Link>.
               </p>
             ) : (
               <div className="flex min-w-0 flex-1 flex-col gap-1">

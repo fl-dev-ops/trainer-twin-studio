@@ -9,6 +9,7 @@ import { UserAvatar } from "@/components/user-avatar";
 import type { SessionDetailData } from "@/lib/pages/sessions";
 import type { KeyMoment } from "@/lib/session-report";
 import { cn } from "@/lib/utils";
+import { dashRoute } from "@/lib/routes";
 
 const STATUS_LABEL: Record<string, string> = {
   assigned: "Not started",
@@ -54,7 +55,7 @@ export function SessionDetail({ data: row }: { data: SessionDetailData }) {
   return (
     <PageContainer className="flex flex-col gap-4">
       <Link
-        href={`/sessions?scenario=${encodeURIComponent(row.agentId)}&range=all`}
+        href={dashRoute(`/sessions?scenario=${encodeURIComponent(row.agentId)}&range=all`)}
         className="mb-2 flex w-fit items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
       >
         <ArrowLeft className="size-4" aria-hidden />

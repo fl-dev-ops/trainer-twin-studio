@@ -10,6 +10,7 @@ import { UserAvatar } from "@/components/user-avatar";
 import type { RoleplayOutputs } from "@/lib/roleplay/trpc";
 import { cn } from "@/lib/utils";
 import { PageContainer } from "@/components/page-container";
+import { dashRoute } from "@/lib/routes";
 
 type Detail = RoleplayOutputs["scenarios"]["get"];
 
@@ -29,20 +30,20 @@ export function RoleplayDetailPage({ roleplay }: { roleplay: Detail }) {
   return (
     <PageContainer>
       <header className="flex min-h-10 items-center justify-between gap-4">
-        <Link href="/roleplay" className="inline-flex items-center gap-2 text-sm text-(--foreground) transition-colors hover:text-muted-foreground">
+        <Link href={dashRoute("/roleplay")} className="inline-flex items-center gap-2 text-sm text-(--foreground) transition-colors hover:text-muted-foreground">
           <ArrowLeft className="size-4" />
           <span>Back</span>
         </Link>
         <div className="flex items-center gap-3">
           <Link
-            href={`/talk?agent=${encodeURIComponent(roleplay.slug)}`}
+            href={dashRoute(`/talk?agent=${encodeURIComponent(roleplay.slug)}`)}
             className="inline-flex h-8 items-center gap-2 rounded-full border border-(--border) px-4 text-body-s font-medium transition-colors hover:bg-(--sidebar)"
           >
             <Play className="size-3.5" />
             <span>Try it</span>
           </Link>
           <Link
-            href={`/roleplay/${roleplay.slug}/edit`}
+            href={dashRoute(`/roleplay/${roleplay.slug}/edit`)}
             className="inline-flex h-8 items-center gap-2 rounded-full bg-(--brand) px-4 text-body-s font-medium text-white transition-colors hover:bg-brand-hover"
           >
             <Pencil className="size-3.5" />
@@ -126,7 +127,7 @@ export function RoleplayDetailPage({ roleplay }: { roleplay: Detail }) {
         <article className={cn(card, "md:col-span-2")}>
           <div className="flex items-center justify-between gap-4">
             <h2 className="m-0 text-title-s font-semibold tracking-title">Members</h2>
-            <Link href={`/roleplay/${roleplay.slug}/assign`} className="text-sm font-medium text-(--brand) hover:underline">
+            <Link href={dashRoute(`/roleplay/${roleplay.slug}/assign`)} className="text-sm font-medium text-(--brand) hover:underline">
               Assign
             </Link>
           </div>

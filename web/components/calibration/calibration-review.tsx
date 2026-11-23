@@ -1,3 +1,4 @@
+import type { Route } from "next";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import type { CalibrationTurn } from "@/components/calibration/mock";
@@ -16,7 +17,7 @@ export function CalibrationReview({
   score,
   sessionId,
 }: {
-  backHref: string;
+  backHref: Route;
   twinName: string;
   /** The twin's persona photo; without it, the initial on a wash. */
   photoUrl?: string | null;

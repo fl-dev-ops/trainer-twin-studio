@@ -28,18 +28,19 @@ import {
   SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { dashRoute } from "@/lib/routes";
 
 const NAV_GROUPS = [
   {
     label: "Twin",
     items: [
-      { title: "Twin agents", href: "/twin", icon: SetupIcon },
-      { title: "Twin sessions", href: "/twin/sessions", icon: SessionsIcon },
-      { title: "Twin users", href: "/twin/users", icon: UsersIcon },
+      { title: "Twin agents", href: dashRoute("/twin"), icon: SetupIcon },
+      { title: "Twin sessions", href: dashRoute("/twin/sessions"), icon: SessionsIcon },
+      { title: "Twin users", href: dashRoute("/twin/users"), icon: UsersIcon },
       // Knowledge opens from the brain canvas, so it lights this item too.
       {
         title: "Twin’s brain",
-        href: "/twin/brain",
+        href: dashRoute("/twin/brain"),
         icon: TwinIcon,
         also: ["/twin/knowledge"],
       },
@@ -48,14 +49,14 @@ const NAV_GROUPS = [
   {
     label: "Role play",
     items: [
-      { title: "Scenarios", href: "/roleplay", icon: RoleplayIcon },
+      { title: "Scenarios", href: dashRoute("/roleplay"), icon: RoleplayIcon },
       {
         title: "Role play sessions",
-        href: "/roleplay/sessions",
+        href: dashRoute("/roleplay/sessions"),
         icon: SessionsIcon,
       },
-      { title: "Roleplay users", href: "/roleplay/users", icon: UsersIcon },
-      { title: "Personas", href: "/personas", icon: PersonaIcon },
+      { title: "Roleplay users", href: dashRoute("/roleplay/users"), icon: UsersIcon },
+      { title: "Personas", href: dashRoute("/personas"), icon: PersonaIcon },
     ],
   },
 ];

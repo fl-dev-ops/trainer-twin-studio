@@ -14,6 +14,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem,
 import { Spinner } from "@/components/ui/spinner";
 import { PersonaSourcePanel } from "@/components/persona-source-panel";
 import { useRefresh } from "@/lib/use-refresh";
+import { dashRoute } from "@/lib/routes";
 
 type VersionInfo = { version: number; createdAt: string; label: string };
 
@@ -53,7 +54,7 @@ export function SpecResourceEditor({
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const historical = shownVersion !== currentVersion;
-  const basePath = `/${type}/${encodeURIComponent(slug)}`;
+  const basePath = dashRoute(`/${type}/${encodeURIComponent(slug)}`);
   const editPath = basePath;
   const copy = COPY;
 
@@ -82,7 +83,7 @@ export function SpecResourceEditor({
       return toast.error(response.status === 409 && result?.error ? result.error : `Could not delete ${slug}`);
     }
     toast.success(`Deleted ${slug}`);
-    router.push(`/${type}`);
+    router.push(dashRoute(`/${type}`));
     refresh();
   }
 
@@ -94,7 +95,7 @@ export function SpecResourceEditor({
   return (
     <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <header className="flex shrink-0 items-center gap-3 border-b px-4 py-3 sm:px-6">
-        <Button variant="ghost" size="icon-sm" render={<Link href={`/${type}`} />} nativeButton={false} aria-label={`Back to ${copy.title}`}>
+        <Button variant="ghost" size="icon-sm" render={<Link href={dashRoute(`/${type}`)} />} nativeButton={false} aria-label={`Back to ${copy.title}`}>
           <ArrowLeft />
         </Button>
         <div className="min-w-0 flex-1">
@@ -120,7 +121,7 @@ export function SpecResourceEditor({
                 <History /> Current · v{currentVersion}
               </DropdownMenuItem>
               {versions.map((version) => (
-                <DropdownMenuItem key={version.version} onClick={() => router.push(`${editPath}?version=${version.version}`)}>
+                <DropdownMenuItem key={version.version} onClick={() => router.push(dashRoute(`/${type}/${encodeURIComponent(slug)}?version=${version.version}`))}>
                   <RotateCcw /> {version.label}
                 </DropdownMenuItem>
               ))}

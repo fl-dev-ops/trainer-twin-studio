@@ -26,6 +26,7 @@ import { PageContainer } from "@/components/page-container";
 import { Button } from "@/components/ui/button";
 import type { ToolSettings } from "@/lib/agent-tools";
 import { FormCard, SettingCard, SettingsPanel, SettingsSection } from "@/components/settings-cards";
+import { dashRoute } from "@/lib/routes";
 
 type Persona = RoleplayOutputs["builder"]["personas"][number];
 type Phase = "before" | "during" | "after" | "tools";
@@ -121,7 +122,7 @@ export function PersonaPicker({ personas, value, onChange }: { personas: Persona
   if (!personas.length) {
     return (
       <p className="text-sm text-muted-foreground">
-        No personas yet. <Link href="/personas/new" className="text-foreground underline underline-offset-4">Create one</Link> first.
+        No personas yet. <Link href={dashRoute("/personas/new")} className="text-foreground underline underline-offset-4">Create one</Link> first.
       </p>
     );
   }
@@ -262,7 +263,7 @@ export function RoleplayBuilderPage({ slug, initial, before: initialBefore, tool
       const settings = editing ? saved.current.before : { ...before, ...card };
       const result = await roleplayClient.builder.save.mutate({ slug, builder: parsed.data, before: settings, tools: editing ? saved.current.tools : tools });
       toast.success(slug ? "Role play saved" : "Role play created");
-      router.push(`/roleplay/${result.slug}`);
+      router.push(dashRoute(`/roleplay/${result.slug}`));
       refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not save the role play");
@@ -297,7 +298,7 @@ export function RoleplayBuilderPage({ slug, initial, before: initialBefore, tool
   return (
     <PageContainer>
       <header className="flex min-h-10 items-center justify-between gap-4">
-        <Link href={slug ? `/roleplay/${slug}` : "/roleplay"} className="inline-flex items-center gap-2 text-sm text-(--foreground) transition-colors hover:text-muted-foreground">
+        <Link href={slug ? dashRoute(`/roleplay/${slug}`) : dashRoute("/roleplay")} className="inline-flex items-center gap-2 text-sm text-(--foreground) transition-colors hover:text-muted-foreground">
           <ArrowLeft className="size-4" />
           <span>Back</span>
         </Link>
@@ -309,7 +310,7 @@ export function RoleplayBuilderPage({ slug, initial, before: initialBefore, tool
           <p className="mt-1 text-sm text-muted-foreground">The call the learner practises, how they’re scored, and what they set up first.</p>
         </div>
         {slug ? (
-          <Button variant="brand" nativeButton={false} render={<Link href={`/talk?agent=${encodeURIComponent(slug)}`} />}>
+          <Button variant="brand" nativeButton={false} render={<Link href={dashRoute(`/talk?agent=${encodeURIComponent(slug)}`)} />}>
             <Play data-icon="inline-start" /> Try role play
           </Button>
         ) : null}
@@ -511,7 +512,7 @@ export function RoleplayBuilderPage({ slug, initial, before: initialBefore, tool
       {/* Editing: Scenario and Scoring save with the role play; Settings and Tools save as they change. */}
       {!editing || tab === "during" || tab === "after" ? (
         <div className="mt-6 flex items-center justify-between gap-3">
-          <Button variant="ghost" nativeButton={false} render={<Link href={slug ? `/roleplay/${slug}` : "/roleplay"} />}>
+          <Button variant="ghost" nativeButton={false} render={<Link href={slug ? dashRoute(`/roleplay/${slug}`) : dashRoute("/roleplay")} />}>
             Cancel
           </Button>
           <Button variant="brand" disabled={saving} onClick={() => void save()}>

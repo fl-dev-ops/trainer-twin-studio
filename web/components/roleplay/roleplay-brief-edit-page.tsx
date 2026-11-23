@@ -1,5 +1,7 @@
 "use client";
 
+import type { Route } from "next";
+
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState, type ReactNode } from "react";
@@ -19,6 +21,7 @@ import { roleplayClient } from "@/lib/roleplay/client";
 import type { RoleplayOutputs } from "@/lib/roleplay/trpc";
 import { useRefresh } from "@/lib/use-refresh";
 import { cn } from "@/lib/utils";
+import { dashRoute } from "@/lib/routes";
 
 type Brief = NonNullable<RoleplayOutputs["builder"]["get"]["brief"]>;
 type Script = Brief["script"];
@@ -39,9 +42,9 @@ function Field({ id, label, hint, children }: { id?: string; label: string; hint
 }
 
 /** Opens the copilot on this role play, with the trainer's change request typed in. */
-export function editWithCopilot(slug: string, title: string, change: string, go: (href: string) => void) {
+export function editWithCopilot(slug: string, title: string, change: string, go: (href: Route) => void) {
   seedCopilot(encodeCopilotMessage({ skill: "roleplay-creator", files: [], text: `Change the role play "${title}" (${slug}): ${change}` }));
-  go("/");
+  go(dashRoute("/"));
 }
 
 /** The script the copilot wrote, read-only: who plays whom, the situation, how it goes and how it ends. */
@@ -126,7 +129,7 @@ export function RoleplayBriefEditPage({ slug, brief, before: initialBefore, tool
       await roleplayClient.builder.saveBrief.mutate({ slug, ...form });
       toast.success("Role play saved");
       refresh();
-      router.push(`/roleplay/${slug}`);
+      router.push(dashRoute(`/roleplay/${slug}`));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not save the role play");
     } finally {
@@ -170,7 +173,7 @@ export function RoleplayBriefEditPage({ slug, brief, before: initialBefore, tool
   return (
     <PageContainer>
       <header className="flex min-h-10 items-center justify-between gap-4">
-        <Link href={`/roleplay/${slug}`} className="inline-flex items-center gap-2 text-sm text-(--foreground) transition-colors hover:text-muted-foreground">
+        <Link href={dashRoute(`/roleplay/${slug}`)} className="inline-flex items-center gap-2 text-sm text-(--foreground) transition-colors hover:text-muted-foreground">
           <ArrowLeft className="size-4" />
           <span>Back</span>
         </Link>
@@ -181,7 +184,7 @@ export function RoleplayBriefEditPage({ slug, brief, before: initialBefore, tool
           <h1 className="m-0 text-title-m leading-7 font-semibold tracking-title">Edit role play</h1>
           <p className="mt-1 text-sm text-muted-foreground">Change the basics here. Ask the copilot to change the script.</p>
         </div>
-        <Button variant="secondary" nativeButton={false} render={<Link href={`/talk?agent=${encodeURIComponent(slug)}`} />}>
+        <Button variant="secondary" nativeButton={false} render={<Link href={dashRoute(`/talk?agent=${encodeURIComponent(slug)}`)} />}>
           <Play data-icon="inline-start" /> Try it
         </Button>
       </div>
@@ -218,7 +221,7 @@ export function RoleplayBriefEditPage({ slug, brief, before: initialBefore, tool
             ) : null}
           </article>
           <div className="flex items-center justify-end gap-3 pt-4">
-            <Button variant="ghost" nativeButton={false} render={<Link href={`/roleplay/${slug}`} />}>Cancel</Button>
+            <Button variant="ghost" nativeButton={false} render={<Link href={dashRoute(`/roleplay/${slug}`)} />}>Cancel</Button>
             <Button variant="brand" disabled={saving || !dirty || !form.title.trim() || (brief.kind !== "authored" && (!form.learnerBrief.trim() || (brief.aiStarts && !form.openingLine.trim())))} onClick={() => void save()}>
               <Check data-icon="inline-start" /> {saving ? "Saving…" : "Save changes"}
             </Button>

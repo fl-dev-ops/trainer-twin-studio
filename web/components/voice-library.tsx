@@ -39,6 +39,7 @@ import { generateSpeech, playPcmStream, stopPlayback } from "@/lib/audio-playbac
 import { useRefresh } from "@/lib/use-refresh";
 import { randomPassage } from "@/lib/voice-passage";
 import { SearchInput } from "@/components/search-input";
+import { dashRoute } from "@/lib/routes";
 
 export type VoiceRow = {
   id: string;
@@ -74,7 +75,7 @@ export function VoiceLibrary({ mine, samples }: { mine: VoiceRow[]; samples: Voi
               <p className="mt-4 max-w-xs text-sm leading-6 text-muted-foreground">
                 Add a named recording or upload. The same voice can be chosen by more than one persona.
               </p>
-              <Button className="mt-5" size="sm" render={<Link href="/voice/cloning" />} nativeButton={false}>
+              <Button className="mt-5" size="sm" render={<Link href={dashRoute("/voice/cloning")} />} nativeButton={false}>
                 <Mic data-icon="inline-start" /> Add my voice
               </Button>
             </div>
@@ -340,7 +341,7 @@ function VoiceRowItem({ voice, sample }: { voice: VoiceRow; sample: boolean }) {
         )}
       </button>
       <Link
-        href={`/voice/${voice.id}`}
+        href={dashRoute(`/voice/${voice.id}`)}
         aria-disabled={retiring || undefined}
         tabIndex={retiring ? -1 : undefined}
         onClick={(event) => { if (retiring) event.preventDefault(); }}

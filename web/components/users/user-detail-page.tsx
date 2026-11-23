@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/page-header";
 import { LearnerCreditsHistory, LearnerCreditsSummary } from "@/components/credits/learner-credits";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+import { dashRoute } from "@/lib/routes";
 
 export type UserDetail = {
   user: { id: string; name: string; email: string; image: string | null };
@@ -18,7 +19,7 @@ export type UserDetail = {
 export function UserDetailPage({ user, sessions }: UserDetail) {
   return (
     <PageContainer>
-      <PageHeader back={{ href: "/users" }} />
+      <PageHeader back={{ href: dashRoute("/users") }} />
 
       {/* Half profile, half credits; stacked on small screens. */}
       <div className="mt-6 grid grid-cols-1 items-center gap-6 md:grid-cols-2">

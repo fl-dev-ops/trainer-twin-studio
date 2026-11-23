@@ -8,6 +8,9 @@ import path from "path";
 const nextConfig: NextConfig = {
   // The browser tests' dev server (e2e/) builds into its own folder, so it runs next to the normal one.
   distDir: process.env.NEXT_DIST_DIR || ".next",
+  // Links and router calls are checked against the app's routes; dash/auth URLs go through lib/routes.ts (the proxy
+  // serves app/dash at dash.<base>/ and app/auth at auth.<base>/, so their folder paths carry a prefix the URL doesn't).
+  typedRoutes: true,
   // Allow dev assets (HMR etc.) on the portless subdomains
   allowedDevOrigins: ["trainertwin.localhost", "*.trainertwin.localhost"],
   experimental: {

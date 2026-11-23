@@ -62,6 +62,7 @@ import { downloadIntroVideo } from "@/lib/intro-video-cache";
 import type { AgentSurface } from "@/lib/agent-surface-events";
 import type { Entry } from "@/lib/session-transcript";
 import { cn } from "@/lib/utils";
+import { dashRoute } from "@/lib/routes";
 
 type Coverage = Record<string, string>;
 type EndReason = "completed" | "manual" | "disconnected" | "time_up";
@@ -1036,7 +1037,7 @@ export function SessionView({
               {sessionCode ? <PractiseAgainActions /> : null}
               {!sessionCode && (
                 <CardContent className="flex justify-center gap-2">
-                  <Button variant="outline" className="h-10" nativeButton={false} render={<Link href="/sessions" />}>
+                  <Button variant="outline" className="h-10" nativeButton={false} render={<Link href={dashRoute("/sessions")} />}>
                     View sessions
                   </Button>
                   <Button
@@ -1534,7 +1535,7 @@ function SessionHeader({ title, linkHome, children }: { title: string; linkHome:
   return (
     <header className="grid shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 px-4 py-3 md:h-[72px] md:grid-cols-[1fr_auto_1fr] md:gap-4 md:px-6 md:py-0">
       {linkHome ? (
-        <Link href="/" className="flex w-fit items-center gap-2">{logo}</Link>
+        <Link href={dashRoute("/")} className="flex w-fit items-center gap-2">{logo}</Link>
       ) : (
         <div className="flex items-center gap-2">{logo}</div>
       )}
@@ -1551,7 +1552,7 @@ function SessionHeader({ title, linkHome, children }: { title: string; linkHome:
 function PractiseAgainActions() {
   return (
     <CardContent className="flex justify-center gap-2">
-      <Button variant="outline" className="h-10" nativeButton={false} render={<Link href="/" />}>
+      <Button variant="outline" className="h-10" nativeButton={false} render={<Link href={dashRoute("/")} />}>
         Back to home
       </Button>
       <Button className="h-10" onClick={() => window.location.reload()}>

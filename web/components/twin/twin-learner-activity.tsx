@@ -7,6 +7,7 @@ import { Progress } from "@/components/ui/progress";
 import { UserAvatar } from "@/components/user-avatar";
 import type { TwinOutputs } from "@/lib/twin/trpc";
 import { cn } from "@/lib/utils";
+import { dashRoute } from "@/lib/routes";
 
 export type TwinLearner = TwinOutputs["agents"]["get"]["learners"][number];
 
@@ -23,7 +24,7 @@ export function TwinLearnerActivity({ learners }: { learners: TwinLearner[] }) {
             <button
               type="button"
               disabled={!learner.sessions}
-              onClick={() => learner.userId && router.push(`/users/${learner.userId}`)}
+              onClick={() => learner.userId && router.push(dashRoute(`/users/${learner.userId}`))}
               className="grid w-full grid-cols-[40px_minmax(0,1fr)_auto] items-center gap-3.5 p-4 px-5 text-left transition-colors outline-none enabled:hover:bg-(--sidebar) focus-visible:bg-(--sidebar)"
             >
               <UserAvatar user={{ name: learner.name, email: learner.email, image: learner.image }} size="xl" />

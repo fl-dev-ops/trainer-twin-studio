@@ -6,6 +6,7 @@ import { AppError, errorResponse, refusals } from "@/lib/errors";
 import { ORG_PIN_HEADER } from "@/lib/org-pin";
 
 import { isStudioRole } from "@/lib/roles";
+import { crossHostRoute, dashRoute } from "@/lib/routes";
 
 export { isStudioRole, LEARNER_ROLE, STUDIO_ROLES, type OrgRole } from "@/lib/roles";
 
@@ -141,14 +142,14 @@ export const getTrainerOrg = () => studioOrg().catch((error: unknown) => {
  */
 export async function requireStudioMember(): Promise<TrainerOrg> {
   const org = await getTrainerOrg();
-  if (!org) redirect("/auth/no-org");
+  if (!org) redirect(crossHostRoute("/auth/no-org"));
   return org;
 }
 
 /** Page guard for Role play pages (scenarios, personas): studio members of an org that has role play. */
 export async function requireRoleplayOrg(): Promise<TrainerOrg> {
   const org = await requireStudioMember();
-  if (org.hideRoleplay) redirect("/twin");
+  if (org.hideRoleplay) redirect(dashRoute("/twin"));
   return org;
 }
 

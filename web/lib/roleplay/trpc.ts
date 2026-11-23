@@ -22,6 +22,7 @@ import { durationSeconds, transcriptTurns } from "@/lib/twin/stats";
 import { toolSettings, toolSettingsInput } from "@/lib/agent-tools";
 import { hydrateAgentSkill } from "@/lib/skill-history";
 import { skillRefusals } from "@/lib/skills";
+import { dashRoute } from "@/lib/routes";
 
 /**
  * Role-play tRPC surface, mounted at /api/roleplay (the twin module's twin, plans/roleplay-skill.md step 6).
@@ -165,7 +166,7 @@ function sessionItem(row: SessionRow) {
     score: typeof report?.score === "number" ? report.score : null,
     summary: report?.summary ?? null,
     reportState: reportState(row),
-    href: `/roleplay/sessions/${row.id}`,
+    href: dashRoute(`/roleplay/sessions/${row.id}`),
   };
 }
 
@@ -217,7 +218,7 @@ const scenariosRouter = t.router({
       return {
         slug: agent.slug,
         name: agent.name,
-        href: `/roleplay/${agent.slug}`,
+        href: dashRoute(`/roleplay/${agent.slug}`),
         description: text(scenario.description),
         opening: text(asRecord(scenario.roleplay).opening) ?? text(brief?.start.openingLine),
         client: clientOf(agent.persona, agent.data),
@@ -462,7 +463,7 @@ const sessionsRouter = t.router({
     ]);
     const builderIds = new Set(builder.map((agent) => agent.id));
     // A session run by the legacy interview runtime (before its role play was converted) keeps its interview report page.
-    return rows.map((row) => ({ ...sessionItem(row), ...(builderIds.has(row.agentId) && !legacyReport(row.report) ? {} : { href: `/sessions/${row.id}` }) }));
+    return rows.map((row) => ({ ...sessionItem(row), ...(builderIds.has(row.agentId) && !legacyReport(row.report) ? {} : { href: dashRoute(`/sessions/${row.id}`) }) }));
   }),
 
   /** One session: learner, client, report (goals, rubric, notes) and transcript. */
