@@ -1,3 +1,4 @@
+import { listAgentBriefs } from "@/lib/specs";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { beforeSettings } from "@/lib/context-upload";
@@ -148,6 +149,7 @@ const reportState = (row: Parameters<typeof reportStateOf>[0], now = Date.now())
 
 const sessionSelect = {
   id: true, agentId: true, status: true, reportStatus: true, report: true, startedAt: true, endedAt: true, createdAt: true,
+  personaSlug: true,
   user: { select: { name: true, email: true, image: true } },
   agent: { select: { slug: true, name: true } },
 } as const;
@@ -167,6 +169,7 @@ function sessionItem(row: SessionRow) {
     summary: report?.summary ?? null,
     reportState: reportState(row),
     href: dashRoute(`/roleplay/sessions/${row.id}`),
+    personaSlug: row.personaSlug,
   };
 }
 
@@ -245,9 +248,25 @@ const scenariosRouter = t.router({
     const average = (list: number[]) => (list.length ? list.reduce((sum, n) => sum + n, 0) / list.length : null);
     const builder = roleplayBuilderFrom(agent.data);
     const brief = briefOf(agent.data);
+    const [learnerBriefs, pool] = await Promise.all([
+      listAgentBriefs(orgId, [agent.slug]),
+      db.agentPersona.findMany({ where: { agentId: agent.id }, orderBy: { position: "asc" }, select: { active: true, persona: { select: personaSelect } } }),
+    ]);
+    // Who played each session: the persona it recorded (also ones since dropped from the pool).
+    const played = new Map(pool.map((row) => [row.persona.slug, row.persona.name]));
+    const missing = [...new Set(sessions.map((s) => s.personaSlug))].filter((slug) => !played.has(slug));
+    if (missing.length) {
+      for (const row of await db.persona.findMany({ where: { slug: { in: missing }, OR: [{ orgId }, { orgId: null }] }, select: { slug: true, name: true } })) played.set(row.slug, row.name);
+    }
+    const sessionsBy = new Map<string, number>();
+    for (const s of sessions) sessionsBy.set(s.learner.email, (sessionsBy.get(s.learner.email) ?? 0) + 1);
+    const goals = builder?.learnerGoals ?? (brief ? [brief.learner.aim] : (asRecord(asRecord(agent.data).after).goals as unknown[] | undefined)?.filter((g): g is string => typeof g === "string") ?? []);
     return {
       slug: agent.slug,
       name: agent.name,
+      /** What the learner reads before the call. */
+      learnerBrief: learnerBriefs[agent.slug] ?? null,
+      goals,
       description: text(asRecord(asRecord(agent.data).scenario).description),
       situation: builder?.situation.scenario ?? brief?.summary ?? null,
       learnerRole: builder?.situation.learnerRole ?? brief?.learner.role ?? null,
@@ -256,9 +275,7 @@ const scenariosRouter = t.router({
       difficulty: builder?.difficulty ?? null,
       client: clientOf(agent.persona),
       // Who may answer: every active persona of the pool, in order (one is picked per call).
-      personas: (await db.agentPersona.findMany({
-        where: { agentId: agent.id, active: true }, orderBy: { position: "asc" }, select: { persona: { select: personaSelect } },
-      })).map((row) => clientOf(row.persona)),
+      personas: pool.filter((row) => row.active).map((row) => clientOf(row.persona)),
       stats: {
         sessions: sessions.length,
         averageScore: scored.length ? Math.round(average(scored)!) : null,
@@ -271,8 +288,9 @@ const scenariosRouter = t.router({
         image: row.image,
         status: row.status,
         assignedAt: row.assignedAt.toISOString(),
+        sessions: sessionsBy.get(row.email) ?? 0,
       })),
-      sessions: sessions.slice(0, 20),
+      sessions: sessions.slice(0, 20).map((s) => ({ ...s, persona: played.get(s.personaSlug) ?? null })),
     };
   }),
 });

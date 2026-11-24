@@ -1,173 +1,173 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { ArrowLeft, Pencil, Play } from "lucide-react";
-import { ScriptView } from "@/components/roleplay/roleplay-brief-edit-page";
-import { SessionTime } from "@/components/sessions/session-time";
 import { RoleplayMenu } from "@/components/roleplay/roleplay-library-page";
-import { RoleplaySessionItem } from "@/components/roleplay/roleplay-session-item";
 import { UserAvatar } from "@/components/user-avatar";
 import type { RoleplayOutputs } from "@/lib/roleplay/trpc";
-import { cn } from "@/lib/utils";
 import { PageContainer } from "@/components/page-container";
 import { dashRoute } from "@/lib/routes";
 
 type Detail = RoleplayOutputs["scenarios"]["get"];
 
-const card = "flex flex-col rounded-tt-lg border border-(--card-border) bg-card p-6 shadow-card";
-const kicker = "text-overline font-medium tracking-overline uppercase text-muted-foreground";
+const heading = "m-0 text-overline font-semibold tracking-overline uppercase text-muted-foreground";
+const pill = "ml-2 inline-flex items-center rounded-full border border-(--border) px-2.5 py-0.5 align-middle text-xs font-medium text-(--text-secondary) transition-colors hover:bg-(--sidebar)";
+/** How many faces show before "+n". */
+const FACES = 9;
+const MEMBERS = 3;
 
-const STATUS: Record<string, { label: string; tone: string }> = {
-  pending: { label: "Assigned", tone: "bg-info-subtle text-info" },
-  used: { label: "Practised", tone: "bg-success-subtle text-success" },
-  expired: { label: "Expired", tone: "bg-(--tone-control) text-muted-foreground" },
-  cancelled: { label: "Cancelled", tone: "bg-(--tone-control) text-muted-foreground" },
-};
+/** Text cut at a character cap, with an inline "Show more" / "Show less" pill after the last word. */
+function Expandable({ text, cap, className }: { text: string; cap: number; className?: string }) {
+  const [open, setOpen] = useState(false);
+  const long = text.length > cap;
+  const shown = !long || open ? text : `${text.slice(0, text.lastIndexOf(" ", cap) > cap * 0.6 ? text.lastIndexOf(" ", cap) : cap).trimEnd()}…`;
+  return (
+    <p className={className}>
+      {shown}
+      {long ? <button type="button" className={pill} onClick={() => setOpen(!open)}>{open ? "Show less" : "Show more"}</button> : null}
+    </p>
+  );
+}
 
-/** One role play (reference roleDetail): client and scenario, report stats, members, sessions. */
+/** One fact row: a label on the left, top-aligned with its value. */
+function Fact({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1 border-b border-(--border) py-3.5 sm:flex-row sm:gap-6">
+      <dt className="w-32 shrink-0 text-sm leading-6 text-muted-foreground">{label}</dt>
+      <dd className="m-0 min-w-0 flex-1 text-sm leading-6">{children}</dd>
+    </div>
+  );
+}
+
+const MEMBER_STATUS: Record<string, string> = { pending: "Not started", expired: "Expired", cancelled: "Removed" };
+
+/** One role play: what it is (brief, learner, personas, goal), who it's assigned to, and its sessions. */
 export function RoleplayDetailPage({ roleplay }: { roleplay: Detail }) {
-  const { stats } = roleplay;
+  const [allFaces, setAllFaces] = useState(false);
+  const [allMembers, setAllMembers] = useState(false);
+  const personas = roleplay.personas.length ? roleplay.personas : [roleplay.client];
+  const faces = allFaces ? personas : personas.slice(0, FACES);
+  const goals = roleplay.goals.map((goal, i) => (roleplay.goals.length > 1 ? `${i + 1}. ${goal}` : goal)).join("\n");
+  const members = allMembers ? roleplay.members : roleplay.members.slice(0, MEMBERS);
+
   return (
     <PageContainer>
-      <header className="flex min-h-10 items-center justify-between gap-4">
-        <Link href={dashRoute("/roleplay")} className="inline-flex items-center gap-2 text-sm text-(--foreground) transition-colors hover:text-muted-foreground">
-          <ArrowLeft className="size-4" />
-          <span>Back</span>
-        </Link>
-        <div className="flex items-center gap-3">
-          <Link
-            href={dashRoute(`/talk?agent=${encodeURIComponent(roleplay.slug)}`)}
-            className="inline-flex h-8 items-center gap-2 rounded-full border border-(--border) px-4 text-body-s font-medium transition-colors hover:bg-(--sidebar)"
-          >
-            <Play className="size-3.5" />
-            <span>Try it</span>
-          </Link>
-          <Link
-            href={dashRoute(`/roleplay/${roleplay.slug}/edit`)}
-            className="inline-flex h-8 items-center gap-2 rounded-full bg-(--brand) px-4 text-body-s font-medium text-white transition-colors hover:bg-brand-hover"
-          >
-            <Pencil className="size-3.5" />
-            <span>Edit</span>
-          </Link>
-          <RoleplayMenu slug={roleplay.slug} name={roleplay.name} trigger="header" />
-        </div>
-      </header>
-
-      <div className="mt-6 grid grid-cols-1 items-stretch gap-4 md:grid-cols-2">
-        <article className={card}>
-          <h1 className="m-0 line-clamp-2 text-section-title leading-7 font-semibold tracking-title" title={roleplay.name}>
-            {roleplay.name}
-          </h1>
-          <div className="mt-6">
-            <p className={kicker}>{roleplay.personas.length > 1 ? `Client personas · ${roleplay.personas.length}, one picked at random per call` : "Client persona"}</p>
-            <ul className="mt-2 flex list-none flex-col gap-3 p-0">
-              {(roleplay.personas.length ? roleplay.personas : [roleplay.client]).map((persona) => (
-                <li key={persona.persona} className="flex items-center gap-3 text-title-s font-semibold">
-                  <UserAvatar user={{ name: persona.name, image: persona.photoUrl }} size={roleplay.personas.length > 1 ? "lg" : "xl"} />
-                  <span className="flex min-w-0 flex-col">
-                    <span className="truncate">{persona.name}</span>
-                    {persona.role ? <span className="text-xs font-normal text-muted-foreground">{persona.role}</span> : null}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
-          <div className="mt-6">
-            <p className={kicker}>Scenario</p>
-            <p className="mt-1 line-clamp-6 text-body leading-6 text-(--text-secondary)" title={roleplay.situation ?? undefined}>
-              {roleplay.situation ?? roleplay.description ?? "No scenario yet."}
-            </p>
-          </div>
-          {roleplay.learnerRole ? (
-            <div className="mt-6">
-              <p className={kicker}>Learner plays</p>
-              <p className="mt-1 text-body leading-6">{roleplay.learnerRole}</p>
+      <div className="mx-auto flex w-full max-w-3xl flex-col gap-16">
+        <section className="flex flex-col gap-6">
+          <header className="flex min-h-10 items-center justify-between gap-4">
+            <Link href={dashRoute("/roleplay")} className="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-(--foreground)">
+              <ArrowLeft className="size-4" />
+              <span>Scenarios</span>
+            </Link>
+            <div className="flex items-center gap-2">
+              <Link
+                href={dashRoute(`/talk?agent=${encodeURIComponent(roleplay.slug)}`)}
+                className="inline-flex h-8 items-center gap-2 rounded-full border border-(--border) px-4 text-body-s font-medium transition-colors hover:bg-(--sidebar)"
+              >
+                <Play className="size-3.5 fill-current" />
+                <span>Try it</span>
+              </Link>
+              <Link
+                href={dashRoute(`/roleplay/${roleplay.slug}/edit`)}
+                className="inline-flex h-8 items-center gap-2 rounded-full bg-(--brand) px-4 text-body-s font-medium text-white transition-colors hover:bg-brand-hover"
+              >
+                <Pencil className="size-3.5" />
+                <span>Edit</span>
+              </Link>
+              <RoleplayMenu slug={roleplay.slug} name={roleplay.name} trigger="header" />
             </div>
+          </header>
+
+          <h1 className="m-0 text-3xl leading-tight font-semibold tracking-title text-balance">{roleplay.name}</h1>
+          {roleplay.learnerBrief ? (
+            <Expandable text={roleplay.learnerBrief} cap={280} className="m-0 text-base leading-7 text-(--text-secondary)" />
           ) : null}
-        </article>
 
-        <article className={card}>
-          <h2 className="m-0 text-title-s font-semibold tracking-title">Report</h2>
-          <div className="mt-4 grid grid-cols-2 gap-3">
-            <div className="rounded-tt-md bg-success-subtle p-4 text-success">
-              <p className="text-overline font-medium tracking-overline uppercase">Sessions</p>
-              <p className="mt-2 text-2xl font-semibold tabular-nums">{stats.sessions}</p>
-            </div>
-            <div className="rounded-tt-md bg-caution-subtle p-4 text-caution">
-              <p className="text-overline font-medium tracking-overline uppercase">Avg score</p>
-              <p className="mt-2 text-2xl font-semibold tabular-nums">
-                {stats.averageScore ?? "—"} {stats.averageScore !== null ? <span className="text-sm font-normal opacity-70">/ 100</span> : null}
-              </p>
-            </div>
-            {/* Role plays the copilot wrote have no difficulty setting. */}
-            {roleplay.difficulty ? (
-              <div className="rounded-tt-md bg-info-subtle p-4 text-info">
-                <p className="text-overline font-medium tracking-overline uppercase">Difficulty</p>
-                <p className="mt-2 text-2xl font-semibold capitalize">{roleplay.difficulty}</p>
-              </div>
+          <dl className="m-0 flex flex-col border-t border-(--border)">
+            {roleplay.learnerRole ? <Fact label="Learner plays">{roleplay.learnerRole}</Fact> : null}
+            <Fact label="Personas">
+              {personas.length === 1 ? (
+                <span className="flex items-center gap-3">
+                  <UserAvatar user={{ name: personas[0].name, image: personas[0].photoUrl }} size="sm" />
+                  <span>{personas[0].name}{personas[0].role ? <span className="text-muted-foreground"> · {personas[0].role}</span> : null}</span>
+                </span>
+              ) : (
+                <span className="flex flex-wrap items-center gap-1.5">
+                  {faces.map((persona) => (
+                    <span key={persona.persona} title={persona.role ? `${persona.name} · ${persona.role}` : persona.name}>
+                      <UserAvatar user={{ name: persona.name, image: persona.photoUrl }} size="sm" />
+                    </span>
+                  ))}
+                  {personas.length > FACES ? (
+                    <button type="button" className={pill} onClick={() => setAllFaces(!allFaces)}>{allFaces ? "Show less" : `+${personas.length - FACES}`}</button>
+                  ) : null}
+                </span>
+              )}
+            </Fact>
+            {goals ? (
+              <Fact label={roleplay.goals.length > 1 ? "Goals" : "Goal"}>
+                <Expandable text={goals} cap={160} className="m-0 whitespace-pre-line" />
+              </Fact>
             ) : null}
-            <div className="rounded-tt-md bg-(--sidebar) p-4 text-(--foreground)">
-              <p className="text-overline font-medium tracking-overline text-muted-foreground uppercase">Avg session length</p>
-              <p className="mt-2 text-2xl font-semibold tabular-nums">
-                {stats.averageMinutes ?? "—"} {stats.averageMinutes !== null ? <span className="text-sm font-normal text-muted-foreground">min</span> : null}
-              </p>
-            </div>
-          </div>
-        </article>
+          </dl>
+        </section>
 
-        {roleplay.script ? (
-          <article className={cn(card, "md:col-span-2")}>
-            <h2 className="m-0 mb-4 text-title-s font-semibold tracking-title">Script</h2>
-            {roleplay.description ? (
-              <div className="mb-6 rounded-tt-md bg-(--sidebar) p-4">
-                <p className={kicker}>Learner brief</p>
-                <p className="m-0 mt-1 whitespace-pre-line text-sm leading-6">{roleplay.description}</p>
-              </div>
-            ) : null}
-            <ScriptView script={roleplay.script} />
-          </article>
-        ) : null}
-
-        <article className={cn(card, "md:col-span-2")}>
-          <div className="flex items-center justify-between gap-4">
-            <h2 className="m-0 text-title-s font-semibold tracking-title">Members</h2>
+        <section className="flex flex-col gap-4">
+          <div className="flex items-baseline justify-between gap-4">
+            <h2 className={heading}>Members{roleplay.members.length ? ` · ${roleplay.members.length}` : ""}</h2>
             <Link href={dashRoute(`/roleplay/${roleplay.slug}/assign`)} className="text-sm font-medium text-(--brand) hover:underline">
-              Assign
+              Assign learners
             </Link>
           </div>
           {roleplay.members.length ? (
-            <ul className="m-0 mt-2 flex list-none flex-col p-0">
-              {roleplay.members.map((member, i) => (
-                <li key={member.id} className={cn("flex items-center justify-between gap-3 py-3", i > 0 && "border-t border-(--border)")}>
-                  <span className="flex min-w-0 items-center gap-3">
-                    <UserAvatar user={{ name: member.name, image: member.image }} size="md" />
-                    <span className="flex min-w-0 flex-col">
-                      <span className="truncate text-sm font-medium">{member.name}</span>
-                      <span className="truncate text-xs text-muted-foreground">
-                        {member.email} · assigned <SessionTime iso={member.assignedAt} />
-                      </span>
+            <ul className="m-0 flex list-none flex-col border-t border-(--border) p-0">
+              {members.map((member) => (
+                <li key={member.id} className="flex items-center gap-3 border-b border-(--border) py-3.5">
+                  <UserAvatar user={{ name: member.name, image: member.image }} size="md" />
+                  <span className="flex min-w-0 flex-col">
+                    <span className="truncate text-sm font-medium">{member.name}</span>
+                    <span className="truncate text-xs text-muted-foreground">
+                      {member.sessions ? `${member.sessions} ${member.sessions === 1 ? "session" : "sessions"}` : MEMBER_STATUS[member.status] ?? "Not started"}
                     </span>
-                  </span>
-                  <span className={cn("shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium", (STATUS[member.status] ?? STATUS.pending).tone)}>
-                    {(STATUS[member.status] ?? STATUS.pending).label}
                   </span>
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="mt-3 text-sm text-muted-foreground">Nobody is assigned yet.</p>
+            <p className="m-0 border-t border-(--border) pt-4 text-sm text-muted-foreground">Nobody is assigned yet.</p>
           )}
-        </article>
+          {roleplay.members.length > MEMBERS ? (
+            <button type="button" className="self-start text-sm text-muted-foreground hover:text-(--foreground)" onClick={() => setAllMembers(!allMembers)}>
+              {allMembers ? "Show less" : `Show all ${roleplay.members.length}`}
+            </button>
+          ) : null}
+        </section>
 
-        <article className={cn(card, "p-0 md:col-span-2")}>
-          <h2 className="m-0 px-6 pt-6 text-title-s font-semibold tracking-title">Sessions</h2>
-          <ul className="m-0 mt-2 flex list-none flex-col p-0 pb-2">
-            {roleplay.sessions.length === 0 ? <li className="px-6 py-3.5 text-sm text-muted-foreground">No sessions yet.</li> : null}
-            {roleplay.sessions.map((session, i) => (
-              <RoleplaySessionItem key={session.id} session={session} divider={i > 0} />
-            ))}
-          </ul>
-        </article>
+        <section className="flex flex-col gap-4">
+          <h2 className={heading}>Sessions</h2>
+          {roleplay.sessions.length ? (
+            <ul className="m-0 flex list-none flex-col border-t border-(--border) p-0">
+              {roleplay.sessions.map((session) => (
+                <li key={session.id} className="border-b border-(--border)">
+                  <Link href={session.href} className="flex flex-col gap-2 py-4 transition-colors hover:bg-(--sidebar)">
+                    <span className="flex items-center gap-3">
+                      <UserAvatar user={{ name: session.learner.name, image: session.learner.image }} size="md" />
+                      <span className="flex min-w-0 flex-1 flex-col">
+                        <span className="truncate text-sm font-medium">{session.learner.name}</span>
+                        {session.persona ? <span className="truncate text-xs text-muted-foreground">with {session.persona}</span> : null}
+                      </span>
+                      <span className="shrink-0 text-sm font-semibold tabular-nums text-muted-foreground">{session.score ?? "—"}</span>
+                    </span>
+                    {session.summary ? <span className="line-clamp-2 pl-12 text-sm leading-6 text-(--text-secondary)">{session.summary}</span> : null}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="m-0 border-t border-(--border) pt-4 text-sm text-muted-foreground">No sessions yet. Assign learners, or try it yourself.</p>
+          )}
+        </section>
       </div>
     </PageContainer>
   );
