@@ -1,4 +1,4 @@
-import type { RoleplayBriefInput } from "@/lib/roleplay/brief";
+import { characterFromLegacyBrief, type RoleplayBriefInput, stageOf } from "@/lib/roleplay/brief";
 
 /**
  * Role-play briefs written from real trainer requirements (Olga's buyer spec, the coach pack, Vasanth's interview
@@ -25,7 +25,10 @@ const olgaObjections: { text: string; tags: string[]; category: string }[] = [
   { text: "Why should I make a decision today when the project won't be completed for years?", tags: ["any"], category: "timing" },
 ];
 
-export const briefFixtures: Record<string, { persona: { name: string; role: string; about: string }; brief: RoleplayBriefInput }> = {
+type Fixture = { persona: { name: string; role: string; about: string }; brief: RoleplayBriefInput; character: string };
+
+/** Written as one brief with the persona's part in it (ai.who, wants, concerns, opening line, reactions, style). */
+const written: Record<string, { persona: Fixture["persona"]; brief: Record<string, unknown> }> = {
   "olga-first-call": {
     persona: { name: "Ravi Menon", role: "Buyer", about: "A careful, risk-averse banker from Oman. Polite, a little reserved, plain-spoken; dislikes jargon and pressure." },
     brief: {
@@ -235,3 +238,10 @@ export const briefFixtures: Record<string, { persona: { name: string; role: stri
     },
   },
 };
+
+/** The stage (the brief) and the persona's character for it, split as the studio stores them. */
+export const briefFixtures: Record<string, Fixture> = Object.fromEntries(Object.entries(written).map(([key, row]) => [key, {
+  persona: row.persona,
+  brief: stageOf(row.brief) as RoleplayBriefInput,
+  character: characterFromLegacyBrief(row.brief),
+}]));

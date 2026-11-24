@@ -6,8 +6,13 @@ import { requirementsText } from "../lib/ingest";
 const fromRequirements = `# Write a role play from the trainer's requirements
 
 Use this when the trainer describes the practice they want (in the chat, a document or an attachment). A role play is
-one brief: the AI's instructions for this situation, written to "you", plus lines it can look up. It is played by one
-persona from the Persona Library, which gives the voice and personality.
+a **stage** plus one **character** per persona:
+- The stage is one brief, written to "you": the situation every persona shares, who speaks first, how the
+  conversation goes and ends, rules, and lines it can look up. It never names or describes one persona.
+- Each persona that plays it (Persona Library: name, voice, photo) has its own character for this role play only:
+  who they are here, their facts, what they want, their concerns (and which they hide), their opening line, how they
+  react and talk, and which ending they accept. No other role play sees it.
+Every session plays one persona's character on the stage; a persona without a character is never picked.
 
 0. **Check what exists.** Call \`roleplay_list\`. When a role play for this same practice and persona already exists,
    this is a change to it: \`roleplay_read\` it and keep its brief id, so publishing makes its next version. Never create
@@ -22,33 +27,32 @@ persona from the Persona Library, which gives the voice and personality.
    proposal. Never ask about things you can sensibly propose.
 3. **Pick the persona.** Call \`persona_list\` and choose the one that fits the AI's role. If none fits, propose a new
    one (name, role, a few sentences of stable personality written to "you", and a voice from \`voice_list\`) and
-   create it with \`persona_create\` once the trainer agrees (or adjust a close one with \`persona_update\`, if no other role play relies on how it is now). Personality goes in the persona; this situation, its facts
-   and goals stay in the brief.
+   create it with \`persona_create\` once the trainer agrees (or adjust a close one with \`persona_update\`, if no other role play relies on how it is now). Stable personality goes in the persona; this situation in the brief; who
+   they are in it, in their character. When the requirements describe several people for the same practice (a library
+   of buyers), they are several personas of one role play, each with its own character, not one role play each.
+   Several scenarios with the same people (a first call and a later meeting) are one role play per scenario, each with
+   the same personas and a separate character per persona written for that scenario.
 4. **Say plainly what this role play cannot do yet**, when the requirements ask for it: several personas in one call
-   (a persona picked at random per session is supported: publish, then \`roleplay_personas_set\`), modes such as practice vs mock
+   (a persona picked at random per session is supported, each with its own character: step 8), modes such as practice vs mock
    (offer one role play per mode), and scoring, reports or feedback (not part of the role play). Never fake them in the
    brief.
 5. **Write the brief** (\`roleplay_draft\`). Quality rules:
    - Write to the AI as "you". Short, concrete sentences; no lists of adjectives.
-   - \`ai.who\` and \`situation\` are what is happening NOW: what triggered the call, what you know and don't know, how
-     you feel at the start, facts to keep consistent. Personality and speaking style belong to the persona, not here.
-   - **Never name the AI's character** in \`ai.who\`, \`situation\`, the opening line or items: the persona gives the name,
-     and any persona of the role play may play it. Write "you", and the opening without a name ("Hello?", "Yes, speaking").
-   - \`concerns\`: what this person worries about, as they would put it, with when it comes up and what eases it. Mark
-     the ones they keep to themselves as hidden. Never write the answers.
-   - \`steps\`: 2 to 6, a real conversation, not a checklist; include moments the AI brings in on purpose.
-   - \`reactions\`: observable things the learner does. Resistance is reasonable and firm, not hostile; difficulty
-     comes from stakes, not rudeness.
+   - \`situation\` is what is happening NOW and is true for every persona: what triggered the call and the shared
+     facts. One persona's own facts (budget, family, motivation, areas) go in that persona's character (step 8).
+   - **Never name or describe one persona** in the brief (situation, steps, items): any persona of the role play plays
+     it. Write "you".
+   - \`start.who\`: who speaks first. When the AI starts, its first words are each character's opening line. When the
+     learner starts (e.g. the agent asks a question after a presentation), write \`start.learnerFirst\`; the stage then
+     has the AI say only a short neutral line and wait, so never write an opening line for it anywhere.
+   - Name, wrong-name correction, ending on "I'll call you back" and the human-talk rules are added automatically; don't
+     repeat them.
+   - \`steps\`: 2 to 6, a real conversation, not a checklist; include moments the AI brings in on purpose. Write them so
+     any character can play them ("raise one of your concerns", not a specific person's concern).
    - A counterpart (client, colleague, stakeholder) never concedes on the learner's first good move: write at least one
      further pushback or test before the good ending, as a person in that situation would.
-   - Make it sound like this person in this situation (every role play also gets standard human-talk rules):
-     - \`situation\`: what they share at each level of trust ("at first only…; if asked about X…; once they trust
-       you…"), so details come out one at a time.
-     - \`reactions\`: how THIS person says no or pushes back (indirect, blunt, joking, going quiet), and how their mood
-       shifts.
-     - \`style\`: how much they talk relative to the learner (a busy buyer: short; an interviewer: short questions), and
-       anything in the requirements about pace or interruptions.
-     - \`items\`: when the requirements give sample lines, include some short reactions too (kind example), as given.
+   - \`items\`: when the requirements give sample lines, include some short reactions too (kind example), as given.
+     Lines only one kind of persona says get a tag (investor, end-user) so the character can point to them.
    - \`ending\`: a limit (time or count), what good looks like, and the exit line if the AI ends it.
    - \`learnerBrief\`: written to the learner: who they are, the situation, the outcome to aim for, the limit. Only the
      situation ("A lead filled in the form after your ad; call them back"), never who they will speak with: no name,
@@ -62,16 +66,35 @@ persona from the Persona Library, which gives the voice and personality.
      people, dates or numbers the requirements don't give: refer to others by role ("a teammate who left"). Fictional names and numbers from the
      requirements stay as they are; never add real people's personal details.
    Fix every reason \`roleplay_draft\` returns in the next call, all at once; at most 3 drafts.
-6. **Show the trainer, in your reply,** once a draft passes: the learner brief and a short summary (the AI's role and
-   persona, the situation, the steps, how it ends) and which values you proposed rather than took from them; then ask
-   whether to publish or change something. Never end a turn on a tool call without this reply. Change it by chat as
+6. **Show the trainer, in your reply,** once a draft passes: the learner brief and a short summary (the AI's role, the
+   situation, the steps, how it ends), the personas that will play it with a line on each character, and which values
+   you proposed rather than took from them; then ask whether to publish or change something. Never end a turn on a tool call without this reply. Change it by chat as
    they ask.
 7. **Publish** with \`roleplay_publish\` (they approve it on a card), then reply with what the studio stored: the role
    play's name, slug and version, or its error.
    A family of scenarios is one role play each: write and publish them one at a time, keeping shared parts identical.
+8. **Write each persona's character** right after publishing: a role play can't start until at least one persona has
+   one. Add the other personas with \`roleplay_personas_set\`, then one \`roleplay_character_set\` per persona (each
+   approved on a card). A character is markdown written to "you", with these sections as the requirements support them:
+   - \`## Who you are here\`: your relationship to the learner and your facts on this call (type, budget, situation).
+   - \`## What you want and your concerns\`: your aim; each concern as you'd put it, when it comes up, what eases it;
+     mark the ones you keep hidden "(hidden until earned)". Never the answers.
+   - \`## Your opening line\` when the AI starts: your exact first words, no name unless it is yours. When the learner
+     starts, write \`## Your first reply\` instead: how you answer their first question (e.g. a stall), never words to say
+     before they speak.
+   - \`## How you react\`: observable things the learner does that make you open up or pull back, and how THIS person
+     says no (indirect, blunt, joking, going quiet). Reasonable and firm, not hostile.
+   - \`## How you talk on this call\`: how much you talk, pace, anything the requirements say.
+   - \`## How you end\`: which next step you accept, and when you decline.
+   Keep the trainer's own words for facts; never borrow another persona's details, and never put several personas'
+   lines in one character or in the brief ("play only your own line" lists): one character, one person. A character is
+   for this role play only: when the same persona plays another role play, write that one from that role play's requirements, never by
+   copying. A persona without a character is never picked.
 
-To **change** a role play written this way (\`roleplay_read\` shows kind \`roleplay-brief\` and its \`brief\`): edit only
-what was asked in that brief, keep its id, draft, show what changed, publish. It becomes the next version.
+To **change** a role play written this way (\`roleplay_read\` shows kind \`roleplay-brief\`, its \`brief\` and each
+persona's \`character\`): a change to how one persona behaves is that persona's character (\`roleplay_character_set\`, no
+new version); a change to the situation, flow or ending is the brief: edit only what was asked, keep its id, draft,
+show what changed, publish. It becomes the next version.
 `;
 
 const procedure = `# Build one role play from recordings

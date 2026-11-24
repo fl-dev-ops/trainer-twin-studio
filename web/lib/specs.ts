@@ -781,8 +781,15 @@ export async function getAgentConfigForAgent(
     ? { id: primaryDoc.id, name: primaryDoc.name, content: "" }
     : null;
 
+  // A role play's character for this persona: written for this pair only. Pinned with the snapshot at session start;
+  // a legacy snapshot rebuilt from saved identities has none.
+  const character = agent.kind === "ROLEPLAY" && !identity
+    ? (await client.agentPersona.findUnique({ where: { agentId_personaId: { agentId: agent.id, personaId: persona.id } }, select: { character: true } }))?.character?.trim() || null
+    : null;
+
   return {
     persona: { id: persona.id, slug: persona.slug, version: persona.version, data: persona.data },
+    character,
     agent: { id: agent.id, slug: agent.slug, version: agent.version, kind: agent.kind, primarySkillId: agent.primarySkillId, archivedAt: agent.archivedAt, data: agent.data },
     knowledgeBases,
     personaVoiceAvailable,

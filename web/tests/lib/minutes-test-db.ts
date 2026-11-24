@@ -1,3 +1,4 @@
+import { giveCharacters } from "../setup/characters";
 // @ts-expect-error Bun test types are provided by the test runner, not Next.
 import { beforeAll, afterAll, expect } from "bun:test";
 import { setupServer } from "msw/node";
@@ -46,6 +47,7 @@ export function minutesFixture() {
       for (const [agent, kind] of [[roleplay, "ROLEPLAY"], [twin, "TWIN"]] as const) {
         await db.agent.create({ data: { ...agent, kind, orgId: id, personaId: persona.id } });
       }
+      await giveCharacters(roleplay.id);
     },
     async clean() {
       await db.minuteLedger.deleteMany({ where: { orgId: id } });

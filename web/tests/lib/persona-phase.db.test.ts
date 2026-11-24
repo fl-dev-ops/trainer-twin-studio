@@ -12,6 +12,7 @@ import { getPersona, PersonaError, savePersona } from "@/lib/personas";
 import { deleteSpec } from "@/lib/specs";
 import { fundOrg } from "../setup/meteroid";
 import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "./minutes-test-db";
+import { giveCharacters } from "../setup/characters";
 
 
 /** Persona phase 2 (plans/voice-persona-phases.md): one reusable definition, frozen per session. */
@@ -75,6 +76,7 @@ describe.skipIf(!localMinutesDb)("reusable persona with a short form (real Postg
   };
   const start = async (agentSlug: string, mode: "voice" | "chat" = "voice") => {
     const value = { orgId: f.org.id, userId: f.trainer.id, agentSlug, mode, idempotencyKey: randomUUID() };
+    await giveCharacters({ slug: agentSlug });
     const session = await activateSession(value);
     if (!session) throw new Error("Expected a session");
     if (mode === "voice") await connectVoice(value, session);

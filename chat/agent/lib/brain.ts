@@ -224,6 +224,8 @@ export async function loadSessionContext(
     twinPlaybooks?: TwinPlaybook[];
     /** web's rendered persona (lib/persona.ts personaBrief); absent from older web builds and legacy personas. */
     personaBrief?: string | null;
+    /** Role plays: the persona's character for this role play (web's AgentPersona.character, pinned per session). */
+    character?: string | null;
   }>(orgId, {
     action: "getSessionContext",
     sessionId,
@@ -234,7 +236,9 @@ export async function loadSessionContext(
   if (runtime && result.visitor?.kind !== "anonymous") throw new Error("Anonymous session context missing visitor");
   const anonymous = result.visitor?.kind === "anonymous";
 
-  const roleplay = roleplaySkill(result.agent?.kind, result.agent?.data);
+  const roleplaySpec = roleplaySkill(result.agent?.kind, result.agent?.data);
+  const character = typeof result.character === "string" && result.character.trim() ? result.character.trim() : undefined;
+  const roleplay = roleplaySpec && character ? { ...roleplaySpec, character } : roleplaySpec;
   const twinPlaybooks = twinSessionPlaybooks(result.agent ? { ...result.agent, data: (result.agent.data ?? {}) as Record<string, unknown> } : null, result.twinPlaybooks);
   // Only twins can be calibrations; asked only for them, so other sessions start as before.
   const calibration = twinPlaybooks && !anonymous

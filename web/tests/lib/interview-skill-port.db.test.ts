@@ -6,6 +6,7 @@ import { buildSessionContext } from "@/lib/session-context";
 import { loadSessionSkills } from "@/lib/session-skills";
 import { interviewSkillPackage } from "@/lib/interview-skill";
 import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "./minutes-test-db";
+import { giveCharacters } from "../setup/characters";
 
 const files = new Map<string, string>();
 const s3 = await import("@/lib/s3");
@@ -105,6 +106,7 @@ describe.skipIf(!localMinutesDb)("interview → skill port (real Postgres)", () 
   test("a session on the port pins the package and the chat runs it as an interviewer skill; the original stays a no-skill interview", async () => {
     const { pkg, published } = await port();
     const start = async (agentSlug: string) => {
+      await giveCharacters({ slug: agentSlug });
       const session = await activateSession({ orgId: f.org.id, userId: f.trainer.id, agentSlug, mode: "chat", idempotencyKey: crypto.randomUUID() });
       if (!session) throw new Error("Expected a session");
       return session;

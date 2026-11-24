@@ -25,6 +25,7 @@ const slug = z.string().trim().min(1).max(200);
 const before = z.object({
   preScreenshare: z.boolean(), preUpload: z.boolean(), preUploadRequired: z.boolean(), duringUpload: z.boolean(),
   uploadTitle: z.string().trim().max(80), uploadInstruction: z.string().trim().max(300),
+  callMinutes: z.number().int().min(1).max(60).nullable(),
 }).partial().strict();
 const tools = z.object({ canvas: z.boolean(), codeEditor: z.boolean(), preview: z.boolean(), choice: z.boolean(), knowledge: z.boolean() }).partial().strict();
 
@@ -65,6 +66,8 @@ export const copilotStudioInput = z.discriminatedUnion("action", [
   // Supporting skills and personas (specs/agents.md), by slug; bots by slug.
   z.object({ action: z.literal("setTwinSkills"), slug, skills: z.array(z.object({ slug, active: z.boolean() })).max(50) }).strict(),
   z.object({ action: z.literal("setRoleplayPersonas"), slug, extras: z.array(z.object({ slug, active: z.boolean() })).max(20) }).strict(),
+  // One persona's character for one role play (AgentPersona.character): written for that pair only. "" clears it.
+  z.object({ action: z.literal("setRoleplayCharacter"), slug, persona: slug, character: z.string().max(20000) }).strict(),
   z.object({ action: z.literal("listBots") }).strict(),
   z.object({ action: z.literal("getBot"), slug }).strict(),
   z.object({ action: z.literal("createBot"), persona: slug, name: z.string().trim().min(1).max(120), objective: z.string().trim().min(1).max(2000) }).strict(),
@@ -156,6 +159,11 @@ export async function runCopilotStudio(actor: Actor, input: CopilotStudioInput, 
         builder: kind === "roleplay-builder" ? roleplayBuilderFrom(agent.data) : null,
         // A role play written from requirements: its brief, which an edit changes (then publishRoleplay again).
         brief: kind === "roleplay-brief" ? asRecord(agent.data).roleplayBrief : null,
+        // Who may play it, in order, each with its character for this role play ("" when none is written yet).
+        personas: (await d.db.agentPersona.findMany({
+          where: { agentId: agent.id }, orderBy: { position: "asc" },
+          select: { active: true, character: true, persona: { select: { id: true, slug: true, name: true, agents: { where: { id: agent.id }, select: { id: true } } } } },
+        })).map((row) => ({ slug: row.persona.slug, name: row.persona.name, active: row.active, main: row.persona.agents.length > 0, character: row.character ?? "" })),
       };
     }
 
@@ -361,6 +369,17 @@ export async function runCopilotStudio(actor: Actor, input: CopilotStudioInput, 
         ], tx);
       });
       return { ok: true, extras: input.extras };
+    }
+
+    case "setRoleplayCharacter": {
+      const roleplay = await findAgent(d, orgId, input.slug, { archived: false });
+      if (roleplay.kind !== "ROLEPLAY") throw new ScenarioIngestError(`"${input.slug}" is not a role play`, 400);
+      const updated = await d.db.agentPersona.updateMany({
+        where: { agentId: roleplay.id, persona: { slug: input.persona } },
+        data: { character: input.character.trim() || null },
+      });
+      if (!updated.count) throw new ScenarioIngestError(`"${input.persona}" does not play this role play; add it with setRoleplayPersonas first`, 400);
+      return { ok: true, persona: input.persona, written: Boolean(input.character.trim()) };
     }
 
     case "listBots":

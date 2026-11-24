@@ -62,8 +62,8 @@ describe.skipIf(!localMinutesDb)("Phase 1 shared skill publishing (real Postgres
   const builder = (): RoleplayBuilder => ({
     name: "Shared skill practice", persona: f.org.slug,
     situation: { scenario: "A buyer is deciding whether to meet.", learnerRole: "Advisor" },
-    difficulty: "medium", opening: "Why should I meet you?", exampleLines: ["I need more time."],
-    guardedIf: [], opensUpIf: [], learnerGoals: ["Agree a next step"],
+    difficulty: "medium", exampleLines: ["I need more time."],
+    learnerGoals: ["Agree a next step"],
     rubric: [{ name: "Understands the buyer", points: 100 }],
   });
   const authored = (skill = "# Authored practice\n") => ({

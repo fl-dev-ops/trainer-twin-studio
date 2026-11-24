@@ -12,6 +12,8 @@ const SHARED_KNOWLEDGE_BASE_SLUG = "acme-knowledge";
 type Snapshot = {
   agent?: { slug?: string; version?: number; data?: Record<string, unknown> };
   persona?: { slug?: string; version?: number; data?: Record<string, unknown> };
+  /** Role plays: the persona's character for this role play, pinned at session start (null: none). */
+  character?: string | null;
   /** All-skills twin sessions: the skill twins pinned when the session started. */
   twinSkills?: PinnedTwinSkill[];
 };
@@ -117,6 +119,8 @@ export async function buildSessionContext(input: {
     ...(playbooks ? { twinPlaybooks: playbooks } : {}),
     persona: persona ?? null,
     // The trainer's own persona speaks as herself (identity only); any other persona is a character to play.
+    // Pinned sessions use only their snapshot's character; a session without a snapshot reads the live one.
+    character: snapshot ? snapshot.character ?? null : await liveCharacter(savedAgent, personaSlug, input.orgId),
     personaBrief: persona ? personaBrief(persona.data, livePersona?.isOwn ? "self" : "character") : null,
     knowledgeBases: sharedKnowledgeBase ? [sharedKnowledgeBase] : [],
     documents: Array.from(docMap.values()),
@@ -127,10 +131,19 @@ export async function buildSessionContext(input: {
   };
 }
 
+async function liveCharacter(agent: { id: string; kind: string } | null, personaSlug: string | undefined, orgId: string) {
+  if (!agent || agent.kind !== "ROLEPLAY" || !personaSlug) return null;
+  const row = await db.agentPersona.findFirst({
+    where: { agentId: agent.id, persona: { slug: { equals: personaSlug, mode: "insensitive" }, OR: [{ orgId }, { orgId: null }] } },
+    select: { character: true },
+  });
+  return row?.character?.trim() || null;
+}
+
 /** Session context is immutable after activation; prime this during the intro. */
 const cachedSessionContext = unstable_cache(
   (orgId: string, sessionId: string) => buildSessionContext({ orgId, sessionId }),
-  ["session-context-v3"],
+  ["session-context-v4"],
   { revalidate: 86_400 },
 );
 

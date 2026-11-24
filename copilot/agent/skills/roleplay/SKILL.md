@@ -10,8 +10,9 @@ description: Role plays (Scenarios) - listing them, reading one, and changing an
 |---|---|---|
 | `roleplay_list` | Lists role plays: slug, kind (`roleplay-brief`, `roleplay-builder`, `roleplay-recordings`), version, archived. | no |
 | `roleplay_read` | Reads one: Settings, Tools, version, invites, and its brief or builder fields. | no |
-| `roleplay_update` | Changes a **builder** role play's script fields (client, situation, opening, goals, rubric…). | yes |
+| `roleplay_update` | Changes a **builder** role play's stage fields (situation, learner role, difficulty, example lines, goals, rubric…). | yes |
 | `roleplay_personas_set` | Lets more personas play it: each session picks one active persona at random (main included). Replaces the extras. | yes |
+| `roleplay_character_set` | Writes one persona's character for this role play only (who they are on this call). | yes |
 | `roleplay_settings_update` | Changes Settings: screen share, upload before the call (and whether required), upload during the call, upload title and instruction. | yes |
 | `roleplay_tools_update` | Switches workspace tools on or off. | yes |
 | `roleplay_draft`, `roleplay_publish` | Check and publish a role play written from requirements; used inside `roleplay-creator`. | publish: yes |
@@ -28,6 +29,14 @@ description: Role plays (Scenarios) - listing them, reading one, and changing an
 5. If the trainer declines, don't retry; ask what to change. Report only what the studio says it saved.
 
 **Example.** "Let learners upload their CV before the mock interview and show it in the PDF viewer" → `roleplay_read` → `roleplay_settings_update` `{ preUpload: true, uploadTitle: "Your CV" }` → `roleplay_tools_update` `{ preview: true }`. That's two cards.
+
+## Stage and characters
+A role play is the **stage**: the situation, steps, ending and rules, the same for every persona, never naming one. Each
+persona that plays it has its own **character** for this role play only: their facts, what they want and hide, their
+opening line, how they talk, open up, push back and end. A character belongs to one role play and one persona; another
+role play never sees it, and the persona itself is unchanged. To change how one persona plays a role play, change its
+character (`roleplay_read` shows each one), never the persona and never the stage. A persona without a character is
+never picked, and a role play with none can't start: write one for every persona that should play.
 
 ## Rules, and why
 - Pass \`label\` with the current name on every update, so the card says what is changing in the trainer's words, not a slug.

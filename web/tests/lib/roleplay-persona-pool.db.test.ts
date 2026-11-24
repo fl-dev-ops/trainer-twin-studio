@@ -2,7 +2,8 @@ import { fundOrg } from "../setup/meteroid";
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import * as nextHeaders from "next/headers";
 import * as sessionUser from "@/lib/session-user";
-import { setAgentPersonas } from "@/lib/agent-personas";
+import { pickSessionPersona, setAgentPersonas } from "@/lib/agent-personas";
+import { giveCharacters } from "../setup/characters";
 import { ensureDeployment } from "@/lib/deployments";
 import { activateSession, finalizeInterviewSession } from "@/lib/interview-sessions";
 import { grantMinutes } from "@/lib/minutes";
@@ -60,13 +61,51 @@ describe.skipIf(!localMinutesDb)("role play persona pool, learner side (local da
   });
 
   /** The learner starts the call from their link, and it ends (a link resumes a live call instead of starting anew). */
-  async function call() {
+  async function call(fill = true) {
+    // Every persona that plays has a character (sessions require one); a test of who is picked passes fill = false.
+    if (fill) await giveCharacters(f.roleplay.id);
     const started = await activateSession({ orgId: f.org.id, userId: f.learner.id, userEmail: f.learner.email, shareCode: code(), mode: "voice" });
     const row = await db.interviewSession.findUniqueOrThrow({ where: { id: started.id }, select: { personaSlug: true, resolvedVoiceId: true, compiledSnapshot: true } });
     const screen = await sessionPersonaView(f.org.id, started.id);
     await finalizeInterviewSession({ sessionId: started.id, requestedStatus: "completed" });
     return { ...row, snapshot: (row.compiledSnapshot as { persona?: { slug?: string } }).persona?.slug, screen };
   }
+
+  test("each persona plays its own character for this role play only; pool edits keep it, a main swap never hands it on", async () => {
+    const daniel = await persona("Daniel");
+    await db.$transaction((tx) => setAgentPersonas(f.roleplay.id, [{ personaId: main.id, active: true }, { personaId: daniel.id, active: false }], tx));
+    await db.agentPersona.update({ where: { agentId_personaId: { agentId: f.roleplay.id, personaId: main.id } }, data: { character: "Main on this call" } });
+    await db.agentPersona.update({ where: { agentId_personaId: { agentId: f.roleplay.id, personaId: daniel.id } }, data: { character: "Daniel on this call" } });
+
+    // The session pins the picked persona's character.
+    const first = await call();
+    expect((first.compiledSnapshot as { character?: string }).character).toBe("Main on this call");
+
+    // Rewriting the pool keeps each persona's character.
+    await db.$transaction((tx) => setAgentPersonas(f.roleplay.id, [{ personaId: main.id, active: true }, { personaId: daniel.id, active: true }], tx));
+    const kept = await db.agentPersona.findMany({ where: { agentId: f.roleplay.id }, select: { personaId: true, character: true } });
+    expect(Object.fromEntries(kept.map((row) => [row.personaId, row.character]))).toEqual({ [main.id]: "Main on this call", [daniel.id]: "Daniel on this call" });
+
+    // Swapping the main persona to a new one does not hand Main's character to it.
+    const sara = await persona("Sara");
+    await db.agent.update({ where: { id: f.roleplay.id }, data: { personaId: sara.id } });
+    const swapped = await db.agentPersona.findUniqueOrThrow({ where: { agentId_personaId: { agentId: f.roleplay.id, personaId: sara.id } }, select: { character: true } });
+    expect(swapped.character).toBeNull();
+    // Swapping to a persona already in the pool keeps that persona's own character.
+    await db.agent.update({ where: { id: f.roleplay.id }, data: { personaId: daniel.id } });
+    const back = await db.agentPersona.findUniqueOrThrow({ where: { agentId_personaId: { agentId: f.roleplay.id, personaId: daniel.id } }, select: { character: true } });
+    expect(back.character).toBe("Daniel on this call");
+  });
+
+  test("once a persona has a character, only personas with one are picked", async () => {
+    const daniel = await persona("Daniel");
+    const sara = await persona("Sara");
+    await db.$transaction((tx) => setAgentPersonas(f.roleplay.id, [{ personaId: main.id, active: true }, { personaId: daniel.id, active: true }, { personaId: sara.id, active: true }], tx));
+    await db.agentPersona.updateMany({ where: { agentId: f.roleplay.id }, data: { character: null } });
+    await db.agentPersona.update({ where: { agentId_personaId: { agentId: f.roleplay.id, personaId: daniel.id } }, data: { character: "Daniel on this call" } });
+    for (let i = 0; i < 10; i++) expect(await pickSessionPersona(f.roleplay.id)).toBe(daniel.id);
+    expect((await call(false)).snapshot).toBe(daniel.slug);
+  });
 
   test("each call plays one active persona at random, in its own name and voice; a switched-off one never plays", async () => {
     const daniel = await persona("Daniel");
@@ -98,6 +137,7 @@ describe.skipIf(!localMinutesDb)("role play persona pool, learner side (local da
       { personaId: daniel.id, active: true }, { personaId: sara.id, active: true }, { personaId: off.id, active: false },
     ], tx));
     const tryIt = async (choice?: string) => {
+      await giveCharacters(f.roleplay.id);
       const started = await activateSession({ orgId: f.org.id, userId: f.trainer.id, userEmail: f.trainer.email, agentSlug: f.roleplay.slug, mode: "voice", persona: choice });
       const row = await db.interviewSession.findUniqueOrThrow({ where: { id: started.id }, select: { personaSlug: true, resolvedVoiceId: true } });
       await finalizeInterviewSession({ sessionId: started.id, requestedStatus: "completed" });
@@ -122,6 +162,7 @@ describe.skipIf(!localMinutesDb)("role play persona pool, learner side (local da
     const daniel = await persona("Daniel");
     const sara = await persona("Sara");
     await db.$transaction((tx) => setAgentPersonas(f.roleplay.id, [{ personaId: daniel.id, active: true }, { personaId: sara.id, active: true }], tx));
+    await giveCharacters(f.roleplay.id);
     const start = () => activateSession({ orgId: f.org.id, userId: f.learner.id, userEmail: f.learner.email, shareCode: code(), mode: "voice" });
     const first = await start();
     const picked = (await db.interviewSession.findUniqueOrThrow({ where: { id: first.id } })).personaSlug;

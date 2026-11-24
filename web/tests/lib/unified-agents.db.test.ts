@@ -17,6 +17,7 @@ import { runCopilotStudio } from "@/lib/copilot-studio";
 import { roleplayRouter } from "@/lib/roleplay/trpc";
 import { ROLEPLAY_SOURCE } from "@/lib/scenario-ingest";
 import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "./minutes-test-db";
+import { giveCharacters } from "../setup/characters";
 
 /** Twins, role plays and bots share one shape (specs/agents.md): main skill, supporting skills, persona(s). */
 describe.skipIf(!localMinutesDb)("unified agents: supporting skills and personas (real database)", () => {
@@ -113,6 +114,7 @@ describe.skipIf(!localMinutesDb)("unified agents: supporting skills and personas
     await db.$transaction((tx) => setAgentPersonas(f.roleplay.id, [
       { personaId: persona.id, active: true }, { personaId: second.id, active: true },
     ], tx));
+    await giveCharacters(f.roleplay.id);
     const random = spyOn(Math, "random");
     spies.push(random);
     random.mockReturnValue(0.99);

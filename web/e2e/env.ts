@@ -7,6 +7,7 @@ import { testDatabaseUrl } from "../tests/setup/test-db-url";
  */
 export const E2E_PORT = 3999;
 export const E2E_BASE = "trainertwin.localhost";
+export const E2E_SCENARIO_INGEST_SECRET = "e2e-only-scenario-ingest-secret";
 export const e2eUrl = (host: string, path = "/") => `http://${host}.${E2E_BASE}:${E2E_PORT}${path}`;
 
 // Opt-in voice transport smoke test: start `livekit-server --dev` locally before running Playwright.
@@ -44,6 +45,7 @@ export function e2eServerEnv(): Record<string, string> {
     LIVEKIT_API_SECRET: localVoice ? localLiveKit.secret : "e2e-only-livekit-secret-not-for-deploy",
     CHAT_URL: localVoice ? "http://127.0.0.1:3996" : "http://chat.test",
     COPILOT_SERVICE_SECRET: "e2e-only-chat-secret",
+    SCENARIO_INGEST_SECRET: E2E_SCENARIO_INGEST_SECRET,
     METEROID_API_URL: "http://127.0.0.1:3998/api/v1",
     METEROID_API_KEY: "e2e-meteroid",
     METEROID_WEBHOOK_SECRET: "whsec_dGVzdC1tZXRlcm9pZC1zZWNyZXQ=",

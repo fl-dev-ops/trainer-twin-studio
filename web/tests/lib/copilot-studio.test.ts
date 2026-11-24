@@ -20,6 +20,8 @@ const fakeDb = {
     findMany: async ({ where }: { where: Row }) => agents.filter((agent) => matches(agent, where)),
     update: async ({ where, data }: { where: { id: string }; data: Row }) => Object.assign(agents.find((agent) => agent.id === where.id)!, data),
   },
+  // Role play pools: none in these fixtures.
+  agentPersona: { findMany: async () => [] },
   member: {
     // Olga's org: admin@ is a studio member, learner@ a learner.
     findMany: async () => [
@@ -186,8 +188,7 @@ test("list hydrates package identity but preserves experience description and pu
 test("get hydrates a stripped roleplay builder while retaining After and Before experience settings", async () => {
   const rendered = renderRoleplay("objection-handling", {
     name: "Practice", persona: "olga", situation: { scenario: "Ask for a meeting", learnerRole: "Advisor" },
-    difficulty: "medium", opening: "Why meet?", exampleLines: [], guardedIf: [], opensUpIf: [],
-    learnerGoals: ["Published goal"], rubric: [{ name: "Published rubric", points: 100 }],
+    difficulty: "medium", exampleLines: [], learnerGoals: ["Published goal"], rubric: [{ name: "Published rubric", points: 100 }],
   });
   const pkg = managedPackage("builder-roleplay");
   const files = { ...pkg.files, "scenario.json": JSON.stringify(rendered.scenario) };
@@ -200,7 +201,7 @@ test("get hydrates a stripped roleplay builder while retaining After and Before 
   expect(await run({ action: "get", slug: "olga-objection-handling", kind: "roleplay" })).toMatchObject({
     kind: "roleplay-builder", version: 2, description: "Experience description",
     settings: { preUpload: true },
-    builder: { name: "Practice", opening: "Why meet?", learnerGoals: ["Edited goal"], rubric: [{ name: "Edited rubric", points: 70 }] },
+    builder: { name: "Practice", learnerGoals: ["Edited goal"], rubric: [{ name: "Edited rubric", points: 70 }] },
   });
 });
 

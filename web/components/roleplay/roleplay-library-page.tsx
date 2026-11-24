@@ -77,9 +77,7 @@ function ScenarioCard({ scenario, index }: { scenario: Scenario; index: number }
               <UserAvatar user={{ name: scenario.client.name, image: scenario.client.photoUrl }} size="xl" />
               <span className="flex min-w-0 flex-col">
                 <span className="truncate text-body-s leading-body-s font-semibold text-(--foreground)">{scenario.client.name}</span>
-                <span className="line-clamp-2 text-body-s leading-body-s text-(--text-secondary) " title={scenario.opening ?? undefined}>
-                  {scenario.opening ? `“${scenario.opening}”` : scenario.client.role ?? "Client"}
-                </span>
+                <span className="line-clamp-2 text-body-s leading-body-s text-(--text-secondary) ">{scenario.client.role ?? "Client"}</span>
               </span>
             </div>
           </div>

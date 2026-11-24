@@ -16,7 +16,7 @@ import { orgCredits } from "@/lib/org-credits";
 import { BEFORE_UPLOAD_REFUSED, uploadAllowed } from "@/lib/context-upload";
 import { resolveSnapshotSkill } from "@/lib/session-skills";
 import { assertVoiceObjectKeys, availableVoiceWhere, listAvailableVoices } from "@/lib/voices";
-import { confirmSessionPersona, pickSessionPersona } from "@/lib/agent-personas";
+import { confirmSessionPersona, eligiblePersonas, pickSessionPersona } from "@/lib/agent-personas";
 
 const shareCode = () => randomBytes(18).toString("base64url");
 export const tokenHash = (token: string) => createHash("sha256").update(token).digest("hex");
@@ -353,7 +353,13 @@ export async function activateSession(input: {
   const chosen = input.persona && studio && !input.shareCode && snapshot.agent.kind === "ROLEPLAY"
     ? await db.agentPersona.findFirst({ where: { agentId, active: true, persona: { slug: input.persona } }, select: { personaId: true } })
     : null;
-  if (input.persona && !chosen) throw refusals.invalidInput("Choose one of this role play's personas.");
+  if (input.persona && (!chosen || !(await eligiblePersonas(agentId)).includes(chosen.personaId))) {
+    throw refusals.invalidInput("Choose one of this role play's personas that has a character.");
+  }
+  // Every role play session plays a persona's character for it; without any, there is nothing to play.
+  if (snapshot.agent.kind === "ROLEPLAY" && !(await eligiblePersonas(agentId)).length) {
+    throw refusals.invalidInput("This role play has no characters yet. Write one for a persona on its edit page.");
+  }
   const personaId = snapshot.agent.kind === "ROLEPLAY" ? chosen?.personaId ?? await pickSessionPersona(agentId) ?? undefined : undefined;
   const compiledConfig = await getAgentConfigForAgent(agentId, input.orgId, primaryId, snapshot.docIds, undefined, undefined, personaId);
   // The org's balance from Meteroid now, before the lock (no network calls while it's held).
@@ -432,7 +438,11 @@ export async function activateSession(input: {
     });
     const ended = [];
     for (const row of live) ended.push(await finalizeSessionRow({ sessionId: row.id, requestedStatus: "abandoned" }, tx));
-    const { allowedSeconds, chargesOrg } = mode === "voice" ? await startAllowance(input.orgId, current, tx) : { allowedSeconds: null, chargesOrg: false };
+    const allowance = mode === "voice" ? await startAllowance(input.orgId, current, tx) : { allowedSeconds: null, chargesOrg: false };
+    // A role play with a call length ends there (the voice agent says the client's goodbye first), within the minutes.
+    const callMinutes = eligibleAgent.kind === "ROLEPLAY" && mode === "voice" ? beforeSettings(coherentConfig?.agent.data ?? eligibleAgent.data).callMinutes : null;
+    const { chargesOrg } = allowance;
+    const allowedSeconds = callMinutes ? Math.min(allowance.allowedSeconds ?? Infinity, callMinutes * 60) : allowance.allowedSeconds;
     const created = await tx.interviewSession.create({
       data: {
         orgId: input.orgId,

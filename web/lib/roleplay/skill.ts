@@ -3,6 +3,8 @@ import { z } from "zod";
 /**
  * During, for a role play: the builder's fields rendered into the same package a twin skill is (SKILL.md +
  * scenario.json + items.json), plus the After block (goals, rubric) the AI never sees. Deterministic, no LLM.
+ * The package is the stage, the same for every persona: who the client is on this call (facts, what they hide, opening
+ * line, how they talk and react, which ending they accept) is each persona's character (AgentPersona.character).
  * The builder input is the source (decision D1, plans/roleplay-skill.md): it is kept in `scenario.json.roleplay`
  * (goals and rubric in `after`), so editing reads back exactly what was saved and SKILL.md / items are regenerated.
  * Client-safe: no server imports.
@@ -18,7 +20,6 @@ export type Difficulty = (typeof DIFFICULTIES)[number]["value"];
 
 export const MAX_GOALS = 5;
 export const MAX_RUBRIC_CRITERIA = 8;
-export const MAX_REACTIONS = 12;
 export const MAX_EXAMPLE_LINES = 20;
 
 const line = z.string().trim().min(1).max(300);
@@ -31,21 +32,14 @@ export const roleplayBuilderSchema = z.object({
   /** The client: a persona of the org (Persona Library). */
   persona: z.string().regex(/^[a-z0-9][a-z0-9._-]*$/i, "Choose who the learner will speak with"),
   situation: z.object({
+    /** What is happening, the same for every persona that plays it. */
     scenario: z.string().trim().min(1, "Describe the situation").max(4000),
-    hiddenTruth: optionalText(4000),
     learnerRole: z.string().trim().min(1, "Say who the learner plays").max(100),
-    agreesWhen: optionalText(2000),
-    declinesWhen: optionalText(2000),
   }),
   difficulty: z.enum(DIFFICULTIES.map((d) => d.value) as [Difficulty, ...Difficulty[]]),
-  /** Only when the client talks differently on this call than the persona usually does. */
-  howTheyTalk: optionalText(2000),
-  guardedIf: z.array(line).max(MAX_REACTIONS).default([]),
-  opensUpIf: z.array(line).max(MAX_REACTIONS).default([]),
   /** The learner's brief, shown before the call. */
   whatToExpect: optionalText(1000),
-  opening: z.string().trim().min(1, "Add the client's first line").max(1000),
-  /** Lines the client might say (objections, brush-offs, how they open up): items.json. May be empty. */
+  /** Lines a client might say (objections, brush-offs): items.json, shared by every persona. May be empty. */
   exampleLines: z.array(line).max(MAX_EXAMPLE_LINES).default([]),
   learnerGoals: z.array(line).min(1, "Add at least one learner goal").max(MAX_GOALS, `${MAX_GOALS} learner goals at most`),
   rubric: z.array(z.object({
@@ -74,31 +68,24 @@ const STEPS = [
 
 const bullets = (items: string[]) => items.map((item) => `- ${item}`).join("\n");
 
-/** SKILL.md: what the AI client plays. Never contains the goals or the rubric (After). */
+/** SKILL.md: the stage every persona plays. Never contains the goals or the rubric (After), nor any one persona. */
 function renderSkillMarkdown(slug: string, input: RoleplayBuilder, description: string): string {
   const s = input.situation;
-  const learner = s.learnerRole;
   const who = [
-    // Persona-neutral: any persona of the role play's pool plays it, under its own name (specs/agents.md).
-    "You are the persona described in PERSONA.",
-    `The person talking to you plays: ${learner}. They are practising on you. Stay in character for the whole call.`,
-    input.howTheyTalk ? `How you talk on this call: ${input.howTheyTalk}` : "",
-  ].filter(Boolean).join("\n");
+    // Persona-neutral: each persona of the pool plays it under its own name, as its CHARACTER says (specs/agents.md).
+    "You are the persona described in PERSONA, as your CHARACTER for this role play describes you.",
+    `The person talking to you plays: ${s.learnerRole}. They are practising on you. Stay in character for the whole call.`,
+  ].join("\n");
   const sections = [
     `---\nname: ${slug}\ndescription: ${JSON.stringify(description)}\n---`,
     `# ${input.name}`,
     `## Who you are on this call\n${who}`,
     `## Situation\n${s.scenario}`,
-    s.hiddenTruth ? `## What is really going on\n${s.hiddenTruth}\n\nNever volunteer this. Reveal one piece at a time, only when the learner asks a question that genuinely earns it.` : "",
-    input.guardedIf.length || input.opensUpIf.length
-      ? `## Reactions${input.guardedIf.length ? `\n### You get more guarded when the learner:\n${bullets(input.guardedIf)}` : ""}${input.opensUpIf.length ? `\n### You open up when the learner:\n${bullets(input.opensUpIf)}` : ""}`
-      : "",
     `## How the call can end\n${bullets([
-      s.agreesWhen ? `Agree: ${s.agreesWhen}` : "",
-      s.declinesWhen ? `Decline: ${s.declinesWhen}` : "",
+      "Agree or decline as your character says.",
       "Never agree to buy, reserve or pay anything on this call.",
-    ].filter(Boolean))}`,
-    `## Steps\n### 1. ${STEPS[0].name} \`opening\`\nAnswer the call with: "${input.opening}"\n### 2. ${STEPS[1].name} \`objection\`\nHold your surface objection. React to what they do as in Reactions.\n### 3. ${STEPS[2].name} \`close\`\nEnd the call as in How the call can end.`,
+    ])}`,
+    `## Steps\n### 1. ${STEPS[0].name} \`opening\`\nAnswer the call with your character's opening line.\n### 2. ${STEPS[1].name} \`objection\`\nHold your surface objection. React to what they do as your character says.\n### 3. ${STEPS[2].name} \`close\`\nEnd the call as in How the call can end.`,
   ];
   return `${sections.filter(Boolean).join("\n\n")}\n`;
 }
@@ -122,11 +109,7 @@ export function renderRoleplay(slug: string, builder: RoleplayBuilder, clientRol
     steps: STEPS,
     roleplay: during,
   };
-  const items: RoleplayItem[] = [
-    { id: `${slug}-opening`, role: "client", context: "", text: input.opening, metadata: { step: "opening", move: "answer_call", kind: "opening" } },
-    // The opening is already an item; an example line repeating it would be returned twice.
-    ...input.exampleLines.filter((text) => text !== input.opening).map((text, index) => ({ id: `${slug}-line-${index + 1}`, role: "client" as const, context: "", text, metadata: { kind: "example" } })),
-  ];
+  const items: RoleplayItem[] = input.exampleLines.map((text, index) => ({ id: `${slug}-line-${index + 1}`, role: "client" as const, context: "", text, metadata: { kind: "example" } }));
   return {
     skill: renderSkillMarkdown(slug, input, description),
     scenario,

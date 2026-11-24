@@ -77,7 +77,7 @@ describe("client role play (kind ROLEPLAY with a SKILL.md)", () => {
     assert.match(prompt, /You are Rohan Mehta, a CLIENT\. The person talking to you plays Agent calling a wait-and-see investor/);
     assert.doesNotMatch(prompt, /Daniel Hart/);
     assert.match(prompt, /- Behaviour: Skeptical & Reserved/);
-    assert.match(prompt, /Your name is always Rohan Mehta\. The lines above are your defaults\. Where the role play below says something different for this call .*or how you talk\), the role play wins\./);
+    assert.match(prompt, /Your name is always Rohan Mehta; if the learner calls you by another name, correct them briefly and carry on\. The lines above are your defaults\. Where the role play below says something different for this call .*or how you talk\), the role play wins\./);
     assert.match(prompt, /<roleplay>\n---\nname: wait-and-see-investor[\s\S]*Inflation and taxes[\s\S]*<\/roleplay>/);
     assert.match(prompt, /# Difficulty: hard\nConfident and testing/);
     assert.match(prompt, /You start at guard level 3/);
@@ -88,6 +88,18 @@ describe("client role play (kind ROLEPLAY with a SKILL.md)", () => {
     assert.doesNotMatch(prompt, /SCENARIO PLAYBOOK|TWIN —|session_plan\(/);
     // Chat mode wording.
     assert.match(formatSessionSpec({ ...base, mode: "chat", roleplay: roleplaySkill("ROLEPLAY", roleplayData) }), /This is a live chat/);
+  });
+
+  test("a persona's character for this role play is played and wins over the persona", () => {
+    const character = "Investor, AED 1.5-2M, JVC. Open with: \"Ravi speaking.\"";
+    const prompt = formatSessionSpec({ ...base, roleplay: { ...roleplaySkill("ROLEPLAY", roleplayData)!, character } });
+    assert.match(prompt, /<character>\nInvestor, AED 1\.5-2M, JVC/);
+    assert.match(prompt, /the character wins/);
+    assert.match(prompt, /if your character gives an opening line/);
+    // Without one, the role play still wins and nothing about a character is said.
+    const plain = formatSessionSpec({ ...base, roleplay: roleplaySkill("ROLEPLAY", roleplayData) });
+    assert.doesNotMatch(plain, /<character>/);
+    assert.match(plain, /the role play wins/);
   });
 
   test("authored practice follows its full skill, roles and attachments without the sales wrapper", () => {

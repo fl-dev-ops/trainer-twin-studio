@@ -1,5 +1,7 @@
 "use client";
 
+import { CALL_MINUTES } from "@/lib/context-upload";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -14,7 +16,6 @@ import {
   DIFFICULTIES,
   MAX_EXAMPLE_LINES,
   MAX_GOALS,
-  MAX_REACTIONS,
   MAX_RUBRIC_CRITERIA,
   type RoleplayBuilder,
   roleplayBuilderSchema,
@@ -37,13 +38,9 @@ const SALES_RUBRIC = ["Rapport and tone", "Discovery questions", "Objection hand
 const emptyBuilder = (persona = ""): RoleplayBuilder => ({
   name: "",
   persona,
-  situation: { scenario: "", hiddenTruth: "", learnerRole: "", agreesWhen: "", declinesWhen: "" },
+  situation: { scenario: "", learnerRole: "" },
   difficulty: "medium",
-  howTheyTalk: "",
-  guardedIf: [],
-  opensUpIf: [],
   whatToExpect: "",
-  opening: "",
   exampleLines: [],
   learnerGoals: [],
   rubric: SALES_RUBRIC,
@@ -117,6 +114,16 @@ function ListField({ id, items, onChange, max, placeholder, addLabel }: {
 }
 
 /** Pick the client (reference rolePersonaPicker): the org's personas with photo, first name and role. */
+/** A role play's call length: the call ends at this point, with the client's goodbye. */
+export function CallLengthSelect({ value, onChange }: { value: number | null | undefined; onChange: (minutes: number | null) => void }) {
+  return (
+    <NativeSelect aria-label="Call length" value={value ? String(value) : ""} onChange={(event) => onChange(event.currentTarget.value ? Number(event.currentTarget.value) : null)}>
+      <NativeSelectOption value="">No limit</NativeSelectOption>
+      {CALL_MINUTES.map((minutes) => <NativeSelectOption key={minutes} value={String(minutes)}>{minutes} min</NativeSelectOption>)}
+    </NativeSelect>
+  );
+}
+
 export function PersonaPicker({ personas, value, onChange, disabled }: { personas: Persona[]; value: string | string[]; onChange: (slug: string) => void; disabled?: boolean }) {
   if (!personas.length) {
     return (
@@ -180,10 +187,12 @@ export const TOOL_ROWS: { key: keyof ToolSettings; label: string; description: s
  * as they change, like twin Configure (switches on flip, the upload card with its own Save). Creating: everything is
  * kept in the form and saved by "Create role play", on every tab.
  */
-export function RoleplayBuilderPage({ slug, initial, before: initialBefore, tools: initialTools, personas }: {
+export function RoleplayBuilderPage({ slug, initial, character: initialCharacter = "", before: initialBefore, tools: initialTools, personas }: {
   slug?: string;
   /** Absent for a new role play: an empty form on the first role-play persona. */
   initial?: RoleplayBuilder;
+  /** The chosen persona's character for this role play (other personas' are edited on the role play's page). */
+  character?: string;
   before: BeforeSettings;
   /** The workspace surfaces the client may use on the call (all off for a new role play). */
   tools: ToolSettings;
@@ -193,6 +202,7 @@ export function RoleplayBuilderPage({ slug, initial, before: initialBefore, tool
   const refresh = useRefresh();
   const editing = Boolean(slug);
   const [b, setB] = useState<RoleplayBuilder>(() => initial ?? emptyBuilder(personas.find((p) => !p.isOwn)?.slug ?? personas[0]?.slug ?? ""));
+  const [character, setCharacter] = useState(initialCharacter);
   const [before, setBefore] = useState<BeforeSettings>(initialBefore);
   const [tools, setTools] = useState<ToolSettings>(initialTools);
   /** The upload card's text as typed (editing: saved with its own Save). */
@@ -252,6 +262,11 @@ export function RoleplayBuilderPage({ slug, initial, before: initialBefore, tool
 
   async function save() {
     const parsed = roleplayBuilderSchema.safeParse(b);
+    if (parsed.success && !character.trim()) {
+      setTab("during");
+      toast.error("Write the client's character for this role play");
+      return;
+    }
     if (!parsed.success) {
       const issue = parsed.error.issues[0];
       setTab(PHASE_OF[String(issue?.path[0])] ?? "during");
@@ -262,7 +277,7 @@ export function RoleplayBuilderPage({ slug, initial, before: initialBefore, tool
     try {
       // Creating: the upload card's text is part of the form. Editing: Settings are already saved as it changed.
       const settings = editing ? saved.current.before : { ...before, ...card };
-      const result = await roleplayClient.builder.save.mutate({ slug, builder: parsed.data, before: settings, tools: editing ? saved.current.tools : tools });
+      const result = await roleplayClient.builder.save.mutate({ slug, builder: parsed.data, character, before: settings, tools: editing ? saved.current.tools : tools });
       toast.success(slug ? "Role play saved" : "Role play created");
       router.push(dashRoute(`/roleplay/${result.slug}`));
       refresh();
@@ -350,12 +365,20 @@ export function RoleplayBuilderPage({ slug, initial, before: initialBefore, tool
             </Field>
           </FormCard>
 
-          <FormCard title="The client" description="The persona sets the name, voice, photo, background and how they talk. The optional field below changes how they talk for this role play only.">
+          <FormCard title="The client" description="Who the learner talks to. The persona gives the name, voice and photo; the character below is who they are on this role play only, and no other role play sees it.">
             <Field label="Persona">
               <PersonaPicker personas={personas} value={b.persona} onChange={(slug) => set("persona", slug)} />
             </Field>
-            <Field id="rp-talk" label="How they talk on this call" hint="Optional. Replaces the persona's speaking style for this role play.">
-              <textarea id="rp-talk" rows={2} maxLength={2000} value={b.howTheyTalk ?? ""} onChange={(e) => set("howTheyTalk", e.target.value)} className={cn(input, "py-2")} />
+            <Field id="rp-character" label="Character on this call" hint="Written to “you”: their facts here, what they keep hidden until earned, their opening line, how they talk, what makes them open up or get guarded, and when they agree or decline.">
+              <textarea
+                id="rp-character"
+                rows={14}
+                maxLength={20000}
+                value={character}
+                placeholder={"## Your facts\n- Banking job in Oman, budget 1.5–2.0M AED via mortgage\n\n## What you keep hidden\n- Your wife decides with you; say so only if asked\n\n## Opening line\n\"Hello? Yes, I clicked on the ad.\"\n\n## Reactions\n- Guarded when the learner pushes guaranteed returns\n- Open up when they ask about your family's needs\n\n## How you end\n- Agree to a follow-up call once affordability is clear"}
+                onChange={(e) => setCharacter(e.target.value)}
+                className={cn(input, "py-2 font-mono")}
+              />
             </Field>
           </FormCard>
 
@@ -368,40 +391,14 @@ export function RoleplayBuilderPage({ slug, initial, before: initialBefore, tool
             </Field>
           </FormCard>
 
-          <FormCard title="The situation" description="What the client is dealing with, and what they keep to themselves.">
+          <FormCard title="The situation" description="What is happening, the same for every persona that plays it.">
             <Field id="rp-scenario" label="Scenario">
               <textarea id="rp-scenario" rows={6} maxLength={4000} value={b.situation.scenario} placeholder="Example: You are an off-plan buyer who wants to wait for prices to drop." onChange={(e) => setSituation("scenario", e.target.value)} className={cn(input, "py-2")} />
             </Field>
-            <Field id="rp-hidden" label="What's really going on" hint="Hidden from the learner. The client reveals it only if the learner earns it.">
-              <textarea id="rp-hidden" rows={4} maxLength={4000} value={b.situation.hiddenTruth ?? ""} placeholder="Example: You are scared of making a mistake with your family's savings." onChange={(e) => setSituation("hiddenTruth", e.target.value)} className={cn(input, "py-2")} />
-            </Field>
           </FormCard>
 
-          <FormCard title="The call" description="How the client opens, and lines that set their tone.">
-            <Field id="rp-opening" label="Opening line" hint="The client's first words when they pick up.">
-              <input id="rp-opening" maxLength={1000} value={b.opening} placeholder="Example: The market has basically stopped. I'll wait for prices to hit the bottom." onChange={(e) => set("opening", e.target.value)} className={cn(input, "h-10")} />
-            </Field>
-            <Field id="rp-lines" label="Example lines" hint="Things this client might say. The AI uses them for tone, never word for word. Optional.">
-              <ListField id="rp-lines" items={b.exampleLines} onChange={(v) => set("exampleLines", v)} max={MAX_EXAMPLE_LINES} placeholder="Example: Honestly, I might just put it into gold." addLabel="Add line" />
-            </Field>
-          </FormCard>
-
-          <FormCard title="Reactions" description="What makes the client close up or open up during the call.">
-            <Field id="rp-guarded" label="Gets more guarded when the learner">
-              <ListField id="rp-guarded" items={b.guardedIf} onChange={(v) => set("guardedIf", v)} max={MAX_REACTIONS} placeholder="Example: Uses fake urgency, like “last units”" addLabel="Add" />
-            </Field>
-            <Field id="rp-opens" label="Opens up when the learner">
-              <ListField id="rp-opens" items={b.opensUpIf} onChange={(v) => set("opensUpIf", v)} max={MAX_REACTIONS} placeholder="Example: Asks why they started looking" addLabel="Add" />
-            </Field>
-          </FormCard>
-
-          <FormCard title="How the call can end" description="The best outcome is a booked meeting or a dated follow-up, never a purchase.">
-            <Field id="rp-agree" label="Agrees when">
-              <textarea id="rp-agree" rows={2} maxLength={2000} value={b.situation.agreesWhen ?? ""} onChange={(e) => setSituation("agreesWhen", e.target.value)} className={cn(input, "py-2")} />
-            </Field>
-            <Field id="rp-decline" label="Declines when">
-              <textarea id="rp-decline" rows={2} maxLength={2000} value={b.situation.declinesWhen ?? ""} onChange={(e) => setSituation("declinesWhen", e.target.value)} className={cn(input, "py-2")} />
-            </Field>
+          <FormCard title="Example lines" description="Things a client in this situation might say, shared by every persona. The AI uses them for tone, never word for word. Optional.">
+            <ListField id="rp-lines" items={b.exampleLines} onChange={(v) => set("exampleLines", v)} max={MAX_EXAMPLE_LINES} placeholder="Example: Honestly, I might just put it into gold." addLabel="Add line" />
           </FormCard>
         </TabsContent>
 
@@ -450,6 +447,11 @@ export function RoleplayBuilderPage({ slug, initial, before: initialBefore, tool
           {createNote}
           <SettingsPanel>
           <SettingsSection title="Before the call" description="Optional: what the learner shares or uploads before the client picks up.">
+            <SettingCard
+              title="Call length"
+              description="The call ends at this point, with the client's goodbye."
+              control={<CallLengthSelect value={before.callMinutes} onChange={(minutes) => saveSettings({ before: { ...before, callMinutes: minutes } }, minutes ? `Calls now end at ${minutes} minutes` : "Call length limit removed")} />}
+            />
             <SettingCard
               title="Share screen"
               description="Learners share their entire screen for the whole call."

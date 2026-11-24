@@ -1374,6 +1374,9 @@ model AgentPersona {
   personaId String
   position  Int
   active    Boolean  @default(true)
+  /// Role plays: this persona's character for this role play only (a SKILL.md: who they are on this call, their facts,
+  /// opening line, reactions). Never shared with another role play; a session pins it (compiledSnapshot.character).
+  character String?
   createdAt DateTime @default(now())
   agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade, onUpdate: Restrict)
   persona   Persona  @relation(fields: [personaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
