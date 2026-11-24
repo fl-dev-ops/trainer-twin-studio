@@ -122,6 +122,8 @@ type Props = {
   minutesLeft?: number | null;
   /** What each role play tells the learner before the call (its learner brief), by agent slug. */
   agentBriefs?: Record<string, string>;
+  /** Role plays with several personas: who can answer (studio Talk lets you pick one; random by default). */
+  agentPersonaPools?: Record<string, { slug: string; name: string; role: string | null }[]>;
 };
 
 function formatBytes(n: number) {
@@ -147,6 +149,7 @@ export function SessionView({
   organizationLogo = null,
   introVideos = {},
   agentBriefs = {},
+  agentPersonaPools = {},
   agentPhotos = {},
   autoStart = false,
   minutesLeft = null,
@@ -169,6 +172,10 @@ export function SessionView({
   const workspaceConnected = roomState === ConnectionState.Connected;
   const [agent, setAgent] = useState(initialAgent ?? agents[0] ?? "");
   const persona = agentPersonas[agent] ?? personas[0] ?? "";
+  // Trying a role play with several personas: the one chosen to answer ("" = random), per role play.
+  const [chosenPersona, setChosenPersona] = useState<Record<string, string>>({});
+  const personaPool = sessionCode ? undefined : agentPersonaPools[agent];
+  const personaChoice = personaPool ? chosenPersona[agent] ?? "" : "";
   // Who answers this call (the session's persona: a role play picks one per call); known once the session starts.
   const [sessionPersona, setSessionPersona] = useState<{ slug: string; name: string; photoUrl: string | null } | null>(null);
   const [contextIds, setContextIds] = useState<string[]>([]);
@@ -316,7 +323,7 @@ export function SessionView({
         body: JSON.stringify(
           sessionCode
             ? { shareCode: sessionCode, contextId: ids[0] || undefined, contextIds: ids, holdOpening: true }
-            : { agentSlug: agent, contextId: ids[0] || undefined, contextIds: ids, holdOpening: true },
+            : { agentSlug: agent, contextId: ids[0] || undefined, contextIds: ids, holdOpening: true, ...(personaChoice ? { persona: personaChoice } : {}) },
         ),
       }).catch(() => {
         throw new Error("Could not reach TrainerTwin. Check your connection and try again.");
@@ -348,7 +355,7 @@ export function SessionView({
       setError(e instanceof Error ? e.message : "Failed to start session");
       if (!autoStart) setLaunched(false);
     }
-  }, [agent, contextIds, documentsAllowed, sessionCode, autoStart]);
+  }, [agent, contextIds, documentsAllowed, sessionCode, autoStart, personaChoice]);
 
   const handleRetry = useCallback(() => {
     startedRef.current = false;
@@ -1132,6 +1139,29 @@ export function SessionView({
                     </SelectContent>
                   </Select>
                 </label>
+
+                {personaPool ? (
+                  <label className="flex flex-col gap-1.5 text-sm">
+                    <span className="font-medium">Persona</span>
+                    <Select
+                      value={personaChoice || "random"}
+                      items={{ random: "Random", ...Object.fromEntries(personaPool.map((p) => [p.slug, p.role ? `${p.name} · ${p.role}` : p.name])) }}
+                      onValueChange={(v) => v !== null && setChosenPersona((current) => ({ ...current, [agent]: v === "random" ? "" : v }))}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Random" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          <SelectItem value="random">Random</SelectItem>
+                          {personaPool.map((p) => (
+                            <SelectItem key={p.slug} value={p.slug}>{p.role ? `${p.name} · ${p.role}` : p.name}</SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  </label>
+                ) : null}
 
                 {agentBriefs[agent] ? <LearnerBrief text={agentBriefs[agent]} /> : null}
 

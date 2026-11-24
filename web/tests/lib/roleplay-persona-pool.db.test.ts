@@ -90,6 +90,28 @@ describe.skipIf(!localMinutesDb)("role play persona pool, learner side (local da
     expect([...played].sort()).toEqual([daniel.slug, sara.slug].sort());
   });
 
+  test("a studio member trying it can choose who answers; a learner's link always picks at random", async () => {
+    const daniel = await persona("Daniel");
+    const sara = await persona("Sara");
+    const off = await persona("Off");
+    await db.$transaction((tx) => setAgentPersonas(f.roleplay.id, [
+      { personaId: daniel.id, active: true }, { personaId: sara.id, active: true }, { personaId: off.id, active: false },
+    ], tx));
+    const tryIt = async (choice?: string) => {
+      const started = await activateSession({ orgId: f.org.id, userId: f.trainer.id, userEmail: f.trainer.email, agentSlug: f.roleplay.slug, mode: "voice", persona: choice });
+      const row = await db.interviewSession.findUniqueOrThrow({ where: { id: started.id }, select: { personaSlug: true, resolvedVoiceId: true } });
+      await finalizeInterviewSession({ sessionId: started.id, requestedStatus: "completed" });
+      return row;
+    };
+    for (let i = 0; i < 5; i++) expect(await tryIt(sara.slug)).toEqual({ personaSlug: sara.slug, resolvedVoiceId: sara.voiceId });
+    // Only an active persona of this role play.
+    await expect(tryIt(off.slug)).rejects.toMatchObject({ status: 400 });
+    await expect(tryIt("someone-else")).rejects.toMatchObject({ status: 400 });
+    // A learner's link can't choose.
+    await expect(activateSession({ orgId: f.org.id, userId: f.learner.id, userEmail: f.learner.email, shareCode: code(), mode: "voice", persona: sara.slug }))
+      .rejects.toMatchObject({ status: 400 });
+  });
+
   test("one active persona: every call is the role play's own persona", async () => {
     const extra = await persona("Extra");
     await db.$transaction((tx) => setAgentPersonas(f.roleplay.id, [{ personaId: main.id, active: true }, { personaId: extra.id, active: false }], tx));

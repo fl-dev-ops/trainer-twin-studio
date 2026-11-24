@@ -26,6 +26,8 @@ export type StartSessionInput = {
   holdOpening?: boolean;
   /** A studio member calibrating a twin: the call's calibration is created with it (specs/practice.md rule 12). */
   calibrate?: boolean;
+  /** A studio member trying a role play with several personas: the persona to play (slug); omitted = random. */
+  persona?: string;
 };
 
 export type OpenedSession = NonNullable<Awaited<ReturnType<typeof activateSession>>>;
