@@ -290,6 +290,13 @@ model Voice {
   status          String   @default("ready") // pending | ready | failed | deleting
   s3AudioKey      String
   s3TranscriptKey String?
+  /// Details for choosing a voice (persona picker, copilot): female | male; young | middle-aged | older; an accent
+  /// in a few words ("British", "Indian English").
+  /// Its home language (ISO 639-1, e.g. "en", "ar"): the one it sounds native in. Any voice can speak any language.
+  language        String   @default("en")
+  gender          String?
+  age             String?
+  accent          String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   personas        Persona[]

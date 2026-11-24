@@ -57,7 +57,7 @@ describe.skipIf(!localMinutesDb)("Phase 5 package-free readers (real Postgres)",
   });
   const ctx = () => ({ user: { ...f.trainer, orgId: f.org.id, orgSlug: f.org.slug, role: "admin" } });
   const builder = (): RoleplayBuilder => ({
-    name: "Package-free practice", persona: f.org.slug, clientName: "Pinned buyer",
+    name: "Package-free practice", persona: f.org.slug,
     situation: { scenario: "Buyer is uncertain", learnerRole: "Advisor" },
     difficulty: "medium", opening: "I need more time", exampleLines: ["Please explain"],
     guardedIf: [], opensUpIf: [], learnerGoals: ["Understand the concern"],
@@ -83,7 +83,8 @@ describe.skipIf(!localMinutesDb)("Phase 5 package-free readers (real Postgres)",
     });
     expect((await caller.builder.get({ slug: saved.slug })).builder).toMatchObject({ opening: "I need more time" });
     expect((await caller.scenarios.list()).find((row) => row.slug === saved.slug)).toMatchObject({
-      opening: "I need more time", client: { name: "Pinned buyer" },
+      // The client is the persona playing it, under its own name (role plays never rename it).
+      opening: "I need more time", client: { name: "Persona", persona: f.org.slug },
     });
     expect(await caller.scenarios.get({ slug: saved.slug })).toMatchObject({ situation: "Buyer is uncertain", learnerRole: "Advisor" });
     await updateRoleplay(f.org.id, saved.slug, { builder: { opening: "Ask me tomorrow" } });
@@ -162,6 +163,6 @@ describe.skipIf(!localMinutesDb)("Phase 5 package-free readers (real Postgres)",
     expect(input.agentName).toBe("Package-free practice");
     expect(input.brief).toContain("I need more time");
     expect(input.goals).toEqual(["Understand the concern"]);
-    expect((await roleplayRouter.createCaller(ctx()).sessions.get({ id: session.id })).client.name).toBe("Pinned buyer");
+    expect((await roleplayRouter.createCaller(ctx()).sessions.get({ id: session.id })).client.name).toBe("Persona");
   });
 });

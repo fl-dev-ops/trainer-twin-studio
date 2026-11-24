@@ -149,7 +149,7 @@ test("upload becomes ready only after its reference audio and transcript persist
   beforePut = () => expect([...voices.values()].every((voice) =>
     voice.status === "pending" && voice.s3AudioKey.startsWith(`base/org/tts-voices/${voice.id}/reference-`) && voice.s3TranscriptKey,
   )).toBe(true);
-  const { voiceId } = await media.setPersonaVoice("org", "daniel", { audio: file("ref.wav", "audio/wav"), transcript: " Hello there " });
+  const { voiceId } = await media.setPersonaVoice("org", "daniel", { name: "Daniel recording", audio: file("ref.wav", "audio/wav"), transcript: " Hello there " });
   expect(personas[0].voiceId).toBe(voiceId);
   const voice = voices.get(voiceId)!;
   expect(voice.s3AudioKey).toMatch(new RegExp(`^base/org/tts-voices/${voiceId}/reference-[0-9a-f-]{36}\\.wav$`));
@@ -158,10 +158,10 @@ test("upload becomes ready only after its reference audio and transcript persist
 });
 
 test("replacing a shared recording creates another voice and preserves the old voice and files", async () => {
-  const { voiceId } = await media.setPersonaVoice("org", "daniel", { audio: file("a.wav", "audio/wav"), transcript: "one" });
+  const { voiceId } = await media.setPersonaVoice("org", "daniel", { name: "Daniel recording", audio: file("a.wav", "audio/wav"), transcript: "one" });
   const old = { ...voices.get(voiceId)! };
   personas.push({ ...personas[0], id: "p3", slug: "other" });
-  const replacement = await media.setPersonaVoice("org", "daniel", { audio: file("b.mp3", "audio/mpeg") });
+  const replacement = await media.setPersonaVoice("org", "daniel", { name: "Daniel recording", audio: file("b.mp3", "audio/mpeg") });
   const now = voices.get(replacement.voiceId)!;
   expect(replacement.voiceId).not.toBe(voiceId);
   expect(voices.size).toBe(2);
@@ -175,10 +175,10 @@ test("replacing a shared recording creates another voice and preserves the old v
 });
 
 test("a failed replacement leaves the voice in use untouched", async () => {
-  const { voiceId } = await media.setPersonaVoice("org", "daniel", { audio: file("a.wav", "audio/wav") });
+  const { voiceId } = await media.setPersonaVoice("org", "daniel", { name: "Daniel recording", audio: file("a.wav", "audio/wav") });
   const before = { ...voices.get(voiceId)! };
   failPut = /reference/;
-  await expect(media.setPersonaVoice("org", "daniel", { audio: file("b.wav", "audio/wav") })).rejects.toThrow("S3 down");
+  await expect(media.setPersonaVoice("org", "daniel", { name: "Daniel recording", audio: file("b.wav", "audio/wav") })).rejects.toThrow("S3 down");
   expect(voices.get(voiceId)).toEqual(before);
   expect(voices.size).toBe(1);
   expect(personas[0].voiceId).toBe(voiceId);
@@ -187,7 +187,7 @@ test("a failed replacement leaves the voice in use untouched", async () => {
 
 test("a failed first upload leaves no voice behind", async () => {
   failPut = /reference/;
-  await expect(media.setPersonaVoice("org", "daniel", { audio: file("a.wav", "audio/wav") })).rejects.toThrow("S3 down");
+  await expect(media.setPersonaVoice("org", "daniel", { name: "Daniel recording", audio: file("a.wav", "audio/wav") })).rejects.toThrow("S3 down");
   expect(voices.size).toBe(0);
   expect(personas[0].voiceId).toBeNull();
 });
@@ -345,7 +345,7 @@ test("in-use deletion does not remove the row or files; unused deletion and rena
   await expect(voiceService.deleteVoice("org", voice.id)).rejects.toMatchObject({ code: "voice_in_use", status: 409 });
   expect(deleted).toEqual([]);
   expect(objects.has(voice.s3AudioKey)).toBe(true);
-  await voiceService.renameVoice("org", voice.id, "Renamed");
+  await voiceService.updateVoice("org", voice.id, { name: "Renamed" });
   expect(voice.name).toBe("Renamed");
   personas[0].voiceId = null;
   await voiceService.deleteVoice("org", voice.id);
@@ -366,7 +366,7 @@ test("partial storage deletion keeps a nonselectable deleting row and can be ret
   expect(objects.has(voice.s3TranscriptKey!)).toBe(true);
   expect(await media.pickableVoices("org")).toEqual([]);
   await expect(media.setPersonaVoiceFrom("org", "daniel", voice.id)).rejects.toMatchObject({ code: "voice_unavailable" });
-  await expect(voiceService.renameVoice("org", voice.id, "Changed")).rejects.toMatchObject({ code: "voice_deleting" });
+  await expect(voiceService.updateVoice("org", voice.id, { name: "Changed" })).rejects.toMatchObject({ code: "voice_deleting" });
   failDelete = null;
   await voiceService.deleteVoice("org", voice.id);
   expect(voices.has(voice.id)).toBe(false);
@@ -412,7 +412,7 @@ test("organization callers cannot rename or delete global samples or another org
   libraryVoice("sample", { orgId: null, kind: "sample", s3AudioKey: "base/shared/tts-voices/sample/reference.wav" });
   libraryVoice("foreign", { orgId: "other" });
   for (const id of ["sample", "foreign"]) {
-    await expect(voiceService.renameVoice("org", id, "Changed")).rejects.toMatchObject({ status: 404 });
+    await expect(voiceService.updateVoice("org", id, { name: "Changed" })).rejects.toMatchObject({ status: 404 });
     await expect(voiceService.deleteVoice("org", id)).rejects.toMatchObject({ status: 404 });
   }
   expect(voices.get("sample")!.name).toBe("sample");
@@ -432,8 +432,8 @@ test("avatar holds both a reference image and a video; each can be replaced on i
 });
 
 test("rejects unsupported, empty and oversized files before storing anything", async () => {
-  await expect(media.setPersonaVoice("org", "daniel", { audio: file("a.txt", "text/plain") })).rejects.toThrow(/Unsupported audio/);
-  await expect(media.setPersonaVoice("org", "daniel", { audio: file("a.wav", "audio/wav", 0) })).rejects.toThrow(/empty/);
+  await expect(media.setPersonaVoice("org", "daniel", { name: "Daniel recording", audio: file("a.txt", "text/plain") })).rejects.toThrow(/Unsupported audio/);
+  await expect(media.setPersonaVoice("org", "daniel", { name: "Daniel recording", audio: file("a.wav", "audio/wav", 0) })).rejects.toThrow(/empty/);
   await expect(media.setPersonaAvatar("org", "daniel", { image: file("a.gif", "image/gif") })).rejects.toThrow(/Unsupported image/);
   const big = file("big.mp4", "video/mp4");
   Object.defineProperty(big, "size", { value: 100 * 1024 * 1024 + 1 });
@@ -459,10 +459,19 @@ test("program settings are validated and stored; reading returns links, transcri
   expect(personas[0].settings).toEqual({ pace: "fast" });
 
   expect(await media.getPersonaMedia("org", "daniel")).toEqual({ voice: null, avatar: null, settings: { pace: "fast" } });
-  await media.setPersonaVoice("org", "daniel", { audio: file("a.wav", "audio/wav"), transcript: "Hi" });
+  await media.setPersonaVoice("org", "daniel", { name: "Daniel recording", audio: file("a.wav", "audio/wav"), transcript: "Hi" });
   await media.setPersonaAvatar("org", "daniel", { image: file("a.jpg", "image/jpeg") });
   const read = await media.getPersonaMedia("org", "daniel");
   expect(read.voice).toMatchObject({ audioUrl: expect.stringMatching(/^https:\/\/s3\.test\/base\/org\/tts-voices\//), transcript: "Hi" });
   expect(read.avatar).toMatchObject({ imageUrl: expect.stringMatching(/avatars/), videoUrl: null });
   expect((await media.getPersonaMedia(null, "preset")).settings).toEqual({ pace: "normal" });
+});
+
+test("voice languages: VoxCPM2's 30, each with its own preview line; labels read language first", async () => {
+  const { VOICE_LANGUAGES, previewLine, voiceDetailsLabel } = await import("@/lib/voice-details");
+  expect(VOICE_LANGUAGES).toHaveLength(30);
+  expect(new Set(VOICE_LANGUAGES.map(([code]) => previewLine(code))).size).toBe(30);
+  expect(previewLine("xx")).toBe(previewLine("en"));
+  expect(voiceDetailsLabel({ language: "ar", gender: "female", age: "young", accent: "Levantine Arabic" })).toBe("Arabic · female · young · Levantine Arabic");
+  expect(voiceDetailsLabel({ language: "ar", gender: "male" }, false)).toBe("Male");
 });

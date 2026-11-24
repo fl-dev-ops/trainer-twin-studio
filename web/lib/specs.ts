@@ -182,7 +182,8 @@ export async function listRunnableSpecs(type: "personas" | "agents", orgId: stri
       .filter(({ data }) => isRecord(data) && isRecord(data.style) && isRecord(data.decision_preferences))
       .map(({ slug }) => slug);
   }
-  const rows = await db.agent.findMany({ where: { orgId }, orderBy: [{ order: "asc" }, { name: "asc" }], select: { id: true, slug: true, version: true, primarySkillId: true, data: true, personaId: true, kind: true } });
+  // Live agents only: archived role plays and twins never start (the studio lists hide them too).
+  const rows = await db.agent.findMany({ where: { orgId, archivedAt: null }, orderBy: [{ order: "asc" }, { name: "asc" }], select: { id: true, slug: true, version: true, primarySkillId: true, data: true, personaId: true, kind: true } });
   const agents = await Promise.all(rows.map((agent) => agent.primarySkillId ? hydrateAgentSkill(orgId, agent) : agent));
   return agents
     .filter((agent) => isRecord(agent.data) && Boolean(agent.personaId) && isRunnableAgentData(agent.kind, agent.data))
@@ -232,14 +233,8 @@ export async function listAgentPersonas(orgId: string, slugs: string[]) {
 /** Who the learner talks to on each agent: the role play's own client name, else the persona's display name. */
 export async function listAgentPersonaNames(orgId: string, slugs: string[]): Promise<Record<string, string>> {
   if (slugs.length === 0) return {};
-  const agents = await db.agent.findMany({ where: { orgId, slug: { in: slugs } }, select: { slug: true, data: true, persona: { select: { name: true } } } });
-  return Object.fromEntries(agents.map((agent) => [agent.slug, personaNameOf(agent.data, agent.persona.name)]));
-}
-
-export function personaNameOf(agentData: unknown, personaName: string) {
-  const record = (value: unknown) => (value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {});
-  const client = record(record(record(agentData).scenario).roleplay).clientName;
-  return typeof client === "string" && client.trim() ? client.trim() : personaName;
+  const agents = await db.agent.findMany({ where: { orgId, slug: { in: slugs }, kind: { not: "ROLEPLAY" } }, select: { slug: true, persona: { select: { name: true } } } });
+  return Object.fromEntries(agents.map((agent) => [agent.slug, agent.persona.name]));
 }
 
 export async function listAgentNames(orgId: string, slugs: string[]) {
@@ -289,7 +284,8 @@ export async function listAgentContextRequired(orgId: string, slugs: string[]): 
 export async function listScenarioIntroVideos(orgId: string, slugs: string[]) {
   if (slugs.length === 0) return {};
   const agents = await db.agent.findMany({
-    where: { orgId, slug: { in: slugs } },
+    // Role plays have none: any persona of the pool may answer, so no one face introduces them.
+    where: { orgId, slug: { in: slugs }, kind: { not: "ROLEPLAY" } },
     select: { slug: true, data: true },
   });
   const resolved = await Promise.all(

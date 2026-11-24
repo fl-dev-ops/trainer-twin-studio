@@ -24,14 +24,16 @@ persona from the Persona Library, which gives the voice and personality.
    one (name, role, a few sentences of stable personality written to "you", and a voice from \`voice_list\`) and
    create it with \`persona_create\` once the trainer agrees (or adjust a close one with \`persona_update\`, if no other role play relies on how it is now). Personality goes in the persona; this situation, its facts
    and goals stay in the brief.
-4. **Say plainly what this role play cannot do yet**, when the requirements ask for it: several personas in one call or
-   a persona picked at random per session (offer one role play per persona instead), modes such as practice vs mock
+4. **Say plainly what this role play cannot do yet**, when the requirements ask for it: several personas in one call
+   (a persona picked at random per session is supported: publish, then \`roleplay_personas_set\`), modes such as practice vs mock
    (offer one role play per mode), and scoring, reports or feedback (not part of the role play). Never fake them in the
    brief.
 5. **Write the brief** (\`roleplay_draft\`). Quality rules:
    - Write to the AI as "you". Short, concrete sentences; no lists of adjectives.
    - \`ai.who\` and \`situation\` are what is happening NOW: what triggered the call, what you know and don't know, how
      you feel at the start, facts to keep consistent. Personality and speaking style belong to the persona, not here.
+   - **Never name the AI's character** in \`ai.who\`, \`situation\`, the opening line or items: the persona gives the name,
+     and any persona of the role play may play it. Write "you", and the opening without a name ("Hello?", "Yes, speaking").
    - \`concerns\`: what this person worries about, as they would put it, with when it comes up and what eases it. Mark
      the ones they keep to themselves as hidden. Never write the answers.
    - \`steps\`: 2 to 6, a real conversation, not a checklist; include moments the AI brings in on purpose.
@@ -48,8 +50,9 @@ persona from the Persona Library, which gives the voice and personality.
        anything in the requirements about pace or interruptions.
      - \`items\`: when the requirements give sample lines, include some short reactions too (kind example), as given.
    - \`ending\`: a limit (time or count), what good looks like, and the exit line if the AI ends it.
-   - \`learnerBrief\`: written to the learner: who they are, the situation, the outcome to aim for, the limit. Never the
-     hidden concerns.
+   - \`learnerBrief\`: written to the learner: who they are, the situation, the outcome to aim for, the limit. Only the
+     situation ("A lead filled in the form after your ad; call them back"), never who they will speak with: no name,
+     persona, personality or background of the AI's character, and never the hidden concerns.
    - \`items\`: only lines the trainer gave (objection lists, question banks, sample lines), each with kind, when it
      fits and tags. Never invent lines. With items, write \`itemsGuide\`.
    - In an interview, exam or assessment the AI asks and probes; it never teaches, hints or nudges toward the answer

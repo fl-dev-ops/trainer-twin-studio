@@ -8,6 +8,7 @@ import { studioOrRefusal } from "@/lib/org";
 import { resolveSessionUser } from "@/lib/session-user";
 import { isStudioRole } from "@/lib/org";
 import { listSessions } from "@/lib/specs";
+import { sessionPersonaView } from "@/lib/persona-media";
 
 export async function GET() {
   const trainer = await studioOrRefusal();
@@ -49,7 +50,9 @@ export async function POST(req: Request) {
     // The browser never gets the agent's token (practice rule 26).
     const { agentToken: _agentToken, ...session } = started.session;
     void _agentToken;
-    const activation = { session, participantToken: started.participantToken, room: started.room, conversationToken: started.conversationToken };
+    // Who answers: the persona this session recorded (a role play picks one of its personas per call).
+    const persona = await sessionPersonaView(org.id, session.id).catch(() => null);
+    const activation = { session, persona, participantToken: started.participantToken, room: started.room, conversationToken: started.conversationToken };
     // Prewarm the chat brain's opening (spec snapshot, surface command, opening style) while the person connects.
     after(() => warmChatOpening(activation.session.id, org.id).catch(() => {}));
     return NextResponse.json(activation);

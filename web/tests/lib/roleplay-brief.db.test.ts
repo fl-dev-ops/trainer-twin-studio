@@ -189,7 +189,7 @@ describe.skipIf(!localMinutesDb)("role plays written from requirements, through 
   test("a role play made in the older form opens the same simple edit page and saves its basics", async () => {
     const { saveRoleplay } = await import("@/lib/scenario-ingest");
     const made = await saveRoleplay(f.org.id, {
-      name: "Older practice", persona: "chloe", clientName: "Pinned buyer",
+      name: "Older practice", persona: "chloe",
       situation: { scenario: "Buyer is uncertain", learnerRole: "Advisor", hiddenTruth: "Worried about the mortgage" },
       difficulty: "medium", opening: "I need more time", whatToExpect: "Find out why they are unsure.", exampleLines: ["Please explain"],
       guardedIf: [], opensUpIf: [], learnerGoals: ["Understand the concern"], rubric: [{ name: "Understanding", points: 100 }],

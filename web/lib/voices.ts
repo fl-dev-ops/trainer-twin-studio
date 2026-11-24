@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import type { Prisma, Voice } from "@/lib/generated/prisma/client";
 import { deleteObject, putObject, voicePrefix } from "@/lib/s3";
+import { voiceDetailsSchema, type VoiceDetails } from "@/lib/voice-details";
 
 const MB = 1024 * 1024;
 const AUDIO_EXTENSIONS = {
@@ -72,8 +73,16 @@ function voiceName(name: string) {
   return trimmed;
 }
 
-export async function createVoice(orgId: string | null, input: { name: string; audio: File; transcript?: string }) {
+/** A valid set of details, or a 400 naming what's wrong. */
+function voiceDetails(input: VoiceDetails | undefined) {
+  const parsed = voiceDetailsSchema.safeParse(input ?? {});
+  if (!parsed.success) throw new VoiceError("voice_invalid_input", "Choose one of the supported languages; gender is female or male, age is young, middle-aged or older, and an accent is up to 40 characters.", 400);
+  return parsed.data;
+}
+
+export async function createVoice(orgId: string | null, input: { name: string; audio: File; transcript?: string; details?: VoiceDetails }) {
   const name = voiceName(input.name);
+  const details = voiceDetails(input.details);
   if (!input.audio.size) throw new VoiceError("voice_invalid_input", "The audio file is empty.", 400);
   if (input.audio.size > VOICE_AUDIO_LIMITS.maxBytes) throw new VoiceError("voice_invalid_input", "The audio file must be 25 MB or smaller.", 400);
   const extension = Object.entries(AUDIO_EXTENSIONS).find(([mime]) => mime === input.audio.type)?.[1];
@@ -84,7 +93,7 @@ export async function createVoice(orgId: string | null, input: { name: string; a
   if (!bytes.byteLength || bytes.byteLength > VOICE_AUDIO_LIMITS.maxBytes) {
     throw new VoiceError("voice_invalid_input", "The audio file must be non-empty and 25 MB or smaller.", 400);
   }
-  const voice = await db.voice.create({ data: { orgId, name, kind: "cloned", status: "pending", s3AudioKey: "" } });
+  const voice = await db.voice.create({ data: { orgId, name, kind: "cloned", status: "pending", s3AudioKey: "", ...details } });
   const prefix = voicePrefix(orgId, voice.id);
   const stamp = randomUUID();
   const audioKey = `${prefix}/reference-${stamp}.${extension}`;
@@ -141,15 +150,17 @@ export async function attachPersonaVoice(orgId: string | null, slug: string, voi
   return { voiceId: voice.id, name: voice.name };
 }
 
-export async function renameVoice(orgId: string, voiceId: string, name: string) {
-  const trimmed = voiceName(name);
+/** Changes an org voice's name and/or details (only what's passed). Its id never changes; personas keep pointing at it. */
+export async function updateVoice(orgId: string, voiceId: string, input: { name?: string } & VoiceDetails) {
+  const { name, ...rest } = input;
+  const data = { ...(name !== undefined ? { name: voiceName(name) } : {}), ...voiceDetails(rest) };
   return db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "Voice" WHERE id = ${voiceId} FOR UPDATE`;
     const voice = await tx.voice.findFirst({ where: { id: voiceId, orgId } });
     if (!voice) throw new VoiceError("voice_not_found", "Voice not found.", 404);
-    if (voice.kind !== "cloned") throw new VoiceError("voice_read_only", "Sample voices cannot be renamed.", 403);
+    if (voice.kind !== "cloned") throw new VoiceError("voice_read_only", "Sample voices cannot be changed.", 403);
     if (voice.status === "deleting") throw new VoiceError("voice_deleting", "Retry deleting this voice before making other changes.", 409);
-    return tx.voice.update({ where: { id: voice.id }, data: { name: trimmed }, select: { id: true, name: true } });
+    return tx.voice.update({ where: { id: voice.id }, data, select: { id: true, name: true, language: true, gender: true, age: true, accent: true } });
   });
 }
 

@@ -59,14 +59,18 @@ export function RoleplayDetailPage({ roleplay }: { roleplay: Detail }) {
             {roleplay.name}
           </h1>
           <div className="mt-6">
-            <p className={kicker}>Client persona</p>
-            <p className="mt-2 flex items-center gap-3 text-title-s font-semibold">
-              <UserAvatar user={{ name: roleplay.client.name, image: roleplay.client.photoUrl }} size="xl" />
-              <span className="flex min-w-0 flex-col">
-                <span className="truncate">{roleplay.client.name}</span>
-                {roleplay.client.role ? <span className="text-xs font-normal text-muted-foreground">{roleplay.client.role}</span> : null}
-              </span>
-            </p>
+            <p className={kicker}>{roleplay.personas.length > 1 ? `Client personas · ${roleplay.personas.length}, one picked at random per call` : "Client persona"}</p>
+            <ul className="mt-2 flex list-none flex-col gap-3 p-0">
+              {(roleplay.personas.length ? roleplay.personas : [roleplay.client]).map((persona) => (
+                <li key={persona.persona} className="flex items-center gap-3 text-title-s font-semibold">
+                  <UserAvatar user={{ name: persona.name, image: persona.photoUrl }} size={roleplay.personas.length > 1 ? "lg" : "xl"} />
+                  <span className="flex min-w-0 flex-col">
+                    <span className="truncate">{persona.name}</span>
+                    {persona.role ? <span className="text-xs font-normal text-muted-foreground">{persona.role}</span> : null}
+                  </span>
+                </li>
+              ))}
+            </ul>
           </div>
           <div className="mt-6">
             <p className={kicker}>Scenario</p>

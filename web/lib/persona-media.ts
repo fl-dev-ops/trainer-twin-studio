@@ -60,15 +60,16 @@ async function removeOld(key: string | null | undefined) {
   await deleteObject(key).catch((error) => console.warn("[persona-media] could not delete replaced file", key, error));
 }
 
-export async function setPersonaVoice(orgId: string | null, slug: string, input: { audio: File; transcript?: string }) {
+/** A recording uploaded for a persona joins the voice library under the name given (never one made from the persona's). */
+export async function setPersonaVoice(orgId: string | null, slug: string, input: { name: string; audio: File; transcript?: string }) {
   const persona = await findPersona(orgId, slug);
-  const voice = await createVoice(orgId, { ...input, name: `${persona.name} voice`.slice(0, 60) });
+  const voice = await createVoice(orgId, input);
   await selectPersonaVoice(orgId, slug, persona, voice.id);
   return { voiceId: voice.id };
 }
 
 export async function pickableVoices(orgId: string) {
-  return (await listAvailableVoices(orgId)).map(({ id, name, kind }) => ({ id, name, kind }));
+  return (await listAvailableVoices(orgId)).map(({ id, name, kind, language, gender, age, accent }) => ({ id, name, kind, language, gender, age, accent }));
 }
 
 export async function setPersonaVoiceFrom(orgId: string, slug: string, sourceVoiceId: string) {
@@ -138,7 +139,8 @@ export async function setPersonaSettings(orgId: string | null, slug: string, inp
 export async function agentPhotoUrls(orgId: string, agentSlugs: string[]): Promise<Record<string, string | null>> {
   if (!agentSlugs.length) return {};
   const agents = await db.agent.findMany({
-    where: { slug: { in: agentSlugs }, OR: [{ orgId }, { orgId: null }] },
+    // Not role plays: their session picks who answers (sessionPersonaView).
+    where: { slug: { in: agentSlugs }, OR: [{ orgId }, { orgId: null }], kind: { not: "ROLEPLAY" } },
     select: { slug: true, persona: { select: { avatar: { select: { s3ImageKey: true } } } } },
   });
   const entries = await Promise.all(agents.map(async (agent) => {
@@ -146,6 +148,25 @@ export async function agentPhotoUrls(orgId: string, agentSlugs: string[]): Promi
     return [agent.slug, key ? await presignedGetUrl(key, 6 * 3600) : null] as const;
   }));
   return Object.fromEntries(entries);
+}
+
+/** Who answers a started session, for its call screen: the persona the session recorded (a role play's pick). */
+export async function sessionPersonaView(orgId: string, sessionId: string) {
+  const session = await db.interviewSession.findFirst({ where: { id: sessionId, orgId }, select: { personaSlug: true } });
+  if (!session) return null;
+  const persona = await db.persona.findFirst({
+    where: { slug: session.personaSlug, OR: [{ orgId }, { orgId: null }] },
+    orderBy: { orgId: { sort: "asc", nulls: "last" } },
+    select: { slug: true, name: true, data: true, avatar: { select: { s3ImageKey: true } } },
+  });
+  if (!persona) return null;
+  const data = persona.data && typeof persona.data === "object" ? (persona.data as Record<string, unknown>) : {};
+  const key = persona.avatar?.s3ImageKey;
+  return {
+    slug: persona.slug,
+    name: typeof data.name === "string" && data.name.trim() ? data.name.trim() : persona.name,
+    photoUrl: key ? await presignedGetUrl(key, 6 * 3600).catch(() => null) : null,
+  };
 }
 
 /** Everything the program side needs: short-lived file links, the voice transcript and settings. */

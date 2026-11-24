@@ -11,7 +11,10 @@ const inputSchema = z.object({
   about: z.string().trim().max(2000).optional().describe(
     "Their stable personality and way of talking, written to \"you\". Never one role play's situation, facts or goals.",
   ),
-  voiceId: z.string().trim().min(1).max(200).optional().describe("A voice id from voice_list."),
+  voiceId: z.string().trim().min(1).max(200).optional().describe("A voice id from voice_list: one whose gender, age and accent fit this person. Never a new voice."),
+  voiceLabel: z.string().trim().min(1).max(200).optional().describe(
+    'The chosen voice as voice_list shows it, name and details ("oliver: male, middle-aged, British"); shown on the approval card instead of its id.',
+  ),
   proposed: proposedInput,
   label: z.string().trim().min(1).max(200).optional().describe("Its current name as twin_read/roleplay_read/persona_list showed it; shown on the approval card instead of the slug."),
 });
@@ -23,12 +26,13 @@ export default defineTool({
   approval: {
     request: always(),
     prompt: ({ input }) => {
-      const { slug, label, proposed, ...fields } = input ?? ({} as z.infer<typeof inputSchema>);
-      return `Change persona "${label ?? slug ?? ""}": ${describeChanges(fields, undefined, proposed) || "no fields"}`;
+      const { slug, label, proposed, voiceLabel, voiceId, ...fields } = input ?? ({} as z.infer<typeof inputSchema>);
+      const changes = { ...fields, ...(voiceId ? { voice: voiceLabel ?? voiceId } : {}) };
+      return `Change persona "${label ?? slug ?? ""}": ${describeChanges(changes, undefined, proposed) || "no fields"}`;
     },
   },
   async execute(input, ctx) {
-    const { label: _label, proposed: _proposed, ...fields } = input;
+    const { label: _label, proposed: _proposed, voiceLabel: _voiceLabel, ...fields } = input;
     return studioResult(ctx, { action: "updatePersona", ...fields });
   },
 });

@@ -30,8 +30,6 @@ export const roleplayBuilderSchema = z.object({
   name: z.string().trim().min(1, "Add a name").max(120),
   /** The client: a persona of the org (Persona Library). */
   persona: z.string().regex(/^[a-z0-9][a-z0-9._-]*$/i, "Choose who the learner will speak with"),
-  /** Only when the client is called something else than the persona on this call. */
-  clientName: optionalText(120),
   situation: z.object({
     scenario: z.string().trim().min(1, "Describe the situation").max(4000),
     hiddenTruth: optionalText(4000),
@@ -81,7 +79,8 @@ function renderSkillMarkdown(slug: string, input: RoleplayBuilder, description: 
   const s = input.situation;
   const learner = s.learnerRole;
   const who = [
-    input.clientName ? `On this call your name is ${input.clientName}.` : "You are the persona described in PERSONA.",
+    // Persona-neutral: any persona of the role play's pool plays it, under its own name (specs/agents.md).
+    "You are the persona described in PERSONA.",
     `The person talking to you plays: ${learner}. They are practising on you. Stay in character for the whole call.`,
     input.howTheyTalk ? `How you talk on this call: ${input.howTheyTalk}` : "",
   ].filter(Boolean).join("\n");

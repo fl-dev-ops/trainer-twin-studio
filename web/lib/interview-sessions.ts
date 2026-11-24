@@ -398,6 +398,7 @@ export async function activateSession(input: {
     let resolvedVoiceId: string | null = null;
     if (mode === "voice") {
       const agentVoiceId = jsonRecord(coherentConfig?.agent.data ?? eligibleAgent.data).voiceId;
+      const pooled = eligibleAgent.kind === "ROLEPLAY" && await tx.agentPersona.count({ where: { agentId, active: true } }) > 1;
       if (agentVoiceId != null && agentVoiceId !== "" && typeof agentVoiceId !== "string") {
         throw refusals.invalidInput("The selected voice is invalid. Choose a ready voice before starting a voice session.");
       }
@@ -408,7 +409,11 @@ export async function activateSession(input: {
       if (!persona) throw refusals.notFound();
       resolvedVoiceId = await resolveVoiceForSession(
         input.orgId,
-        typeof agentVoiceId === "string" && agentVoiceId ? agentVoiceId : persona.voiceId,
+        // A role play with several personas speaks in the picked persona's voice; its own voice only covers a persona
+        // without one. With one persona (and other agents), its own voice, when set, comes first.
+        pooled
+          ? persona.voiceId ?? (typeof agentVoiceId === "string" && agentVoiceId ? agentVoiceId : null)
+          : typeof agentVoiceId === "string" && agentVoiceId ? agentVoiceId : persona.voiceId,
         tx,
       );
     }

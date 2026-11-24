@@ -6,6 +6,8 @@ import { attachTwinSkillToMainTwin, supportingCatalog, setSupportingSkills } fro
 import { pickSessionPersona, setAgentPersonas } from "@/lib/agent-personas";
 import { createBot, saveBotPublic, saveBotSkills } from "@/lib/bots";
 import { getAgentConfigForAgent } from "@/lib/specs";
+import { sessionPersonaView } from "@/lib/persona-media";
+import { getPersona, PersonaInUseError, removePersonaRecord } from "@/lib/personas";
 import { resolveTwinCatalog } from "@/lib/twins";
 import { startPublicTwinSession } from "@/lib/public-twin-sessions";
 import { skillPackageHash } from "@/lib/skills";
@@ -119,6 +121,19 @@ describe.skipIf(!localMinutesDb)("unified agents: supporting skills and personas
     expect(await pickSessionPersona(f.roleplay.id)).toBe(persona.id);
     const config = await getAgentConfigForAgent(f.roleplay.id, f.org.id, undefined, undefined, undefined, undefined, second.id);
     expect(config?.persona.slug).toBe(second.slug);
+  });
+
+  test("a role play's extra persona: its call screen shows it, and it counts as used (no delete, listed in used by)", async () => {
+    const second = await db.persona.create({ data: { orgId: f.org.id, slug: `${f.org.slug}-second`, name: "Second", data: { name: "Daniel Hart" } } });
+    await db.$transaction((tx) => setAgentPersonas(f.roleplay.id, [
+      { personaId: persona.id, active: true }, { personaId: second.id, active: false },
+    ], tx));
+    // The call screen names who this session recorded, not the role play's main persona.
+    const session = await f.session({ personaSlug: second.slug });
+    expect(await sessionPersonaView(f.org.id, session.id)).toEqual({ slug: second.slug, name: "Daniel Hart", photoUrl: null });
+    // Only an extra (even switched off): still in use, so it can't be deleted and its page lists the role play.
+    expect((await getPersona(f.org.id, second.slug))?.usedBy.map((agent) => agent.slug)).toEqual([f.roleplay.slug]);
+    await expect(removePersonaRecord(f.org.id, second.slug)).rejects.toBeInstanceOf(PersonaInUseError);
   });
 
   test("the database keeps each kind's personas: twin one own, bot one, role play at least one", async () => {

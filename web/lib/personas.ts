@@ -24,7 +24,8 @@ const select = {
   id: true, slug: true, name: true, version: true, data: true, settings: true, isOwn: true, updatedAt: true,
   avatar: { select: { s3ImageKey: true, s3VideoKey: true, updatedAt: true } },
   voice: { select: { id: true, name: true } },
-  agents: { where: { archivedAt: null }, select: { slug: true, name: true, kind: true }, orderBy: { name: "asc" } },
+  // Every agent it plays, a role play's extra personas included (AgentPersona).
+  agentLinks: { where: { agent: { archivedAt: null } }, select: { agent: { select: { slug: true, name: true, kind: true } } }, orderBy: { agent: { name: "asc" } } },
 } as const;
 
 type Row = Prisma.PersonaGetPayload<{ select: typeof select }>;
@@ -42,7 +43,7 @@ function view(row: Row) {
     hasVideo: Boolean(row.avatar?.s3VideoKey),
     voice: row.voice ? { id: row.voice.id, name: row.voice.name } : null,
     /** Active agents using this persona: an edit applies to their next sessions. */
-    usedBy: row.agents.map((agent) => ({ slug: agent.slug, name: agent.name, kind: agent.kind })),
+    usedBy: row.agentLinks.map(({ agent }) => ({ slug: agent.slug, name: agent.name, kind: agent.kind })),
   };
 }
 export type PersonaView = ReturnType<typeof view>;
@@ -143,7 +144,8 @@ export async function removePersonaRecord(orgId: string, slug: string) {
     // Locks the row: a concurrent agent insert/update referencing it waits on its key lock.
     const [row] = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM "Persona" WHERE "orgId" = ${orgId} AND slug = ${slug} FOR UPDATE`;
     if (!row) throw new PersonaError("Persona not found", 404);
-    const agents = await tx.agent.count({ where: { personaId: row.id } });
+    // Any agent that may speak as it: its main persona, or one of a role play's personas (archived included).
+    const agents = await tx.agent.count({ where: { OR: [{ personaId: row.id }, { personas: { some: { personaId: row.id } } }] } });
     if (agents) throw new PersonaInUseError(agents);
     const sources = await tx.personaSource.findMany({ where: { personaId: row.id, orgId }, select: { s3Key: true } });
     await tx.specVersion.deleteMany({ where: { entityType: "personas", entitySlug: slug, orgId } });

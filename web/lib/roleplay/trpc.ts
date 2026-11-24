@@ -95,7 +95,7 @@ function builderScriptOf(b: RoleplayBuilder) {
   const lines = (...values: (string | undefined)[]) => values.map((v) => (v ?? "").trim()).filter(Boolean);
   return {
     aiRole: "Client",
-    who: lines(b.clientName ? `On this call your name is ${b.clientName}.` : "", b.howTheyTalk).join(" ") || "The persona, as they are.",
+    who: lines(b.howTheyTalk).join(" ") || "The persona, as they are.",
     learnerRole: b.situation.learnerRole,
     learnerAim: b.learnerGoals.join(" ") || "Get to a clear next step.",
     situation: lines(b.situation.scenario),
@@ -115,12 +115,11 @@ const anyRoleplayOf = (orgId: string): Prisma.AgentWhereInput => ({ orgId, kind:
 const personaSelect = { slug: true, name: true, data: true, avatar: { select: { s3ImageKey: true, updatedAt: true } } } as const;
 type PersonaRow = Prisma.PersonaGetPayload<{ select: typeof personaSelect }>;
 
-/** The client the learner talks to: the role play's own client name, else the persona's; the persona's photo. */
-function clientOf(persona: PersonaRow, data: unknown) {
-  const builder = asRecord(asRecord(asRecord(data).scenario).roleplay);
+/** The role play's main persona (the studio's view; learners never see who plays it before the call). */
+function clientOf(persona: PersonaRow) {
   const personaData = asRecord(persona.data);
   return {
-    name: text(builder.clientName) ?? text(personaData.name) ?? persona.name,
+    name: text(personaData.name) ?? persona.name,
     role: text(personaData.role),
     persona: persona.slug,
     photoUrl: avatarPhotoUrl(persona.slug, persona.avatar),
@@ -222,7 +221,7 @@ const scenariosRouter = t.router({
         href: dashRoute(`/roleplay/${agent.slug}`),
         description: text(scenario.description),
         opening: text(asRecord(scenario.roleplay).opening) ?? text(brief?.start.openingLine),
-        client: clientOf(agent.persona, agent.data),
+        client: clientOf(agent.persona),
         sessions: sessionsOf.get(agent.id) ?? 0,
         updatedAt: agent.updatedAt.toISOString(),
         learners: invites
@@ -255,7 +254,11 @@ const scenariosRouter = t.router({
       /** Written by the copilot: the script the trainer reads (changed through the copilot or the edit page's core fields). */
       script: brief ? scriptOf(brief) : builder ? builderScriptOf(builder) : authoredScriptOf(agent.data),
       difficulty: builder?.difficulty ?? null,
-      client: clientOf(agent.persona, agent.data),
+      client: clientOf(agent.persona),
+      // Who may answer: every active persona of the pool, in order (one is picked per call).
+      personas: (await db.agentPersona.findMany({
+        where: { agentId: agent.id, active: true }, orderBy: { position: "asc" }, select: { persona: { select: personaSelect } },
+      })).map((row) => clientOf(row.persona)),
       stats: {
         sessions: sessions.length,
         averageScore: scored.length ? Math.round(average(scored)!) : null,
@@ -503,19 +506,22 @@ const sessionsRouter = t.router({
   get: studioProcedure.input(z.object({ id: z.string().min(1).max(100) })).query(async ({ ctx, input }) => {
     const row = await db.interviewSession.findFirst({
       where: roleplaySessions(ctx.user.orgId, { id: input.id }),
-      select: { ...sessionSelect, transcript: true, compiledSnapshot: true, skillPinsVersion: true, agent: { select: { id: true, slug: true, version: true, primarySkillId: true, name: true, data: true, persona: { select: personaSelect } } } },
+      select: { ...sessionSelect, personaSlug: true, transcript: true, compiledSnapshot: true, skillPinsVersion: true, agent: { select: { id: true, slug: true, version: true, primarySkillId: true, name: true, data: true, persona: { select: personaSelect } } } },
     });
     if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Session not found" });
     const snapshot = asRecord(row.compiledSnapshot);
     const savedData = asRecord(snapshot.agent).data;
     if (row.skillPinsVersion != null && !savedData) throw skillRefusals.unavailable();
-    const current = !savedData && row.agent.primarySkillId
-      ? await hydrateAgentSkill(ctx.user.orgId, row.agent)
-      : row.agent;
+    // Who played this session: the persona it recorded (a role play picks one per call), as it was then.
+    const played = row.personaSlug === row.agent.persona.slug ? row.agent.persona : await db.persona.findFirst({
+      where: { slug: row.personaSlug, OR: [{ orgId: ctx.user.orgId }, { orgId: null }] },
+      orderBy: { orgId: { sort: "asc", nulls: "last" } },
+      select: personaSelect,
+    }) ?? row.agent.persona;
     const savedPersona = asRecord(snapshot.persona).data;
     return {
       ...sessionItem(row),
-      client: clientOf(savedPersona ? { ...row.agent.persona, data: savedPersona as Prisma.JsonValue } : row.agent.persona, savedData ?? current.data),
+      client: clientOf(savedPersona ? { ...played, data: savedPersona as Prisma.JsonValue } : played),
       report: roleplayReport(row.report),
       turns: transcriptTurns(row.transcript).map((turn) => ({ who: turn.who === "learner" ? ("learner" as const) : ("client" as const), text: turn.text })),
     };

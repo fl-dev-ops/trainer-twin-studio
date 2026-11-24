@@ -37,7 +37,6 @@ const SALES_RUBRIC = ["Rapport and tone", "Discovery questions", "Objection hand
 const emptyBuilder = (persona = ""): RoleplayBuilder => ({
   name: "",
   persona,
-  clientName: "",
   situation: { scenario: "", hiddenTruth: "", learnerRole: "", agreesWhen: "", declinesWhen: "" },
   difficulty: "medium",
   howTheyTalk: "",
@@ -351,12 +350,9 @@ export function RoleplayBuilderPage({ slug, initial, before: initialBefore, tool
             </Field>
           </FormCard>
 
-          <FormCard title="The client" description="The persona sets the voice, photo, background and how they talk. The two optional fields change them for this role play only.">
+          <FormCard title="The client" description="The persona sets the name, voice, photo, background and how they talk. The optional field below changes how they talk for this role play only.">
             <Field label="Persona">
               <PersonaPicker personas={personas} value={b.persona} onChange={(slug) => set("persona", slug)} />
-            </Field>
-            <Field id="rp-client" label="Client name on this call" hint="Optional. Replaces the persona's name; describe who they are in the situation below.">
-              <input id="rp-client" maxLength={120} value={b.clientName ?? ""} onChange={(e) => set("clientName", e.target.value)} className={cn(input, "h-10")} />
             </Field>
             <Field id="rp-talk" label="How they talk on this call" hint="Optional. Replaces the persona's speaking style for this role play.">
               <textarea id="rp-talk" rows={2} maxLength={2000} value={b.howTheyTalk ?? ""} onChange={(e) => set("howTheyTalk", e.target.value)} className={cn(input, "py-2")} />
@@ -367,7 +363,7 @@ export function RoleplayBuilderPage({ slug, initial, before: initialBefore, tool
             <Field id="rp-learner" label="Learner role">
               <input id="rp-learner" maxLength={100} value={b.situation.learnerRole} placeholder="Example: Off-plan agent on a first call" onChange={(e) => setSituation("learnerRole", e.target.value)} className={cn(input, "h-10")} />
             </Field>
-            <Field id="rp-brief" label="Learner brief" hint="Shown to the learner before the call: what to expect and what to aim for.">
+            <Field id="rp-brief" label="Learner brief" hint="Shown to the learner before the call: only the situation and what to aim for (e.g. a lead filled in the form after an ad). Never name who they'll speak with.">
               <textarea id="rp-brief" rows={3} maxLength={1000} value={b.whatToExpect ?? ""} placeholder="Example: Listen first, then ask one question at a time." onChange={(e) => set("whatToExpect", e.target.value)} className={cn(input, "py-2")} />
             </Field>
           </FormCard>

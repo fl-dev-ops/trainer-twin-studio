@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { VoiceRecorder } from "@/components/voice-recorder";
 import { generateSpeech, playPcmStream, stopPlayback } from "@/lib/audio-playback";
@@ -40,6 +41,11 @@ import { useRefresh } from "@/lib/use-refresh";
 import { randomPassage } from "@/lib/voice-passage";
 import { SearchInput } from "@/components/search-input";
 import { dashRoute } from "@/lib/routes";
+import { VOICE_ACCENTS, VOICE_AGES, VOICE_GENDERS, VOICE_LANGUAGES, languageName, voiceDetailsLabel } from "@/lib/voice-details";
+
+const capital = (value: string | null | undefined) => (value ? value.charAt(0).toUpperCase() + value.slice(1) : "—");
+/** The table's columns (Sarvam-style): one width each, shared by the header and the rows. */
+const COL = { language: "hidden w-32 shrink-0 text-sm md:block", gender: "hidden w-20 shrink-0 text-sm md:block", age: "hidden w-28 shrink-0 text-sm md:block", actions: "w-8 shrink-0" };
 
 export type VoiceRow = {
   id: string;
@@ -47,7 +53,59 @@ export type VoiceRow = {
   kind: string;
   status: string;
   createdAt: string;
+  language?: string | null;
+  gender?: string | null;
+  age?: string | null;
+  accent?: string | null;
 };
+
+type Details = { language: string; gender: string; age: string; accent: string };
+const detailsOf = (voice?: { language?: string | null; gender?: string | null; age?: string | null; accent?: string | null }): Details =>
+  ({ language: voice?.language ?? "en", gender: voice?.gender ?? "", age: voice?.age ?? "", accent: voice?.accent ?? "" });
+/** What the API stores: an empty field clears it (a voice always has a language). */
+const detailsBody = (details: Details) =>
+  ({ language: details.language, gender: details.gender || null, age: details.age || null, accent: details.accent.trim() || null });
+
+/** The language a voice sounds native in. */
+export function LanguageSelect({ id, value, onChange, all, className }: { id?: string; value: string; onChange: (code: string) => void; all?: string[]; className?: string }) {
+  return (
+    <NativeSelect id={id} aria-label={id ? undefined : "Language"} className={className} value={value} onChange={(event) => onChange(event.currentTarget.value)}>
+      {all ? <NativeSelectOption value="">All languages</NativeSelectOption> : null}
+      {VOICE_LANGUAGES.filter(([code]) => !all || all.includes(code)).map(([code, name]) => <NativeSelectOption key={code} value={code}>{name}</NativeSelectOption>)}
+    </NativeSelect>
+  );
+}
+
+/** Language, gender, age and accent: what personas and the copilot choose a voice by. */
+function VoiceDetailsFields({ id, value, onChange }: { id: string; value: Details; onChange: (next: Details) => void }) {
+  return (
+    <div className="grid gap-4 sm:grid-cols-2">
+      <Field>
+        <FieldLabel htmlFor={`${id}-language`}>Language</FieldLabel>
+        <LanguageSelect id={`${id}-language`} className="w-full" value={value.language} onChange={(language) => onChange({ ...value, language })} />
+      </Field>
+      <Field>
+        <FieldLabel htmlFor={`${id}-gender`}>Gender</FieldLabel>
+        <NativeSelect id={`${id}-gender`} className="w-full" value={value.gender} onChange={(event) => onChange({ ...value, gender: event.currentTarget.value })}>
+          <NativeSelectOption value="">Not set</NativeSelectOption>
+          {VOICE_GENDERS.map((gender) => <NativeSelectOption key={gender} value={gender}>{gender.charAt(0).toUpperCase() + gender.slice(1)}</NativeSelectOption>)}
+        </NativeSelect>
+      </Field>
+      <Field>
+        <FieldLabel htmlFor={`${id}-age`}>Age</FieldLabel>
+        <NativeSelect id={`${id}-age`} className="w-full" value={value.age} onChange={(event) => onChange({ ...value, age: event.currentTarget.value })}>
+          <NativeSelectOption value="">Not set</NativeSelectOption>
+          {VOICE_AGES.map((age) => <NativeSelectOption key={age} value={age}>{age.charAt(0).toUpperCase() + age.slice(1)}</NativeSelectOption>)}
+        </NativeSelect>
+      </Field>
+      <Field>
+        <FieldLabel htmlFor={`${id}-accent`}>Accent</FieldLabel>
+        <Input id={`${id}-accent`} list={`${id}-accents`} value={value.accent} maxLength={40} placeholder="e.g. British" onChange={(event) => onChange({ ...value, accent: event.currentTarget.value })} />
+        <datalist id={`${id}-accents`}>{VOICE_ACCENTS.map((accent) => <option key={accent} value={accent} />)}</datalist>
+      </Field>
+    </div>
+  );
+}
 
 const SAMPLE_SENTENCE = "Hi, this is a quick test of my voice. Let us begin today's session.";
 
@@ -96,29 +154,48 @@ function VoiceTab({
   emptyState: React.ReactNode;
 }) {
   const [query, setQuery] = useState("");
+  const [language, setLanguage] = useState("");
+  const [gender, setGender] = useState("");
+  const languages = useMemo(() => [...new Set(voices.map((voice) => voice.language ?? "en"))], [voices]);
   const filtered = useMemo(
-    () => voices.filter((voice) => voice.name.toLowerCase().includes(query.trim().toLowerCase())),
-    [voices, query],
+    () => voices.filter((voice) => (!language || (voice.language ?? "en") === language) && (!gender || voice.gender === gender)
+      && `${voice.name} ${voiceDetailsLabel(voice)}`.toLowerCase().includes(query.trim().toLowerCase())),
+    [voices, query, language, gender],
   );
 
   return (
     <div className="mt-4">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <SearchInput
           className="w-full max-w-xs"
           value={query}
           onChange={(event) => setQuery(event.currentTarget.value)}
-          placeholder="Search"
+          placeholder="Search voices or accents"
           aria-label="Search voices"
         />
+        <LanguageSelect value={language} onChange={setLanguage} all={languages} />
+        <NativeSelect aria-label="Gender" value={gender} onChange={(event) => setGender(event.currentTarget.value)}>
+          <NativeSelectOption value="">All genders</NativeSelectOption>
+          {VOICE_GENDERS.map((value) => <NativeSelectOption key={value} value={value}>{capital(value)}</NativeSelectOption>)}
+        </NativeSelect>
+        <span className="ml-auto text-sm text-muted-foreground">{filtered.length} {filtered.length === 1 ? "voice" : "voices"}</span>
       </div>
 
       {filtered.length > 0 ? (
-        <ul className="mt-4 divide-y rounded-xl border bg-card">
-          {filtered.map((voice) => (
-            <VoiceRowItem key={voice.id} voice={voice} sample={kind === "sample"} />
-          ))}
-        </ul>
+        <div className="mt-4">
+          <div className="flex items-center gap-4 border-b px-4 pb-2 text-xs font-medium text-muted-foreground" aria-hidden="true">
+            <span className="min-w-0 flex-1 pl-15">Voice</span>
+            <span className={COL.language}>Language</span>
+            <span className={COL.gender}>Gender</span>
+            <span className={COL.age}>Age</span>
+            <span className={COL.actions} />
+          </div>
+          <ul className="divide-y">
+            {filtered.map((voice) => (
+              <VoiceRowItem key={voice.id} voice={voice} sample={kind === "sample"} />
+            ))}
+          </ul>
+        </div>
       ) : (
         emptyState
       )}
@@ -138,6 +215,7 @@ export function VoiceCreateForm({ onCreated, onCancel, onSaved, onSavingChange }
   const refresh = useRefresh();
   const id = useId();
   const [name, setName] = useState("");
+  const [details, setDetails] = useState<Details>(detailsOf());
   const [source, setSource] = useState<"record" | "upload">("record");
   const [audio, setAudio] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
@@ -158,6 +236,7 @@ export function VoiceCreateForm({ onCreated, onCancel, onSaved, onSavingChange }
         form.set("name", name.trim());
         form.set("audio", audio);
         form.set("transcript", source === "record" ? passage : "");
+        for (const [key, value] of Object.entries(details)) if (value.trim()) form.set(key, value.trim());
         const response = await fetch("/api/tts/voices", { method: "POST", body: form });
         const result: { voice?: { id: string; name: string }; error?: string } = await response.json();
         if (!response.ok || !result.voice) throw new Error(result.error ?? "Could not add the voice");
@@ -185,6 +264,7 @@ export function VoiceCreateForm({ onCreated, onCancel, onSaved, onSavingChange }
           <FieldLabel htmlFor={`${id}-name`}>Voice name</FieldLabel>
           <Input id={`${id}-name`} value={name} onChange={(event) => setName(event.currentTarget.value)} maxLength={60} autoFocus />
         </Field>
+        <VoiceDetailsFields id={`${id}-details`} value={details} onChange={setDetails} />
         <Tabs value={source} onValueChange={(value) => { if (value === "record" || value === "upload") { setSource(value); setAudio(null); } }}>
           <TabsList aria-label="Voice recording source">
             <TabsTrigger value="record">Record</TabsTrigger>
@@ -240,6 +320,8 @@ function VoiceRowItem({ voice, sample }: { voice: VoiceRow; sample: boolean }) {
   const refresh = useRefresh();
   const [name, setName] = useState(voice.name);
   const [draft, setDraft] = useState(voice.name);
+  const [details, setDetails] = useState<Details>(detailsOf(voice));
+  const [detailsDraft, setDetailsDraft] = useState<Details>(details);
   const [renameOpen, setRenameOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
@@ -255,22 +337,24 @@ function VoiceRowItem({ voice, sample }: { voice: VoiceRow; sample: boolean }) {
   async function rename(event: React.FormEvent) {
     event.preventDefault();
     const nextName = draft.trim();
-    if (!nextName || nextName === name) return setRenameOpen(false);
+    const unchanged = JSON.stringify(detailsBody(detailsDraft)) === JSON.stringify(detailsBody(details));
+    if (!nextName || (nextName === name && unchanged)) return setRenameOpen(false);
 
     setSaving(true);
     try {
       const response = await fetch(`/api/tts/voices/${voice.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: nextName }),
+        body: JSON.stringify({ name: nextName, ...detailsBody(detailsDraft) }),
       });
-      if (!response.ok) return toast.error((await response.json()).error ?? "Rename failed");
+      if (!response.ok) return toast.error((await response.json()).error ?? "Could not save the voice");
       setName(nextName);
+      setDetails(detailsDraft);
       setRenameOpen(false);
       refresh();
-      toast.success("Voice renamed");
+      toast.success("Voice saved");
     } catch {
-      toast.error("Rename failed");
+      toast.error("Could not save the voice");
     } finally {
       setSaving(false);
     }
@@ -324,7 +408,7 @@ function VoiceRowItem({ voice, sample }: { voice: VoiceRow; sample: boolean }) {
   if (deleted) return null;
 
   return (
-    <li className="group flex items-center gap-4 px-4 py-4">
+    <li className="group flex items-center gap-4 px-4 py-3">
       <button
         type="button"
         onClick={quickTest}
@@ -335,9 +419,9 @@ function VoiceRowItem({ voice, sample }: { voice: VoiceRow; sample: boolean }) {
         {loading ? (
           <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
         ) : playing ? (
-          <Square className="size-4" aria-hidden="true" />
+          <Square className="size-4 fill-current" aria-hidden="true" />
         ) : (
-          <Play className="size-4" aria-hidden="true" />
+          <Play className="size-4 fill-current" aria-hidden="true" />
         )}
       </button>
       <Link
@@ -349,9 +433,16 @@ function VoiceRowItem({ voice, sample }: { voice: VoiceRow; sample: boolean }) {
       >
         <span className="block truncate text-sm font-medium capitalize">{name}</span>
         <span className="block truncate text-xs text-muted-foreground">
-          {sample ? "Built-in sample voice" : `Cloned voice · ${new Date(voice.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`}
+          {/* Small screens have no columns: the details go here. */}
+          <span className="md:hidden">{voiceDetailsLabel(details) || (sample ? "" : "No details yet")}{sample ? "" : " · "}</span>
+          <span className="hidden md:inline">{details.accent || (sample ? "" : voiceDetailsLabel(details) ? "" : "No details yet")}{!sample && (details.accent || !voiceDetailsLabel(details)) ? " · " : ""}</span>
+          {sample ? null : `Cloned ${new Date(voice.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`}
         </span>
       </Link>
+      <span className={COL.language}>{languageName(details.language)}</span>
+      <span className={COL.gender}>{capital(details.gender)}</span>
+      <span className={COL.age}>{capital(details.age)}</span>
+      <span className={COL.actions}>
       {!sample && (
         <>
           <DropdownMenu>
@@ -362,8 +453,8 @@ function VoiceRowItem({ voice, sample }: { voice: VoiceRow; sample: boolean }) {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuGroup>
-                <DropdownMenuItem disabled={retiring} onClick={() => { setDraft(name); setRenameOpen(true); }}>
-                  <Pencil /> Rename
+                <DropdownMenuItem disabled={retiring} onClick={() => { setDraft(name); setDetailsDraft(details); setRenameOpen(true); }}>
+                  <Pencil /> Edit
                 </DropdownMenuItem>
                 <DropdownMenuItem variant="destructive" onClick={() => { setDeleteError(""); setDeleteOpen(true); }}>
                   <Trash2 /> {retiring ? "Retry delete" : "Delete"}
@@ -376,8 +467,8 @@ function VoiceRowItem({ voice, sample }: { voice: VoiceRow; sample: boolean }) {
             <DialogContent>
               <form onSubmit={rename} className="contents">
                 <DialogHeader>
-                  <DialogTitle>Rename voice</DialogTitle>
-                  <DialogDescription>Choose a name you&apos;ll recognize in your voice library.</DialogDescription>
+                  <DialogTitle>Edit voice</DialogTitle>
+                  <DialogDescription>Its name, and the details personas and the copilot choose a voice by.</DialogDescription>
                 </DialogHeader>
                 <Field>
                   <FieldLabel htmlFor={`rename-${voice.id}`}>Voice name</FieldLabel>
@@ -390,11 +481,12 @@ function VoiceRowItem({ voice, sample }: { voice: VoiceRow; sample: boolean }) {
                   />
                   <FieldDescription>Up to 60 characters.</FieldDescription>
                 </Field>
+                <VoiceDetailsFields id={`edit-${voice.id}`} value={detailsDraft} onChange={setDetailsDraft} />
                 <DialogFooter>
                   <DialogClose render={<Button variant="outline" disabled={saving} />}>Cancel</DialogClose>
                   <Button type="submit" disabled={saving || !draft.trim()}>
                     {saving && <LoaderCircle data-icon="inline-start" className="animate-spin" />}
-                    Save name
+                    Save
                   </Button>
                 </DialogFooter>
               </form>
@@ -445,6 +537,7 @@ function VoiceRowItem({ voice, sample }: { voice: VoiceRow; sample: boolean }) {
           </AlertDialog>
         </>
       )}
+      </span>
       {retiring && (
         <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">Removal incomplete</span>
       )}

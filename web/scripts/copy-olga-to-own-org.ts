@@ -61,8 +61,7 @@ try {
   if (!existing?.voiceId && persona.voice?.s3AudioKey) {
     const ext = persona.voice.s3AudioKey.split(".").pop()!;
     const transcript = persona.voice.s3TranscriptKey ? await getObjectText(persona.voice.s3TranscriptKey) : undefined;
-    const { voiceId } = await setPersonaVoice(to.id, persona.slug, { audio: await fileFrom(persona.voice.s3AudioKey, `reference.${ext}`, `audio/${ext === "wav" ? "wav" : ext}`), transcript });
-    await db.voice.update({ where: { id: voiceId }, data: { name: persona.voice.name } });
+    const { voiceId } = await setPersonaVoice(to.id, persona.slug, { name: persona.voice.name, audio: await fileFrom(persona.voice.s3AudioKey, `reference.${ext}`, `audio/${ext === "wav" ? "wav" : ext}`), transcript });
   }
   if (!existing?.avatarId && persona.avatar?.s3ImageKey) {
     const { s3ImageKey, s3OriginalImageKey, s3VideoKey } = persona.avatar;

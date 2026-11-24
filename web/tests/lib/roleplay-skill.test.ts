@@ -29,7 +29,9 @@ test("render: the same package a twin skill is, valid for the scenario manifest;
     for (const row of builder.rubric) expect(body).not.toContain(row.name);
     expect(JSON.stringify(out.scenario)).not.toContain(builder.rubric[0].name);
     expect(body).toContain(builder.situation.hiddenTruth.slice(0, 40));
-    expect(body).toContain(`On this call your name is ${builder.clientName}.`);
+    // Persona-neutral: an older builder's client name is dropped; the persona playing it gives the name.
+    expect(body).toContain("You are the persona described in PERSONA.");
+    expect(body).not.toContain("On this call your name is");
     // Steps sit where the twin skill parser looks for them.
     expect(stepGoal(body, "opening")).toBeUndefined();
     expect(body).toContain("### 1. The client answers `opening`");
@@ -54,7 +56,7 @@ test("limits: at least one goal, at most five; rubric 1..8; slug must be kebab-c
   expect(() => renderRoleplay("x", { ...builder, situation: { ...builder.situation, learnerRole: "x".repeat(101) } })).toThrow();
   expect(renderRoleplay("x", { ...builder, situation: { ...builder.situation, learnerRole: "x".repeat(100) } }).scenario.learner_role).toHaveLength(100);
   // Optional parts drop out of SKILL.md cleanly.
-  const bare = renderRoleplay("bare", { ...builder, clientName: undefined, howTheyTalk: undefined, guardedIf: [], opensUpIf: [], exampleLines: [], situation: { ...builder.situation, hiddenTruth: undefined } });
+  const bare = renderRoleplay("bare", { ...builder, howTheyTalk: undefined, guardedIf: [], opensUpIf: [], exampleLines: [], situation: { ...builder.situation, hiddenTruth: undefined } });
   expect(bare.skill).not.toContain("## What is really going on");
   expect(bare.skill).not.toContain("## Reactions");
   expect(bare.skill).toContain("You are the persona described in PERSONA.");

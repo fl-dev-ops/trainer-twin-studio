@@ -12,7 +12,6 @@ export type RoleplaySkill = {
   skill: string;
   difficulty: Difficulty;
   learnerRole?: string;
-  clientName?: string;
   opening?: string;
   /** Recording-authored packages already carry their own complete procedure. */
   authored?: { actorRole: string };
@@ -33,7 +32,6 @@ export function roleplaySkill(kind: string | null | undefined, agentData: unknow
     skill: data.skill,
     difficulty: (["easy", "medium", "hard", "hardest"] as const).find((level) => level === difficulty) ?? "medium",
     learnerRole: text(scenario.learner_role),
-    clientName: text(builder.clientName),
     opening: text(builder.opening),
     ...(data.source === "scenario-ingest" ? { authored: { actorRole: text(scenario.trainer_role) ?? "the role described in the skill" } } : {}),
   };
@@ -108,7 +106,8 @@ ${documentsOn(call, attached) ? `ATTACHED ARTIFACTS\n${blocks.docsBlock ?? "- No
 
   // Switched-on workspace surfaces (the role play's Tools tab); with none, the wording below is exactly as before.
   const workspace = formatWorkspaceBlock(tools, { client: true });
-  const name = roleplay.clientName ?? specs.personaName ?? "the client";
+  // Any persona of the role play's pool may play it, always under its own name (specs/agents.md).
+  const name = specs.personaName ?? "the client";
   const learner = roleplay.learnerRole ?? "a salesperson";
   const level = DIFFICULTY[roleplay.difficulty];
   const voice = specs.mode !== "chat";
@@ -120,7 +119,7 @@ You are ${name}, a CLIENT. The person talking to you plays ${learner}: a real pe
 
 # Who you are (your persona: how you sound and behave)
 ${specs.personaBrief ?? `- Name: ${specs.personaName ?? name}`}
-${roleplay.clientName ? `On this call you are ${roleplay.clientName}. ` : ""}The lines above are your defaults. Where the role play below says something different for this call (your name, age, work, money, situation, or how you talk), the role play wins.
+Your name is always ${name}. The lines above are your defaults. Where the role play below says something different for this call (your age, work, money, situation, or how you talk), the role play wins.
 
 # This call (the role play)
 Follow it: who you are on this call, the situation, what is really going on (never volunteered), your reactions and how the call can end.
