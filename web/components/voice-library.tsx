@@ -41,7 +41,11 @@ import { useRefresh } from "@/lib/use-refresh";
 import { randomPassage } from "@/lib/voice-passage";
 import { SearchInput } from "@/components/search-input";
 import { dashRoute } from "@/lib/routes";
-import { VOICE_ACCENTS, VOICE_AGES, VOICE_GENDERS, VOICE_LANGUAGES, voiceDetailsLabel } from "@/lib/voice-details";
+import { VOICE_ACCENTS, VOICE_AGES, VOICE_GENDERS, VOICE_LANGUAGES, languageName, voiceDetailsLabel } from "@/lib/voice-details";
+
+const capital = (value: string | null | undefined) => (value ? value.charAt(0).toUpperCase() + value.slice(1) : "—");
+/** The table's columns (Sarvam-style): one width each, shared by the header and the rows. */
+const COL = { language: "hidden w-32 shrink-0 text-sm md:block", gender: "hidden w-20 shrink-0 text-sm md:block", age: "hidden w-28 shrink-0 text-sm md:block", actions: "w-8 shrink-0" };
 
 export type VoiceRow = {
   id: string;
@@ -151,32 +155,47 @@ function VoiceTab({
 }) {
   const [query, setQuery] = useState("");
   const [language, setLanguage] = useState("");
+  const [gender, setGender] = useState("");
   const languages = useMemo(() => [...new Set(voices.map((voice) => voice.language ?? "en"))], [voices]);
   const filtered = useMemo(
-    () => voices.filter((voice) => (!language || (voice.language ?? "en") === language)
+    () => voices.filter((voice) => (!language || (voice.language ?? "en") === language) && (!gender || voice.gender === gender)
       && `${voice.name} ${voiceDetailsLabel(voice)}`.toLowerCase().includes(query.trim().toLowerCase())),
-    [voices, query, language],
+    [voices, query, language, gender],
   );
 
   return (
     <div className="mt-4">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <SearchInput
           className="w-full max-w-xs"
           value={query}
           onChange={(event) => setQuery(event.currentTarget.value)}
-          placeholder="Search name, gender, age or accent"
+          placeholder="Search voices or accents"
           aria-label="Search voices"
         />
-        {languages.length > 1 ? <LanguageSelect value={language} onChange={setLanguage} all={languages} /> : null}
+        <LanguageSelect value={language} onChange={setLanguage} all={languages} />
+        <NativeSelect aria-label="Gender" value={gender} onChange={(event) => setGender(event.currentTarget.value)}>
+          <NativeSelectOption value="">All genders</NativeSelectOption>
+          {VOICE_GENDERS.map((value) => <NativeSelectOption key={value} value={value}>{capital(value)}</NativeSelectOption>)}
+        </NativeSelect>
+        <span className="ml-auto text-sm text-muted-foreground">{filtered.length} {filtered.length === 1 ? "voice" : "voices"}</span>
       </div>
 
       {filtered.length > 0 ? (
-        <ul className="mt-4 divide-y rounded-xl border bg-card">
-          {filtered.map((voice) => (
-            <VoiceRowItem key={voice.id} voice={voice} sample={kind === "sample"} withLanguage={!language} />
-          ))}
-        </ul>
+        <div className="mt-4">
+          <div className="flex items-center gap-4 border-b px-4 pb-2 text-xs font-medium text-muted-foreground" aria-hidden="true">
+            <span className="min-w-0 flex-1 pl-15">Voice</span>
+            <span className={COL.language}>Language</span>
+            <span className={COL.gender}>Gender</span>
+            <span className={COL.age}>Age</span>
+            <span className={COL.actions} />
+          </div>
+          <ul className="divide-y">
+            {filtered.map((voice) => (
+              <VoiceRowItem key={voice.id} voice={voice} sample={kind === "sample"} />
+            ))}
+          </ul>
+        </div>
       ) : (
         emptyState
       )}
@@ -297,7 +316,7 @@ export function AddVoiceDialog({ onCreated }: { onCreated?: OnVoiceCreated }) {
   );
 }
 
-function VoiceRowItem({ voice, sample, withLanguage = true }: { voice: VoiceRow; sample: boolean; withLanguage?: boolean }) {
+function VoiceRowItem({ voice, sample }: { voice: VoiceRow; sample: boolean }) {
   const refresh = useRefresh();
   const [name, setName] = useState(voice.name);
   const [draft, setDraft] = useState(voice.name);
@@ -389,7 +408,7 @@ function VoiceRowItem({ voice, sample, withLanguage = true }: { voice: VoiceRow;
   if (deleted) return null;
 
   return (
-    <li className="group flex items-center gap-4 px-4 py-4">
+    <li className="group flex items-center gap-4 px-4 py-3">
       <button
         type="button"
         onClick={quickTest}
@@ -400,9 +419,9 @@ function VoiceRowItem({ voice, sample, withLanguage = true }: { voice: VoiceRow;
         {loading ? (
           <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
         ) : playing ? (
-          <Square className="size-4" aria-hidden="true" />
+          <Square className="size-4 fill-current" aria-hidden="true" />
         ) : (
-          <Play className="size-4" aria-hidden="true" />
+          <Play className="size-4 fill-current" aria-hidden="true" />
         )}
       </button>
       <Link
@@ -414,9 +433,16 @@ function VoiceRowItem({ voice, sample, withLanguage = true }: { voice: VoiceRow;
       >
         <span className="block truncate text-sm font-medium capitalize">{name}</span>
         <span className="block truncate text-xs text-muted-foreground">
-          {[voiceDetailsLabel(details, withLanguage) || (sample ? "" : "No details yet"), sample ? "Built-in sample voice" : `Cloned ${new Date(voice.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`].filter(Boolean).join(" · ")}
+          {/* Small screens have no columns: the details go here. */}
+          <span className="md:hidden">{voiceDetailsLabel(details) || (sample ? "" : "No details yet")}{sample ? "" : " · "}</span>
+          <span className="hidden md:inline">{details.accent || (sample ? "" : voiceDetailsLabel(details) ? "" : "No details yet")}{!sample && (details.accent || !voiceDetailsLabel(details)) ? " · " : ""}</span>
+          {sample ? null : `Cloned ${new Date(voice.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`}
         </span>
       </Link>
+      <span className={COL.language}>{languageName(details.language)}</span>
+      <span className={COL.gender}>{capital(details.gender)}</span>
+      <span className={COL.age}>{capital(details.age)}</span>
+      <span className={COL.actions}>
       {!sample && (
         <>
           <DropdownMenu>
@@ -511,6 +537,7 @@ function VoiceRowItem({ voice, sample, withLanguage = true }: { voice: VoiceRow;
           </AlertDialog>
         </>
       )}
+      </span>
       {retiring && (
         <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">Removal incomplete</span>
       )}
