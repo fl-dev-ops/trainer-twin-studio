@@ -241,6 +241,8 @@ export async function activateSession(input: {
   idempotencyKey?: string;
   /** A studio member calibrating a twin (specs/practice.md rule 12). */
   calibrate?: boolean;
+  /** A studio member trying a role play: one of its active personas (slug) instead of a random pick. */
+  persona?: string;
 }) {
   const person = await practicePerson(input.orgId, input.userId); // every session path goes through here
   const mode = input.mode ?? "voice";
@@ -347,7 +349,12 @@ export async function activateSession(input: {
   const primaryId = snapshot.docIds[0];
   const primary = snapshot.documents.find((document) => document.id === primaryId);
   // A role play with several personas plays one at random per session (lib/agent-personas); the session records it.
-  const personaId = snapshot.agent.kind === "ROLEPLAY" ? await pickSessionPersona(agentId) ?? undefined : undefined;
+  // A studio member trying it (not a learner's link) may choose one of its active personas instead.
+  const chosen = input.persona && studio && !input.shareCode && snapshot.agent.kind === "ROLEPLAY"
+    ? await db.agentPersona.findFirst({ where: { agentId, active: true, persona: { slug: input.persona } }, select: { personaId: true } })
+    : null;
+  if (input.persona && !chosen) throw refusals.invalidInput("Choose one of this role play's personas.");
+  const personaId = snapshot.agent.kind === "ROLEPLAY" ? chosen?.personaId ?? await pickSessionPersona(agentId) ?? undefined : undefined;
   const compiledConfig = await getAgentConfigForAgent(agentId, input.orgId, primaryId, snapshot.docIds, undefined, undefined, personaId);
   // The org's balance from Meteroid now, before the lock (no network calls while it's held).
   if (studio && mode === "voice") await orgCredits(input.orgId, { fresh: true });

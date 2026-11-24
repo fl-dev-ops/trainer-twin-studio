@@ -142,8 +142,21 @@ export const pageRouter = t.router({
       listAgentBriefs(orgId, agents),
       listAgentPersonaNames(orgId, agents),
     ]);
+    // Role plays with several active personas: who can answer, for the "Persona" choice (random by default).
+    const pools = await db.agentPersona.findMany({
+      where: { active: true, agent: { orgId, slug: { in: agents }, kind: "ROLEPLAY", archivedAt: null } },
+      orderBy: { position: "asc" },
+      select: { agent: { select: { slug: true } }, persona: { select: { slug: true, name: true, data: true } } },
+    });
+    const agentPersonaPools: Record<string, { slug: string; name: string; role: string | null }[]> = {};
+    for (const row of pools) {
+      const role = (row.persona.data as { role?: unknown } | null)?.role;
+      (agentPersonaPools[row.agent.slug] ??= []).push({ slug: row.persona.slug, name: row.persona.name, role: typeof role === "string" && role.trim() ? role.trim() : null });
+    }
+    for (const slug of Object.keys(agentPersonaPools)) if (agentPersonaPools[slug].length < 2) delete agentPersonaPools[slug];
     return {
       agentBriefs,
+      agentPersonaPools,
       agentPersonaNames,
       personas,
       agents,

@@ -45,6 +45,7 @@ export async function POST(req: Request) {
       idempotencyKey: typeof body.idempotencyKey === "string" ? body.idempotencyKey : undefined,
       holdOpening: body.holdOpening === true,
       calibrate: body.calibrate === true,
+      persona: typeof body.persona === "string" && body.persona ? body.persona : undefined,
     });
     if (!started.ok) return NextResponse.json({ error: started.error, ...(started.code ? { code: started.code } : {}) }, { status: started.status });
     // The browser never gets the agent's token (practice rule 26).
