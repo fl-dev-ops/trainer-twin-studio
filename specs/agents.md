@@ -29,6 +29,16 @@ InterviewSession: the persona it played (personaSlug/version) + SessionSkill pin
 4. A role play's persona is picked once, at session start (`lib/agent-personas.ts`), re-checked under the session lock,
    and recorded on the session, so reports and replays stay exact. The role-play editor saves the selected personas
    together without republishing the script. It keeps the default if still selected, otherwise uses the first selection.
+5. A role play is a **stage** played by **characters**. The stage is its package (situation, who speaks first, steps,
+   ending, rules, shared example lines; it never names or describes one persona). Each persona of the pool has its own
+   character for that role play only (`AgentPersona.character`, a SKILL.md written to "you": who they are here, their
+   facts, what they want and hide, opening line, reactions, how they talk and end). It is never shared with another role
+   play and never changes the persona. In the prompt the character wins over the persona's defaults; the stage sets the
+   situation and steps. Only active personas with a character are picked (`eligiblePersonas`); a role play with none
+   can't start. The session pins the character in `compiledSnapshot.character`; pool edits keep each persona's
+   character, and swapping the main persona never hands one persona's character to another. Briefs refuse persona
+   fields (`ai.who`, `wants`, `concerns`, `reactions`, `style`, `start.openingLine`); stored ones were ported to
+   characters (migration `roleplay_character_port`).
 
 ## Twins: main twin and topic skills
 

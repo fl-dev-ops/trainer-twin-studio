@@ -4,11 +4,12 @@ import type { Route } from "next";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Check, Play, Sparkles } from "lucide-react";
 import { toast } from "sonner";
-import { PersonaPicker, TOOL_ROWS } from "@/components/roleplay/roleplay-builder-page";
+import { CallLengthSelect, PersonaPicker, TOOL_ROWS } from "@/components/roleplay/roleplay-builder-page";
 import { PageContainer } from "@/components/page-container";
+import { UserAvatar } from "@/components/user-avatar";
 import { PageSection, SECTION_CARD, SectionRow } from "@/components/page-section";
 import { SwitchToggle } from "@/components/switch-toggle";
 import { Button } from "@/components/ui/button";
@@ -45,7 +46,7 @@ export function ScriptView({ script }: { script: Script }) {
         <div>
           <p className={kicker}>The AI plays</p>
           <p className="m-0 mt-1 font-medium">{script.aiRole}</p>
-          <p className="m-0 mt-1 text-(--text-secondary)">{script.who}</p>
+          <p className="m-0 mt-1 text-(--text-secondary)">Each persona as its character for this role play says.</p>
         </div>
         <div>
           <p className={kicker}>The learner plays</p>
@@ -59,16 +60,6 @@ export function ScriptView({ script }: { script: Script }) {
           {script.situation.map((line) => <li key={line}>{line}</li>)}
         </ul>
       </div>
-      {script.concerns.length ? (
-        <div>
-          <p className={kicker}>Concerns</p>
-          <ul className="m-0 mt-1 list-disc pl-5 text-(--text-secondary)">
-            {script.concerns.map((c) => (
-              <li key={c.concern}>{c.concern}{c.hidden ? <span className="ml-1.5 rounded-full bg-(--tone-control) px-2 py-0.5 text-xs text-muted-foreground">hidden</span> : null}</li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
       {script.steps.length ? <div>
         <p className={kicker}>How it goes</p>
         <ol className="m-0 mt-1 flex flex-col gap-2 pl-5">
@@ -104,7 +95,7 @@ export function RoleplayBriefEditPage({ slug, brief, before: initialBefore, tool
 }) {
   const router = useRouter();
   const refresh = useRefresh();
-  const initial = { title: brief.title, learnerBrief: brief.learnerBrief, openingLine: brief.openingLine, limit: brief.limit };
+  const initial = { title: brief.title, learnerBrief: brief.learnerBrief, limit: brief.limit };
   const [form, setForm] = useState(initial);
   const [saving, setSaving] = useState(false);
   const [change, setChange] = useState("");
@@ -115,7 +106,7 @@ export function RoleplayBriefEditPage({ slug, brief, before: initialBefore, tool
   const set = (key: keyof typeof form, value: string) => setForm((prev) => ({ ...prev, [key]: value }));
   const dirty = JSON.stringify(form) !== JSON.stringify(initial);
   const canSave = !saving && dirty && Boolean(form.title.trim())
-    && (brief.kind === "authored" || (Boolean(form.learnerBrief.trim()) && (!brief.aiStarts || Boolean(form.openingLine.trim()))));
+    && (brief.kind === "authored" || Boolean(form.learnerBrief.trim()));
 
   async function save() {
     if (!canSave) return;
@@ -187,12 +178,6 @@ export function RoleplayBriefEditPage({ slug, brief, before: initialBefore, tool
                   detail={<span id="rp-brief-help">Shown to the learner before the call: who they are, the situation and what to aim for.</span>}>
                   <Textarea id="rp-brief" aria-describedby="rp-brief-help" rows={4} className="min-h-32" maxLength={1000} value={form.learnerBrief} onChange={(e) => set("learnerBrief", e.target.value)} />
                 </SectionRow>
-                {brief.kind !== "authored" ? (
-                  <SectionRow title={<label htmlFor="rp-opening">{brief.aiStarts ? "Opening line" : "First reply"}</label>} className="sm:flex-col sm:items-stretch sm:gap-3"
-                    detail={<span id="rp-opening-help">{brief.aiStarts ? "The AI's first words when the call starts." : "The learner speaks first; this is the AI's first reply."}</span>}>
-                    <Input id="rp-opening" aria-describedby="rp-opening-help" maxLength={400} value={form.openingLine} onChange={(e) => set("openingLine", e.target.value)} />
-                  </SectionRow>
-                ) : null}
                 {brief.kind === "brief" ? (
                   <SectionRow title={<label htmlFor="rp-limit">Time limit</label>} detail={<span id="rp-limit-help">Optional, e.g. “At most 5 minutes.”</span>}>
                     <Input id="rp-limit" aria-describedby="rp-limit-help" className="w-full sm:w-80" maxLength={200} value={form.limit} onChange={(e) => set("limit", e.target.value)} />
@@ -244,6 +229,9 @@ export function RoleplayBriefEditPage({ slug, brief, before: initialBefore, tool
           <div className="flex flex-col gap-10">
             <PageSection title="Before the conversation" description="What learners share before the call begins. Switches save automatically.">
               <div className={SECTION_CARD}>
+                <SectionRow title="Call length" detail="The call ends at this point, with the client's goodbye.">
+                  <CallLengthSelect value={before.callMinutes} onChange={(minutes) => saveSettings({ before: { ...before, callMinutes: minutes } }, minutes ? `Calls now end at ${minutes} minutes` : "Call length limit removed")} />
+                </SectionRow>
                 <SectionRow title="Share screen" detail="Learners share their entire screen for the whole call.">
                   <SwitchToggle checked={before.preScreenshare} onChange={(on) => saveSettings({ before: { ...before, preScreenshare: on } }, `Screen share turned ${on ? "on" : "off"}`)} label="Share screen" />
                 </SectionRow>
@@ -321,6 +309,79 @@ function PersonaPool({ slug, personas, pool }: { slug: string; personas: Persona
           <Button type="button" variant="brand" disabled={busy || !draft.length} onClick={() => void save()}>{busy ? "Saving…" : "Save personas"}</Button>
         </div>
       ) : null}
+      <Characters slug={slug} reload={saved} />
     </PageSection>
+  );
+}
+
+type Character = RoleplayOutputs["builder"]["characters"][number];
+
+/** Each persona's character for this role play only: who they are on this call. Never shared with another role play. */
+function Characters({ slug, reload }: { slug: string; reload: unknown }) {
+  const [rows, setRows] = useState<Character[] | null>(null);
+  useEffect(() => {
+    let live = true;
+    roleplayClient.builder.characters.query({ slug }).then((next) => { if (live) setRows(next); }).catch(() => { if (live) setRows([]); });
+    return () => { live = false; };
+  }, [slug, reload]);
+  if (!rows?.length) return null;
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-1">
+        <h3 className="m-0 text-sm font-semibold">Characters</h3>
+        <p className="m-0 text-sm text-muted-foreground">How each persona plays this role play: their facts, what they hide, how they talk and react, their opening line. Written for this role play only; other role plays never see it.</p>
+      </div>
+      {rows.map((row) => <CharacterEditor key={row.persona} slug={slug} row={row} onSaved={(character) => setRows((prev) => prev?.map((item) => item.persona === row.persona ? { ...item, character } : item) ?? prev)}  />)}
+    </div>
+  );
+}
+
+function CharacterEditor({ slug, row, onSaved }: { slug: string; row: Character; onSaved: (character: string) => void }) {
+  const [saved, setSaved] = useState(row.character);
+  const [draft, setDraft] = useState(row.character);
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  async function save() {
+    setBusy(true);
+    try {
+      await roleplayClient.builder.setCharacter.mutate({ slug, persona: row.persona, character: draft });
+      setSaved(draft);
+      onSaved(draft);
+      toast.success(`${row.name}'s character saved`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not save the character");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className={cn(SECTION_CARD, "flex flex-col gap-3 px-5 py-4")}>
+      <button type="button" className="flex items-center gap-3 text-left" onClick={() => setOpen(!open)} aria-expanded={open}>
+        <UserAvatar user={{ name: row.name, image: row.photoUrl }} size="sm" />
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="truncate text-sm font-medium">{row.name}{row.role ? <span className="text-muted-foreground"> · {row.role}</span> : null}</span>
+          <span className="truncate text-xs text-muted-foreground">{saved.trim() ? "Character written" : "No character yet: not picked for sessions until it has one"}</span>
+        </span>
+        <span className="text-sm text-(--brand)">{open ? "Close" : saved.trim() ? "Edit" : "Write"}</span>
+      </button>
+      {open ? (
+        <>
+          <Textarea
+            value={draft}
+            disabled={busy}
+            rows={12}
+            className="font-mono text-sm"
+            placeholder={`# ${row.name} on this call\n\n## Facts\n- Investor, budget AED 1.5–2M, looking at JVC\n\n## What you hide\n- Your budget, until asked directly\n\n## Opening line\n"${row.name} speaking."\n\n## Reactions\n- Open up when…\n- Get guarded when…`}
+            onChange={(event) => setDraft(event.target.value)}
+          />
+          {draft !== saved ? (
+            <div className="flex items-center justify-end gap-2">
+              <Button type="button" variant="ghost" disabled={busy} onClick={() => setDraft(saved)}>Cancel</Button>
+              <Button type="button" variant="brand" disabled={busy} onClick={() => void save()}>{busy ? "Saving…" : "Save character"}</Button>
+            </div>
+          ) : null}
+        </>
+      ) : null}
+    </div>
   );
 }

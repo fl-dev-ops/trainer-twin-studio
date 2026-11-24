@@ -46,7 +46,11 @@ describe.skipIf(!localMinutesDb)("Module 4 role-play saves (real Postgres locks)
       await fixture.clean();
     }
   });
-  const builder = (opening = "Hello?") => ({ ...(rawBuilder as Record<string, unknown>), persona: f.org.slug, opening });
+  // Each distinct learner brief is a distinct stage, so a new version.
+  const builder = (whatToExpect = "Hello?") => {
+    const raw = rawBuilder as Record<string, unknown>;
+    return { ...raw, persona: f.org.slug, whatToExpect, exampleLines: [...(raw.exampleLines as string[] ?? []), whatToExpect] };
+  };
   const caller = () => roleplayRouter.createCaller({ user: { ...f.trainer, orgId: f.org.id, orgSlug: f.org.slug, role: "admin" } });
   const row = () => db.agent.findUniqueOrThrow({ where: { id: f.roleplay.id } });
   const versions = () => db.specVersion.findMany({ where: { orgId: f.org.id, entitySlug: f.roleplay.slug }, orderBy: { version: "asc" } });

@@ -487,7 +487,7 @@ export async function ingestTwinSkill(orgId: string, input: TwinSkillIngestInput
  * after (lib/roleplay/skill.ts), stored like a skill twin with kind ROLEPLAY. The client is any persona of the org.
  * Returns the agent's slug (org-prefixed, like skill twins).
  */
-export async function saveRoleplay(orgId: string, builder: unknown, slug?: string, before?: BeforeSettings, tools?: ToolSettings) {
+export async function saveRoleplay(orgId: string, builder: unknown, slug?: string, before?: BeforeSettings, tools?: ToolSettings, character?: string) {
   const parsed = roleplayBuilderSchema.safeParse(builder);
   if (!parsed.success) throw new ScenarioIngestError(parsed.error.issues[0]?.message ?? "Invalid role play", 400);
   const [org, persona] = await Promise.all([
@@ -502,12 +502,17 @@ export async function saveRoleplay(orgId: string, builder: unknown, slug?: strin
   }
   const role = (persona.data as { role?: unknown } | null)?.role;
   const rendered = renderRoleplay(shortSlug, parsed.data, typeof role === "string" && role.trim() ? role.trim() : "Client");
-  return storeSkillAgent({
+  const stored = await storeSkillAgent({
     org, kind: "ROLEPLAY", personaId: persona.id,
     manifest: scenarioManifestSchema.parse(rendered.scenario), skill: rendered.skill, items: rendered.items,
     // Before and Tools are saved with the builder when given (the builder edits every tab); otherwise the agent's are kept.
     data: { source: ROLEPLAY_SOURCE, after: rendered.after, ...(before ? { before } : {}), ...(tools ? { tools } : {}) },
   });
+  // The chosen persona's character for this role play (its row exists: the main persona is always in the pool).
+  if (character?.trim()) {
+    await db.agentPersona.updateMany({ where: { agent: { slug: stored.slug }, personaId: persona.id }, data: { character: character.trim() } });
+  }
+  return stored;
 }
 
 /** kebab-case id from a role play's name ("The wait-and-see investor" → "the-wait-and-see-investor"). */

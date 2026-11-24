@@ -14,5 +14,5 @@ export default function EditRoleplayRoute() {
   // Every role play: the simple edit page (basics, persona, read-only script, settings).
   if (saved.brief) return <RoleplayBriefEditPage slug={saved.slug} brief={saved.brief} before={saved.before} tools={saved.tools} personas={personas} pool={pool} />;
   if (!saved.builder) pageNotFound();
-  return <RoleplayBuilderPage slug={saved.slug} initial={saved.builder} before={saved.before} tools={saved.tools} personas={personas} />;
+  return <RoleplayBuilderPage slug={saved.slug} initial={saved.builder} character={saved.character} before={saved.before} tools={saved.tools} personas={personas} />;
 }

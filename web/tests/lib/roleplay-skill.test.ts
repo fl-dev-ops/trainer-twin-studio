@@ -20,17 +20,20 @@ test("render: the same package a twin skill is, valid for the scenario manifest;
     expect(out.scenario.trainer_role).toBe("Prospect");
     expect(out.scenario.steps.map((s) => s.id)).toEqual(["opening", "objection", "close"]);
     for (const item of out.items) expect(roleplayItemSchema.safeParse(item).success).toBe(true);
-    expect(out.items[0]).toMatchObject({ role: "client", text: builder.opening, metadata: { step: "opening" } });
-    expect(out.items).toHaveLength(1 + builder.exampleLines.length);
+    // The opening line is each persona's character, not the stage's: items are the shared example lines only.
+    expect(out.items.map((item) => item.text)).toEqual(builder.exampleLines);
     expect(out.after).toEqual({ report: "roleplay", goals: builder.learnerGoals, rubric: builder.rubric });
     // The AI client never sees how the learner is scored.
     const body = skillBody(out.skill);
     for (const goal of builder.learnerGoals) expect(body).not.toContain(goal);
     for (const row of builder.rubric) expect(body).not.toContain(row.name);
     expect(JSON.stringify(out.scenario)).not.toContain(builder.rubric[0].name);
-    expect(body).toContain(builder.situation.hiddenTruth.slice(0, 40));
+    // The stage holds no one persona's part (hidden truth, opening, reactions): those are characters.
+    expect(body).not.toContain(builder.situation.hiddenTruth.slice(0, 40));
+    expect(body).not.toContain(builder.opening);
+    expect(body).not.toContain("## Reactions");
     // Persona-neutral: an older builder's client name is dropped; the persona playing it gives the name.
-    expect(body).toContain("You are the persona described in PERSONA.");
+    expect(body).toContain("You are the persona described in PERSONA, as your CHARACTER for this role play describes you.");
     expect(body).not.toContain("On this call your name is");
     // Steps sit where the twin skill parser looks for them.
     expect(stepGoal(body, "opening")).toBeUndefined();
@@ -55,11 +58,6 @@ test("limits: at least one goal, at most five; rubric 1..8; slug must be kebab-c
   expect(() => renderRoleplay("Not Kebab", builder)).toThrow();
   expect(() => renderRoleplay("x", { ...builder, situation: { ...builder.situation, learnerRole: "x".repeat(101) } })).toThrow();
   expect(renderRoleplay("x", { ...builder, situation: { ...builder.situation, learnerRole: "x".repeat(100) } }).scenario.learner_role).toHaveLength(100);
-  // Optional parts drop out of SKILL.md cleanly.
-  const bare = renderRoleplay("bare", { ...builder, howTheyTalk: undefined, guardedIf: [], opensUpIf: [], exampleLines: [], situation: { ...builder.situation, hiddenTruth: undefined } });
-  expect(bare.skill).not.toContain("## What is really going on");
-  expect(bare.skill).not.toContain("## Reactions");
-  expect(bare.skill).toContain("You are the persona described in PERSONA.");
-  expect(bare.items).toHaveLength(1);
-  expect(renderRoleplay("dup", { ...builder, exampleLines: [builder.opening, "Other"] }).items.map((i) => i.text)).toEqual([builder.opening, "Other"]);
+  // Without example lines there are no items.
+  expect(renderRoleplay("bare", { ...builder, exampleLines: [] }).items).toHaveLength(0);
 });

@@ -87,7 +87,9 @@ export function RoleplayDetailPage({ roleplay }: { roleplay: Detail }) {
           <dl className="m-0 flex flex-col border-t border-(--border)">
             {roleplay.learnerRole ? <Fact label="Learner plays">{roleplay.learnerRole}</Fact> : null}
             <Fact label="Personas">
-              {personas.length === 1 ? (
+              {!roleplay.personas.length ? (
+                <span className="text-muted-foreground">No persona has a character for this role play yet, so it can't start. <Link href={dashRoute(`/roleplay/${roleplay.slug}/edit`)} className="text-(--brand) hover:underline">Write one</Link>.</span>
+              ) : personas.length === 1 ? (
                 <span className="flex items-center gap-3">
                   <UserAvatar user={{ name: personas[0].name, image: personas[0].photoUrl }} size="sm" />
                   <span>{personas[0].name}{personas[0].role ? <span className="text-muted-foreground"> · {personas[0].role}</span> : null}</span>

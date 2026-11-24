@@ -5,6 +5,7 @@ import { activateSession } from "@/lib/interview-sessions";
 import { buildSessionContext } from "@/lib/session-context";
 import { briefFixtures } from "../fixtures/roleplay-briefs";
 import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "./minutes-test-db";
+import { giveCharacters } from "../setup/characters";
 
 const files = new Map<string, string>();
 const s3 = await import("@/lib/s3");
@@ -139,6 +140,7 @@ describe.skipIf(!localMinutesDb)("role plays written from requirements, through 
 
   test("a session on it runs the brief as the AI's skill with the persona, and the learner brief is the description", async () => {
     const { slug } = await studio({ action: "publishRoleplay", persona: "chloe", brief: brief("bevan-missed-deadlines") }) as { slug: string };
+    await giveCharacters({ slug });
     const session = await activateSession({ orgId: f.org.id, userId: f.trainer.id, agentSlug: slug, mode: "chat", idempotencyKey: crypto.randomUUID() });
     if (!session) throw new Error("Expected a session");
     const row = await db.interviewSession.findUniqueOrThrow({ where: { id: session.id }, include: { skillPins: true } });
@@ -146,7 +148,10 @@ describe.skipIf(!localMinutesDb)("role plays written from requirements, through 
     const context = await buildSessionContext({ orgId: f.org.id, sessionId: session.id });
     const data = context.agent?.data as Record<string, unknown>;
     expect(data.source).toBe("scenario-ingest");
-    expect(String(data.skill)).toContain('You speak first: "Is this about the release? Because there\'s a reason for that."');
+    // The stage says who starts; the opening line is the persona's character, pinned with the session.
+    expect(String(data.skill)).toContain("You speak first, with your character's opening line.");
+    expect(String(data.skill)).not.toContain("Is this about the release?");
+    expect(context.character).toBe("## Who you are here\n\nThe client on this call.");
     expect(data.scenario).toMatchObject({ trainer_role: "Employee", learner_role: "Founder", description: briefFixtures["bevan-missed-deadlines"].brief.learnerBrief });
     expect(context.persona).toMatchObject({ slug: "chloe" });
     expect(context.personaBrief).toContain("- Who: Chloe Martin, Operations lead.");
@@ -158,7 +163,7 @@ describe.skipIf(!localMinutesDb)("role plays written from requirements, through 
     const fixture = briefFixtures["bevan-missed-deadlines"].brief;
 
     const card = (await caller.scenarios.list()).find((row) => row.slug === slug);
-    expect(card).toMatchObject({ href: `/roleplay/${slug}`, description: fixture.learnerBrief, opening: fixture.start.openingLine });
+    expect(card).toMatchObject({ href: `/roleplay/${slug}`, description: fixture.learnerBrief });
 
     const detail = await caller.scenarios.get({ slug });
     expect(detail).toMatchObject({ situation: fixture.summary, learnerRole: fixture.learner.role, description: fixture.learnerBrief });
@@ -166,54 +171,56 @@ describe.skipIf(!localMinutesDb)("role plays written from requirements, through 
 
     const edit = await caller.builder.get({ slug });
     expect(edit.builder).toBeNull();
-    expect(edit.brief).toMatchObject({ persona: "chloe", title: fixture.title, openingLine: fixture.start.openingLine, aiStarts: true });
+    expect(edit.brief).toMatchObject({ persona: "chloe", title: fixture.title, aiStarts: true });
 
-    const unchanged = await caller.builder.saveBrief({ slug, persona: "chloe", title: fixture.title, learnerBrief: fixture.learnerBrief, openingLine: fixture.start.openingLine!, limit: fixture.ending.limit ?? "" });
+    const unchanged = await caller.builder.saveBrief({ slug, persona: "chloe", title: fixture.title, learnerBrief: fixture.learnerBrief, limit: fixture.ending.limit ?? "" });
     expect(unchanged.changed).toBe(false);
-    const saved = await caller.builder.saveBrief({ slug, persona: "chloe", title: "Missed deadlines, take two", learnerBrief: "You are the founder. Find out why the release slipped.", openingLine: "You wanted to see me?", limit: "At most 3 minutes." });
+    const saved = await caller.builder.saveBrief({ slug, persona: "chloe", title: "Missed deadlines, take two", learnerBrief: "You are the founder. Find out why the release slipped.", limit: "At most 3 minutes." });
     expect(saved).toMatchObject({ slug, changed: true });
     const after = await caller.builder.get({ slug });
-    expect(after.brief).toMatchObject({ title: "Missed deadlines, take two", openingLine: "You wanted to see me?", limit: "At most 3 minutes." });
+    expect(after.brief).toMatchObject({ title: "Missed deadlines, take two", limit: "At most 3 minutes." });
     // The rest of the script is untouched, and the session runs the re-rendered skill.
     expect(after.brief?.script.steps).toEqual(detail.script!.steps);
     const agent = await db.agent.findUniqueOrThrow({ where: { slug }, include: { primarySkill: { include: { currentVersion: true } } } });
     expect(agent.name).toBe("Missed deadlines, take two");
-    expect(agent.primarySkill?.currentVersion?.skillText).toContain('"You wanted to see me?"');
+    expect(agent.primarySkill?.currentVersion?.skillText).toContain("At most 3 minutes.");
     expect(await listAgentBriefs(f.org.id, [slug])).toEqual({ [slug]: "You are the founder. Find out why the release slipped." });
 
-    await expect(caller.builder.saveBrief({ slug, persona: "nobody", title: "x", learnerBrief: "x", openingLine: "x", limit: "At most 3 minutes." })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(caller.builder.saveBrief({ slug, persona: "nobody", title: "x", learnerBrief: "x", limit: "At most 3 minutes." })).rejects.toMatchObject({ code: "NOT_FOUND" });
     // The brief's own checks still apply: clearing the only ending is refused with the reason.
-    await expect(caller.builder.saveBrief({ slug, persona: "chloe", title: "x", learnerBrief: "x", openingLine: "x", limit: "" })).rejects.toMatchObject({ code: "BAD_REQUEST", message: expect.stringContaining("Say when the conversation ends") });
+    await expect(caller.builder.saveBrief({ slug, persona: "chloe", title: "x", learnerBrief: "x", limit: "" })).rejects.toMatchObject({ code: "BAD_REQUEST", message: expect.stringContaining("Say when the conversation ends") });
   });
 
   test("a role play made in the older form opens the same simple edit page and saves its basics", async () => {
     const { saveRoleplay } = await import("@/lib/scenario-ingest");
     const made = await saveRoleplay(f.org.id, {
       name: "Older practice", persona: "chloe",
-      situation: { scenario: "Buyer is uncertain", learnerRole: "Advisor", hiddenTruth: "Worried about the mortgage" },
-      difficulty: "medium", opening: "I need more time", whatToExpect: "Find out why they are unsure.", exampleLines: ["Please explain"],
-      guardedIf: [], opensUpIf: [], learnerGoals: ["Understand the concern"], rubric: [{ name: "Understanding", points: 100 }],
+      situation: { scenario: "Buyer is uncertain", learnerRole: "Advisor" },
+      difficulty: "medium", whatToExpect: "Find out why they are unsure.", exampleLines: ["Please explain"],
+      learnerGoals: ["Understand the concern"], rubric: [{ name: "Understanding", points: 100 }],
     });
     const caller = roleplayRouter.createCaller({ user: { ...f.trainer, orgId: f.org.id, orgSlug: f.org.slug, role: "admin" } } as never);
     const edit = await caller.builder.get({ slug: made.slug });
-    expect(edit.brief).toMatchObject({ kind: "builder", persona: "chloe", title: "Older practice", learnerBrief: "Find out why they are unsure.", openingLine: "I need more time" });
-    expect(edit.brief?.script).toMatchObject({ learnerRole: "Advisor", situation: ["Buyer is uncertain"], concerns: [{ concern: "Worried about the mortgage", hidden: true }] });
+    expect(edit.brief).toMatchObject({ kind: "builder", persona: "chloe", title: "Older practice", learnerBrief: "Find out why they are unsure." });
+    expect(edit.brief?.script).toMatchObject({ learnerRole: "Advisor", situation: ["Buyer is uncertain"] });
     expect((await caller.scenarios.get({ slug: made.slug })).script).toMatchObject({ learnerRole: "Advisor" });
 
     await caller.builder.setPersonaPool({ slug: made.slug, personas: [f.org.slug] });
     expect((await caller.builder.get({ slug: made.slug })).brief?.persona).toBe(f.org.slug);
-    const saved = await caller.builder.saveBrief({ slug: made.slug, title: "Older practice, renamed", learnerBrief: "Find the real worry.", openingLine: "Not sure yet.", limit: "" });
+    const saved = await caller.builder.saveBrief({ slug: made.slug, title: "Older practice, renamed", learnerBrief: "Find the real worry.", limit: "" });
     expect(saved.changed).toBe(true);
     const after = await caller.builder.get({ slug: made.slug });
     // Basics changed; the rest of the form's fields kept (rubric, difficulty, example lines).
-    expect(after.builder).toMatchObject({ persona: f.org.slug, name: "Older practice, renamed", whatToExpect: "Find the real worry.", opening: "Not sure yet.", difficulty: "medium", exampleLines: ["Please explain"], rubric: [{ name: "Understanding", points: 100 }] });
+    expect(after.builder).toMatchObject({ persona: f.org.slug, name: "Older practice, renamed", whatToExpect: "Find the real worry.", difficulty: "medium", exampleLines: ["Please explain"], rubric: [{ name: "Understanding", points: 100 }] });
     expect(await caller.builder.personaPool({ slug: made.slug })).toEqual([f.org.slug]);
   });
 
   test("refuses an incomplete brief, an unknown persona and an id another role play already owns", async () => {
     const incomplete = brief("bevan-missed-deadlines");
-    delete incomplete.start.openingLine;
-    await expect(studio({ action: "publishRoleplay", persona: "chloe", brief: incomplete })).rejects.toMatchObject({ status: 400, message: expect.stringContaining("add its opening line") });
+    incomplete.steps = incomplete.steps.slice(0, 1);
+    await expect(studio({ action: "publishRoleplay", persona: "chloe", brief: incomplete })).rejects.toMatchObject({ status: 400, message: expect.stringContaining("steps") });
+    // A persona's part written into the brief is refused: it belongs in that persona's character.
+    await expect(studio({ action: "publishRoleplay", persona: "chloe", brief: { ...brief("bevan-missed-deadlines"), wants: "A fair hearing" } })).rejects.toMatchObject({ status: 400, message: expect.stringContaining("character") });
     await expect(studio({ action: "publishRoleplay", persona: "nobody", brief: brief("bevan-missed-deadlines") })).rejects.toMatchObject({ status: 404 });
     await db.agent.create({ data: { slug: `${f.org.slug}-taken`, name: "Taken", kind: "ROLEPLAY", orgId: f.org.id, personaId: (await db.persona.findFirstOrThrow({ where: { orgId: f.org.id, slug: "chloe" } })).id, data: { skill: "# other", source: "scenario-ingest" } } });
     await expect(studio({ action: "publishRoleplay", persona: "chloe", brief: { ...brief("bevan-missed-deadlines"), id: "taken" } })).rejects.toMatchObject({ status: 409 });

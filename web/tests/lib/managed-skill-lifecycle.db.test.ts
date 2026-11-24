@@ -16,6 +16,7 @@ import { builtFrom } from "@/lib/skill-sources";
 import type { RoleplayBuilder } from "@/lib/roleplay/skill";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "./minutes-test-db";
+import { giveCharacters } from "../setup/characters";
 
 const canaryReference = "isolated-test-attestation-not-live";
 const files = new Map<string, string>();
@@ -113,8 +114,8 @@ describe.skipIf(!localMinutesDb)("managed skill ownership lifecycle (real Postgr
   const builder = (revision = 1): RoleplayBuilder => ({
     name: "Managed builder", persona: f.org.slug,
     situation: { scenario: `Concern v${revision}`, learnerRole: "Advisor" }, difficulty: "medium",
-    opening: `Builder opening v${revision}`, exampleLines: [`Builder example v${revision}`],
-    guardedIf: [], opensUpIf: [], learnerGoals: [`Goal v${revision}`],
+    exampleLines: [`Builder example v${revision}`],
+    learnerGoals: [`Goal v${revision}`],
     rubric: [{ name: `Rubric v${revision}`, points: 100 }],
   });
   const publish = (format: Format, revision = 1, source?: string) => {
@@ -152,6 +153,7 @@ describe.skipIf(!localMinutesDb)("managed skill ownership lifecycle (real Postgr
     where: { id }, include: { skillPins: { include: { version: true }, orderBy: { position: "asc" } } },
   });
   const start = async (slug: string, format: Format | "main" = "twin") => {
+    await giveCharacters({ slug });
     const session = await activateSession({
       orgId: f.org.id, userId: f.trainer.id, agentSlug: slug,
       mode: format === "builder" || format === "authored" ? "chat" : "voice", idempotencyKey: randomUUID(),
@@ -392,7 +394,6 @@ describe.skipIf(!localMinutesDb)("managed skill ownership lifecycle (real Postgr
   test.each([
     { field: "name", value: "" },
     { field: "difficulty", value: "unsupported" },
-    { field: "opening", value: "" },
     { field: "situation", value: { scenario: "", learnerRole: "Advisor" } },
   ])("migration accepts scoring-free builder files but rejects malformed during.$field", async ({ field, value }) => {
     const saved = await publish("builder");

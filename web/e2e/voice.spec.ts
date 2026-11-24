@@ -414,18 +414,18 @@ test("voice rename is explicit and in-use deletion leaves the voice visible with
   });
   await page.goto("/voice");
   await page.getByRole("button", { name: "Actions for Shared voice", exact: true }).click();
-  await page.getByRole("menuitem", { name: "Rename", exact: true }).click();
-  const rename = page.getByRole("dialog", { name: "Rename voice", exact: true });
+  await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
+  const rename = page.getByRole("dialog", { name: "Edit voice", exact: true });
   await rename.getByLabel("Voice name", { exact: true }).fill("Discarded name");
   await rename.getByRole("button", { name: "Cancel", exact: true }).click();
   expect(renames).toHaveLength(0);
   await page.getByRole("button", { name: "Actions for Shared voice", exact: true }).click();
-  await page.getByRole("menuitem", { name: "Rename", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
   await expect(rename.getByLabel("Voice name", { exact: true })).toHaveValue("Shared voice");
   await rename.getByLabel("Voice name", { exact: true }).fill("Shared recording");
-  await rename.getByRole("button", { name: "Save name", exact: true }).click();
+  await rename.getByRole("button", { name: "Save", exact: true }).click();
   await expect(rename).toBeHidden();
-  expect(renames).toEqual([{ name: "Shared recording" }]);
+  expect(renames).toEqual([{ name: "Shared recording", gender: null, age: null, accent: null }]);
   await page.getByRole("button", { name: "Actions for Shared recording", exact: true }).click();
   await page.getByRole("menuitem", { name: "Delete", exact: true }).click();
   const remove = page.getByRole("alertdialog", { name: "Delete Shared recording?", exact: true });
@@ -439,7 +439,7 @@ test("voice rename is explicit and in-use deletion leaves the voice visible with
   await expect(page.getByRole("button", { name: "Actions for Jules", exact: true })).toHaveCount(0);
 });
 
-test("incomplete removal disables playback and rename, survives reload, and can be retried", async ({ page }) => {
+test("incomplete removal disables playback and editing, survives reload, and can be retried", async ({ page }) => {
   const row = { id: "retry-voice", name: "Retry recording", kind: "cloned", status: "ready", createdAt: "2026-11-19T00:00:00.000Z" };
   let removed = false;
   let attempts = 0;
@@ -473,7 +473,7 @@ test("incomplete removal disables playback and rename, survives reload, and can 
   await expect(page.getByRole("button", { name: "Listen to Retry recording", exact: true })).toBeDisabled();
   await expect(page.getByRole("link", { name: /Retry recording/ })).toHaveAttribute("aria-disabled", "true");
   await page.getByRole("button", { name: "Actions for Retry recording", exact: true }).click();
-  await expect(page.getByRole("menuitem", { name: "Rename", exact: true })).toBeDisabled();
+  await expect(page.getByRole("menuitem", { name: "Edit", exact: true })).toBeDisabled();
   await page.getByRole("menuitem", { name: "Retry delete", exact: true }).click();
   await dialog.getByRole("textbox").fill(row.name);
   await dialog.getByRole("button", { name: "Retry delete", exact: true }).click();

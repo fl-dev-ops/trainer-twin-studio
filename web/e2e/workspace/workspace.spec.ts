@@ -1,9 +1,10 @@
 import "../use-test-db";
 import { expect, test } from "@playwright/test";
 import { execFileSync } from "node:child_process";
-import { createHmac, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { db } from "../../lib/db";
+import { browserToken } from "../../lib/interview-sessions";
 import { seed } from "../seed-data";
 
 let execute: typeof import("../../../chat/agent/lib/workspace-tools")["executeWorkspaceTool"];
@@ -12,7 +13,6 @@ let sessionId: string;
 let token: string;
 let pdfBytes: Buffer;
 let contextId: string;
-let claimId: string;
 let data: ReturnType<typeof seed>;
 const secret = process.env.COPILOT_SERVICE_SECRET!;
 const context = (tool: string, callId: string = randomUUID()) => ({ toolName: tool, callId,
@@ -32,14 +32,17 @@ test.beforeAll(async () => {
 test.beforeEach(async ({ context: browser }) => {
   const agent = await db.agent.findFirstOrThrow({ where: { orgId, slug: data.roleplay.slug }, include: { persona: true } });
   const doc = await db.contextDocument.create({ data: { orgId, ownerUserId: data.learner.id, name: "Resume.pdf", mimeType: "application/pdf", size: pdfBytes.length, content: new Uint8Array(pdfBytes),
-    extractedText: "Built reliable distributed systems and reduced latency by forty percent.", claims: { create: { claimNo: 1, section: "Experience", kind: "project", text: "Built reliable distributed systems", anchor: "Built reliable distributed systems" } } }, include: { claims: true } });
-  contextId = doc.id; claimId = doc.claims[0].id;
+    extractedText: "Built reliable distributed systems and reduced latency by forty percent." } });
+  contextId = doc.id;
   const row = await db.interviewSession.create({ data: { orgId, userId: data.learner.id, agentId: agent.id, agentSlug: agent.slug, agentVersion: agent.version,
     personaSlug: agent.persona.slug, personaVersion: agent.persona.version, shareCode: randomUUID(), status: "active", mode: "voice", startedAt: new Date(), contextId,
-    compiledSnapshot: { agent: { slug: agent.slug, version: agent.version, data: { config: { interview: { type: "technical" } } } } },
+    compiledSnapshot: { agent: {
+      slug: agent.slug, version: agent.version,
+      data: { tools: { canvas: true, codeEditor: true, preview: true, choice: true } },
+    } },
   } });
   sessionId = row.id;
-  token = createHmac("sha256", secret).update(`browser:${sessionId}`).digest("base64url");
+  token = browserToken(sessionId);
   await browser.route("https://cdn.jsdelivr.net/npm/@embedpdf/pdfium@*/dist/pdfium.wasm", route => route.fulfill({ body: readFileSync("node_modules/@embedpdf/pdfium/dist/pdfium.wasm"), contentType: "application/wasm" }));
   await browser.route("**/api/documents/*/raw**", route => route.fulfill({ body: pdfBytes, contentType: "application/pdf" }));
 });
@@ -121,14 +124,19 @@ test("PDF loads, an image loads, and real presentation navigation uses zero-base
   expect(await command("workspace_request", { method: "workspace.presentation", action: "set_zoom", payload: { percent: 150 } })).toMatchObject({ result: { result: { zoom: 150 } } });
 });
 
-test("resume question reaches the real PDF viewer and returns a confirmed highlight", async ({ page }) => {
-  await db.interviewSession.update({ where: { id: sessionId }, data: { compiledSnapshot: { agent: { data: { config: { interview: { type: "resume" } } } } } } });
+test("replaying a confirmed PDF highlight returns the saved result without reopening the viewer", async ({ page }) => {
   await visit(page);
+  expect(await open("open_pdf", { fileId: contextId })).toMatchObject({ status: "completed" });
+  await expect(page.getByRole("button", { name: "Current page 1. Edit page number" })).toBeVisible();
   const id = randomUUID();
-  const input = { claimId, question: "What did you build?" };
-  expect(await command("start_resume_question", input, id)).toMatchObject({ status: "completed", result: { status: "highlighted" } });
-  expect(await command("start_resume_question", input, id)).toMatchObject({ status: "completed", result: { status: "highlighted" } });
-  await expect(page.getByTestId("opens")).toHaveText("1");
+  const input = {
+    action: "highlight_document",
+    payload: { fileId: contextId, highlightQuery: "Built reliable distributed systems" },
+  };
+  const first = await command("surface", input, id);
+  expect(first).toMatchObject({ status: "completed" });
+  expect(await command("surface", input, id)).toEqual(first);
+  await expect(page.getByTestId("opens")).toHaveText("2");
 });
 
 test("failed acknowledgements retry without reopening or resetting the workspace", async ({ page }) => {

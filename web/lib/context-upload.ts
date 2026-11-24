@@ -26,7 +26,12 @@ export type BeforeSettings = {
   duringUpload: boolean;
   uploadTitle: string;
   uploadInstruction: string;
+  /** A role play's call length in minutes: the call ends (with the client's goodbye) at this point. Null: no limit. */
+  callMinutes?: number | null;
 };
+
+/** The call lengths a role play can be limited to (minutes). */
+export const CALL_MINUTES = [2, 3, 4, 5, 6, 8, 10, 15, 20, 30] as const;
 
 export const TWIN_UPLOAD_TITLE_DEFAULT = "Documents";
 
@@ -171,6 +176,7 @@ export function beforeSettings(data: unknown): BeforeSettings {
     duringUpload: settings?.duringUpload === true,
     uploadTitle: text(settings?.uploadTitle),
     uploadInstruction: text(settings?.uploadInstruction),
+    callMinutes: typeof settings?.callMinutes === "number" && Number.isInteger(settings.callMinutes) && settings.callMinutes >= 1 && settings.callMinutes <= 60 ? settings.callMinutes : null,
   };
 }
 

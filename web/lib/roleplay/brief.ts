@@ -3,8 +3,9 @@ import { z } from "zod";
 /**
  * A role play written from a trainer's requirements (plans/roleplay-creator.md): one structured brief, rendered into
  * the role play's SKILL.md (the AI's brief, written to "you"), the learner brief and items (lines the AI may pull).
- * Deterministic and client-safe. The persona (Persona Library) gives the voice and personality; the brief says what is
- * happening now and what this person wants and does in it. Scoring is not part of the role play.
+ * Deterministic and client-safe. The brief is the stage, the same for every persona: what is happening, how the
+ * conversation goes and ends. Who the AI is in it (what they want, their concerns, opening line, reactions, style) is
+ * each persona's character for this role play (AgentPersona.character). Scoring is not part of the role play.
  */
 
 const kebab = z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, "must be kebab-case").max(60);
@@ -26,30 +27,17 @@ export const roleplayBriefSchema = z.object({
   ai: z.object({
     /** The AI's role in a few words, e.g. "Buyer", "Interviewer". */
     role: text(80),
-    /** Who you are in this situation and your relationship to the learner. Personality comes from the persona. */
-    who: text(1200),
   }).strict(),
   learner: z.object({
     role: text(80),
     /** What the learner is trying to achieve in the call. */
     aim: text(600),
   }).strict(),
-  /** What triggered the conversation, what you know and don't know, how you feel at the start, facts to keep. */
+  /** What triggered the conversation and the shared facts, the same for every persona that plays it. */
   situation: lines(15).min(1),
-  /** Your aim in the conversation. */
-  wants: text(800),
-  concerns: z.array(z.object({
-    /** The concern, as this person would put it. Never the answer to it. */
-    concern: text(400),
-    comesUpWhen: text(300).optional(),
-    resolvedWhen: text(300).optional(),
-    /** Kept to yourself until the learner earns it. */
-    hidden: z.boolean().default(false),
-  }).strict()).max(5).default([]),
   start: z.object({
+    /** Who speaks first; the AI's first words are in its character. */
     who: z.enum(["ai", "learner"]),
-    /** Your first words (when you start), or your first reply (when the learner starts). */
-    openingLine: text(400).optional(),
     /** What the learner does first, when they start. */
     learnerFirst: text(300).optional(),
   }).strict(),
@@ -60,10 +48,6 @@ export const roleplayBriefSchema = z.object({
     what: text(800),
     moveOnWhen: text(300).optional(),
   }).strict()).min(2).max(6),
-  reactions: z.object({
-    opensUpWhen: lines(10).min(1),
-    pullsBackWhen: lines(10).min(1),
-  }).strict(),
   ending: z.object({
     /** Time or count limit, e.g. "At most 4 minutes", "After 3 questions". */
     limit: text(200).optional(),
@@ -76,8 +60,6 @@ export const roleplayBriefSchema = z.object({
   }).strict(),
   /** Scenario-specific rules, added to the standard ones. */
   rules: lines(10).default([]),
-  /** Scenario-specific speaking constraints only (length, pace); tone and personality come from the persona. */
-  style: lines(5).default([]),
   items: z.array(z.object({
     kind: z.enum(ITEM_KINDS),
     text: text(1000),
@@ -92,6 +74,64 @@ export const roleplayBriefSchema = z.object({
 export type RoleplayBrief = z.infer<typeof roleplayBriefSchema>;
 export type RoleplayBriefInput = z.input<typeof roleplayBriefSchema>;
 
+/** Fields older briefs held that now belong to each persona's character. */
+export const CHARACTER_FIELDS = { top: ["wants", "concerns", "reactions", "style"], ai: ["who"], start: ["openingLine"] } as const;
+
+/** A stored brief without the fields that moved to characters (they were ported to AgentPersona.character). */
+export function stageOf(stored: unknown): unknown {
+  if (!stored || typeof stored !== "object" || Array.isArray(stored)) return stored;
+  const brief = { ...(stored as Record<string, unknown>) };
+  for (const key of CHARACTER_FIELDS.top) delete brief[key];
+  for (const [part, keys] of [["ai", CHARACTER_FIELDS.ai], ["start", CHARACTER_FIELDS.start]] as const) {
+    const value = brief[part];
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      const next = { ...(value as Record<string, unknown>) };
+      for (const key of keys) delete next[key];
+      brief[part] = next;
+    }
+  }
+  return brief;
+}
+
+/**
+ * A persona's character written from an older brief's character fields (who, wants, concerns, opening line,
+ * reactions, style): the same port the migration roleplay_character_port does for stored role plays.
+ */
+export function characterFromLegacyBrief(stored: unknown): string {
+  const record = (value: unknown) => (value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {});
+  const str = (value: unknown) => (typeof value === "string" && value.trim() ? value.trim() : "");
+  const list = (value: unknown) => (Array.isArray(value) ? value.map(str).filter(Boolean) : []);
+  const b = record(stored);
+  const start = record(b.start);
+  const reactions = record(b.reactions);
+  const concerns = (Array.isArray(b.concerns) ? b.concerns : []).map(record).map((c) => [
+    `- ${c.hidden === true ? "(hidden until earned) " : ""}${str(c.concern)}`,
+    str(c.comesUpWhen) ? `  - Comes up when: ${str(c.comesUpWhen)}` : "",
+    str(c.resolvedWhen) ? `  - Eased when: ${str(c.resolvedWhen)}` : "",
+  ].filter(Boolean).join("\n"));
+  const opening = str(start.openingLine);
+  return [
+    str(record(b.ai).who) ? `## Who you are here\n\n${str(record(b.ai).who)}` : "",
+    str(b.wants) || concerns.length ? `## What you want and your concerns\n\n${[str(b.wants), concerns.join("\n")].filter(Boolean).join("\n\n")}` : "",
+    opening ? `## ${start.who === "learner" ? "Your first reply" : "Your opening line"}\n\n"${opening}"` : "",
+    list(reactions.opensUpWhen).length || list(reactions.pullsBackWhen).length
+      ? `## How you react\n\nYou open up when the learner:\n${bullets(list(reactions.opensUpWhen))}\n\nYou pull back when the learner:\n${bullets(list(reactions.pullsBackWhen))}`
+      : "",
+    list(b.style).length ? `## How you talk on this call\n\n${bullets(list(b.style))}` : "",
+  ].filter(Boolean).join("\n\n");
+}
+
+/** Character fields written into a brief: each must go in a persona's character instead. */
+function characterFieldsIn(input: unknown): string[] {
+  const record = (value: unknown) => (value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {});
+  const brief = record(input);
+  return [
+    ...CHARACTER_FIELDS.top.filter((key) => key in brief),
+    ...CHARACTER_FIELDS.ai.filter((key) => key in record(brief.ai)).map((key) => `ai.${key}`),
+    ...CHARACTER_FIELDS.start.filter((key) => key in record(brief.start)).map((key) => `start.${key}`),
+  ];
+}
+
 /** Always part of a role play; scenario rules are added after these. */
 export const STANDARD_RULES = [
   "Stay in your role for the whole conversation. Never mention being an AI, a simulation or a role play.",
@@ -100,6 +140,7 @@ export const STANDARD_RULES = [
   "Keep every fact consistent for the whole conversation; never invent facts that contradict the situation.",
   "Vary your wording: use any example lines for substance and shape, never word for word.",
   "Never name people, places or numbers the situation doesn't give; refer to others by their role.",
+  "Your name is your persona's. If the learner calls you by another name, correct them briefly (\"It's Sara, actually.\") and carry on.",
   "Never end before the limit or ending the brief sets just because the learner is doing well; go through what it asks for.",
 ];
 
@@ -125,17 +166,16 @@ const bullets = (items: string[]) => items.map((item) => `- ${item}`).join("\n")
 const words = (value: string) => value.split(/\s+/).filter(Boolean).length;
 const norm = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 
-/** SKILL.md: the AI's brief. Never the learner's scoring. */
+/** SKILL.md: the stage every persona plays, written to "you". Never the learner's scoring, never one persona. */
 export function renderBriefSkill(brief: RoleplayBrief): string {
   const b = brief;
   const start = b.start.who === "ai"
-    ? `You speak first${b.start.openingLine ? `: "${b.start.openingLine}"` : "."}`
-    : [`The learner speaks first${b.start.learnerFirst ? `: ${b.start.learnerFirst}` : "."}`, b.start.openingLine ? `Your first reply: "${b.start.openingLine}"` : ""].filter(Boolean).join("\n");
-  const concerns = b.concerns.map((c) => [
-    `- ${c.hidden ? "(hidden until earned) " : ""}${c.concern}`,
-    c.comesUpWhen ? `  - Comes up when: ${c.comesUpWhen}` : "",
-    c.resolvedWhen ? `  - Eased when: ${c.resolvedWhen}` : "",
-  ].filter(Boolean).join("\n"));
+    ? "You speak first, with your character's opening line."
+    : [
+      `The learner starts the conversation${b.start.learnerFirst ? `: ${b.start.learnerFirst}` : "."}`,
+      "On the opening turn, before the learner has said anything, say only a short, neutral line that fits the situation and wait: after a meeting or presentation \"Okay, thanks.\", on a phone call \"Hello?\". Raise nothing yet.",
+      "Once the learner has started, reply as your character's first reply says.",
+    ].join("\n");
   const ending = [
     b.ending.limit ? `- ${b.ending.limit}` : "",
     `- Good outcome: ${b.ending.good}`,
@@ -144,21 +184,18 @@ export function renderBriefSkill(brief: RoleplayBrief): string {
     ...b.ending.endsEarlyWhen.map((when) => `- End early when: ${when}`),
     b.ending.exitLine ? `- If you end it early or without a next step, say only: "${b.ending.exitLine}" A good ending closes naturally instead.` : "",
   ].filter(Boolean).join("\n");
-  const hasHidden = b.concerns.some((c) => c.hidden);
   const sections = [
     `---\nname: ${b.id}\ndescription: ${JSON.stringify(b.summary)}\n---`,
     `# ${b.title}\n\n${b.summary}`,
-    `## Your role\n\n${b.ai.who}`,
+    `## Your role\n\nYou play the ${b.ai.role}: the persona described in PERSONA, as your CHARACTER for this role play describes you (what you want, your concerns and what you keep hidden, how you react and talk).`,
     `## The learner\n\nThe learner plays: ${b.learner.role}. ${b.learner.aim}`,
     `## Situation\n\n${bullets(b.situation)}`,
-    `## What you want and your concerns\n\n${b.wants}${concerns.length ? `\n\n${concerns.join("\n")}` : ""}${hasHidden ? "\n\nReveal a hidden concern only when the learner asks a genuine question about it and listens; one piece at a time." : ""}`,
     `## How it starts\n\n${start}`,
     `## How the conversation goes\n\n${b.steps.map((s, i) => `### ${i + 1}. ${s.name} \`${s.id}\`\n\n**Goal:** ${s.what}${s.moveOnWhen ? `\n\nMove on when: ${s.moveOnWhen}` : ""}`).join("\n\n")}`,
-    `## How you react\n\nYou open up when the learner:\n${bullets(b.reactions.opensUpWhen)}\n\nYou pull back when the learner:\n${bullets(b.reactions.pullsBackWhen)}\n\nStay reasonable and firm, not hostile; move gradually, never all at once.`,
+    `## How you react\n\nAs your character says. Stay reasonable and firm, not hostile; move gradually, never all at once. Reveal what your character keeps hidden only when the learner asks a genuine question about it and listens; one piece at a time.`,
     `## How it ends\n\n${ending}`,
     `## Rules\n\n${bullets([...STANDARD_RULES, ...b.rules])}`,
     `## How real people talk\n\n${bullets(HUMAN_TALK)}`,
-    b.style.length ? `## Style\n\n${bullets(b.style)}` : "",
     b.items.length ? `## Using your lines\n\n${b.itemsGuide ?? "When you reach a step or a new kind of moment, look up your lines for it; use them for substance and shape and vary the wording."}` : "",
   ];
   return `${sections.filter(Boolean).join("\n\n")}\n`;
@@ -169,17 +206,11 @@ export function checkBrief(brief: RoleplayBrief): string[] {
   const b = brief;
   const reasons: string[] = [];
   if (norm(b.ai.role) === norm(b.learner.role)) reasons.push("The AI and the learner play the same role; give each a distinct role.");
-  if (b.start.who === "ai" && !b.start.openingLine) reasons.push("The AI speaks first: add its opening line.");
   if (b.start.who === "learner" && !b.start.learnerFirst) reasons.push("The learner speaks first: say what they do first (start.learnerFirst).");
   const ids = b.steps.map((s) => s.id);
   if (new Set(ids).size !== ids.length) reasons.push("Step ids must be unique.");
   if (!b.ending.limit && !b.ending.endsEarlyWhen.length && !/\b(after|when|once|until|minute|question|objection)\b/i.test(b.ending.good)) {
     reasons.push("Say when the conversation ends: a time or count limit, or what ends it.");
-  }
-  const brief_ = norm(b.learnerBrief);
-  for (const c of b.concerns.filter((x) => x.hidden)) {
-    const n = norm(c.concern);
-    if (n.length >= 12 && brief_.includes(n)) reasons.push(`The learner brief gives away a hidden concern: "${c.concern.slice(0, 80)}".`);
   }
   for (const item of b.items) if (item.step && !ids.includes(item.step)) reasons.push(`Item "${item.text.slice(0, 40)}" names step "${item.step}", which does not exist.`);
   const seen = new Set<string>();
@@ -221,6 +252,10 @@ export function renderBrief(brief: RoleplayBrief) {
 
 /** Parses, checks and renders: what the copilot's draft shows and what publishing stores. */
 export function draftBrief(input: unknown) {
+  const moved = characterFieldsIn(input);
+  if (moved.length) {
+    return { ok: false as const, reasons: [`${moved.join(", ")}: these belong to each persona's character, not the brief (the stage). Remove them here and write them per persona with roleplay_character_set.`] };
+  }
   const parsed = roleplayBriefSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false as const, reasons: parsed.error.issues.slice(0, 20).map((issue) => `${issue.path.join(".") || "brief"}: ${issue.message}`) };

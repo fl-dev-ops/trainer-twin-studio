@@ -10,6 +10,7 @@ import { skillFiles, skillPackageHash } from "@/lib/skills";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import type { RoleplayBuilder } from "@/lib/roleplay/skill";
 import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "./minutes-test-db";
+import { giveCharacters } from "../setup/characters";
 
 const files = new Map<string, string>();
 const s3 = await import("@/lib/s3");
@@ -76,8 +77,8 @@ describe.skipIf(!localMinutesDb)("Phase 2 session skill pins (real Postgres)", (
   const builder = (revision = 1): RoleplayBuilder => ({
     name: "Pinned practice", persona: f.org.slug,
     situation: { scenario: `Buyer concern ${revision}`, learnerRole: "Advisor" },
-    difficulty: "medium", opening: `Opening ${revision}`, exampleLines: [`Concern ${revision}`],
-    guardedIf: [], opensUpIf: [], learnerGoals: [`Goal ${revision}`],
+    difficulty: "medium", exampleLines: [`Concern ${revision}`],
+    learnerGoals: [`Goal ${revision}`],
     rubric: [{ name: `Rubric ${revision}`, points: 100 }],
   });
   const publish = async (format: "builder" | "authored" = "builder", revision = 1, personaSlug = f.org.slug) => {
@@ -93,6 +94,7 @@ describe.skipIf(!localMinutesDb)("Phase 2 session skill pins (real Postgres)", (
     });
   };
   const start = async (slug = f.roleplay.slug, idempotencyKey = randomUUID()) => {
+    await giveCharacters({ slug });
     const session = await activateSession({ orgId: f.org.id, userId: f.trainer.id, agentSlug: slug, mode: "chat", idempotencyKey });
     if (!session) throw new Error("Activation returned no session");
     return session;

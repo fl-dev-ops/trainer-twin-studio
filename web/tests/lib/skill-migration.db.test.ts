@@ -57,8 +57,7 @@ describe.skipIf(!localMinutesDb)("skill migration (real isolated Postgres)", () 
       steps: [{ id: "opening", name: "Opening", trainer_moves: ["answer"], learner_moves: ["ask"] }],
       ...(format === "builder-roleplay" ? { roleplay: {
         name: "Migration", persona: f.org.slug, situation: { scenario: "Saved concern", learnerRole: "Advisor" },
-        difficulty: "medium", opening: "Hello", exampleLines: [], guardedIf: [], opensUpIf: [],
-        learnerGoals: ["Ask"], rubric: [{ name: "Ask", points: 100 }],
+        difficulty: "medium", exampleLines: [], learnerGoals: ["Ask"], rubric: [{ name: "Ask", points: 100 }],
       } } : {}),
     };
     const items = options.empty ? [] : [{

@@ -7,7 +7,8 @@ from recording.webhook import post_completion_webhook
 
 
 @pytest.mark.asyncio
-async def test_post_completion_webhook():
+async def test_post_completion_webhook(monkeypatch):
+    monkeypatch.setenv("COPILOT_SERVICE_SECRET", "test-webhook-secret")
     with patch("urllib.request.urlopen") as mock_urlopen:
         mock_response = MagicMock()
         mock_response.status = 200

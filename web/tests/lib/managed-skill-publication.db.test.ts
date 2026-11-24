@@ -12,6 +12,7 @@ import { runCopilotStudio } from "@/lib/copilot-studio";
 import { ownershipLock, packageFieldsOmitted } from "@/lib/skill-ownership";
 import type { RoleplayBuilder } from "@/lib/roleplay/skill";
 import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "./minutes-test-db";
+import { giveCharacters } from "../setup/characters";
 
 const files = new Map<string, string>();
 let corruptRead = false;
@@ -105,8 +106,8 @@ describe.skipIf(!localMinutesDb)("managed-only skill publication (real Postgres)
   const builder = (revision = 1): RoleplayBuilder => ({
     name: "Managed practice", persona: f.org.slug,
     situation: { scenario: `Concern ${revision}`, learnerRole: "Advisor" },
-    difficulty: "medium", opening: `Opening ${revision}`, exampleLines: [`Example ${revision}`],
-    guardedIf: [], opensUpIf: [], learnerGoals: [`Goal ${revision}`], rubric: [{ name: "Understanding", points: 100 }],
+    difficulty: "medium", exampleLines: [`Example ${revision}`],
+    learnerGoals: [`Goal ${revision}`], rubric: [{ name: "Understanding", points: 100 }],
   });
   const publish = (format: Format = "authored-roleplay", revision = 1) => {
     if (format === "builder-roleplay") return saveRoleplay(f.org.id, builder(revision), f.roleplay.slug);
@@ -188,6 +189,7 @@ describe.skipIf(!localMinutesDb)("managed-only skill publication (real Postgres)
 
   test.each(formats)("%s keeps exact session pins and retrieval scopes through two package-free updates", async format => {
     const first = await publish(format);
+    await giveCharacters({ slug: first.slug });
     const call = await activateSession({
       orgId: f.org.id, userId: f.trainer.id, agentSlug: first.slug,
       mode: format === "twin" || format === "legacy-twin" ? "voice" : "chat", idempotencyKey: randomUUID(),

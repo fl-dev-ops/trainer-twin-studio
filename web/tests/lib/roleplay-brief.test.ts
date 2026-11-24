@@ -3,7 +3,7 @@ import { checkBrief, draftBrief, renderBrief, roleplayBriefSchema, STANDARD_RULE
 import { scenarioItemSchema, scenarioManifestSchema, skillBody, stepGoal } from "@/lib/scenario-ingest";
 import { briefFixtures } from "../fixtures/roleplay-briefs";
 
-const SECTIONS = ["## Your role", "## The learner", "## Situation", "## What you want and your concerns", "## How it starts", "## How the conversation goes", "## How you react", "## How it ends", "## Rules", "## How real people talk"];
+const SECTIONS = ["## Your role", "## The learner", "## Situation", "## How it starts", "## How the conversation goes", "## How you react", "## How it ends", "## Rules", "## How real people talk"];
 const fixture = (name: keyof typeof briefFixtures) => structuredClone(briefFixtures[name].brief);
 const reasonsFor = (brief: RoleplayBriefInput) => checkBrief(roleplayBriefSchema.parse(brief));
 
@@ -22,8 +22,9 @@ test.each(Object.keys(briefFixtures))("%s: a complete brief renders every sectio
   expect(draft.items).toHaveLength(draft.brief.items.length);
   // Every step's goal is readable the way the runtime reads authored skills.
   for (const step of draft.brief.steps) expect(stepGoal(skillBody(draft.skill), step.id)).toBe(step.what);
-  // The learner never sees the AI's hidden concerns.
-  for (const concern of draft.brief.concerns.filter((c) => c.hidden)) expect(draft.brief.learnerBrief).not.toContain(concern.concern);
+  // The stage names no persona; the persona's part is its character.
+  expect(draft.skill).not.toContain(briefFixtures[name].persona.name);
+  expect(briefFixtures[name].character).toContain("## How you react");
 });
 
 test("rendering is deterministic: the same brief gives byte-identical files", () => {
@@ -35,11 +36,15 @@ test("the brief is written to the AI as \"you\", with how it starts for each ope
   const ai = draftBrief(fixture("olga-first-call"));
   const learner = draftBrief(fixture("flo-keynote-qa"));
   if (!ai.ok || !learner.ok) throw new Error("fixtures must pass");
-  expect(ai.skill).toContain('You speak first: "Hello, yes, Ravi speaking."');
-  expect(learner.skill).toContain("The learner speaks first: The speaker names their keynote topic in one line.");
-  expect(learner.skill).toContain('Your first reply: "We\'ve heard ideas like this before. Why would this one work?"');
-  expect(ai.skill).toContain("(hidden until earned) You don't really understand how a Dubai mortgage works");
-  expect(ai.skill).toContain("Reveal a hidden concern only when the learner asks a genuine question about it and listens");
+  expect(ai.skill).toContain("You speak first, with your character's opening line.");
+  expect(learner.skill).toContain("The learner starts the conversation: The speaker names their keynote topic in one line.");
+  expect(learner.skill).toContain("On the opening turn, before the learner has said anything, say only a short, neutral line");
+  expect(ai.skill).toContain("Reveal what your character keeps hidden only when the learner asks a genuine question about it and listens");
+  // The persona's part moved to its character: opening line, first reply, hidden concerns.
+  expect(ai.skill).not.toContain("Ravi speaking");
+  expect(briefFixtures["olga-first-call"].character).toContain('## Your opening line\n\n"Hello, yes, Ravi speaking."');
+  expect(briefFixtures["flo-keynote-qa"].character).toContain('## Your first reply\n\n"We\'ve heard ideas like this before. Why would this one work?"');
+  expect(briefFixtures["olga-first-call"].character).toContain("(hidden until earned) You don't really understand how a Dubai mortgage works");
   expect(ai.skill).toContain('If you end it early or without a next step, say only: "I\'ve got to go, just send me something on WhatsApp." A good ending closes naturally instead.');
   expect(ai.skill).toContain("## Using your lines");
   // Without items, the skill has no "Using your lines" section.
@@ -61,17 +66,9 @@ test("checks catch an incomplete or inconsistent brief", () => {
   same.learner.role = "employee";
   expect(reasonsFor(same)).toContain("The AI and the learner play the same role; give each a distinct role.");
 
-  const noOpening = fixture("bevan-missed-deadlines");
-  delete noOpening.start.openingLine;
-  expect(reasonsFor(noOpening)).toContain("The AI speaks first: add its opening line.");
-
   const learnerFirst = fixture("flo-keynote-qa");
   delete learnerFirst.start.learnerFirst;
   expect(reasonsFor(learnerFirst)).toContain("The learner speaks first: say what they do first (start.learnerFirst).");
-
-  const leak = fixture("bevan-missed-deadlines");
-  leak.learnerBrief = `${leak.learnerBrief} Since someone left, you have been doing two jobs and you are close to burning out.`;
-  expect(reasonsFor(leak).join(" ")).toContain("The learner brief gives away a hidden concern");
 
   const noEnd = fixture("bevan-missed-deadlines");
   delete noEnd.ending.limit;
@@ -101,10 +98,13 @@ test("checks catch an incomplete or inconsistent brief", () => {
 
 test("schema refusals come back as readable reasons, not exceptions", () => {
   const missing = fixture("bevan-missed-deadlines") as Record<string, unknown>;
-  delete missing.wants;
+  delete missing.summary;
+  // A persona's part written into the brief comes back as a reason to move it to the character.
+  const persona = { ...fixture("bevan-missed-deadlines"), wants: "A fair hearing", start: { who: "ai", openingLine: "Hi." } };
+  expect(draftBrief(persona)).toMatchObject({ ok: false, reasons: [expect.stringContaining("wants, start.openingLine: these belong to each persona's character")] });
   const tooFewSteps = fixture("bevan-missed-deadlines");
   tooFewSteps.steps = tooFewSteps.steps.slice(0, 1);
-  expect(draftBrief(missing)).toMatchObject({ ok: false, reasons: [expect.stringContaining("wants")] });
+  expect(draftBrief(missing)).toMatchObject({ ok: false, reasons: [expect.stringContaining("summary")] });
   expect(draftBrief(tooFewSteps)).toMatchObject({ ok: false, reasons: [expect.stringContaining("steps")] });
   expect(draftBrief({ ...fixture("bevan-missed-deadlines"), score: [1] })).toMatchObject({ ok: false });
 });

@@ -450,7 +450,7 @@ test("re-ingesting a skill twin keeps its Before and After settings and intro vi
 
 test("role play: rendered from the builder and stored like a skill twin, kind ROLEPLAY, on any org persona", async () => {
   const saved = await saveRoleplay("org1", roleplayBuilder);
-  expect(saved).toMatchObject({ slug: "acme-the-wait-and-see-investor", version: 1, created: true, items: 1 + roleplayBuilder.exampleLines.length });
+  expect(saved).toMatchObject({ slug: "acme-the-wait-and-see-investor", version: 1, created: true, items: roleplayBuilder.exampleLines.length });
   const agent = agents[0];
   expect(agent).toMatchObject({ kind: "ROLEPLAY", personaId: "p-rohan" });
   expect("domainSlug" in agent).toBe(false);
@@ -459,12 +459,13 @@ test("role play: rendered from the builder and stored like a skill twin, kind RO
   expect(data.after).toEqual({ report: "roleplay", goals: roleplayBuilder.learnerGoals, rubric: roleplayBuilder.rubric });
   expect((data.scenario as Row).trainer_role).toBe("Prospect");
   expect(log).toEqual(["s3", "chroma", "agent.create"]);
-  expect(s3.get(`${saved.artifacts}/SKILL.md`)).toContain("## What is really going on");
+  // The stage holds no persona's part; the hidden truth is the persona's character.
+  expect(s3.get(`${saved.artifacts}/SKILL.md`)).not.toContain("## What is really going on");
   expect(JSON.parse(s3.get(`${saved.artifacts}/items.json`)!)[0]).toMatchObject({ role: "client" });
 
   // Editing (slug given, short or full) updates the same agent; unchanged saves keep the version.
   expect((await saveRoleplay("org1", roleplayBuilder, saved.slug)).version).toBe(1);
-  const edited = await saveRoleplay("org1", { ...roleplayBuilder, opening: "Hello?" }, "the-wait-and-see-investor");
+  const edited = await saveRoleplay("org1", { ...roleplayBuilder, whatToExpect: "Listen first." }, "the-wait-and-see-investor");
   expect(edited).toMatchObject({ slug: saved.slug, version: 2, created: false });
   expect(agents).toHaveLength(1);
   // A second new role play with the same name gets its own slug.

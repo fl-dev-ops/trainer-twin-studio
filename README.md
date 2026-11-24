@@ -137,6 +137,37 @@ invoice.paid, invoice.voided, subscription.cancelled, subscription.ended; `meter
 ones) and put its signing
 secret in `METEROID_WEBHOOK_SECRET`.
 
+## QA
+
+From the repository root, run `bash scripts/qa.sh quick` for the fast suites across all four apps and the
+Chat and Copilot typechecks. Run `bash scripts/qa.sh` for the full local check before committing, pushing, or
+merging. It also migrates the local test database and runs the DB, flow, and browser suites.
+
+| App | Local checks |
+| --- | --- |
+| Studio | From `web/`, run `bun run test:unit`. Set `DATABASE_URL` to a local PostgreSQL server and run `bun run test:setup` before `bun run test:db` and `bun run test:flows`. Setup creates and migrates the database with the `_test` suffix. |
+| Chat | From `chat/`, run `bun run typecheck` and `bun run test`. |
+| Copilot | From `copilot/`, run `bun run typecheck` and `bun run test`. |
+| Voice worker | Install chat's Bun dependencies, then run `uv sync --locked` and `uv run --locked pytest -q` from `agent/`. The transport test sends two turns through the real chat bridge over loopback HTTP with deterministic model events. |
+
+Install Bun dependencies in `web/`, `chat/`, and `copilot/`, and use Node 24. For full QA, point
+`DATABASE_URL` in `web/.env` or your shell at local PostgreSQL, install the browsers from `web/` with
+`bunx playwright install chromium chrome`, and start the S3 emulator in another terminal:
+
+```sh
+qa_s3_data=$(mktemp -d)
+bunx s3rver@3.7.1 --directory "$qa_s3_data" --address 127.0.0.1 --port 9100 --no-vhost-buckets --configure-bucket olga-local
+```
+
+To run the browser suites individually, from `web/` run `bun run test:e2e` for
+learner, Studio, widget, and Copilot HTTP journeys, and `bun run test:workspace` for workspace interactions.
+Playwright saves failure traces and screenshots in `web/e2e/.results/`. From `web/`, open the main browser
+report with `bunx playwright show-report e2e/.report`.
+
+With `livekit-server --dev` running locally, use
+`E2E_LOCAL_LIVEKIT=1 bun run test:e2e e2e/learner-journey.spec.ts` to exercise room admission and session
+finalization. The browser journey uses a test chat admission endpoint.
+
 ## Versioning model
 
 - Persona/Agent each carry a `version` int; a changed save snapshots the old data

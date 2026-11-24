@@ -2,7 +2,8 @@ import { z } from "zod";
 
 // The role-play brief the copilot writes from a trainer's requirements. Same shape as web/lib/roleplay/brief.ts (the
 // studio renders and checks it; a web contract test keeps the two in step). The descriptions are the writing guidance
-// the model sees: write to the AI as "you", situation not personality, concerns without answers.
+// the model sees: write to the AI as "you". The brief is the stage, the same for every persona; who the AI is on it
+// (what they want, concerns, opening line, reactions, style) is each persona's character (roleplay_character_set).
 
 const kebab = z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, "kebab-case").max(60);
 const text = (max: number) => z.string().trim().min(1).max(max);
@@ -15,23 +16,14 @@ export const roleplayBrief = z.object({
   learnerBrief: text(1000).describe("Shown to the learner before the call, written to them: who they are, the situation, the outcome to aim for, the time limit. Never the AI's hidden concerns or how it will react."),
   ai: z.object({
     role: text(80).describe("The AI's role in a few words: Buyer, Interviewer, Employee, Co-founder, Audience member."),
-    who: text(1200).describe("Written to the AI as \"You are…\": who you are IN THIS SITUATION and your relationship to the learner. Do not describe personality or speaking style; the persona carries those."),
   }).strict(),
   learner: z.object({
     role: text(80).describe("Who the learner plays, e.g. Real estate agent, Candidate, Founder."),
     aim: text(600).describe("What the learner is trying to achieve in the call, written about them (\"They want to…\")."),
   }).strict(),
-  situation: lines(15).min(1).describe("Bullets written to the AI: what triggered this conversation, what you know and don't know, how you feel at the start, facts to keep consistent (budget, product, numbers)."),
-  wants: text(800).describe("Your aim in this conversation, written to the AI."),
-  concerns: z.array(z.object({
-    concern: text(400).describe("The concern as this person sees or says it. Never write the answer to it."),
-    comesUpWhen: text(300).optional().describe("When it comes up."),
-    resolvedWhen: text(300).optional().describe("What the learner must do for it to ease."),
-    hidden: z.boolean().default(false).describe("True when you keep it to yourself until the learner earns it with a genuine question."),
-  }).strict()).max(5).default([]).describe("1 to 5 concerns for a counterpart (buyer, employee, stakeholder); often none for an interviewer."),
+  situation: lines(15).min(1).describe("Bullets written to the AI: what triggered this conversation and the facts every persona shares. Never one persona's own facts (budget, family, motivation): those go in its character."),
   start: z.object({
-    who: z.enum(["ai", "learner"]).describe("Who speaks first."),
-    openingLine: text(400).optional().describe("Your first words (when you start) or your first reply (when the learner starts). Required when the AI starts."),
+    who: z.enum(["ai", "learner"]).describe("Who speaks first. The AI's first words are in each persona's character."),
     learnerFirst: text(300).optional().describe("What the learner does first, when they start, e.g. \"The agent asks: 'Is this something you could consider?'\""),
   }).strict(),
   steps: z.array(z.object({
@@ -40,10 +32,6 @@ export const roleplayBrief = z.object({
     what: text(800).describe("What happens in this step and what you do, written to the AI. Include moments you bring in on purpose (\"Around the middle, say: …\")."),
     moveOnWhen: text(300).optional().describe("When to move to the next step."),
   }).strict()).min(2).max(6).describe("2 to 6 steps in order. A real conversation, not a checklist of questions."),
-  reactions: z.object({
-    opensUpWhen: lines(10).min(1).describe("Observable things the learner does that make you open up, e.g. \"asks about your family's needs\"."),
-    pullsBackWhen: lines(10).min(1).describe("Observable things that make you pull back, e.g. \"pitches before asking anything\". Resistance is reasonable and firm, not hostile."),
-  }).strict(),
   ending: z.object({
     limit: text(200).optional().describe("Time or count limit, e.g. \"At most 4 minutes.\", \"After 3 questions.\""),
     good: text(400).describe("What a good ending looks like."),
@@ -53,7 +41,6 @@ export const roleplayBrief = z.object({
     exitLine: text(300).optional().describe("What you say when you end it early or without a next step (a good ending closes naturally)."),
   }).strict(),
   rules: lines(10).default([]).describe("Scenario-specific always/never rules only. Standard rules (stay in role, never coach, keep facts consistent, vary wording) are added automatically."),
-  style: lines(5).default([]).describe("Scenario-specific speaking constraints only, e.g. \"At most 45 words per turn.\" Tone and personality come from the persona."),
   items: z.array(z.object({
     kind: z.enum(["example", "objection", "question", "concern"]),
     text: text(1000).describe("The line as the trainer wrote it. Never invent lines."),

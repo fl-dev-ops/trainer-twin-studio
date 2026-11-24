@@ -59,8 +59,8 @@ describe.skipIf(!localMinutesDb)("Phase 5 package-free readers (real Postgres)",
   const builder = (): RoleplayBuilder => ({
     name: "Package-free practice", persona: f.org.slug,
     situation: { scenario: "Buyer is uncertain", learnerRole: "Advisor" },
-    difficulty: "medium", opening: "I need more time", exampleLines: ["Please explain"],
-    guardedIf: [], opensUpIf: [], learnerGoals: ["Understand the concern"],
+    difficulty: "medium", whatToExpect: "I need more time", exampleLines: ["Please explain"],
+    learnerGoals: ["Understand the concern"],
     rubric: [{ name: "Understanding", points: 100 }],
   });
   const stripPackage = async (slug: string) => {
@@ -79,22 +79,22 @@ describe.skipIf(!localMinutesDb)("Phase 5 package-free readers (real Postgres)",
     await stripPackage(saved.slug);
     const caller = roleplayRouter.createCaller(ctx());
     expect((await buildSessionContext({ orgId: f.org.id, agentSlug: saved.slug, personaSlug: f.org.slug })).agent?.data).toMatchObject({
-      scenario: { roleplay: { opening: "I need more time" } },
+      scenario: { roleplay: { whatToExpect: "I need more time" } },
     });
-    expect((await caller.builder.get({ slug: saved.slug })).builder).toMatchObject({ opening: "I need more time" });
+    expect((await caller.builder.get({ slug: saved.slug })).builder).toMatchObject({ whatToExpect: "I need more time" });
     expect((await caller.scenarios.list()).find((row) => row.slug === saved.slug)).toMatchObject({
       // The client is the persona playing it, under its own name (role plays never rename it).
-      opening: "I need more time", client: { name: "Persona", persona: f.org.slug },
+      client: { name: "Persona", persona: f.org.slug },
     });
     expect(await caller.scenarios.get({ slug: saved.slug })).toMatchObject({ situation: "Buyer is uncertain", learnerRole: "Advisor" });
-    await updateRoleplay(f.org.id, saved.slug, { builder: { opening: "Ask me tomorrow" } });
+    await updateRoleplay(f.org.id, saved.slug, { builder: { whatToExpect: "Ask me tomorrow" } });
     await stripPackage(saved.slug);
     const editor = await caller.builder.get({ slug: saved.slug });
-    expect(editor.builder?.opening).toBe("Ask me tomorrow");
+    expect(editor.builder?.whatToExpect).toBe("Ask me tomorrow");
     if (!editor.builder) throw new Error("Mapped package did not restore builder fields");
-    await caller.builder.save({ slug: saved.slug, builder: { ...editor.builder, opening: "Call next week" }, before: editor.before, tools: editor.tools });
+    await caller.builder.save({ slug: saved.slug, builder: { ...editor.builder, whatToExpect: "Call next week" }, character: editor.character || "## Who you are here\n\nThe client.", before: editor.before, tools: editor.tools });
     await stripPackage(saved.slug);
-    expect((await caller.builder.get({ slug: saved.slug })).builder?.opening).toBe("Call next week");
+    expect((await caller.builder.get({ slug: saved.slug })).builder?.whatToExpect).toBe("Call next week");
     expect((await db.agent.findUniqueOrThrow({ where: { slug: saved.slug } })).data).not.toHaveProperty("scenario");
   });
 
@@ -161,7 +161,7 @@ describe.skipIf(!localMinutesDb)("Phase 5 package-free readers (real Postgres)",
     await db.agent.update({ where: { slug: saved.slug }, data: { name: "Changed experience", data: { source: "roleplay-skill", after: { report: "roleplay", goals: ["Changed goal"] } } } });
     const input = await loadRoleplayReportInput(session.id);
     expect(input.agentName).toBe("Package-free practice");
-    expect(input.brief).toContain("I need more time");
+    expect(input.brief).toContain("Buyer is uncertain");
     expect(input.goals).toEqual(["Understand the concern"]);
     expect((await roleplayRouter.createCaller(ctx()).sessions.get({ id: session.id })).client.name).toBe("Persona");
   });

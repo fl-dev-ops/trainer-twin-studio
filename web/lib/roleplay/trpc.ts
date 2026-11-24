@@ -14,7 +14,7 @@ import { listPersonas } from "@/lib/personas";
 import { isSessionReport } from "@/lib/session-report";
 import { type RoleplayBuilder, roleplayBuilderFrom, roleplayBuilderSchema } from "@/lib/roleplay/skill";
 import { updateRoleplay } from "@/lib/roleplay/manage";
-import { type RoleplayBrief, roleplayBriefSchema } from "@/lib/roleplay/brief";
+import { type RoleplayBrief, roleplayBriefSchema, stageOf } from "@/lib/roleplay/brief";
 import { type RoleplayReport } from "@/lib/roleplay/session-report";
 import { publishRoleplayBrief, ROLEPLAY_SOURCE, saveRoleplay, ScenarioIngestError } from "@/lib/scenario-ingest";
 import { studioProcedure, t } from "@/lib/trpc";
@@ -51,7 +51,7 @@ const roleplaysOf = (orgId: string): Prisma.AgentWhereInput => ({
 
 /** A role play's brief, when the copilot wrote it from requirements. */
 const briefOf = (data: unknown): RoleplayBrief | null => {
-  const parsed = roleplayBriefSchema.safeParse(asRecord(data).roleplayBrief);
+  const parsed = roleplayBriefSchema.safeParse(stageOf(asRecord(data).roleplayBrief));
   return parsed.success ? parsed.data : null;
 };
 
@@ -59,12 +59,9 @@ const briefOf = (data: unknown): RoleplayBrief | null => {
 function scriptOf(brief: RoleplayBrief) {
   return {
     aiRole: brief.ai.role,
-    who: brief.ai.who,
     learnerRole: brief.learner.role,
     learnerAim: brief.learner.aim,
     situation: brief.situation,
-    wants: brief.wants,
-    concerns: brief.concerns.map((c) => ({ concern: c.concern, hidden: c.hidden })),
     steps: brief.steps.map((step) => ({ name: step.name, what: step.what })),
     ending: { limit: brief.ending.limit ?? null, good: brief.ending.good },
     items: brief.items.length,
@@ -83,8 +80,6 @@ function authoredScriptOf(data: unknown) {
     learnerRole: text(scenario.learner_role) ?? "Learner",
     learnerAim: "",
     situation: [text(scenario.description)].filter((v): v is string => Boolean(v)),
-    wants: "",
-    concerns: [] as { concern: string; hidden: boolean }[],
     steps: steps.map((step) => ({ name: text(step.name) ?? text(step.id) ?? "Step", what: "" })).filter((step) => step.name),
     ending: { limit: null as string | null, good: "" },
     items: 0,
@@ -96,14 +91,11 @@ function builderScriptOf(b: RoleplayBuilder) {
   const lines = (...values: (string | undefined)[]) => values.map((v) => (v ?? "").trim()).filter(Boolean);
   return {
     aiRole: "Client",
-    who: lines(b.howTheyTalk).join(" ") || "The persona, as they are.",
     learnerRole: b.situation.learnerRole,
     learnerAim: b.learnerGoals.join(" ") || "Get to a clear next step.",
     situation: lines(b.situation.scenario),
-    wants: "",
-    concerns: lines(b.situation.hiddenTruth).map((concern) => ({ concern, hidden: true })),
     steps: [] as { name: string; what: string }[],
-    ending: { limit: null as string | null, good: lines(b.situation.agreesWhen ? `Agrees when: ${b.situation.agreesWhen}` : "", b.situation.declinesWhen ? `Declines when: ${b.situation.declinesWhen}` : "").join(" ") },
+    ending: { limit: null as string | null, good: "" },
     items: b.exampleLines.length,
   };
 }
@@ -223,7 +215,6 @@ const scenariosRouter = t.router({
         name: agent.name,
         href: dashRoute(`/roleplay/${agent.slug}`),
         description: text(scenario.description),
-        opening: text(asRecord(scenario.roleplay).opening) ?? text(brief?.start.openingLine),
         client: clientOf(agent.persona),
         sessions: sessionsOf.get(agent.id) ?? 0,
         updatedAt: agent.updatedAt.toISOString(),
@@ -250,7 +241,7 @@ const scenariosRouter = t.router({
     const brief = briefOf(agent.data);
     const [learnerBriefs, pool] = await Promise.all([
       listAgentBriefs(orgId, [agent.slug]),
-      db.agentPersona.findMany({ where: { agentId: agent.id }, orderBy: { position: "asc" }, select: { active: true, persona: { select: personaSelect } } }),
+      db.agentPersona.findMany({ where: { agentId: agent.id }, orderBy: { position: "asc" }, select: { active: true, character: true, persona: { select: personaSelect } } }),
     ]);
     // Who played each session: the persona it recorded (also ones since dropped from the pool).
     const played = new Map(pool.map((row) => [row.persona.slug, row.persona.name]));
@@ -275,7 +266,8 @@ const scenariosRouter = t.router({
       difficulty: builder?.difficulty ?? null,
       client: clientOf(agent.persona),
       // Who may answer: every active persona of the pool, in order (one is picked per call).
-      personas: pool.filter((row) => row.active).map((row) => clientOf(row.persona)),
+      // Only active personas with a character for this role play play it (lib/agent-personas eligiblePersonas).
+      personas: pool.filter((row) => row.active && row.character?.trim()).map((row) => clientOf(row.persona)),
       stats: {
         sessions: sessions.length,
         averageScore: scored.length ? Math.round(average(scored)!) : null,
@@ -303,6 +295,7 @@ const beforeInput = z.object({
   duringUpload: z.boolean(),
   uploadTitle: z.string().trim().max(80),
   uploadInstruction: z.string().trim().max(300),
+  callMinutes: z.number().int().min(1).max(60).nullable().optional(),
 }).strict();
 
 const builderRouter = t.router({
@@ -314,6 +307,8 @@ const builderRouter = t.router({
     return {
       slug: agent.slug,
       builder: builder ? { ...builder, persona: agent.persona.slug } : null,
+      // The main persona's character for this role play (the builder edits it with the persona it picks).
+      character: (await db.agentPersona.findFirst({ where: { agentId: agent.id, persona: { slug: agent.persona.slug } }, select: { character: true } }))?.character ?? "",
       before: beforeSettings(agent.data),
       tools: toolSettings(agent.data),
       // A role play the copilot wrote: its core fields (editable here) and its script (changed through the copilot).
@@ -323,7 +318,6 @@ const builderRouter = t.router({
         title: brief.title,
         learnerBrief: brief.learnerBrief,
         aiStarts: brief.start.who === "ai",
-        openingLine: brief.start.openingLine ?? "",
         limit: brief.ending.limit ?? "",
         script: scriptOf(brief),
       } : builder ? {
@@ -333,7 +327,6 @@ const builderRouter = t.router({
         title: builder.name,
         learnerBrief: builder.whatToExpect ?? "",
         aiStarts: true,
-        openingLine: builder.opening ?? "",
         limit: "",
         script: builderScriptOf(builder),
       } : {
@@ -343,7 +336,6 @@ const builderRouter = t.router({
         title: agent.name,
         learnerBrief: text(asRecord(agent.data).learnerBrief) ?? "",
         aiStarts: true,
-        openingLine: "",
         limit: "",
         script: authoredScriptOf(agent.data),
       },
@@ -351,7 +343,7 @@ const builderRouter = t.router({
   }),
 
   /**
-   * Saves the core fields of a role play the copilot wrote (name, persona, learner brief, opening line, time limit) by
+   * Saves the core fields of a role play the copilot wrote (name, persona, learner brief, time limit) by
    * republishing its brief: the script is re-rendered and a real change is a new version. The rest of the script is
    * changed through the copilot.
    */
@@ -360,7 +352,6 @@ const builderRouter = t.router({
       persona: z.string().trim().min(1).max(200).optional(),
       title: z.string().trim().min(1).max(120),
       learnerBrief: z.string().trim().max(1000),
-      openingLine: z.string().trim().max(400),
       limit: z.string().trim().max(200),
     }))
     .mutation(async ({ ctx, input }) => {
@@ -393,7 +384,7 @@ const builderRouter = t.router({
         // Made in the older form: the same basics, saved through its builder fields.
         if (!roleplayBuilderFrom(agent.data)) throw new TRPCError({ code: "BAD_REQUEST", message: "This role play can't be edited here" });
         try {
-          const saved = await updateRoleplay(ctx.user.orgId, agent.slug, { builder: { name: input.title, ...(input.persona ? { persona: input.persona } : {}), whatToExpect: input.learnerBrief, opening: input.openingLine } });
+          const saved = await updateRoleplay(ctx.user.orgId, agent.slug, { builder: { name: input.title, ...(input.persona ? { persona: input.persona } : {}), whatToExpect: input.learnerBrief } });
           return { slug: saved.slug, version: "version" in saved ? saved.version ?? agent.version : agent.version, changed: "version" in saved && saved.version !== agent.version };
         } catch (error) {
           if (error instanceof ScenarioIngestError) throw new TRPCError({ code: error.status === 404 ? "NOT_FOUND" : "BAD_REQUEST", message: error.message });
@@ -404,7 +395,6 @@ const builderRouter = t.router({
         ...brief,
         title: input.title,
         learnerBrief: input.learnerBrief,
-        start: { ...brief.start, openingLine: input.openingLine || undefined },
         ending: { ...brief.ending, limit: input.limit || undefined },
       };
       try {
@@ -450,6 +440,28 @@ const builderRouter = t.router({
       return { ok: true };
     }),
 
+  /** Each pool persona's character for this role play only (AgentPersona.character). */
+  characters: studioProcedure.input(slugInput).query(async ({ ctx, input }) => {
+    const agent = await findRoleplay(ctx.user.orgId, input.slug);
+    const rows = await db.agentPersona.findMany({
+      where: { agentId: agent.id }, orderBy: { position: "asc" },
+      select: { character: true, persona: { select: personaSelect } },
+    });
+    return rows.map((row) => ({ ...clientOf(row.persona), character: row.character ?? "" }));
+  }),
+  /** Writes one persona's character for this role play; the next session picks it up, running ones keep theirs. */
+  setCharacter: studioProcedure
+    .input(slugInput.extend({ persona: z.string().trim().min(1).max(200), character: z.string().max(20000) }))
+    .mutation(async ({ ctx, input }) => {
+      const agent = await findRoleplay(ctx.user.orgId, input.slug);
+      const updated = await db.agentPersona.updateMany({
+        where: { agentId: agent.id, persona: { slug: input.persona } },
+        data: { character: input.character.trim() || null },
+      });
+      if (!updated.count) throw new TRPCError({ code: "NOT_FOUND", message: `"${input.persona}" does not play this role play` });
+      return { ok: true };
+    }),
+
   /** The org's personas the client can be (Persona Library), with photo and role. */
   personas: studioProcedure.query(async ({ ctx }) =>
     (await listPersonas(ctx.user.orgId)).map((row) => ({
@@ -466,13 +478,15 @@ const builderRouter = t.router({
     .input(z.object({
       slug: z.string().min(1).max(200).optional(),
       builder: roleplayBuilderSchema,
+      /** The chosen persona's character for this role play: required, since every session plays one. */
+      character: z.string().trim().min(1, "Write the client's character for this role play").max(20000),
       before: beforeInput,
       tools: toolSettingsInput,
     }))
     .mutation(async ({ ctx, input }) => {
       if (input.slug) await findRoleplay(ctx.user.orgId, input.slug);
       try {
-        const saved = await saveRoleplay(ctx.user.orgId, input.builder, input.slug, input.before, input.tools);
+        const saved = await saveRoleplay(ctx.user.orgId, input.builder, input.slug, input.before, input.tools, input.character);
         return { slug: saved.slug, version: saved.version, created: saved.created };
       } catch (error) {
         if (error instanceof ScenarioIngestError) {
