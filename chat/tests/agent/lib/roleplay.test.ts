@@ -16,7 +16,7 @@ description: "The wait-and-see investor: practise a call with a prospect."
 # The wait-and-see investor
 
 ## Who you are on this call
-On this call your name is Daniel Hart.
+You are the persona described in PERSONA.
 
 ## What is really going on
 Inflation and taxes at home are eating into your savings.
@@ -58,14 +58,13 @@ describe("client role play (kind ROLEPLAY with a SKILL.md)", () => {
   const originalFetch = globalThis.fetch;
   afterEach(() => { clearSessionModeCache(); globalThis.fetch = originalFetch; });
 
-  test("only ROLEPLAY agents with a skill are role plays; difficulty, opening and client name come from scenario.json", () => {
+  test("only ROLEPLAY agents with a skill are role plays; difficulty and opening come from scenario.json, never a client name", () => {
     assert.equal(roleplaySkill("TWIN", roleplayData), undefined);
     assert.equal(roleplaySkill("ROLEPLAY", { config: { interview: {} } }), undefined); // older interview role play
     assert.deepEqual(roleplaySkill("ROLEPLAY", roleplayData), {
       skill: SKILL,
       difficulty: "hard",
       learnerRole: "Agent calling a wait-and-see investor",
-      clientName: "Daniel Hart",
       opening: "The market has basically stopped. I'll wait for prices to hit the bottom.",
     });
     assert.equal(roleplaySkill("ROLEPLAY", { ...roleplayData, scenario: { ...roleplayData.scenario, difficulty: "weird" } })?.difficulty, "medium");
@@ -74,9 +73,11 @@ describe("client role play (kind ROLEPLAY with a SKILL.md)", () => {
   test("prompt: client mode with persona brief + SKILL.md + difficulty; never the goals or rubric", () => {
     const prompt = formatSessionSpec({ ...base, roleplay: roleplaySkill("ROLEPLAY", roleplayData) });
     assert.ok(prompt.startsWith("CLIENT ROLE-PLAY MODE"));
-    assert.match(prompt, /You are Daniel Hart, a CLIENT\. The person talking to you plays Agent calling a wait-and-see investor/);
+    // The persona's own name, whatever an older role play stored as its client name.
+    assert.match(prompt, /You are Rohan Mehta, a CLIENT\. The person talking to you plays Agent calling a wait-and-see investor/);
+    assert.doesNotMatch(prompt, /Daniel Hart/);
     assert.match(prompt, /- Behaviour: Skeptical & Reserved/);
-    assert.match(prompt, /On this call you are Daniel Hart\. The lines above are your defaults\. Where the role play below says something different for this call .*or how you talk\), the role play wins\./);
+    assert.match(prompt, /Your name is always Rohan Mehta\. The lines above are your defaults\. Where the role play below says something different for this call .*or how you talk\), the role play wins\./);
     assert.match(prompt, /<roleplay>\n---\nname: wait-and-see-investor[\s\S]*Inflation and taxes[\s\S]*<\/roleplay>/);
     assert.match(prompt, /# Difficulty: hard\nConfident and testing/);
     assert.match(prompt, /You start at guard level 3/);

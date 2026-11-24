@@ -38,7 +38,7 @@ test.each([
 test("POST voice returns browser credentials without agentToken and schedules warmup after the response", async () => {
   const response = await POST(request({ shareCode: "invite", idempotencyKey: "retry", holdOpening: true }));
   expect(response.status).toBe(200);
-  expect(await response.json()).toEqual({ session: publicSession, participantToken: "participant", room: "room" });
+  expect(await response.json()).toEqual({ session: publicSession, persona: null, participantToken: "participant", room: "room" });
   expect(start).toHaveBeenCalledWith(expect.objectContaining({ orgId: "org", userId: "learner", userEmail: "learner@example.com", shareCode: "invite", mode: "voice", idempotencyKey: "retry", holdOpening: true }));
   expect(callbacks).toHaveLength(1);
   expect(warming).not.toHaveBeenCalled();
@@ -57,7 +57,7 @@ test.each([true, false, "true", 1, null])("POST passes calibrate only for litera
 test("POST chat omits undefined voice credentials", async () => {
   start.mockResolvedValue({ ok: true, session, conversationToken: "agent" });
   const response = await POST(request({ shareCode: "invite", mode: "chat" }));
-  expect(await response.json()).toEqual({ session: publicSession, conversationToken: "agent" });
+  expect(await response.json()).toEqual({ session: publicSession, persona: null, conversationToken: "agent" });
 });
 test("unexpected start failures return a generic 500 without leaking internal errors", async () => {
   start.mockRejectedValue(new Error("private connection details"));

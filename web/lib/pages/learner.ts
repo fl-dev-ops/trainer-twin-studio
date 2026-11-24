@@ -9,7 +9,7 @@ import { orgPerson } from "@/lib/org-people";
 import { agentPhotoUrls } from "@/lib/persona-media";
 import { presignedGetUrl } from "@/lib/s3";
 import { resolveSessionUser } from "@/lib/session-user";
-import { listAgentBriefs, listAgentContextRequired, listAgentContextUploads, listScenarioIntroVideos, personaNameOf } from "@/lib/specs";
+import { listAgentBriefs, listAgentContextRequired, listAgentContextUploads, listScenarioIntroVideos } from "@/lib/specs";
 import { learnerBalance } from "@/lib/minutes";
 import { AppError } from "@/lib/errors";
 import { practicePerson, startAllowance } from "@/lib/practice";
@@ -47,7 +47,7 @@ async function twinSessionView(orgId: string, agentId: string, code: string, use
     organizationName: organization.name,
     organizationLogo: dataImage(organization.logo),
     agentPersonas: { [agent.slug]: agent.persona.slug },
-    agentPersonaNames: { [agent.slug]: personaNameOf(agent.data, agent.persona.name) },
+    agentPersonaNames: { [agent.slug]: agent.persona.name },
     agentContextRequired,
     agentContextUploads,
     introVideos,
@@ -137,7 +137,7 @@ export async function loadSharedSession(code: string): Promise<SharedSessionView
       organizationName: assignment.organization.name,
       organizationLogo: dataImage(assignment.organization.logo),
       agentPersonas: { [agent.slug]: agent.persona.slug },
-    agentPersonaNames: { [agent.slug]: personaNameOf(agent.data, agent.persona.name) },
+      // Who answers is the session's pick, shown once the call starts; before it the learner sees only the situation.
       agentContextRequired,
       agentContextUploads,
       introVideos,

@@ -169,6 +169,8 @@ export function SessionView({
   const workspaceConnected = roomState === ConnectionState.Connected;
   const [agent, setAgent] = useState(initialAgent ?? agents[0] ?? "");
   const persona = agentPersonas[agent] ?? personas[0] ?? "";
+  // Who answers this call (the session's persona: a role play picks one per call); known once the session starts.
+  const [sessionPersona, setSessionPersona] = useState<{ slug: string; name: string; photoUrl: string | null } | null>(null);
   const [contextIds, setContextIds] = useState<string[]>([]);
   const contextId = contextIds[0] ?? "";
   // Earlier uploads that fit the before-the-call rule (a PDF or an image, up to 10 MB); the session start checks again.
@@ -332,6 +334,7 @@ export function SessionView({
         throw new Error("Voice session credentials were not returned");
       }
 
+      setSessionPersona(launch.persona?.name ? launch.persona : null);
       setConnection({
         url: livekitUrl,
         token: launch.participantToken,
@@ -976,7 +979,8 @@ export function SessionView({
   }, [room]);
 
   const title = scenarioName ?? agentNames[agent] ?? agent.replaceAll("-", " ");
-  const trainerName = agentPersonaNames[agent] || persona.replaceAll("-", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()) || "Trainer";
+  // A role play has no name before the call (agentPersonaNames leaves it out): the learner knows only the situation.
+  const trainerName = sessionPersona?.name || agentPersonaNames[agent] || "";
 
   if (sessionCode && !prejoinComplete) {
     return (
@@ -1073,7 +1077,7 @@ export function SessionView({
               <div className="flex max-w-sm flex-col gap-1.5">
                 <h2 className="text-xl font-semibold tracking-title">Get ready</h2>
                 <p className="text-sm text-night/70">
-                  {trainerName} will start the conversation in a moment. Find a quiet spot and check your mic.
+                  {trainerName ? `${trainerName} will start` : "The conversation will start"} in a moment. Find a quiet spot and check your mic.
                 </p>
               </div>
             </div>
@@ -1104,7 +1108,7 @@ export function SessionView({
               <CardHeader>
                 <CardTitle className="text-xl font-semibold tracking-title">Start a practice session</CardTitle>
                 <CardDescription>
-                  You’ll join as a learner. {trainerName} is already set up for this scenario.
+                  You’ll join as a learner{trainerName ? `. ${trainerName} is already set up for this scenario.` : "."}
                 </CardDescription>
               </CardHeader>
               <CardContent className="flex flex-col gap-4">
@@ -1400,7 +1404,7 @@ export function SessionView({
                         className="h-full min-h-0 w-full"
                       />
                     ) : (
-                      <AgentTile persona={persona} name={trainerName} photoUrl={agentPhotos[agent] ?? null} compact={surface !== null} />
+                      <AgentTile persona={sessionPersona?.slug ?? persona} name={trainerName} photoUrl={sessionPersona ? sessionPersona.photoUrl : agentPhotos[agent] ?? null} compact={surface !== null} />
                     )}
                   </div>
                   <div className={cn("w-full shrink-0 aspect-[4/3]", !surface && "max-w-[340px] sm:min-w-0 sm:flex-[1_1_0]")}>
@@ -1422,10 +1426,10 @@ export function SessionView({
               <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
                 <SheetContent side="bottom" showCloseButton={false} className="h-[70dvh]! max-h-[85dvh] gap-0 overflow-hidden">
                   <SheetTitle className="sr-only">Chat</SheetTitle>
-                  <SheetDescription className="sr-only">Your conversation with {trainerName}. Send a message or close chat to return to the call.</SheetDescription>
+                  <SheetDescription className="sr-only">Your conversation with {trainerName || "the other person"}. Send a message or close chat to return to the call.</SheetDescription>
                   <SessionSidebar
                     entries={entries}
-                    trainerName={trainerName}
+                    trainerName={trainerName || undefined}
                     onSendMessage={handleSendMessage}
                     onClose={() => setSidebarOpen(false)}
                     disabled={!connected}
@@ -1444,7 +1448,7 @@ export function SessionView({
                 >
                   <SessionSidebar
                     entries={entries}
-                    trainerName={trainerName}
+                    trainerName={trainerName || undefined}
                     onSendMessage={handleSendMessage}
                     onClose={() => setSidebarOpen(false)}
                     disabled={!connected}

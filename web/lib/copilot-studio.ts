@@ -273,13 +273,13 @@ export async function runCopilotStudio(actor: Actor, input: CopilotStudioInput, 
       // Who can play a role play: the org's personas (personality and voice). The skill never redefines them.
       const personas = await d.db.persona.findMany({
         where: { orgId }, orderBy: [{ isOwn: "desc" }, { name: "asc" }],
-        select: { slug: true, name: true, isOwn: true, data: true, voice: { select: { name: true } }, _count: { select: { agents: { where: { archivedAt: null } } } } },
+        select: { slug: true, name: true, isOwn: true, data: true, voice: { select: { name: true } }, _count: { select: { agentLinks: { where: { agent: { archivedAt: null } } } } } },
       });
       return {
         personas: personas.map((p) => ({
           slug: p.slug, name: p.name, own: p.isOwn,
           role: text(asRecord(p.data).role) ?? null, about: text(asRecord(p.data).background) ?? null,
-          voice: p.voice?.name ?? null, usedBy: p._count.agents,
+          voice: p.voice?.name ?? null, usedBy: p._count.agentLinks,
         })),
       };
     }

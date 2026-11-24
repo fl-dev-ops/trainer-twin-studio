@@ -90,6 +90,8 @@ export async function connectVoice(input: StartSessionInput, session: OpenedSess
   });
   if (!row) throw refusals.notFound();
   requireVoiceMode(row.mode);
+  // A role play has no intro video: any persona of its pool may answer (lib/agent-personas).
+  const roleplay = row.agent.kind === "ROLEPLAY";
   const agentData = row.agent.data as { introVideo?: unknown; voiceId?: unknown } | null;
 
   try {
@@ -130,7 +132,7 @@ export async function connectVoice(input: StartSessionInput, session: OpenedSess
       runtimeToken: session.agentToken,
       orgId: input.orgId,
       agentSlug: row.agentSlug,
-      holdOpening: row.anonymousId ? false : Boolean(agentData?.introVideo) || Boolean(input.holdOpening),
+      holdOpening: row.anonymousId ? false : (!roleplay && Boolean(agentData?.introVideo)) || Boolean(input.holdOpening),
       voice: voiceId,
       // Learner minutes: the voice agent ends the call at this moment (absolute, so agent and web count the same span).
       endsAt: row.startedAt && row.allowedSeconds != null
