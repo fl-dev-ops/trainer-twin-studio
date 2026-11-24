@@ -250,11 +250,14 @@ export async function listAgentNames(orgId: string, slugs: string[]) {
 /** What each role play tells the learner before the call (the learner brief of one the copilot wrote). */
 export async function listAgentBriefs(orgId: string, slugs: string[]): Promise<Record<string, string>> {
   if (slugs.length === 0) return {};
-  const agents = await db.agent.findMany({ where: { orgId, slug: { in: slugs }, kind: "ROLEPLAY" }, select: { slug: true, data: true } });
+  const rows = await db.agent.findMany({ where: { orgId, slug: { in: slugs }, kind: "ROLEPLAY" }, select: { id: true, slug: true, kind: true, version: true, primarySkillId: true, data: true } });
+  // A published package holds the builder's fields (scenario.json), so read the hydrated agent.
+  const agents = await Promise.all(rows.map((agent) => agent.primarySkillId ? hydrateAgentSkill(orgId, agent) : agent));
   const record = (value: unknown) => (value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {});
   return Object.fromEntries(agents.flatMap((agent) => {
-    // A copilot brief's learner brief, else the one set on the edit page (authored role plays).
-    const brief = record(record(agent.data).roleplayBrief).learnerBrief ?? record(agent.data).learnerBrief;
+    // A copilot brief's learner brief, the one set on the edit page (authored role plays), or the builder's "What to expect".
+    const brief = record(record(agent.data).roleplayBrief).learnerBrief ?? record(agent.data).learnerBrief
+      ?? record(record(record(agent.data).scenario).roleplay).whatToExpect;
     return typeof brief === "string" && brief.trim() ? [[agent.slug, brief.trim()]] : [];
   }));
 }
