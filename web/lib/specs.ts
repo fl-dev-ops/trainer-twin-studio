@@ -182,7 +182,8 @@ export async function listRunnableSpecs(type: "personas" | "agents", orgId: stri
       .filter(({ data }) => isRecord(data) && isRecord(data.style) && isRecord(data.decision_preferences))
       .map(({ slug }) => slug);
   }
-  const rows = await db.agent.findMany({ where: { orgId }, orderBy: [{ order: "asc" }, { name: "asc" }], select: { id: true, slug: true, version: true, primarySkillId: true, data: true, personaId: true, kind: true } });
+  // Live agents only: archived role plays and twins never start (the studio lists hide them too).
+  const rows = await db.agent.findMany({ where: { orgId, archivedAt: null }, orderBy: [{ order: "asc" }, { name: "asc" }], select: { id: true, slug: true, version: true, primarySkillId: true, data: true, personaId: true, kind: true } });
   const agents = await Promise.all(rows.map((agent) => agent.primarySkillId ? hydrateAgentSkill(orgId, agent) : agent));
   return agents
     .filter((agent) => isRecord(agent.data) && Boolean(agent.personaId) && isRunnableAgentData(agent.kind, agent.data))

@@ -255,6 +255,10 @@ const scenariosRouter = t.router({
       script: brief ? scriptOf(brief) : builder ? builderScriptOf(builder) : authoredScriptOf(agent.data),
       difficulty: builder?.difficulty ?? null,
       client: clientOf(agent.persona),
+      // Who may answer: every active persona of the pool, in order (one is picked per call).
+      personas: (await db.agentPersona.findMany({
+        where: { agentId: agent.id, active: true }, orderBy: { position: "asc" }, select: { persona: { select: personaSelect } },
+      })).map((row) => clientOf(row.persona)),
       stats: {
         sessions: sessions.length,
         averageScore: scored.length ? Math.round(average(scored)!) : null,
