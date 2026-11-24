@@ -1,6 +1,6 @@
 import { setTimeout as sleep } from "node:timers/promises";
 import { createCerebras } from "@ai-sdk/cerebras";
-import { wrapLanguageModel } from "ai";
+import { gateway, wrapLanguageModel } from "ai";
 
 const cerebras = createCerebras({ apiKey: process.env.CEREBRAS_API_KEY });
 
@@ -44,5 +44,14 @@ const qwen = {
   context: 128_000,
 };
 
-export const MODELS = { main: qwen, scout: qwen, pattern: qwen, skill: qwen, items: qwen };
+/** Claude Opus 5.5 through the Vercel AI Gateway (as chat's speaking model): every copilot step. Qwen on Cerebras stays
+ * defined above as the fallback to switch back to. */
+const opus = {
+  model: gateway("anthropic/claude-opus-5.5"),
+  // The model takes 1M tokens; 200K keeps long runs (knowledge reads, builds) affordable before compaction.
+  context: 200_000,
+};
+void qwen;
+
+export const MODELS = { main: opus, scout: opus, pattern: opus, skill: opus, items: opus };
 export const LIMITS = { sessionUsage: () => false, sessionTimeoutMs: false as const };
