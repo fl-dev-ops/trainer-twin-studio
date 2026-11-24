@@ -147,7 +147,7 @@ describe.skipIf(!localMinutesDb)("own-persona voice selection and copied twin ov
     const selected = method === "library"
       ? await setPersonaVoiceFrom(f.org.id, f.org.slug, nextVoiceId)
       : await setPersonaVoice(f.org.id, f.org.slug, {
-          audio: new File(["RIFF test fixture"], "trainer.wav", { type: "audio/wav" }), transcript: "Trainer reference passage.",
+          name: "Trainer recording", audio: new File(["RIFF test fixture"], "trainer.wav", { type: "audio/wav" }), transcript: "Trainer reference passage.",
         });
     const afterPersona = await persona();
     expect(afterPersona.voiceId).toBe(selected.voiceId);
@@ -227,7 +227,7 @@ describe.skipIf(!localMinutesDb)("own-persona voice selection and copied twin ov
     } });
     globalPersonas.push(preset.id);
     const selected = await setPersonaVoice(null, preset.slug, {
-      audio: new File(["RIFF global fixture"], "preset.wav", { type: "audio/wav" }),
+      name: "Preset recording", audio: new File(["RIFF global fixture"], "preset.wav", { type: "audio/wav" }),
     });
     globalVoices.push(selected.voiceId);
     const voice = await db.voice.findUniqueOrThrow({ where: { id: selected.voiceId } });

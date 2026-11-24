@@ -62,7 +62,7 @@ mock.module("@/lib/s3", () => ({
 }));
 const fixtures = await import("./minutes-test-db");
 const { localMinutesDb, minutesFixture } = fixtures;
-const { attachPersonaVoice, availableVoiceWhere, createVoice, deleteVoice, listAvailableVoices, renameVoice } = await import("@/lib/voices");
+const { attachPersonaVoice, availableVoiceWhere, createVoice, deleteVoice, listAvailableVoices, updateVoice } = await import("@/lib/voices");
 
 function barrier() {
   let resolve!: () => void;
@@ -167,6 +167,24 @@ describe.skipIf(!localMinutesDb)("shared voice references (isolated real Postgre
     }
   }
 
+  test("a voice's details (gender, age, accent) are set on upload and edited in place: same id, same name unless renamed", async () => {
+    const created = await createVoice(f.org.id, { name: "Daniel's recording", audio: audio(), details: { gender: "male", age: "middle-aged", accent: " British " } });
+    createdVoices.push(created.id);
+    expect(created).toMatchObject({ name: "Daniel's recording", gender: "male", age: "middle-aged", accent: "British" });
+    // Only what's passed changes; null clears; the id and name stay.
+    expect(await updateVoice(f.org.id, created.id, { age: "older", accent: null })).toMatchObject({ id: created.id, name: "Daniel's recording", gender: "male", age: "older", accent: null });
+    await expect(updateVoice(f.org.id, created.id, { gender: "other" as never })).rejects.toMatchObject({ code: "voice_invalid_input", status: 400 });
+    await expect(updateVoice(f.org.id, created.id, { accent: "x".repeat(41) })).rejects.toMatchObject({ status: 400 });
+    // Another org's voice is not found; the database refuses a value outside the lists.
+    await expect(updateVoice(other.org.id, created.id, { gender: "female" })).rejects.toMatchObject({ status: 404 });
+    await expect(Promise.resolve(db.voice.update({ where: { id: created.id }, data: { age: "ancient" } }))).rejects.toThrow();
+    // A voice's language: English unless set; one of VoxCPM2's 30 languages.
+    expect(created.language).toBe("en");
+    expect(await updateVoice(f.org.id, created.id, { language: "ar" })).toMatchObject({ id: created.id, language: "ar" });
+    await expect(updateVoice(f.org.id, created.id, { language: "xx" as never })).rejects.toMatchObject({ status: 400 });
+    await expect(Promise.resolve(db.voice.update({ where: { id: created.id }, data: { language: "ARA" } }))).rejects.toThrow();
+  });
+
   test("two personas share one unchanged Voice and storage set; reselection is idempotent", async () => {
     const selected = await voice();
     const beforeObjects = new Map(objects);
@@ -228,7 +246,7 @@ describe.skipIf(!localMinutesDb)("shared voice references (isolated real Postgre
       await expect(Promise.resolve(db.persona.update({ where: { id: personaId }, data: { voiceId: unavailable.id } }))).rejects.toThrow();
     }
     await attachPersonaVoice(f.org.id, f.org.slug, sample.id);
-    await expect(renameVoice(f.org.id, sample.id, "Changed")).rejects.toMatchObject({ status: 404 });
+    await expect(updateVoice(f.org.id, sample.id, { name: "Changed" })).rejects.toMatchObject({ status: 404 });
     await expect(deleteVoice(f.org.id, sample.id)).rejects.toMatchObject({ status: 404 });
     const global = await db.persona.create({ data: { slug: `voice-test-${randomUUID()}`, name: "Global", data: {} } });
     globalPersonas.push(global.id);
@@ -433,7 +451,7 @@ describe.skipIf(!localMinutesDb)("shared voice references (isolated real Postgre
     ]) {
       await expect(Promise.resolve(db.voice.update({ where: { id: selected.id }, data }))).rejects.toThrow();
     }
-    await renameVoice(f.org.id, selected.id, "A reusable name");
+    await updateVoice(f.org.id, selected.id, { name: "A reusable name" });
     expect((await db.voice.findUniqueOrThrow({ where: { id: selected.id } })).name).toBe("A reusable name");
     expect(objects.has(selected.s3AudioKey)).toBe(true);
     expect(deleted).toEqual([]);
@@ -501,7 +519,7 @@ describe.skipIf(!localMinutesDb)("shared voice references (isolated real Postgre
     expect(objects.has(selected.s3TranscriptKey!)).toBe(true);
     expect(await db.voice.count({ where: { id: selected.id, ...availableVoiceWhere(f.org.id) } })).toBe(0);
     await expect(attachPersonaVoice(f.org.id, f.org.slug, selected.id)).rejects.toMatchObject({ code: "voice_unavailable" });
-    await expect(renameVoice(f.org.id, selected.id, "Changed")).rejects.toMatchObject({ code: "voice_deleting" });
+    await expect(updateVoice(f.org.id, selected.id, { name: "Changed" })).rejects.toMatchObject({ code: "voice_deleting" });
     for (const data of [
       { status: "ready" }, { orgId: other.org.id }, { s3AudioKey: `${selected.s3AudioKey}.changed` }, { s3TranscriptKey: null },
     ]) {

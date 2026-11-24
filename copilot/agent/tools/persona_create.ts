@@ -11,7 +11,10 @@ const inputSchema = z.object({
   about: z.string().trim().max(2000).describe(
     "Their stable personality and way of talking, written to \"you\" in a few short sentences. Never this role play's situation, facts or goals: those belong to the role play.",
   ),
-  voiceId: z.string().trim().min(1).max(200).optional().describe("A voice id from voice_list."),
+  voiceId: z.string().trim().min(1).max(200).optional().describe("A voice id from voice_list: one whose gender, age and accent fit this person. Never a new voice."),
+  voiceLabel: z.string().trim().min(1).max(200).optional().describe(
+    'The chosen voice as voice_list shows it, name and details ("oliver: male, middle-aged, British"); shown on the approval card instead of its id.',
+  ),
   proposed: proposedInput,
 });
 
@@ -23,11 +26,12 @@ export default defineTool({
     request: always(),
     prompt: ({ input }) => {
       const suggested = input?.proposed?.length ? ` Suggested by the copilot: ${input.proposed.join(", ")}.` : "";
-      return `Create the persona "${input?.name ?? ""}" (${input?.role ?? ""})${input?.voiceId ? "" : " with no voice yet"}?${suggested}`;
+      const voice = input?.voiceId ? ` with the voice ${input.voiceLabel ?? input.voiceId}` : " with no voice yet";
+      return `Create the persona "${input?.name ?? ""}" (${input?.role ?? ""})${voice}?${suggested}`;
     },
   },
   async execute(input, ctx) {
-    const { proposed: _proposed, ...fields } = input;
+    const { proposed: _proposed, voiceLabel: _voiceLabel, ...fields } = input;
     return studioResult(ctx, { action: "createPersona", ...fields });
   },
 });

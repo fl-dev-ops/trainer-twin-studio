@@ -4,9 +4,10 @@ import { db } from "@/lib/db";
 import { errorResponse, refusals } from "@/lib/errors";
 import { studioOrRefusal } from "@/lib/org";
 import { getObjectText, presignedGetUrl } from "@/lib/s3";
-import { deleteVoice, findAvailableVoice, renameVoice } from "@/lib/voices";
+import { voiceDetailsSchema } from "@/lib/voice-details";
+import { deleteVoice, findAvailableVoice, updateVoice } from "@/lib/voices";
 
-const renameFields = z.strictObject({ name: z.string().trim().min(1).max(60) });
+const updateFields = voiceDetailsSchema.extend({ name: z.string().trim().min(1).max(60).optional() });
 
 /**
  * Voice resolver for the TTS service (server-to-server).
@@ -47,7 +48,7 @@ export async function GET(
   }
 }
 
-/** Rename a user-cloned voice from the voice library. */
+/** Change an org voice's name and/or details (gender, age, accent) from the voice library. */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ voiceId: string }> },
@@ -59,13 +60,13 @@ export async function PATCH(
     try {
       body = await request.json();
     } catch (error) {
-      if (error instanceof SyntaxError) throw refusals.invalidInput("A JSON voice name is required.");
+      if (error instanceof SyntaxError) throw refusals.invalidInput("A JSON body with the voice's name or details is required.");
       throw error;
     }
-    const fields = renameFields.safeParse(body);
-    if (!fields.success) throw refusals.invalidInput("name must be between 1 and 60 characters");
+    const fields = updateFields.safeParse(body);
+    if (!fields.success) throw refusals.invalidInput("Use a name of 1 to 60 characters; gender female or male; age young, middle-aged or older; an accent up to 40 characters.");
     const { voiceId } = await params;
-    const voice = await renameVoice(org.id, voiceId, fields.data.name);
+    const voice = await updateVoice(org.id, voiceId, fields.data);
     return NextResponse.json({ voice });
   } catch (error) {
     return errorResponse(error);

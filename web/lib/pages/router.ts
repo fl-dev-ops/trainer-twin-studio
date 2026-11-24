@@ -192,6 +192,7 @@ export const pageRouter = t.router({
     ]);
     const rows = [...available, ...deleting].map((voice) => ({
       id: voice.id, name: voice.name, kind: voice.kind, status: voice.status, createdAt: voice.createdAt.toISOString(),
+      language: voice.language, gender: voice.gender, age: voice.age, accent: voice.accent,
     }));
     return { mine: rows.filter((voice) => voice.kind === "cloned"), samples: rows.filter((voice) => voice.kind === "sample") };
   }),

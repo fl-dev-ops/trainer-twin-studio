@@ -4,7 +4,7 @@ import { studioResult } from "../lib/studio";
 
 export default defineTool({
   description:
-    "List the voices a persona can use (read-only): id, name, and own (cloned for this organization) or shared. Call before persona_create or a voice change in persona_update; pick a voice that fits the person's role and gender only when the trainer has not named one, and say it is a proposal.",
+    "List the voice library (read-only): id, name, own (this organization's) or shared, and each voice's language (ISO code: the one it sounds native in; 30 languages), gender, age (young, middle-aged, older) and accent. Call before persona_create or a voice change in persona_update. When the trainer hasn't named a voice, pick the one whose gender, age and accent best fit the person and say why it is a proposal. Voices are only ever chosen by id: never create, copy or rename one.",
   inputSchema: z.object({}),
   async execute(_input, ctx) {
     return studioResult(ctx, { action: "listVoices" });

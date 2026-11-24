@@ -34,7 +34,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
   if (!audio && !image && !video && !voiceId) return NextResponse.json({ error: "Pick a voice, or add a photo or a video" }, { status: 400 });
   try {
     if (voiceId) await setPersonaVoiceFrom(org.id, slug, voiceId);
-    else if (audio) await setPersonaVoice(org.id, slug, { audio, transcript: String(form.get("transcript") ?? "") });
+    else if (audio) {
+      const name = String(form.get("voiceName") ?? "").trim();
+      if (!name) return NextResponse.json({ error: "Name the voice: it joins your voice library under that name." }, { status: 400 });
+      await setPersonaVoice(org.id, slug, { name, audio, transcript: String(form.get("transcript") ?? "") });
+    }
     if (image || video) await setPersonaAvatar(org.id, slug, { image, video });
     return NextResponse.json({ ok: true });
   } catch (error) {

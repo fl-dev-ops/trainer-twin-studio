@@ -286,7 +286,8 @@ export async function runCopilotStudio(actor: Actor, input: CopilotStudioInput, 
 
     case "listVoices": {
       const voices = await d.listAvailableVoices(orgId);
-      return { voices: voices.map((v) => ({ id: v.id, name: v.name, own: v.orgId === orgId })) };
+      // The voice library: ids and names never change; gender, age and accent are what the copilot matches a persona to.
+      return { voices: voices.map((v) => ({ id: v.id, name: v.name, own: v.orgId === orgId, language: v.language, gender: v.gender, age: v.age, accent: v.accent })) };
     }
 
     case "createPersona": {

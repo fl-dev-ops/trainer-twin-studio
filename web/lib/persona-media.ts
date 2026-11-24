@@ -60,15 +60,16 @@ async function removeOld(key: string | null | undefined) {
   await deleteObject(key).catch((error) => console.warn("[persona-media] could not delete replaced file", key, error));
 }
 
-export async function setPersonaVoice(orgId: string | null, slug: string, input: { audio: File; transcript?: string }) {
+/** A recording uploaded for a persona joins the voice library under the name given (never one made from the persona's). */
+export async function setPersonaVoice(orgId: string | null, slug: string, input: { name: string; audio: File; transcript?: string }) {
   const persona = await findPersona(orgId, slug);
-  const voice = await createVoice(orgId, { ...input, name: `${persona.name} voice`.slice(0, 60) });
+  const voice = await createVoice(orgId, input);
   await selectPersonaVoice(orgId, slug, persona, voice.id);
   return { voiceId: voice.id };
 }
 
 export async function pickableVoices(orgId: string) {
-  return (await listAvailableVoices(orgId)).map(({ id, name, kind }) => ({ id, name, kind }));
+  return (await listAvailableVoices(orgId)).map(({ id, name, kind, language, gender, age, accent }) => ({ id, name, kind, language, gender, age, accent }));
 }
 
 export async function setPersonaVoiceFrom(orgId: string, slug: string, sourceVoiceId: string) {

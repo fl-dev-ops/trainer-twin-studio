@@ -14,10 +14,12 @@ import { generateSpeech, playPcmStream, stopPlayback } from "@/lib/audio-playbac
 import { cn } from "@/lib/utils";
 import { useRefresh } from "@/lib/use-refresh";
 import { PageContainer } from "@/components/page-container";
-import { AddVoiceDialog } from "@/components/voice-library";
+import { AddVoiceDialog, LanguageSelect } from "@/components/voice-library";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { previewLine, VOICE_GENDERS, voiceDetailsLabel } from "@/lib/voice-details";
 import { dashRoute } from "@/lib/routes";
 
-type LibraryVoice = { id: string; name: string; kind: string };
+type LibraryVoice = { id: string; name: string; kind: string; language?: string | null; gender?: string | null; age?: string | null; accent?: string | null };
 type SavedVoice = { id: string; name: string } | null;
 type UsedBy = { slug: string; name: string; kind: string }[];
 
@@ -194,12 +196,15 @@ function VoiceSection({ saved, selected, voices, onSelect }: { saved: SavedVoice
   );
 }
 
-const PREVIEW_SENTENCE = "Hi, thanks for calling. I've got a few minutes, so tell me what this is about.";
-
 function VoicePicker({ voices, current, selected, busy, onSelect }: { voices: LibraryVoice[]; current: string | null; selected: string | null; busy: boolean; onSelect: (voiceId: string) => void }) {
   const [playing, setPlaying] = useState<string | null>(null);
   const [loading, setLoading] = useState<string | null>(null);
   const previewRef = useRef<AbortController | null>(null);
+  // Language first, then gender: the library has voices in 30 languages.
+  const [language, setLanguage] = useState(() => voices.find((voice) => voice.id === (selected ?? current))?.language ?? "en");
+  const [gender, setGender] = useState("");
+  const languages = [...new Set(voices.map((voice) => voice.language ?? "en"))];
+  const shown = voices.filter((voice) => (!language || (voice.language ?? "en") === language) && (!gender || voice.gender === gender));
 
   useEffect(() => () => {
     previewRef.current?.abort();
@@ -218,7 +223,7 @@ function VoicePicker({ voices, current, selected, busy, onSelect }: { voices: Li
     setPlaying(voice.id);
     setLoading(voice.id);
     try {
-      const response = await generateSpeech(voice.id, PREVIEW_SENTENCE, true, controller.signal);
+      const response = await generateSpeech(voice.id, previewLine(voice.language), true, controller.signal);
       controller.signal.throwIfAborted();
       setLoading(null);
       await playPcmStream(response, controller.signal);
@@ -239,12 +244,22 @@ function VoicePicker({ voices, current, selected, busy, onSelect }: { voices: Li
     return <p className="m-0 text-sm text-muted-foreground">No ready voices available. Cancel to add your voice.</p>;
   }
   return (
+    <div className="flex flex-col gap-2">
+    <div className="flex flex-wrap items-center gap-2">
+      <LanguageSelect value={language} onChange={setLanguage} all={languages.length > 1 ? languages : undefined} />
+      <NativeSelect aria-label="Gender" value={gender} onChange={(event) => setGender(event.currentTarget.value)}>
+        <NativeSelectOption value="">Any gender</NativeSelectOption>
+        {VOICE_GENDERS.map((value) => <NativeSelectOption key={value} value={value}>{value.charAt(0).toUpperCase() + value.slice(1)}</NativeSelectOption>)}
+      </NativeSelect>
+    </div>
+    {shown.length ? null : <p className="m-0 text-sm text-muted-foreground">No voices match. Choose another language or gender.</p>}
     <ul aria-label="Choose a voice" className="m-0 flex list-none flex-col divide-y divide-(--border) rounded-tt-md border border-(--border) p-0">
-      {voices.map((voice) => (
+      {shown.map((voice) => (
         <li key={voice.id} className="flex items-center gap-3 px-3 py-2.5">
           <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-3">
             <input type="radio" name="persona-voice" value={voice.id} checked={selected === voice.id} disabled={busy} onChange={() => onSelect(voice.id)} />
             <span className="truncate text-sm font-medium">{voice.name}</span>
+            {voiceDetailsLabel(voice, false) ? <span className="truncate text-xs text-muted-foreground">{voiceDetailsLabel(voice, false)}</span> : null}
             {current === voice.id ? <span className="text-xs text-muted-foreground">Current</span> : null}
           </label>
           <Button size="sm" variant="ghost" onClick={() => void preview(voice)} disabled={loading !== null && loading !== voice.id} aria-label={playing === voice.id ? `Stop ${voice.name}` : `Listen to ${voice.name}`}>
@@ -254,5 +269,6 @@ function VoicePicker({ voices, current, selected, busy, onSelect }: { voices: Li
         </li>
       ))}
     </ul>
+    </div>
   );
 }
