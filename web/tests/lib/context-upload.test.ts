@@ -93,7 +93,7 @@ test("before settings: `before` wins over an older twinSettings; a role play fol
     { offered: roleplay.offered, screenShare: roleplay.screenShare, label: roleplay.label, duringSession: roleplay.duringSession },
     { offered: true, screenShare: false, label: "Listing", duringSession: false },
   );
-  assert.deepEqual(beforeSettings({}), { preScreenshare: false, preUpload: false, preUploadRequired: false, duringUpload: false, uploadTitle: "", uploadInstruction: "" });
+  assert.deepEqual(beforeSettings({}), { preScreenshare: false, preUpload: false, preUploadRequired: false, duringUpload: false, uploadTitle: "", uploadInstruction: "", callMinutes: null });
 });
 
 test("generate overlay stamps résumé upload on resume interviews", () => {
