@@ -221,7 +221,7 @@ export const planInput = z.object({
       trainer: z.array(z.string()).min(1).describe("Speaker labels of the trainer side; diarization can split one person, list all."),
       learner: z.array(z.string()).min(1).describe("Speaker labels of the learner side."),
       plays: z.record(z.string(), z.string().max(160)).optional().describe("For every speaker label above: the part that person plays in the practice, by role, e.g. \"coach; plays the client in role-plays\", \"agent\", \"observer\". Say when it changes, e.g. \"coach; demonstrates the agent in turns 40-60\"."),
-      spans: z.array(z.tuple([z.number().int(), z.number().int()])).min(1).describe("Inclusive turn ranges that hold the practice, and only the practice."),
+      spans: z.array(z.array(z.number().int()).length(2).transform((v) => v as [number, number])).min(1).describe("Inclusive turn ranges that hold the practice, and only the practice."),
     })),
     method: z.array(z.string()).default([]).describe("File ids of docs, posts or solo recordings that explain this practice."),
   })),
