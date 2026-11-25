@@ -13,6 +13,40 @@ import {
   parseAgentSurfaceMessage,
   type AgentSurface,
 } from "@/lib/agent-surface-events";
+import { Room, RoomEvent } from "livekit-client";
+
+const HANGUP_WAIT_MS = 25_000;
+
+/** Mute, tell the worker to finish the goodbye, and resolve when it has left or the wait runs out. */
+export function requestAgentExit(room: Room, speak: boolean): Promise<void> {
+  void room.localParticipant.setMicrophoneEnabled(false).catch(() => {});
+  void room.localParticipant.publishData(
+    new TextEncoder().encode(JSON.stringify({ type: "end-call", speak })),
+    { reliable: true },
+  ).catch(() => {});
+  return new Promise((resolve) => {
+    let settled = false;
+    const done = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      room.off(RoomEvent.DataReceived, onData);
+      room.off(RoomEvent.Disconnected, done);
+      resolve();
+    };
+    const onData = (payload: Uint8Array) => {
+      try {
+        const data = JSON.parse(new TextDecoder().decode(payload)) as { type?: string };
+        if (data.type === "session-ended") done();
+      } catch {
+        // not our packet
+      }
+    };
+    const timer = setTimeout(done, HANGUP_WAIT_MS);
+    room.on(RoomEvent.DataReceived, onData);
+    room.on(RoomEvent.Disconnected, done);
+  });
+}
 
 export type WorkspaceHandler = (request: string) => Promise<string>;
 export type WorkspaceMethod =
@@ -104,6 +138,7 @@ export function LiveKitWorkspaceProvider({
   runtimeToken,
   onSurface,
   onEndSession,
+  onHangup,
   active = true,
 }: {
   children: ReactNode;
@@ -111,6 +146,8 @@ export function LiveKitWorkspaceProvider({
   runtimeToken?: string;
   onSurface: (surface: AgentSurface) => void | Promise<{ status: string }>;
   onEndSession?: () => void;
+  /** The agent has decided to leave. Mute, tell the worker, and resolve once the goodbye has finished. */
+  onHangup?: (speak: boolean) => Promise<void> | void;
   /** While false (e.g. intro video still playing), pending commands are not polled. */
   active?: boolean;
 }) {
@@ -121,9 +158,11 @@ export function LiveKitWorkspaceProvider({
   // Latest callbacks, read at call time: callers pass inline functions, which must not restart polling each render.
   const onSurfaceRef = useRef(onSurface);
   const onEndSessionRef = useRef(onEndSession);
+  const onHangupRef = useRef(onHangup);
   useEffect(() => {
     onSurfaceRef.current = onSurface;
     onEndSessionRef.current = onEndSession;
+    onHangupRef.current = onHangup;
   });
 
   const register = useCallback(
@@ -163,10 +202,8 @@ export function LiveKitWorkspaceProvider({
         : {};
       try {
         if (command.tool === "finish_session") {
-          // Acknowledge the command immediately so the brain's tool loop resolves,
-          // then wait a grace period for any remaining TTS audio to finish playing
-          // before tearing down the WebRTC connection.
-          await new Promise((resolve) => setTimeout(resolve, 5000));
+          const speak = input.speak === true;
+          await onHangupRef.current?.(speak);
           return { status: "completed" as const, result: { ok: true } };
         }
         if (command.tool === "surface" || command.tool === "start_resume_question") {

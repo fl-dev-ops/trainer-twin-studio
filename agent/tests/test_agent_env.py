@@ -32,6 +32,46 @@ def test_validate_environment_passes_with_all_vars(monkeypatch):
     agent.validate_environment()  # must not raise SystemExit
 
 
+class _Speech:
+    def __init__(self) -> None:
+        self.played = False
+
+    async def wait_for_playout(self) -> None:
+        self.played = True
+
+
+class _Session:
+    def __init__(self, current=None) -> None:
+        self.current_speech = current
+        self.events: dict[str, list] = {}
+
+    def on(self, name, callback) -> None:
+        self.events.setdefault(name, []).append(callback)
+
+    def off(self, name, callback) -> None:
+        self.events[name].remove(callback)
+
+    def start_speech(self):
+        speech = _Speech()
+        for callback in self.events.get("speech_created", []):
+            callback(SimpleNamespace(speech_handle=speech))
+        return speech
+
+
+async def test_goodbye_waits_for_speech_that_has_not_started():
+    session = _Session()
+    waiting = asyncio.create_task(agent.wait_for_goodbye(session, speak=True))
+    await asyncio.sleep(0)
+    speech = session.start_speech()
+    await waiting
+    assert speech.played is True
+
+
+async def test_goodbye_without_a_new_line_does_not_wait():
+    session = _Session()
+    await asyncio.wait_for(agent.wait_for_goodbye(session, speak=False), timeout=0.2)
+
+
 async def test_inactivity_nudge_only_runs_after_opening():
     class Session:
         callback = None
