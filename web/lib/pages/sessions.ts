@@ -86,7 +86,8 @@ export async function loadSessionDetail(orgId: string, id: string) {
       videoEgressId: true,
       report: true,
       reportStatus: true,
-      agent: { select: { name: true, persona: { select: { name: true } } } },
+      personaSlug: true,
+      agent: { select: { name: true, persona: { select: { slug: true, name: true } } } },
       user: { select: { name: true, email: true, image: true } },
     },
   });
@@ -100,7 +101,9 @@ export async function loadSessionDetail(orgId: string, id: string) {
     status: row.status,
     user: row.user,
     learner: row.user ? row.user.name || row.user.email : row.anonymousName || "Anonymous visitor",
-    trainer: row.agent.persona.name || "Trainer",
+    trainer: (row.personaSlug && row.personaSlug !== row.agent.persona.slug
+      ? (await db.persona.findFirst({ where: { slug: row.personaSlug, OR: [{ orgId }, { orgId: null }] }, orderBy: { orgId: { sort: "asc", nulls: "last" } }, select: { name: true } }))?.name
+      : null) || row.agent.persona.name || "Trainer",
     scenario: row.agent.name || row.agentSlug,
     at: row.startedAt ?? row.createdAt,
     hasVideo: Boolean(row.videoEgressId || evidence.videoS3Key || evidence.videoUrl),

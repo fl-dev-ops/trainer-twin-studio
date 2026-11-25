@@ -147,6 +147,19 @@ const sessionSelect = {
 } as const;
 type SessionRow = Prisma.InterviewSessionGetPayload<{ select: typeof sessionSelect }>;
 
+/** The persona a session recorded, preferring this org's row over a global one with the same slug. */
+async function personaNames(orgId: string, slugs: string[]) {
+  const wanted = [...new Set(slugs.filter(Boolean))];
+  const names = new Map<string, string>();
+  if (!wanted.length) return names;
+  const rows = await db.persona.findMany({
+    where: { slug: { in: wanted }, OR: [{ orgId }, { orgId: null }] },
+    select: { slug: true, name: true, orgId: true },
+  });
+  for (const row of rows) if (!names.has(row.slug) || row.orgId === orgId) names.set(row.slug, row.name);
+  return names;
+}
+
 function sessionItem(row: SessionRow) {
   if (!row.user) throw new Error("Role-play sessions require an account");
   const report = roleplayReport(row.report);
@@ -201,21 +214,36 @@ const scenariosRouter = t.router({
     });
     const agents = await Promise.all(rows.map((agent) => agent.primarySkillId ? hydrateAgentSkill(orgId, agent) : agent));
     const ids = agents.map((agent) => agent.id);
-    const [invites, sessions] = await Promise.all([
+    const [invites, sessions, pool] = await Promise.all([
       invitesFor(orgId, ids),
       db.interviewSession.groupBy({ by: ["agentId"], where: { orgId, agentId: { in: ids }, deletedAt: null, startedAt: { not: null } }, _count: true }),
+      db.agentPersona.findMany({
+        where: { agentId: { in: ids }, active: true },
+        orderBy: { position: "asc" },
+        select: { agentId: true, character: true, persona: { select: personaSelect } },
+      }),
     ]);
     const sessionsOf = new Map(sessions.map((row) => [row.agentId, row._count]));
+    const playable = new Map<string, ReturnType<typeof clientOf>[]>();
+    for (const row of pool) {
+      if (!row.character?.trim()) continue;
+      const list = playable.get(row.agentId) ?? [];
+      list.push(clientOf(row.persona));
+      playable.set(row.agentId, list);
+    }
     return agents.map((agent) => {
       const data = asRecord(agent.data);
       const scenario = asRecord(data.scenario);
       const brief = briefOf(data);
+      const client = clientOf(agent.persona);
       return {
         slug: agent.slug,
         name: agent.name,
         href: dashRoute(`/roleplay/${agent.slug}`),
         description: text(scenario.description),
-        client: clientOf(agent.persona),
+        client,
+        /** Who can play it. One is picked per call; the card must not show only the default. */
+        personas: playable.get(agent.id) ?? [client],
         sessions: sessionsOf.get(agent.id) ?? 0,
         updatedAt: agent.updatedAt.toISOString(),
         learners: invites
@@ -530,8 +558,9 @@ const sessionsRouter = t.router({
       db.agent.findMany({ where: roleplaysOf(orgId), select: { id: true } }),
     ]);
     const builderIds = new Set(builder.map((agent) => agent.id));
+    const names = await personaNames(orgId, rows.map((row) => row.personaSlug));
     // A session run by the legacy interview runtime (before its role play was converted) keeps its interview report page.
-    return rows.map((row) => ({ ...sessionItem(row), ...(builderIds.has(row.agentId) && !legacyReport(row.report) ? {} : { href: dashRoute(`/sessions/${row.id}`) }) }));
+    return rows.map((row) => ({ ...sessionItem(row), persona: names.get(row.personaSlug) ?? null, ...(builderIds.has(row.agentId) && !legacyReport(row.report) ? {} : { href: dashRoute(`/sessions/${row.id}`) }) }));
   }),
 
   /** One session: learner, client, report (goals, rubric, notes) and transcript. */
