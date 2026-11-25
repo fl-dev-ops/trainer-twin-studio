@@ -141,7 +141,7 @@ export function SignInForm({
             <Field data-invalid={Boolean(error)}>
               <div className="flex items-center justify-between gap-3">
                 <FieldLabel htmlFor="code">Code</FieldLabel>
-                <Button type="button" variant="ghost" size="sm" className="h-10 rounded-lg" disabled={busy} onClick={() => void sendCode()}>
+                <Button type="button" variant="ghost" disabled={busy} onClick={() => void sendCode()}>
                   Resend code
                 </Button>
               </div>
@@ -178,7 +178,7 @@ export function SignInForm({
           ) : null}
 
           <Field>
-            <Button type="submit" variant="default" disabled={busy || (codeSent && code.length !== 6)} className="h-11 w-full rounded-xl">
+            <Button type="submit" variant="default" disabled={busy || (codeSent && code.length !== 6)} className="h-11 w-full">
               {busy ? <Spinner data-icon="inline-start" /> : null}
               {busy ? (codeSent ? "Signing in…" : "Sending…") : codeSent ? "Sign in" : "Continue"}
             </Button>
