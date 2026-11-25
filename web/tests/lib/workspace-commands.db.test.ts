@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
+import * as nextServer from "next/server";
 import * as lifecycle from "@/lib/session-lifecycle";
 import { randomUUID, createHmac } from "node:crypto";
 import { db, localMinutesDb, minutesFixture, type MinutesFixture } from "./minutes-test-db";
@@ -72,6 +73,18 @@ describe.skipIf(!localMinutesDb)("workspace commands: real database and browser-
       expect(await enqueue(row.id, "finish_session", {})).toMatchObject({ status: "failed", result: { ok: false } });
       expect(closed).toHaveBeenCalledWith(session.id, "completed");
     } finally { closed.mockRestore(); }
+  });
+
+  test("a live finish returns before the browser acknowledges, so the goodbye is not delayed", async () => {
+    const closed = spyOn(lifecycle, "closeInterviewSession").mockResolvedValue(null);
+    const later = spyOn(nextServer, "after").mockImplementation(() => undefined);
+    try {
+      const id = randomUUID();
+      expect(await enqueue(id, "finish_session", { speak: true })).toEqual({ status: "queued" });
+      expect(closed).not.toHaveBeenCalled();
+      expect(await db.workspaceCommand.findUnique({ where: { id } })).toMatchObject({ status: "pending", tool: "finish_session" });
+      expect(later).toHaveBeenCalledTimes(1);
+    } finally { later.mockRestore(); closed.mockRestore(); }
   });
 
   test("server teardown observes the grace even if a browser acknowledges immediately", async () => {

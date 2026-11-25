@@ -57,7 +57,7 @@ import { PresentationViewer } from "@/components/session/presentation-viewer";
 import { PreJoin, type PreJoinMediaSettings } from "@/components/session/prejoin";
 import { PdfViewerSurface } from "@/components/session/pdf-viewer";
 import { ImageViewerSurface } from "@/components/session/image-viewer";
-import { LiveKitWorkspaceProvider } from "@/lib/livekit-workspaces";
+import { LiveKitWorkspaceProvider, requestAgentExit } from "@/lib/livekit-workspaces";
 import { downloadIntroVideo } from "@/lib/intro-video-cache";
 import type { AgentSurface } from "@/lib/agent-surface-events";
 import type { Entry } from "@/lib/session-transcript";
@@ -203,6 +203,7 @@ export function SessionView({
   const [ended, setEnded] = useState(false);
   const [completedSessionId, setCompletedSessionId] = useState<string | null>(null);
   const [endReason, setEndReason] = useState<EndReason>("disconnected");
+  const [ending, setEnding] = useState(false);
   const [introDone, setIntroDone] = useState(false);
   const [introPlaybackSrc, setIntroPlaybackSrc] = useState<string | null>(null);
 
@@ -281,6 +282,7 @@ export function SessionView({
     setError("");
     setSaveFailed(false);
     setEndReason("disconnected");
+    setEnding(false);
     setIntroDone(false);
     setEntries([]);
     setCoverage({});
@@ -571,7 +573,7 @@ export function SessionView({
   const handleSendMessage = useCallback(
     async (text: string) => {
       const trimmed = text.trim();
-      if (!trimmed) return;
+      if (!trimmed || ending) return;
       setEntries((prev) => [...prev, { role: "user" as const, text: trimmed }]);
       try {
         // RoomIO listens on lk.chat: interrupt STT wait, then generate_reply.
@@ -580,7 +582,7 @@ export function SessionView({
         console.error("Could not send chat message:", err);
       }
     },
-    [room],
+    [room, ending],
   );
 
   const [attaching, setAttaching] = useState(false);
@@ -1277,6 +1279,10 @@ export function SessionView({
           runtimeToken={connection?.runtimeToken}
           onSurface={handleSurface}
           onEndSession={() => void handleDisconnect("completed")}
+          onHangup={(speak) => {
+            setEnding(true);
+            return requestAgentExit(room, speak);
+          }}
           active={workspaceConnected && (introSrc ? introDone : true)}
         >
           <SessionHeader title={title} linkHome={!sessionCode}>
@@ -1286,6 +1292,7 @@ export function SessionView({
                 Sharing your screen
               </span>
             )}
+            {ending ? <span className="text-sm text-muted-foreground">Ending the call</span> : null}
             {sessionCode ? <ReportIssueButton /> : null}
           </SessionHeader>
 

@@ -89,6 +89,7 @@ const requestSchema = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("finishSession"),
     sessionId: z.string().trim().min(1),
+    speak: z.boolean().optional(),
   }).strict(),
   turnEvidenceSchema.extend({ action: z.literal("recordTurnEvidence") }).strict(),
   z.object({
@@ -268,7 +269,7 @@ export async function POST(request: Request) {
       sessionId: input.sessionId,
       callId: input.action === "finishSession" ? `finish-${input.sessionId}` : input.callId,
       tool: input.action === "finishSession" ? "finish_session" : input.tool,
-      payload: input.action === "finishSession" ? {} : input.input,
+      payload: input.action === "finishSession" ? { speak: input.speak === true } : input.input,
     }));
   }
 

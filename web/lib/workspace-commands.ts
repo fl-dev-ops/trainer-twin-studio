@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { closeInterviewSession } from "@/lib/session-lifecycle";
 import { stableJson } from "@/lib/stable-json";
+import { after } from "next/server";
 
 const COMMAND_LIFETIME_MS = 30_000;
 const timedOut = { ok: false, error: "Timed out waiting for the browser" };
@@ -52,33 +53,50 @@ export async function enqueueWorkspaceCommand(input: {
 
   const finishCall = async () => {
     if (input.tool !== "finish_session") return;
-    const grace = stored.createdAt.getTime() + 5_000 - Date.now();
-    if (grace > 0) await new Promise((resolve) => setTimeout(resolve, grace));
-    // Server-side end remains authoritative even if the browser has gone away.
+    // A browser-less call (anonymous) has no worker signal. Keep its goodbye window. A live call ends when the worker finishes speaking.
+    if (stored.status === "completed") {
+      const grace = stored.createdAt.getTime() + 5_000 - Date.now();
+      if (grace > 0) await new Promise((resolve) => setTimeout(resolve, grace));
+    }
     await closeInterviewSession(session.id, "completed");
   };
-  const startedAt = Date.now();
-  console.info(`[JOB:workspace-command] action=${input.tool} status=started session=${input.sessionId}`);
-  for (let attempt = 0; attempt < 60; attempt += 1) {
-    await expireCommands(session.id);
-    const command = await db.workspaceCommand.findFirst({
-      where: { id: input.callId, sessionId: session.id },
-      select: { status: true, result: true },
-    });
-    if (command && !["pending", "running"].includes(command.status)) {
-      console.info(`[JOB:workspace-command] action=${input.tool} status=${command.status} elapsed_ms=${Date.now() - startedAt}`);
-      await finishCall();
-      return { status: command.status, result: command.result ?? { ok: command.status === "completed" } };
+  const waitForBrowser = async () => {
+    const startedAt = Date.now();
+    console.info(`[JOB:workspace-command] action=${input.tool} status=started session=${input.sessionId}`);
+    for (let attempt = 0; attempt < 60; attempt += 1) {
+      await expireCommands(session.id);
+      const command = await db.workspaceCommand.findFirst({
+        where: { id: input.callId, sessionId: session.id },
+        select: { status: true, result: true },
+      });
+      if (command && !["pending", "running"].includes(command.status)) {
+        console.info(`[JOB:workspace-command] action=${input.tool} status=${command.status} elapsed_ms=${Date.now() - startedAt}`);
+        await finishCall();
+        return { status: command.status, result: command.result ?? { ok: command.status === "completed" } };
+      }
+      await new Promise((resolve) => setTimeout(resolve, 500));
     }
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    console.warn(`[JOB:workspace-command] action=${input.tool} status=timeout elapsed_ms=${Date.now() - startedAt}`);
+    await db.workspaceCommand.updateMany({
+      where: { id: input.callId, sessionId: session.id, status: { in: ["pending", "running"] } },
+      data: { status: "failed", result: timedOut, completedAt: new Date() },
+    });
+    await finishCall();
+    return { status: "failed", result: timedOut };
+  };
+  // A live browser is still in the call. Return so the goodbye can be spoken; the browser tells the
+  // worker to leave, then acknowledges. A lost browser is closed by the same wait, off the response.
+  const justQueued = stored.status === "pending" && Date.now() - stored.createdAt.getTime() < 5_000;
+  if (input.tool === "finish_session" && justQueued) {
+    const wait = () => waitForBrowser();
+    try {
+      after(wait);
+      return { status: "queued" };
+    } catch {
+      return await wait();
+    }
   }
-  console.warn(`[JOB:workspace-command] action=${input.tool} status=timeout elapsed_ms=${Date.now() - startedAt}`);
-  await db.workspaceCommand.updateMany({
-    where: { id: input.callId, sessionId: session.id, status: { in: ["pending", "running"] } },
-    data: { status: "failed", result: timedOut, completedAt: new Date() },
-  });
-  await finishCall();
-  return { status: "failed", result: timedOut };
+  return waitForBrowser();
 }
 
 export async function listPendingWorkspaceCommands(sessionId: string) {

@@ -29,7 +29,7 @@ import { RoleplayIcon } from "@/components/icons";
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Marker, MarkerContent } from "@/components/ui/marker";
-import { LiveKitWorkspaceProvider } from "@/lib/livekit-workspaces";
+import { LiveKitWorkspaceProvider, requestAgentExit } from "@/lib/livekit-workspaces";
 import { twinClient } from "@/lib/twin/client";
 import { isFeelsOffMessage, joinsLearnerTurn, type CalibrationScore } from "@/lib/twin/stats";
 import { toast } from "sonner";
@@ -563,6 +563,7 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
       runtimeToken={connection?.runtimeToken}
       onSurface={ignoreSurface}
       onEndSession={() => void end("completed")}
+      onHangup={(speak) => requestAgentExit(room, speak)}
       active={phase === "live"}
     >
       <div className="relative flex h-dvh max-h-dvh flex-col overflow-hidden">

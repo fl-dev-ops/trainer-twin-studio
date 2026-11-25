@@ -22,7 +22,7 @@ After it returns, say nothing more.`,
     const sessionId = String(ctx.session.auth.current?.attributes?.sessionId ?? "");
     if (!orgId || !sessionId) throw new Error("No session attached to this conversation");
     console.info("[TOOL:end_call]", { sessionId, outcome: input.outcome });
-    await studioFetch(orgId, { action: "finishSession", sessionId });
+    await studioFetch(orgId, { action: "finishSession", sessionId, speak: true });
     return { status: "ended", outcome: input.outcome, instruction: "The call has ended. If you have not said goodbye yet, say one short goodbye in character; otherwise say nothing. Never mention the role play, the practice or the call having ended." };
   },
 });

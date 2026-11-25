@@ -41,6 +41,34 @@ if os.path.exists(_default_ca) and "SSL_CERT_FILE" not in os.environ:
 logger = logging.getLogger("trainertwin_agent")
 logging.basicConfig(level=logging.INFO)
 
+GOODBYE_SPEAK_TIMEOUT = 8.0
+GOODBYE_PLAYOUT_TIMEOUT = 20.0
+
+
+async def wait_for_goodbye(session: Any, *, speak: bool) -> None:
+    """Let the line already playing finish. If the hangup still has a goodbye to say, wait for that too."""
+    loop = asyncio.get_running_loop()
+    started: asyncio.Future[Any] = loop.create_future()
+
+    def on_speech(event: Any) -> None:
+        if not started.done():
+            started.set_result(getattr(event, "speech_handle", event))
+
+    session.on("speech_created", on_speech)
+    try:
+        current = session.current_speech
+        if current is not None:
+            await asyncio.wait_for(current.wait_for_playout(), GOODBYE_PLAYOUT_TIMEOUT)
+            return
+        if not speak:
+            return
+        handle = await asyncio.wait_for(started, GOODBYE_SPEAK_TIMEOUT)
+        await asyncio.wait_for(handle.wait_for_playout(), GOODBYE_PLAYOUT_TIMEOUT)
+    except asyncio.TimeoutError:
+        return
+    finally:
+        session.off("speech_created", on_speech)
+
 # Transport-only prompt. The configured remote brain owns all behavioral and session instructions.
 COMMON_VOICE_PROMPT_PATH = Path(__file__).with_name("prompt.md")
 COMMON_VOICE_INSTRUCTIONS = COMMON_VOICE_PROMPT_PATH.read_text(encoding="utf-8").strip()
@@ -324,10 +352,35 @@ async def entrypoint(ctx: agents.JobContext) -> None:
     participant_identity: str | None = None
     hold_opening = not anonymous and bool(metadata.get("hold_opening"))
     deadline_expired = False
+    call_ending = False
 
     def input_allowed() -> bool:
         remaining = seconds_until_end(metadata, time.time())
-        return not deadline_expired and (remaining is None or remaining > 0)
+        return not call_ending and not deadline_expired and (remaining is None or remaining > 0)
+
+    async def leave_after_goodbye(speak: bool) -> None:
+        session = active_session
+        if session is not None:
+            session.input.set_audio_enabled(False)
+        pending_chat_messages.clear()
+        try:
+            if session is not None:
+                await wait_for_goodbye(session, speak=speak)
+        except Exception as exc:
+            logger.warning("Goodbye playout failed room=%s error=%s", ctx.room.name, exc)
+        try:
+            await ctx.room.local_participant.publish_data(
+                json.dumps({"type": "session-ended", "status": "completed"}).encode("utf-8"),
+                reliable=True,
+            )
+        except Exception as exc:
+            logger.warning("Could not tell the browser the call ended room=%s error=%s", ctx.room.name, exc)
+        state = _sessions.setdefault(ctx.room.name, {})
+        state["end_status"] = "COMPLETED"
+        if session is not None:
+            session.shutdown(drain=True)
+        else:
+            ctx.shutdown(reason="call_ended")
 
     async def end_at_deadline(limit: float) -> None:
         nonlocal deadline_expired
@@ -374,6 +427,7 @@ async def entrypoint(ctx: agents.JobContext) -> None:
             pending_chat_messages.append(text)
 
     def on_data_received(packet: rtc.DataPacket) -> None:
+        nonlocal call_ending
         try:
             msg = json.loads(packet.data)
         except Exception:
@@ -381,6 +435,12 @@ async def entrypoint(ctx: agents.JobContext) -> None:
         if not isinstance(msg, dict):
             return
         msg_type = msg.get("type")
+        if msg_type == "end-call":
+            if call_ending:
+                return
+            call_ending = True
+            asyncio.create_task(leave_after_goodbye(msg.get("speak") is True))
+            return
         if not input_allowed() or (anonymous and msg_type != "begin-opening"):
             return
         if msg_type == "begin-opening":
