@@ -28,21 +28,22 @@ const calls = (turns: { toolCalls?: unknown }[], name: string) =>
 const ok = (call: Call) => (call.output as { ok?: unknown } | undefined)?.ok === true;
 
 const QUALITY = [
-  "Judge this role-play brief written for an AI that plays one side of a practice conversation. Score how well it follows these principles:",
-  "1. The AI's instructions are written to \"you\" and say who the AI is IN THIS SITUATION and its relationship to the learner (not a personality description).",
-  "2. The situation says what triggered the conversation, what the AI knows, how it feels at the start, and facts to keep consistent.",
-  "3. The learner's role and aim are clear and outcome-based.",
-  "4. Concerns are written as the character would see them, never with the answers; hidden ones are marked and not in the learner brief.",
-  "5. The flow is a realistic conversation in a few steps, including deliberate moments the requirements ask for.",
-  "6. Reactions are observable learner behaviours; resistance is reasonable and firm, not hostile.",
-  "7. There is a clear ending: limit, what good looks like, exit line when relevant.",
-  "8. It is faithful to the requirements (given in full) for the scenario and persona asked: no facts, backstory or lines borrowed from another persona or scenario, none invented; the requirement's details kept.",
+  "Judge this role-play brief. It is the stage every persona on this practice plays, not one person's character. That character is a separate document this score does not see. Score how well the brief follows these principles:",
+  "1. Written to \"you\". It names the AI's role, not one person. One person's name, facts, concerns and private lines are correctly absent.",
+  "2. The situation says what triggered the conversation and the facts every persona shares. It does not carry one person's budget, backstory or private concern.",
+  "3. The learner's role and aim are clear and outcome-based. The learner brief does not name who they will speak with.",
+  "4. The steps are a real conversation any persona on this stage can play, including the deliberate moments the requirements ask for. They do not name one person.",
+  "5. The ending has a limit or a clear end, and what good looks like for every persona. An exit line, if present, is something every persona would say.",
+  "6. Items are only lines every persona may say, as the trainer wrote them. A line only some personas may say is correctly absent. Do not mark the brief down for leaving those lines out.",
+  "7. It does not invent facts, people, numbers or lines, and it does not borrow another scenario's details.",
+  "8. It does not assume a sales call. An interview, a 1:1 or a question after a talk is valid when that is what the requirements describe.",
+  "9. A requirement that fits no heading is still present, in the closest stage field, in the trainer's words. Do not mark the brief down for placing it there. Mark it down if that requirement was dropped.",
 ].join("\n");
 
 type Case = { id: string; file: string; ask: string; persona: string; expectNotes?: RegExp };
 const cases: Case[] = [
   { id: "olga-first-call", file: "olga.md", persona: "Ravi Menon", ask: "Write Scenario 1 (first call after the ad) as one role play, played by the buyer Ravi Menon. Use his details exactly as written." },
-  { id: "olga-objections", file: "olga.md", persona: "Faisal Al-Qahtani", ask: "Write Scenario 2 (after the presentation) as one role play, played by Faisal Al-Qahtani. Include the 35 objections so the buyer can draw on them." },
+  { id: "olga-objections", file: "olga.md", persona: "Faisal Al-Qahtani", ask: "Write Scenario 2 (after the presentation) as one role play, played by Faisal Al-Qahtani. Objections every buyer may say go on the stage; the ones only some buyers may say go on that buyer's character." },
   { id: "bevan-missed-deadlines", file: "coaches.md", persona: "Chloe Martin", ask: "Write Bevan's Scenario 2 (missed deadlines) as one role play, played by Chloe Martin." },
   { id: "flo-keynote", file: "coaches.md", persona: "Ingrid Larsen", ask: "Write Flo's Scenario 3 (keynote Q&A) as one role play, played by Ingrid Larsen." },
   { id: "jameel-technical", file: "coaches.md", persona: "Linda Chen", ask: "Write Jameel's Scenario 2 (round two, technical) as one role play, played by Linda Chen.", expectNotes: /mode|practice|mock/i },

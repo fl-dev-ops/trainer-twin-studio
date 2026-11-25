@@ -3,7 +3,7 @@ import { z } from "zod";
 // The role-play brief the copilot writes from a trainer's requirements. Same shape as web/lib/roleplay/brief.ts (the
 // studio renders and checks it; a web contract test keeps the two in step). The descriptions are the writing guidance
 // the model sees: write to the AI as "you". The brief is the stage, the same for every persona; who the AI is on it
-// (what they want, concerns, opening line, reactions, style) is each persona's character (roleplay_character_set).
+// (facts, concerns, opening line, own lines, reactions) is each persona's character (roleplay_character_set).
 
 const kebab = z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, "kebab-case").max(60);
 const text = (max: number) => z.string().trim().min(1).max(max);
@@ -34,11 +34,11 @@ export const roleplayBrief = z.object({
   }).strict()).min(2).max(6).describe("2 to 6 steps in order. A real conversation, not a checklist of questions."),
   ending: z.object({
     limit: text(200).optional().describe("Time or count limit, e.g. \"At most 4 minutes.\", \"After 3 questions.\""),
-    good: text(400).describe("What a good ending looks like."),
+    good: text(400).describe("What a good ending looks like for every persona. What makes one person accept or decline belongs on that character."),
     partial: text(400).optional(),
     poor: text(400).optional(),
-    endsEarlyWhen: lines(5).default([]).describe("Moments that end it early, e.g. \"two pitches without a question\"."),
-    exitLine: text(300).optional().describe("What you say when you end it early or without a next step (a good ending closes naturally)."),
+    endsEarlyWhen: lines(5).default([]).describe("Moments that end it early for every persona, e.g. \"the learner repeats the same move and does not listen\"."),
+    exitLine: text(300).optional().describe("What every persona on this stage says when ending early or without a next step. If only some would say it, leave it off. A good ending closes naturally."),
   }).strict(),
   rules: lines(10).default([]).describe("Scenario-specific always/never rules only. Standard rules (stay in role, never coach, keep facts consistent, vary wording) are added automatically."),
   items: z.array(z.object({
@@ -46,8 +46,8 @@ export const roleplayBrief = z.object({
     text: text(1000).describe("The line as the trainer wrote it. Never invent lines."),
     context: text(300).describe("When this line fits."),
     step: kebab.optional().describe("The step it belongs to, if any."),
-    tags: z.array(kebab).max(5).default([]).describe("Short tags, e.g. investor, end-user, technical."),
-  }).strict()).max(200).default([]).describe("Lines from the trainer's requirements the AI can look up during the call (objection lists, question banks, sample lines). Only lines the trainer gave."),
+    tags: z.array(kebab).max(5).default([]).describe("Optional topic labels for a line every persona may say. Do not use a tag to keep a line only some personas may say."),
+  }).strict()).max(200).default([]).describe("Lines every persona on this stage may say, as the trainer wrote them: a question, objection, example or concern. Never invent lines. A line only some personas may say belongs on those characters, not here."),
   itemsGuide: text(600).optional().describe("Required with items: when to look up which kind, written to the AI."),
 }).strict();
 export type RoleplayBrief = z.infer<typeof roleplayBrief>;

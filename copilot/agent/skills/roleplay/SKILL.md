@@ -31,12 +31,15 @@ description: Role plays (Scenarios) - listing them, reading one, and changing an
 **Example.** "Let learners upload their CV before the mock interview and show it in the PDF viewer" → `roleplay_read` → `roleplay_settings_update` `{ preUpload: true, uploadTitle: "Your CV" }` → `roleplay_tools_update` `{ preview: true }`. That's two cards.
 
 ## Stage and characters
-A role play is the **stage**: the situation, steps, ending and rules, the same for every persona, never naming one. Each
-persona that plays it has its own **character** for this role play only: their facts, what they want and hide, their
-opening line, how they talk, open up, push back and end. A character belongs to one role play and one persona; another
-role play never sees it, and the persona itself is unchanged. To change how one persona plays a role play, change its
-character (`roleplay_read` shows each one), never the persona and never the stage. A persona without a character is
-never picked, and a role play with none can't start: write one for every persona that should play.
+A role play is the **stage**: the situation, steps, ending and rules, the same for every persona, never naming one.
+Lines every persona may say stay on the stage. A line only some personas may say belongs on those characters, not on
+the stage and not behind a tag. A requirement that fits no heading is kept: on the stage if every persona shares it,
+on the character if only some do. It is not dropped because it matches no heading. Each persona has its own **character** for this role play only: their facts, what they
+want and hide, their opening line, their own lines, how they talk, open up, push back and end. A character belongs to
+one role play and one persona; another role play never sees it, and the persona itself is unchanged. To change how one
+persona plays a role play, change its character (`roleplay_read` shows each one), never the persona and never the stage.
+A persona without a character is never picked, and a role play with none can't start: write one for every persona that
+should play.
 
 ## Rules, and why
 - Pass \`label\` with the current name on every update, so the card says what is changing in the trainer's words, not a slug.
