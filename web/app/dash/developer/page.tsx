@@ -25,7 +25,7 @@ export default function DeveloperApiPage() {
         description="Generate organization-scoped keys for server-to-server integrations."
         actions={
           <Button
-            variant="outline"
+            variant="secondary"
             nativeButton={false}
             render={<a href={`${DOCS_URL}/quickstart`} target="_blank" rel="noopener noreferrer" />}
           >

@@ -17,10 +17,8 @@ export function ReportIssueButton() {
   return (
     <>
       <Button
-        variant="outline"
-        size="sm"
+        variant="secondary"
         onClick={() => setOpen(true)}
-        className="h-9"
       >
         <Flag data-icon="inline-start" />
         Report an issue

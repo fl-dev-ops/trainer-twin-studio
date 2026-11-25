@@ -95,7 +95,7 @@ export function TwinLearnerFlow({ path, trainer, twin, access }: { path: string;
         <span className="rounded-full bg-(--tone-control) px-3 py-1 text-xs font-medium tabular-nums">{minutesLeft} min left</span>
       ) : access ? (
         <DropdownMenu>
-          <DropdownMenuTrigger render={<Button variant="ghost" size="lg" />}>
+          <DropdownMenuTrigger render={<Button variant="ghost" />}>
             <span data-icon="inline-start" className="-ml-2">
               <UserAvatar user={{ name: access.name, email: access.email }} size="sm" />
             </span>
@@ -115,7 +115,7 @@ export function TwinLearnerFlow({ path, trainer, twin, access }: { path: string;
           </DropdownMenuContent>
         </DropdownMenu>
       ) : (
-        <Button variant="ghost" className="h-9" onClick={() => setSigningIn(true)}>
+        <Button variant="ghost" onClick={() => setSigningIn(true)}>
           <LogIn data-icon="inline-start" />
           Sign in
         </Button>
@@ -226,7 +226,7 @@ export function TwinLearnerFlow({ path, trainer, twin, access }: { path: string;
       {step === "profile" && !blocked ? (
         <div className="fixed inset-x-0 bottom-0 z-10 flex flex-col items-center gap-2 bg-linear-to-t from-background via-background/90 to-transparent px-5 pt-10 pb-5">
           <div className="flex items-center gap-3 rounded-full border border-(--card-border) bg-card p-1.5 shadow-elevation-2">
-            <Button size="xl" variant="brand"
+            <Button touchTarget variant="default"
               
               disabled={minutesLeft !== null && minutesLeft < MIN_START_MINUTES}
               onClick={() => (access?.ok ? setStep("call") : setSigningIn(true))}
@@ -312,7 +312,7 @@ function Summary({ twin, trainer, result, minutesLeft, preview, onReport, onAgai
             <p className="m-0 text-xs text-muted-foreground">{preview ? "used: not counted" : "with this twin"}</p>
           </div>
         </div>
-        <Button variant="brand" size="xl" className="mt-6 w-full" onClick={onAgain} disabled={minutesLeft !== null && minutesLeft < MIN_START_MINUTES}>
+        <Button variant="default" touchTarget className="mt-6 w-full" onClick={onAgain} disabled={minutesLeft !== null && minutesLeft < MIN_START_MINUTES}>
           <PhoneIcon data-icon="inline-start" className="size-[18px]" />
           Start another
         </Button>
@@ -339,11 +339,11 @@ function Summary({ twin, trainer, result, minutesLeft, preview, onReport, onAgai
         </div>
         <Textarea className="mt-4" rows={2} maxLength={500} value={note} disabled={sent} onChange={(e) => setNote(e.target.value)} placeholder={`Anything to tell ${firstName(trainer.name)}? (optional)`} />
         <div className="mt-4 flex items-center justify-between gap-3">
-          <Button variant="subtle" className="h-9" onClick={onReport}>
+          <Button variant="ghost" onClick={onReport}>
             <Flag data-icon="inline-start" />
             Report a problem
           </Button>
-          <Button variant="outline" className="h-9" disabled={!rating || sending || sent || !result.sessionId} onClick={() => void send()}>
+          <Button variant="secondary" disabled={!rating || sending || sent || !result.sessionId} onClick={() => void send()}>
             {sent ? <><Check data-icon="inline-start" /> Sent</> : sending ? "Sending…" : "Send rating"}
           </Button>
         </div>
@@ -439,7 +439,7 @@ function ReportDialog({ twin, sessionId, onClose }: { twin: Twin; sessionId: str
             <Textarea rows={3} maxLength={2000} value={text} onChange={(e) => setText(e.target.value)} placeholder="Tell us more (optional)" />
             <DialogFooter>
               <Button variant="ghost" onClick={onClose}>Cancel</Button>
-              <Button variant="brand" disabled={sending || (!reasons.length && text.trim().length < 5)} onClick={() => void send()}>
+              <Button variant="default" disabled={sending || (!reasons.length && text.trim().length < 5)} onClick={() => void send()}>
                 {sending ? "Sending…" : "Send report"}
               </Button>
             </DialogFooter>

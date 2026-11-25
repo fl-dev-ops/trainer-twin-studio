@@ -78,7 +78,7 @@ function MembersTable({ members, empty, currentUserId, busy, onToggle }: {
                   <TableCell className="text-right">
                     {locked ? null : (
                       <DropdownMenu>
-                        <DropdownMenuTrigger render={<Button variant="subtle" size="icon-sm" className="relative" aria-label={`More for ${member.name}`} disabled={busy === member.id} />}>
+                        <DropdownMenuTrigger render={<Button variant="ghost" iconOnly className="relative" aria-label={`More for ${member.name}`} disabled={busy === member.id} />}>
                           <MoreHorizontal />
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
@@ -169,7 +169,7 @@ export function TeamSection(props: {
                 </div>
               ) : null}
               <Dialog open={inviting === group.role} onOpenChange={(open) => setInviting(open ? group.role : null)}>
-                <DialogTrigger render={<Button size="sm" />}>
+                <DialogTrigger render={<Button />}>
                   <Plus />
                   Add
                 </DialogTrigger>

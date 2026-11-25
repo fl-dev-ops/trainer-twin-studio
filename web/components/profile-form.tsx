@@ -197,7 +197,7 @@ export function OrganizationForm({
               className="sr-only"
               onChange={(event) => uploadLogo(event.target.files?.[0])}
             />
-            <Button type="button" variant="outline" size="sm" disabled={readingLogo} onClick={() => logoInput.current?.click()}>
+            <Button type="button" variant="secondary" disabled={readingLogo} onClick={() => logoInput.current?.click()}>
               <Upload data-icon="inline-start" />
               {readingLogo ? "Reading…" : logo ? "Replace" : "Upload"}
             </Button>
@@ -230,12 +230,12 @@ export function OrganizationForm({
           </SectionRow>
           <SectionRow title={<label htmlFor="accent-color">Accent color</label>}>
             <ColorPicker value={accent} onValueChange={(value) => { if (value) setAccent(value); }} format="hex" swatches={ACCENT_SWATCHES}>
-              <ColorPickerTrigger id="accent-color" type="button" className="w-40 justify-start font-mono" />
+              <ColorPickerTrigger id="accent-color" type="button" />
               <ColorPickerContent>
                 <ColorPickerPanel />
               </ColorPickerContent>
             </ColorPicker>
-            <Button type="button" variant="ghost" size="sm" onClick={() => setAccent(DEFAULT_ACCENT)}>Reset</Button>
+            <Button type="button" variant="ghost" onClick={() => setAccent(DEFAULT_ACCENT)}>Reset</Button>
           </SectionRow>
         </div>
         <SaveRow saving={saving} saved={saved ? "Organization updated." : null} busyLabel={readingLogo ? "Reading image…" : null} />

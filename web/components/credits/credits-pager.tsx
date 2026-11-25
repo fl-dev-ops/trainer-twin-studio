@@ -24,10 +24,10 @@ export function CreditsPager({ page, pages, total, setPage }: Omit<ReturnType<ty
         {from}–{Math.min(total, from + PAGE_SIZE - 1)} of {total}
       </span>
       <span className="flex items-center gap-1">
-        <Button variant="ghost" size="sm" disabled={page === 0} onClick={() => setPage(page - 1)}>
+        <Button variant="ghost" disabled={page === 0} onClick={() => setPage(page - 1)}>
           <ChevronLeft data-icon="inline-start" /> Previous
         </Button>
-        <Button variant="ghost" size="sm" disabled={page >= pages - 1} onClick={() => setPage(page + 1)}>
+        <Button variant="ghost" disabled={page >= pages - 1} onClick={() => setPage(page + 1)}>
           Next <ChevronRight data-icon="inline-end" />
         </Button>
       </span>

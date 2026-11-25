@@ -147,7 +147,7 @@ test("a delayed recorder conversion after switching to Upload cannot replace the
   find(capture(), (element) => typeof element.props.onStreamReady === "function")!.props.onStreamReady({ getTracks: () => [{ stop: trackStop }] });
   const recorder = recordings[0];
   now = 11_000;
-  find(capture(), (element) => element.props.variant === "strong" && typeof element.props.onClick === "function")!.props.onClick();
+  find(capture(), (element) => element.props.children?.toString().includes("Finish") === true && typeof element.props.onClick === "function")!.props.onClick();
   expect(recorder.state).toBe("inactive");
   find(form(), (element) => typeof element.props.onValueChange === "function")!.props.onValueChange("upload");
   unmount(recorderScope);

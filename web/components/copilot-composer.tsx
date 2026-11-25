@@ -56,7 +56,7 @@ export function KnowledgeFilePicker({ selected, onChange, disabled }: { selected
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
-        render={<Button type="button" variant="ghost" size="sm" disabled={disabled} aria-label="Pick files from your knowledge base" />}
+        render={<Button type="button" variant="ghost" disabled={disabled} aria-label="Pick files from your knowledge base" />}
       >
         <Library data-icon="inline-start" aria-hidden="true" />
         Files

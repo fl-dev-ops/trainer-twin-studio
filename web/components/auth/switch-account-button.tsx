@@ -18,7 +18,7 @@ export function SwitchAccountButton({ returnTo, label = "Switch account" }: { re
 
   return (
     <>
-      <Button type="button" variant="outline" onClick={switchAccount}>{label}</Button>
+      <Button type="button" variant="secondary" onClick={switchAccount}>{label}</Button>
       {error ? <p role="alert" className="text-destructive text-sm">{error}</p> : null}
     </>
   );

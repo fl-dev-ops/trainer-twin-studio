@@ -77,7 +77,7 @@ export function SupportDialog({ open, onOpenChange, subject: initialSubject = ""
           </FieldGroup>
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} disabled={busy}>Cancel</Button>
-            <Button type="submit" variant="brand" disabled={!ready || busy}>
+            <Button type="submit" variant="default" disabled={!ready || busy}>
               {busy ? <><Spinner data-icon="inline-start" /> Sending…</> : "Send"}
             </Button>
           </DialogFooter>

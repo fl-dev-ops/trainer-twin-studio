@@ -60,7 +60,7 @@ export function SupportingSkillsEditor({ title, description, empty, attached, ch
                 <span className="flex shrink-0 items-center gap-1">
                   <SwitchToggle checked={skill.active} label={`Use ${names.get(skill.skillId) ?? "skill"}`}
                     onChange={(active) => setDraft((prev) => prev.map((row) => row.skillId === skill.skillId ? { ...row, active } : row))} />
-                  <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => setDraft((prev) => prev.filter((row) => row.skillId !== skill.skillId))}>Remove</Button>
+                  <Button type="button" variant="ghost" disabled={busy} onClick={() => setDraft((prev) => prev.filter((row) => row.skillId !== skill.skillId))}>Remove</Button>
                 </span>
               </li>
             ))}

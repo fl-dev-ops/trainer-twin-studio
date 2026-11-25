@@ -27,7 +27,7 @@ export function FilterDropdown({
   const current = options.find((option) => option.value === value)?.label ?? options[0]?.label;
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger render={<Button variant="outline" />}>
+      <DropdownMenuTrigger render={<Button variant="secondary" />}>
         <span>{current}</span>
         <ChevronDown className="size-3.5 text-muted-foreground" aria-hidden />
       </DropdownMenuTrigger>

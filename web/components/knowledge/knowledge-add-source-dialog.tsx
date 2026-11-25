@@ -554,9 +554,7 @@ export function KnowledgeAddSourceDialog({
                           </span>
                           <Button
                             type="button"
-                            variant="subtle"
-                            size="sm"
-                            className="h-6"
+                            variant="ghost"
                             onClick={() => setQueue([])}
                             disabled={isUploading}
                           >
@@ -602,7 +600,7 @@ export function KnowledgeAddSourceDialog({
                           ))}
                         </div>
                         <div className="pt-2 flex justify-end">
-                          <Button variant="brand"
+                          <Button variant="default"
                             type="button"
                             onClick={startUpload}
                             disabled={isUploading || queue.every((i) => i.status === "done")}
@@ -638,8 +636,7 @@ export function KnowledgeAddSourceDialog({
                         </div>
                         <Button
                           type="button"
-                          variant="outline"
-                          size="sm"
+                          variant="secondary"
                           onClick={startYouTubeOAuth}
                           disabled={!connectors?.youtube.configured}
                           >
@@ -685,8 +682,8 @@ export function KnowledgeAddSourceDialog({
                                 </Badge>
                                 <Button
                                   type="button"
-                                  variant="ghost-destructive"
-                                  size="icon-xs"
+                                  variant="ghost"
+                                  iconOnly
                                   
                                   onClick={() =>
                                     setDisconnectItem({
@@ -722,7 +719,7 @@ export function KnowledgeAddSourceDialog({
                           />
                           <Button
                             type="button"
-                            variant="outline"
+                            variant="secondary"
                             onClick={handleYouTubePreview}
                             disabled={youtubePreviewing || !youtubeUrl.trim() || !selectedYoutubeConnection}
                             className="shrink-0"
@@ -750,7 +747,7 @@ export function KnowledgeAddSourceDialog({
                               )}
                             </div>
                             <div className="flex justify-end pt-1">
-                              <Button variant="brand"
+                              <Button variant="default"
                                 type="button"
                                 onClick={handleYouTubeImport}
                                 disabled={youtubeImporting}
@@ -816,8 +813,7 @@ export function KnowledgeAddSourceDialog({
                             </div>
                             <Button
                               type="button"
-                              variant="outline"
-                              size="sm"
+                              variant="secondary"
                               onClick={startNotionOAuth}
                               disabled={!connectors?.notion.configured}
                               >
@@ -861,8 +857,8 @@ export function KnowledgeAddSourceDialog({
                                   </div>
                                   <Button
                                     type="button"
-                                    variant="ghost-destructive"
-                                    size="icon-xs"
+                                    variant="ghost"
+                                    iconOnly
                                     
                                     onClick={() =>
                                       setDisconnectItem({
@@ -898,7 +894,7 @@ export function KnowledgeAddSourceDialog({
                             </div>
 
                             <div className="pt-2 flex justify-end">
-                              <Button variant="brand"
+                              <Button variant="default"
                                 type="button"
                                 onClick={handleNotionImport}
                                 disabled={notionImporting || !notionUrl.trim()}
@@ -934,7 +930,7 @@ export function KnowledgeAddSourceDialog({
                         </div>
 
                         <div className="pt-2 flex justify-end">
-                          <Button variant="brand"
+                          <Button variant="default"
                             type="button"
                             onClick={handleNotionImport}
                             disabled={notionImporting || !notionUrl.trim()}
@@ -977,7 +973,7 @@ export function KnowledgeAddSourceDialog({
             <DialogFooter className="gap-2">
               <Button
                 type="button"
-                variant="outline"
+                variant="secondary"
                 onClick={() => setDisconnectItem(null)}
                 disabled={disconnecting}
                 
@@ -986,7 +982,7 @@ export function KnowledgeAddSourceDialog({
               </Button>
               <Button
                 type="button"
-                variant="destructive"
+                variant="secondary"
                 onClick={confirmDisconnect}
                 disabled={disconnecting}
                 

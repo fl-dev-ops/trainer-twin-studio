@@ -258,7 +258,7 @@ export function KnowledgeUploadModal({
 
         <DialogFooter className="mt-2 gap-2 sm:gap-0">
           <Button
-            variant="outline"
+            variant="secondary"
             onClick={() => {
               setQueue([]);
               onOpenChange(false);

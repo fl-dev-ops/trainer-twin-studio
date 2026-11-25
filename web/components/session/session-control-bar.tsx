@@ -121,7 +121,7 @@ export function SessionControlBar({
             >
               Yes, end session
             </button>
-            <AlertDialogCancel variant="default" className="h-10">
+            <AlertDialogCancel variant="default">
               No, I’ll continue
             </AlertDialogCancel>
           </div>

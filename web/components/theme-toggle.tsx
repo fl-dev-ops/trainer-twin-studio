@@ -17,8 +17,8 @@ export function ThemeToggle() {
   const label = dark ? "Switch to light" : "Switch to dark";
   return (
     <Button
-      variant="subtle"
-      size="icon"
+      variant="ghost"
+      iconOnly
       onClick={() => setTheme(dark ? "light" : "dark")}
       aria-label={label}
       aria-pressed={dark}

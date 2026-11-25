@@ -157,7 +157,7 @@ export function DocumentDetailDrawer({
     <>
       {usedIn.length ? (
         <DropdownMenu>
-          <DropdownMenuTrigger render={<Button variant="secondary" size="sm" />}>
+          <DropdownMenuTrigger render={<Button variant="secondary" />}>
             <Sparkles data-icon="inline-start" />
             Used in {usedIn.length}
           </DropdownMenuTrigger>
@@ -298,16 +298,14 @@ export function DocumentDetailDrawer({
           ) : null}
           <div className="flex justify-end gap-2 mt-4">
             <Button
-              variant="outline"
-              size="sm"
+              variant="secondary"
               onClick={() => setConfirmDeleteOpen(false)}
               disabled={deleting}
             >
               Cancel
             </Button>
             <Button
-              variant="destructive"
-              size="sm"
+              variant="secondary"
               onClick={handleDelete}
               disabled={deleting}
             >

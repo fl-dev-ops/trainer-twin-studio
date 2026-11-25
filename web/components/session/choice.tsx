@@ -113,7 +113,7 @@ export function ChoicePanel({
         <p className="text-xs text-muted-foreground">
           {submitted ? "Answer submitted. Waiting for the next question." : "Select one option, then submit your answer."}
         </p>
-        <Button type="button" size="sm" disabled={!selectedId || submitting || submitted} onClick={() => void handleSubmit()}>
+        <Button type="button" disabled={!selectedId || submitting || submitted} onClick={() => void handleSubmit()}>
           {submitting ? "Submitting…" : submitted ? "Submitted" : "Submit answer"}
         </Button>
       </div>

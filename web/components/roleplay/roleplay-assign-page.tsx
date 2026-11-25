@@ -63,7 +63,7 @@ export function RoleplayAssignPage({ roleplay, learners }: { roleplay: Detail; l
           <h1 className="m-0 text-title-m leading-7 font-semibold tracking-title">Assign roleplay</h1>
           <p className="mt-1 text-sm text-muted-foreground">{roleplay.name} · {roleplay.members.length} assigned</p>
         </div>
-        <Button variant="brand" onClick={() => setOpen(true)} >
+        <Button variant="default" onClick={() => setOpen(true)} >
           <UserPlus data-icon="inline-start" /> Assign learners
         </Button>
       </div>

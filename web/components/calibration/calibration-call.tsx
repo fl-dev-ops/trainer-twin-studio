@@ -829,7 +829,7 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
                     {ending ? <LoaderCircle className="size-4 animate-spin" aria-hidden /> : null}
                     {ending ? "Ending the call\u2026" : "Yes, end the call"}
                   </button>
-                  <AlertDialogCancel variant="default" disabled={ending} className="h-10">
+                  <AlertDialogCancel variant="default" disabled={ending}>
                     No, I’ll continue
                   </AlertDialogCancel>
                 </div>
@@ -898,7 +898,7 @@ function ReadyToCall({ twinName, photoUrl, blocked, onStart }: { twinName: strin
           {status}
         </p>
       </div>
-      <Button variant="brand" size="lg" onClick={() => void begin()} disabled={asking || Boolean(blocked)}>
+      <Button variant="default" onClick={() => void begin()} disabled={asking || Boolean(blocked)}>
         {asking ? "Starting…" : "Start calibration"}
       </Button>
     </div>

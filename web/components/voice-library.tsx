@@ -133,7 +133,7 @@ export function VoiceLibrary({ mine, samples }: { mine: VoiceRow[]; samples: Voi
               <p className="mt-4 max-w-xs text-sm leading-6 text-muted-foreground">
                 Add a named recording or upload. The same voice can be chosen by more than one persona.
               </p>
-              <Button className="mt-5" size="sm" render={<Link href={dashRoute("/voice/cloning")} />} nativeButton={false}>
+              <Button className="mt-5" render={<Link href={dashRoute("/voice/cloning")} />} nativeButton={false}>
                 <Mic data-icon="inline-start" /> Add my voice
               </Button>
             </div>
@@ -276,7 +276,7 @@ export function VoiceCreateForm({ onCreated, onCancel, onSaved, onSavingChange }
             {source === "record" ? audio ? (
               <div className="flex items-center gap-3">
                 <p role="status" className="m-0 text-sm">Recording ready to save.</p>
-                <Button variant="outline" size="sm" onClick={() => setAudio(null)}>Record again</Button>
+                <Button variant="secondary" onClick={() => setAudio(null)}>Record again</Button>
               </div>
             ) : <VoiceRecorder disabled={saving} onFinished={(wav) => setAudio(new File([wav], "reference.wav", { type: "audio/wav" }))} /> : null}
           </TabsContent>
@@ -292,7 +292,7 @@ export function VoiceCreateForm({ onCreated, onCancel, onSaved, onSavingChange }
       {error ? <p role="alert" className="m-0 text-sm text-destructive">{error}</p> : null}
       {created && error ? <p className="m-0 text-sm text-muted-foreground">Your recording is in the voice library. Try Save again to select it without another upload.</p> : null}
       <div className="flex items-center justify-end gap-2">
-        <Button variant="outline" disabled={saving} onClick={onCancel}>Cancel</Button>
+        <Button variant="secondary" disabled={saving} onClick={onCancel}>Cancel</Button>
         <Button type="submit" disabled={saving || !name.trim() || !audio}>{saving ? "Saving…" : "Save voice"}</Button>
       </div>
     </form>
@@ -304,7 +304,7 @@ export function AddVoiceDialog({ onCreated }: { onCreated?: OnVoiceCreated }) {
   const [saving, setSaving] = useState(false);
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!saving) setOpen(next); }}>
-      <Button variant="outline" size="sm" onClick={() => setOpen(true)}><Mic data-icon="inline-start" /> Add my voice</Button>
+      <Button variant="secondary" onClick={() => setOpen(true)}><Mic data-icon="inline-start" /> Add my voice</Button>
       <DialogContent className="max-h-[calc(100svh-2rem)] overflow-y-auto sm:max-w-xl" showCloseButton={!saving}>
         <DialogHeader>
           <DialogTitle>Add my voice</DialogTitle>
@@ -447,7 +447,7 @@ function VoiceRowItem({ voice, sample }: { voice: VoiceRow; sample: boolean }) {
         <>
           <DropdownMenu>
             <DropdownMenuTrigger
-              render={<Button variant="ghost" size="icon-sm" aria-label={`Actions for ${name}`} />}
+              render={<Button variant="ghost" iconOnly aria-label={`Actions for ${name}`} />}
             >
               <MoreHorizontal />
             </DropdownMenuTrigger>
@@ -483,7 +483,7 @@ function VoiceRowItem({ voice, sample }: { voice: VoiceRow; sample: boolean }) {
                 </Field>
                 <VoiceDetailsFields id={`edit-${voice.id}`} value={detailsDraft} onChange={setDetailsDraft} />
                 <DialogFooter>
-                  <DialogClose render={<Button variant="outline" disabled={saving} />}>Cancel</DialogClose>
+                  <DialogClose render={<Button variant="secondary" disabled={saving} />}>Cancel</DialogClose>
                   <Button type="submit" disabled={saving || !draft.trim()}>
                     {saving && <LoaderCircle data-icon="inline-start" className="animate-spin" />}
                     Save
@@ -525,7 +525,7 @@ function VoiceRowItem({ voice, sample }: { voice: VoiceRow; sample: boolean }) {
               <AlertDialogFooter>
                 <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
                 <AlertDialogAction
-                  variant="destructive"
+                  variant="secondary"
                   onClick={deleteVoice}
                   disabled={deleting || deleteConfirmation !== name}
                 >

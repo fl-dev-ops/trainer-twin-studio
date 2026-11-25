@@ -239,7 +239,7 @@ function PptxFileActionsMenu({
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger render={<Button type="button" variant="ghost" size="icon-sm" aria-label="Open PowerPoint actions" />}><HugeiconsIcon icon={MoreHorizontalIcon} className="size-4" /></DropdownMenuTrigger>
+      <DropdownMenuTrigger render={<Button type="button" variant="ghost" iconOnly aria-label="Open PowerPoint actions" />}><HugeiconsIcon icon={MoreHorizontalIcon} className="size-4" /></DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-44">
         {showDownloadButton ? (
           <DropdownMenuItem disabled={downloadDisabled} onClick={onDownload}>
@@ -330,8 +330,6 @@ function PptxSlideNumberControl({
         <Button
           type="button"
           variant="ghost"
-          size="sm"
-          className="font-normal"
           aria-label={`Current slide ${displaySlide}. Edit slide number`}
           disabled={controlsDisabled || !slideCount}
           onClick={() => {
@@ -391,7 +389,7 @@ function PptxToolbar({
             <Button
               type="button"
               variant="ghost"
-              size="icon-sm"
+              iconOnly
               aria-label="Toggle thumbnails"
               disabled={controlsDisabled}
               onClick={onToggleSidebar}
@@ -404,7 +402,7 @@ function PptxToolbar({
             <Button
               type="button"
               variant="ghost"
-              size="icon-sm"
+              iconOnly
               aria-label="Previous slide"
               disabled={!canGoPrevious}
               onClick={() => onSlideChange(activeSlideIndex - 1)}
@@ -422,7 +420,7 @@ function PptxToolbar({
             <Button
               type="button"
               variant="ghost"
-              size="icon-sm"
+              iconOnly
               aria-label="Next slide"
               disabled={!canGoNext}
               onClick={() => onSlideChange(activeSlideIndex + 1)}
@@ -437,7 +435,7 @@ function PptxToolbar({
               <Button
                 type="button"
                 variant="ghost"
-                size="icon-sm"
+                iconOnly
                 aria-label="Zoom out"
                 disabled={!canZoomOut}
                 onClick={() =>
@@ -472,7 +470,7 @@ function PptxToolbar({
               <Button
                 type="button"
                 variant="ghost"
-                size="icon-sm"
+                iconOnly
                 aria-label="Zoom in"
                 disabled={!canZoomIn}
                 onClick={() =>
@@ -1238,8 +1236,7 @@ export function PptxViewerPreview({
                 </div>
                 <Button
                   type="button"
-                  variant="outline"
-                  size="sm"
+                  variant="secondary"
                   className="mt-4"
                   onClick={() => fileInputRef.current?.click()}
                 >

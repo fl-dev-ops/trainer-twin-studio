@@ -3,6 +3,7 @@
 import posthog from "posthog-js";
 import { useEffect } from "react";
 import NotFound from "@/app/not-found";
+import { Button } from "@/components/ui/button";
 import { isNotFound } from "@/lib/api";
 
 export default function Error({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
@@ -20,9 +21,9 @@ export default function Error({ error, reset }: { error: Error & { digest?: stri
       <div className="flex flex-col gap-4">
         <h1 className="text-lg font-semibold">Something went wrong</h1>
         <p className="text-sm text-muted-foreground">An unexpected error occurred. Please try again.</p>
-        <button type="button" onClick={reset} className="rounded-md border px-4 py-2 text-sm">
+        <Button type="button" onClick={reset}>
           Try again
-        </button>
+        </Button>
       </div>
     </div>
   );

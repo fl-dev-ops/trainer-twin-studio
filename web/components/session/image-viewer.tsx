@@ -23,8 +23,7 @@ export function ImageViewerSurface({ sourceUrl, title }: { sourceUrl?: string; t
         <div className="ml-auto flex items-center gap-1">
           <Button
             variant="ghost"
-            size="icon"
-            className="size-8"
+            iconOnly
             onClick={() => setScale((s) => Math.max(0.25, s - 0.25))}
             aria-label="Zoom out"
           >
@@ -33,8 +32,7 @@ export function ImageViewerSurface({ sourceUrl, title }: { sourceUrl?: string; t
           <span className="min-w-10 text-center text-xs text-muted-foreground">{Math.round(scale * 100)}%</span>
           <Button
             variant="ghost"
-            size="icon"
-            className="size-8"
+            iconOnly
             onClick={() => setScale((s) => Math.min(3, s + 0.25))}
             aria-label="Zoom in"
           >
@@ -42,8 +40,7 @@ export function ImageViewerSurface({ sourceUrl, title }: { sourceUrl?: string; t
           </Button>
           <Button
             variant="ghost"
-            size="icon"
-            className="size-8"
+            iconOnly
             onClick={() => setScale(1)}
             aria-label="Reset zoom"
           >

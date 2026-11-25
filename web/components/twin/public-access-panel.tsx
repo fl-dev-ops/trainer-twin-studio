@@ -177,7 +177,7 @@ function InstallSection({ origin, id, live }: { origin: string; id: string; live
               : "Paste this once before your page’s closing </body> tag. The widget appears after it’s turned on above."}
           </div>
         </div>
-        <Button type="button" variant="outline" size="lg" onClick={() => void copy()}>
+        <Button type="button" variant="secondary" onClick={() => void copy()}>
           {copied ? <Check data-icon="inline-start" /> : <Copy data-icon="inline-start" />}{copied ? "Copied" : "Copy code"}
         </Button>
       </div>

@@ -125,12 +125,12 @@ export function TwinAgentDetailPage({ twin }: { twin: TwinDetail }) {
               <Settings2 data-icon="inline-start" />
               Configure
             </Button>
-            <Button variant="brand" nativeButton={false} render={<Link href={dashRoute(`/twin/${id}/calibration`)} />}>
+            <Button variant="default" nativeButton={false} render={<Link href={dashRoute(`/twin/${id}/calibration`)} />}>
               <Sliders data-icon="inline-start" />
               Calibrate
             </Button>
             <DropdownMenu>
-              <DropdownMenuTrigger render={<Button variant="outline" size="icon" aria-label="More actions" />}>
+              <DropdownMenuTrigger render={<Button variant="secondary" iconOnly aria-label="More actions" />}>
                 <MoreDotsIcon />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-44">

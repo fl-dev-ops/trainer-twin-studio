@@ -259,11 +259,11 @@ export function PersonaSourcePanel({
               {!disabled && (
                 <div className="flex shrink-0 items-center">
                   {(s.status === "uploaded" || s.status === "failed" || needsIndex) && (
-                    <Button variant="ghost" size="sm" onClick={() => retry(s.id)}>
+                    <Button variant="ghost" onClick={() => retry(s.id)}>
                       {needsIndex ? "Index" : s.status === "failed" ? "Retry" : "Analyze"}
                     </Button>
                   )}
-                  <Button variant="ghost" size="icon-sm" onClick={() => remove(s.id)} aria-label={`Remove ${s.name}`}>
+                  <Button variant="ghost" iconOnly onClick={() => remove(s.id)} aria-label={`Remove ${s.name}`}>
                     <Trash2 />
                   </Button>
                 </div>

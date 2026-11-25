@@ -38,7 +38,7 @@ export function KnowledgeActionBar({
           aria-label="Search indexed knowledge"
           end={
             searchQuery ? (
-              <InputGroupButton size="icon-xs" onClick={() => onSearchChange("")} aria-label="Clear search">
+              <InputGroupButton iconOnly onClick={() => onSearchChange("")} aria-label="Clear search">
                 <X />
               </InputGroupButton>
             ) : null
@@ -46,8 +46,7 @@ export function KnowledgeActionBar({
         />
         <Button
           type="submit"
-          variant="outline"
-          size="lg"
+          variant="secondary"
           disabled={!searchQuery.trim() || searching}
         >
           {searching ? <Spinner data-icon="inline-start" /> : <Search data-icon="inline-start" />}
@@ -55,8 +54,8 @@ export function KnowledgeActionBar({
         </Button>
         <Button
           type="button"
-          variant="outline"
-          size="icon-lg"
+          variant="secondary"
+          iconOnly
           onClick={onRefresh}
           disabled={refreshing}
           title="Refresh documents"

@@ -488,7 +488,7 @@ function WorkbookFileActionsMenu({
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger render={<Button type="button" variant="ghost" size="icon-sm" aria-label="Open workbook actions" />}><HugeiconsIcon icon={MoreHorizontalIcon} className="size-4" /></DropdownMenuTrigger>
+      <DropdownMenuTrigger render={<Button type="button" variant="ghost" iconOnly aria-label="Open workbook actions" />}><HugeiconsIcon icon={MoreHorizontalIcon} className="size-4" /></DropdownMenuTrigger>
       <DropdownMenuContent
         align="end"
         className={cn("w-52", XLSX_DROPDOWN_Z_INDEX_CLASS)}
@@ -550,7 +550,7 @@ export function WorkbookTableHeaderMenu({
 
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
-      <DropdownMenuTrigger render={<Button {...triggerProps} type="button" variant="ghost" size="icon-sm" className={cn("size-6 rounded-sm", triggerProps.className)} aria-label="Column menu" />}>{triggerIcon ? (
+      <DropdownMenuTrigger render={<Button {...triggerProps} type="button" variant="ghost" iconOnly aria-label="Column menu" />}>{triggerIcon ? (
                       triggerIcon
                     ) : (
                       <HugeiconsIcon icon={MoreHorizontalIcon} className="size-3.5" />
@@ -735,7 +735,7 @@ function WorkbookSearchPopover({
   return (
     <Popover>
       <ToolbarTooltip label="Search workbook">
-        <PopoverTrigger render={<Button type="button" variant="ghost" size="icon-sm" aria-label="Search workbook" disabled={controlsDisabled} />}><HugeiconsIcon icon={Search01Icon} className="size-4" /></PopoverTrigger>
+        <PopoverTrigger render={<Button type="button" variant="ghost" iconOnly aria-label="Search workbook" disabled={controlsDisabled} />}><HugeiconsIcon icon={Search01Icon} className="size-4" /></PopoverTrigger>
       </ToolbarTooltip>
       <PopoverContent align="end" className="w-72">
         <div className="space-y-3">
@@ -779,8 +779,8 @@ function WorkbookSearchPopover({
             <div className="flex shrink-0 items-center gap-1">
               <Button
                 type="button"
-                variant="outline"
-                size="icon-sm"
+                variant="secondary"
+                iconOnly
                 aria-label="Previous result"
                 disabled={isSearching || searchResults.length === 0}
                 onClick={() => goToRelativeResult(-1)}
@@ -789,8 +789,8 @@ function WorkbookSearchPopover({
               </Button>
               <Button
                 type="button"
-                variant="outline"
-                size="icon-sm"
+                variant="secondary"
+                iconOnly
                 aria-label="Next result"
                 disabled={isSearching || searchResults.length === 0}
                 onClick={() => goToRelativeResult(1)}
@@ -802,8 +802,7 @@ function WorkbookSearchPopover({
           <div className="flex justify-end">
             <Button
               type="button"
-              variant="outline"
-              size="sm"
+              variant="secondary"
               onClick={clearSearch}
             >
               Clear
@@ -855,7 +854,7 @@ function WorkbookToolbar({
               <Button
                 type="button"
                 variant="ghost"
-                size="icon-sm"
+                iconOnly
                 disabled={!canZoomOut}
                 aria-label="Zoom out"
                 onClick={zoomOut}
@@ -891,7 +890,7 @@ function WorkbookToolbar({
               <Button
                 type="button"
                 variant="ghost"
-                size="icon-sm"
+                iconOnly
                 disabled={!canZoomIn}
                 aria-label="Zoom in"
                 onClick={zoomIn}
@@ -1544,8 +1543,7 @@ function XlsxViewerContent({
             </p>
             <Button
               type="button"
-              variant="outline"
-              size="sm"
+              variant="secondary"
               className="mt-4"
               onClick={() => fileInputRef.current?.click()}
             >
@@ -1584,8 +1582,7 @@ function XlsxViewerContent({
             <p className="mt-1 text-muted-foreground">{loadError}</p>
             <Button
               type="button"
-              variant="outline"
-              size="sm"
+              variant="secondary"
               className="mt-4"
               onClick={() => fileInputRef.current?.click()}
             >

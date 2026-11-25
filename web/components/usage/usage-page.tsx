@@ -101,7 +101,7 @@ function RangeToggle({ days, onChange }: { days: Days; onChange: (days: Days) =>
   return (
     <div role="group" aria-label="Period" className="flex gap-1">
       {([7, 30, 90] as const).map((value) => (
-        <Button key={value} size="sm" variant={value === days ? "secondary" : "subtle"} aria-pressed={value === days} onClick={() => onChange(value)}>
+        <Button key={value} variant={value === days ? "secondary" : "ghost"} aria-pressed={value === days} onClick={() => onChange(value)}>
           {value}d
         </Button>
       ))}
@@ -121,7 +121,7 @@ function BalanceCard({ credits }: { credits: OrgCredits }) {
             {credits.balanceMinutes.toLocaleString()} <span className="text-lg font-normal text-muted-foreground">min</span>
           </p>
         </div>
-        {credits.billed ? <Button variant="outline" render={<Link href={dashRoute("/billing")} />} nativeButton={false}>Buy credits</Button> : null}
+        {credits.billed ? <Button variant="secondary" render={<Link href={dashRoute("/billing")} />} nativeButton={false}>Buy credits</Button> : null}
       </div>
       {credits.addedMinutes > 0 ? (
         <div className="flex items-center gap-3 text-xs text-muted-foreground">
@@ -253,7 +253,7 @@ function ActivityLog({ activity }: { activity: Activity }) {
           <NativeSelect aria-label="Show" value={filter} onChange={(event) => setFilter(event.target.value as keyof typeof FILTERS)}>
             {Object.entries(FILTERS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </NativeSelect>
-          <Button variant="outline" size="sm" disabled={!entries.length} onClick={() => downloadCsv(entries)}>
+          <Button variant="secondary" disabled={!entries.length} onClick={() => downloadCsv(entries)}>
             <Download data-icon="inline-start" /> CSV
           </Button>
         </div>

@@ -57,7 +57,7 @@ function TwinAllCard({ twin }: { twin: TwinCard }) {
 
       <div className="shrink-0 ml-1">
         <DropdownMenu>
-          <DropdownMenuTrigger render={<Button variant="secondary" size="icon" aria-label={`More actions for ${twin.name}`} />}>
+          <DropdownMenuTrigger render={<Button variant="secondary" iconOnly aria-label={`More actions for ${twin.name}`} />}>
             <DotsIcon />
           </DropdownMenuTrigger>
           <DropdownMenuContent side="bottom" align="end" className="w-44">
@@ -135,7 +135,7 @@ function TwinBotCard({ bot, index }: { bot: TwinCard; index: number }) {
         <LearnerAvatars learners={bot.learners} />
 
         <DropdownMenu>
-          <DropdownMenuTrigger render={<Button variant="ghost" size="icon" className="ml-auto" aria-label={`Actions for ${bot.name}`} />}>
+          <DropdownMenuTrigger render={<Button variant="ghost" iconOnly className="ml-auto" aria-label={`Actions for ${bot.name}`} />}>
             <DotsIcon />
           </DropdownMenuTrigger>
           <DropdownMenuContent side="bottom" align="end" className="w-44">
@@ -202,7 +202,7 @@ function CreateSkillDialog({ personaSlug }: { personaSlug: string | null }) {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button variant="brand" />}>
+      <DialogTrigger render={<Button variant="default" />}>
         <svg viewBox="0 0 16 16" width={16} height={16} fill="none" aria-hidden>
           <path d="M8 3.5v9M3.5 8h9" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" />
         </svg>

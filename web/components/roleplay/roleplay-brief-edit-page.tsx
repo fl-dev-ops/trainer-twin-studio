@@ -186,7 +186,7 @@ export function RoleplayBriefEditPage({ slug, brief, before: initialBefore, tool
               </fieldset>
               <div className="flex items-center justify-end gap-3">
                 <Button variant="ghost" nativeButton={false} render={<Link href={dashRoute(`/roleplay/${slug}`)} />}>Cancel</Button>
-                <Button variant="brand" type="submit" disabled={!canSave}>
+                <Button variant="default" type="submit" disabled={!canSave}>
                   <Check data-icon="inline-start" /> {saving ? "Saving…" : "Save changes"}
                 </Button>
               </div>
@@ -211,7 +211,7 @@ export function RoleplayBriefEditPage({ slug, brief, before: initialBefore, tool
                     onChange={(e) => setChange(e.target.value)} />
                 </div>
                 <div className="flex justify-end">
-                  <Button type="submit" variant="brand" disabled={!change.trim()}>
+                  <Button type="submit" variant="default" disabled={!change.trim()}>
                     <Sparkles data-icon="inline-start" /> Ask the copilot
                   </Button>
                 </div>
@@ -306,7 +306,7 @@ function PersonaPool({ slug, personas, pool }: { slug: string; personas: Persona
         <div className="flex flex-wrap items-center justify-end gap-2">
           <span className="mr-auto text-sm text-muted-foreground" role="status">{draft.length ? "Unsaved changes" : "Select at least one persona."}</span>
           <Button type="button" variant="ghost" disabled={busy} onClick={() => setDraft(saved)}>Cancel</Button>
-          <Button type="button" variant="brand" disabled={busy || !draft.length} onClick={() => void save()}>{busy ? "Saving…" : "Save personas"}</Button>
+          <Button type="button" variant="default" disabled={busy || !draft.length} onClick={() => void save()}>{busy ? "Saving…" : "Save personas"}</Button>
         </div>
       ) : null}
       <Characters slug={slug} reload={saved} />
@@ -377,7 +377,7 @@ function CharacterEditor({ slug, row, onSaved }: { slug: string; row: Character;
           {draft !== saved ? (
             <div className="flex items-center justify-end gap-2">
               <Button type="button" variant="ghost" disabled={busy} onClick={() => setDraft(saved)}>Cancel</Button>
-              <Button type="button" variant="brand" disabled={busy} onClick={() => void save()}>{busy ? "Saving…" : "Save character"}</Button>
+              <Button type="button" variant="default" disabled={busy} onClick={() => void save()}>{busy ? "Saving…" : "Save character"}</Button>
             </div>
           ) : null}
         </>

@@ -51,7 +51,7 @@ function CopyShareLinkButton({ slug }: { slug: string }) {
     }
   }
   return (
-    <Button variant="outline" size="lg" onClick={() => void copy()} disabled={state === "busy"}>
+    <Button variant="secondary" onClick={() => void copy()} disabled={state === "busy"}>
       {state === "copied" ? <Check data-icon="inline-start" /> : <Copy data-icon="inline-start" />}
       {state === "copied" ? "Copied" : "Copy link"}
     </Button>
@@ -234,7 +234,7 @@ export function TwinEditPage({
             </fieldset>
             <div className="flex items-center justify-end gap-3">
               <Button variant="ghost" nativeButton={false} render={<Link href={dashRoute(`/twin/${id}`)} />}>Cancel</Button>
-              <Button variant="brand" type="submit" disabled={saving || !name.trim()}>
+              <Button variant="default" type="submit" disabled={saving || !name.trim()}>
                 {saved && <Check data-icon="inline-start" />}
                 {saving ? "Saving…" : saved ? "Saved" : "Save changes"}
               </Button>
@@ -313,7 +313,7 @@ export function TwinEditPage({
       <TabsContent value="learners">
       <div id="assign">
         <PageSection title="Learners" description={`${assigned.length} assigned. Credits are each learner’s own, shared across twins and role plays.`}
-          action={<Button variant="brand" onClick={() => setAssignOpen(true)}><UserPlus data-icon="inline-start" /> Assign learners</Button>}>
+          action={<Button variant="default" onClick={() => setAssignOpen(true)}><UserPlus data-icon="inline-start" /> Assign learners</Button>}>
         {assigned.length ? (
           <ul className={cn(SECTION_CARD, "m-0 list-none overflow-hidden p-0")}>
             {assigned.map((u) => (

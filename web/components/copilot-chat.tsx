@@ -378,11 +378,9 @@ function CopilotConversation({
               {showWorkspace && (
                 <Button
                   variant="ghost"
-                  size="sm"
                   aria-label="Open workspace"
                   onClick={() => setBlueprintOpen(true)}
-                  // eslint-disable-next-line shadcn/no-restyle -- an icon on small screens, icon + label from sm: no Button size changes responsively.
-                  className="size-8 px-0 sm:w-auto sm:px-3 xl:hidden"
+                  className="xl:hidden"
                 >
                   <Layers3 data-icon="inline-start" aria-hidden="true" />{" "}
                   <span className="hidden sm:inline">Workspace</span>
@@ -400,12 +398,9 @@ function CopilotConversation({
               )}
               <Button
                 variant="ghost"
-                size="sm"
                 aria-label="New conversation"
                 onClick={newConversation}
                 disabled={busy}
-                // eslint-disable-next-line shadcn/no-restyle -- an icon on small screens, icon + label from sm: no Button size changes responsively.
-                className="size-8 px-0 sm:w-auto sm:px-3"
               >
                 <Plus data-icon="inline-start" aria-hidden="true" />{" "}
                 <span className="hidden sm:inline">New</span>
@@ -738,7 +733,7 @@ function ToolPartView({
               {request.options.map((option) => (
                 <ConfirmationAction
                   key={option.id}
-                  variant={option.style === "primary" ? "default" : "outline"}
+                  variant={option.style === "primary" ? "default" : "secondary"}
                   disabled={busy || answered}
                   onClick={() =>
                     reply([{ interactionId: interaction.interactionId, optionId: option.id }])
@@ -764,7 +759,7 @@ function ToolPartView({
                 aria-label="Your answer"
                 className="h-8 min-w-0 flex-1 rounded-lg border bg-background px-2.5 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
               />
-              <Button size="sm" type="submit" disabled={!answer.trim() || busy || answered}>
+              <Button type="submit" disabled={!answer.trim() || busy || answered}>
                 Answer
               </Button>
             </form>

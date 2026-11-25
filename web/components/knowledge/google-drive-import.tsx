@@ -114,7 +114,7 @@ export function GoogleDriveImport({ onSuccess, onPickerOpenChange }: { onSuccess
                   <Button
                     type="button"
                     variant="ghost"
-                    size="icon-sm"
+                    iconOnly
                     disabled={busy}
                     aria-label={`Remove ${file.name} from selection`}
                     title="Remove from selection (does not delete saved files)"

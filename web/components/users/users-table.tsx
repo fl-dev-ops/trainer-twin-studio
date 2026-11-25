@@ -58,14 +58,14 @@ export function UsersTable({ users }: { users: UsersRow[] }) {
         <div className="w-72 max-w-full">
           <SearchInput placeholder="Search users" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search users" />
         </div>
-        <Button variant={lowOnly ? "secondary" : "outline"} size="sm" aria-pressed={lowOnly} onClick={() => setLowOnly((on) => !on)}>
+        <Button variant={lowOnly ? "secondary" : "ghost"} aria-pressed={lowOnly} onClick={() => setLowOnly((on) => !on)}>
           Low on credits <span className="tabular-nums text-muted-foreground">{lowCount}</span>
         </Button>
         {picked.length ? (
           <div className="ml-auto flex items-center gap-2">
             <span className="text-sm text-muted-foreground">{picked.length} selected</span>
-            <Button variant="ghost" size="sm" onClick={() => setSelected([])}>Clear</Button>
-            <Button variant="brand" size="sm" onClick={() => setAdding(true)}>
+            <Button variant="ghost" onClick={() => setSelected([])}>Clear</Button>
+            <Button variant="default" onClick={() => setAdding(true)}>
               <Plus data-icon="inline-start" /> Add credits
             </Button>
           </div>

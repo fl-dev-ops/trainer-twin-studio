@@ -111,8 +111,7 @@ export function PdfViewerSurface({
       <header className="flex min-h-12 shrink-0 items-center gap-2 border-b bg-card px-3">
         <span className="truncate text-sm font-medium">{fileName}</span>
         {!resumeDocument && <Button
-          variant="outline"
-          size="sm"
+          variant="secondary"
           className="ml-auto"
           onClick={() => fileInput.current?.click()}
         >
@@ -151,7 +150,7 @@ export function PdfViewerSurface({
                   Choose a document to read together. It stays in your browser.
                 </p>
               </div>
-              {!resumeDocument && <Button size="lg" onClick={() => fileInput.current?.click()}>
+              {!resumeDocument && <Button onClick={() => fileInput.current?.click()}>
                 Choose PDF
               </Button>}
             </div>

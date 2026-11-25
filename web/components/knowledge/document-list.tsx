@@ -127,7 +127,7 @@ export function DocumentList({
             <EmptyTitle>No matching documents</EmptyTitle>
             <EmptyDescription>No indexed content matched your search.</EmptyDescription>
           </EmptyHeader>
-          <Button variant="outline" size="sm" onClick={onClearSearch}>
+          <Button variant="secondary" onClick={onClearSearch}>
             Clear search
           </Button>
         </Empty>
@@ -145,7 +145,7 @@ export function DocumentList({
             Upload local documents or connect Notion workspaces and YouTube channels to ground your trainers.
           </EmptyDescription>
         </EmptyHeader>
-        <Button onClick={onOpenUpload} size="sm">
+        <Button onClick={onOpenUpload}>
           Add first knowledge source
         </Button>
       </Empty>
@@ -285,10 +285,8 @@ export function DocumentList({
               {uploadedDocs.length > visibleCounts.uploaded && (
                 <div className="flex justify-center pt-1">
                   <Button
-                    variant="outline"
-                    size="sm"
+                    variant="secondary"
                     onClick={() => showMore("uploaded")}
-                    className="h-8"
                   >
                     Show more
                   </Button>
@@ -325,10 +323,8 @@ export function DocumentList({
               {youtubeDocs.length > visibleCounts.youtube && (
                 <div className="flex justify-center pt-1">
                   <Button
-                    variant="outline"
-                    size="sm"
+                    variant="secondary"
                     onClick={() => showMore("youtube")}
-                    className="h-8"
                   >
                     Show more
                   </Button>
@@ -365,10 +361,8 @@ export function DocumentList({
               {notionDocs.length > visibleCounts.notion && (
                 <div className="flex justify-center pt-1">
                   <Button
-                    variant="outline"
-                    size="sm"
+                    variant="secondary"
                     onClick={() => showMore("notion")}
-                    className="h-8"
                   >
                     Show more
                   </Button>

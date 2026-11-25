@@ -29,7 +29,7 @@ export function RoleplayMenu({ slug, name, trigger }: { slug: string; name: stri
         render={
           <Button
             variant={trigger === "header" ? "secondary" : "ghost"}
-            size="icon"
+            iconOnly
             className={trigger === "header" ? undefined : "ml-auto"}
             aria-label={`Actions for ${name}`}
           />
