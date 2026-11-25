@@ -277,7 +277,7 @@ export function SessionView({
     setConnected(false);
     setLaunched(false);
     setCountdown(null);
-    setAgentInRoom(false);
+    setAgentRoomName(null);
     setError("");
     setSaveFailed(false);
     setEndReason("disconnected");
@@ -472,7 +472,7 @@ export function SessionView({
     }
     const sync = () => {
       const person = [...room.remoteParticipants.values()].find((participant) => participant.kind === ParticipantKind.AGENT);
-      setAgentRoomName(person?.name.trim() || (person ? "" : null));
+      setAgentRoomName(person ? (person.name ?? "").trim() : null);
     };
     sync();
     room.on(RoomEvent.ParticipantConnected, sync);
