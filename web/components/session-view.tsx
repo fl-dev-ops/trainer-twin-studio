@@ -42,14 +42,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { AgentTile } from "@/components/session/agent-tile";
-import { Aurora } from "@/components/session/aurora";
 import { CandidateTile } from "@/components/session/candidate-tile";
 import { SessionControlBar } from "@/components/session/session-control-bar";
 import { SessionSidebar } from "@/components/session/session-sidebar";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ReportIssueButton } from "@/components/report-issue-button";
-import { LiveSubtitles } from "@/components/session/live-subtitles";
 import { ChoicePanel } from "@/components/session/choice";
 import { CodeEditor } from "@/components/session/code-editor";
 import { Whiteboard } from "@/components/session/whiteboard";
@@ -150,7 +148,6 @@ export function SessionView({
   introVideos = {},
   agentBriefs = {},
   agentPersonaPools = {},
-  agentPhotos = {},
   autoStart = false,
   minutesLeft = null,
 }: Props) {
@@ -364,14 +361,23 @@ export function SessionView({
     void handleStartSession();
   }, [handleStartSession]);
 
+  const beginSession = useCallback(() => {
+    if (SKIP_GET_READY_COUNTDOWN) {
+      setLaunched(true);
+      void handleStartSession();
+    } else {
+      setCountdown(GET_READY_SECONDS);
+    }
+  }, [handleStartSession]);
+
   useEffect(() => {
     if (!autoStart || !prejoinComplete || ended || !agent || !persona || launched || countdown !== null) return;
     if (isContextRequired && contextIds.length === 0) return;
     // Deliberately NOT waiting on the intro download: a ~100 MB clip would otherwise
     // sit between "Join now" and the session. ScenarioIntro streams the presigned
     // URL (S3 serves 206 range requests) and the prefetch blob is used if it lands first.
-    void Promise.resolve().then(() => setCountdown(GET_READY_SECONDS));
-  }, [autoStart, prejoinComplete, ended, agent, persona, launched, countdown, isContextRequired, contextIds]);
+    void Promise.resolve().then(beginSession);
+  }, [autoStart, prejoinComplete, ended, agent, persona, launched, countdown, isContextRequired, contextIds, beginSession]);
 
   // "Get ready": a short pause so the learner isn't talked at the moment the page opens. The session (room,
   // agent dispatch, join) starts with the countdown; the agent holds its opening until "begin-opening", which is
@@ -466,10 +472,7 @@ export function SessionView({
   }, [connected, room, ended, screenShareRequired]);
 
   useEffect(() => {
-    if (!connected) {
-      setAgentRoomName(null);
-      return;
-    }
+    if (!connected) return;
     const sync = () => {
       const person = [...room.remoteParticipants.values()].find((participant) => participant.kind === ParticipantKind.AGENT);
       setAgentRoomName(person ? (person.name ?? "").trim() : null);
@@ -1079,35 +1082,32 @@ export function SessionView({
 
   if (countdown !== null) {
     return (
-      <div className="flex h-dvh w-dvw flex-col overflow-hidden bg-panel text-foreground">
-        <SessionHeader title={title} linkHome={!sessionCode} />
-        <main className="flex min-h-0 flex-1 px-4 pb-20 sm:px-6">
-          <Stage>
-            <div role="status" className="relative flex size-full flex-col items-center justify-center gap-5 p-6 text-center text-night">
-              <span className="relative grid size-24 place-items-center rounded-full bg-white/80 shadow-elevation-2">
-                <span aria-hidden className="absolute inset-0 animate-spin rounded-full border-2 border-night/10 border-t-night/60 motion-reduce:animate-none" />
-                <span className="text-4xl font-semibold tabular-nums">{countdown}</span>
-              </span>
-              <div className="flex max-w-sm flex-col gap-1.5">
-                <h2 className="text-xl font-semibold tracking-title">Get ready</h2>
-                <p className="text-sm text-night/70">
-                  {sessionPersona?.name ? `${sessionPersona.name} will start` : "The conversation will start"} in a moment. Find a quiet spot and check your mic.
-                </p>
-              </div>
-            </div>
-          </Stage>
-        </main>
+      <div className="grid h-dvh w-dvw place-items-center bg-panel text-foreground">
+        <AnimatePresence mode="popLayout">
+          <motion.span
+            key={countdown}
+            role="status"
+            aria-label={`Starting in ${countdown}`}
+            initial={reduceMotion ? false : { opacity: 0, scale: 0.72 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={reduceMotion ? undefined : { opacity: 0, scale: 1.35 }}
+            transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+            className="text-8xl font-semibold tabular-nums"
+          >
+            {countdown}
+          </motion.span>
+        </AnimatePresence>
       </div>
     );
   }
 
-  if (sessionCode && prejoinComplete && !launched && (!isContextRequired || contextIds.length > 0)) {
+  if (!error && !connected && (launched || (sessionCode && prejoinComplete && (!isContextRequired || contextIds.length > 0)))) {
     return (
-      <div className="grid min-h-svh place-items-center bg-panel text-foreground">
-        <div className="flex items-center gap-3 text-sm text-muted-foreground">
-          <LoaderCircle className="size-5 animate-spin" /> Preparing your session…
+      <main className="grid h-dvh w-dvw place-items-center bg-panel text-foreground">
+        <div role="status" className="flex items-center gap-3 text-sm text-muted-foreground">
+          <LoaderCircle aria-hidden className="size-5 motion-safe:animate-spin" /> Connecting to the session…
         </div>
-      </div>
+      </main>
     );
   }
 
@@ -1253,7 +1253,7 @@ export function SessionView({
                 )}
 
                 <Button touchTarget
-                  onClick={() => setCountdown(GET_READY_SECONDS)}
+                  onClick={beginSession}
                   disabled={!persona || !agent || (isContextRequired && contextIds.length === 0)}
                   className="mt-2 w-full"
                 >
@@ -1268,9 +1268,22 @@ export function SessionView({
   }
 
   const elapsedLabel = `${String(Math.floor(elapsed / 60)).padStart(2, "0")}:${String(elapsed % 60).padStart(2, "0")}`;
+  const tileEntry = { opacity: 0, scale: 0.94 };
+  const tileMotion = {
+    layout: !reduceMotion,
+    initial: reduceMotion ? false : tileEntry,
+    animate: { opacity: 1, scale: 1 },
+    exit: reduceMotion ? undefined : tileEntry,
+    transition: { duration: reduceMotion ? 0 : 0.35, ease: [0.16, 1, 0.3, 1] as const },
+  };
 
   return (
-    <div className="flex h-dvh w-dvw flex-col overflow-hidden bg-panel text-foreground">
+    <motion.div
+      className="relative flex h-dvh w-dvw flex-col overflow-hidden bg-panel text-foreground"
+      initial={reduceMotion ? false : { opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+    >
       <RoomContext.Provider value={room}>
         <LiveKitWorkspaceProvider
           sessionId={connection?.sessionId}
@@ -1282,16 +1295,16 @@ export function SessionView({
         >
           <SessionHeader title={title} linkHome={!sessionCode}>
             {isScreenSharing && (
-              <span className="hidden items-center gap-1.5 rounded-full bg-success-subtle px-3 py-1 text-xs font-medium text-success sm:flex">
-                <span aria-hidden className="size-2 animate-pulse rounded-full bg-success" />
-                Sharing your screen
+              <span className="hidden min-w-0 items-center gap-1.5 rounded-full bg-success-subtle px-3 py-1 text-xs font-medium text-success lg:flex">
+                <span aria-hidden className="size-2 shrink-0 rounded-full bg-success motion-safe:animate-pulse" />
+                <span className="truncate">Sharing your screen</span>
               </span>
             )}
-            {sessionCode ? <ReportIssueButton /> : null}
+            {sessionCode ? <ReportIssueButton iconOnly={isMobile} /> : null}
           </SessionHeader>
 
           {/* Main Body: Stage (Left) & Chat Sidebar (Right) — EQUAL HEIGHT */}
-          <main className="relative flex min-h-0 flex-1 gap-4 px-4 sm:px-6">
+          <main className="relative flex min-h-0 flex-1 px-4 sm:px-6">
             {/* Blocking overlay when screen sharing is stopped */}
             {screenShareRequired && connected && !isScreenSharing && screenShareAttempted && !isScreenSharePending && (
               <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/30 p-6 backdrop-blur-sm">
@@ -1319,12 +1332,12 @@ export function SessionView({
               </div>
             )}
 
-            {/* Stage: the prototype's pastel wash, with the tiles centred or a workspace beside them. */}
-            <Stage aurora={!surface}>
+            {/* Stage: tiles fill the dark page. A narrow stage stacks them; a wide one sits them side by side. */}
+            <Stage>
               <div
                 className={cn(
-                  "relative flex min-h-0 w-full max-md:flex-1",
-                  surface ? "gap-3 p-3" : "flex-col items-center justify-start gap-6 overflow-y-auto p-6 sm:flex-row sm:gap-8 md:justify-center",
+                  "relative flex min-h-0 w-full flex-1",
+                  surface ? "gap-3 p-3" : "@container",
                 )}
               >
                 {/* Surface Presentation Mode (Left Large Workspace) */}
@@ -1421,41 +1434,50 @@ export function SessionView({
                   </motion.section>
                 )}
 
-                {/* Tiles: centred side by side, or a small stack beside the workspace. */}
-                <div className={surface ? "flex w-[220px] shrink-0 flex-col gap-3" : "contents"}>
-                  {/* The agent tile exists only once that participant is in the room. The intro, if any, holds the slot until then. */}
-                  {introSrc && !introDone ? (
-                    <div className={cn("w-full shrink-0", surface ? "aspect-[4/3]" : "aspect-video max-w-[640px] sm:min-w-0 sm:flex-[2_1_0]")}>
-                      <ScenarioIntro
-                        key={agent}
-                        src={introPlaybackSrc ?? introSrc}
-                        onFinished={() => setIntroDone(true)}
-                        className="h-full min-h-0 w-full"
-                      />
-                    </div>
-                  ) : agentRoomName ? (
-                    <div className={cn("w-full shrink-0 aspect-[4/3]", !surface && "max-w-[340px] sm:min-w-0 sm:flex-[1_1_0]")}>
-                      <AgentTile persona={sessionPersona?.slug ?? ""} name={agentRoomName} photoUrl={sessionPersona?.photoUrl ?? null} compact={surface !== null} />
-                    </div>
-                  ) : null}
-                  <div className={cn("w-full shrink-0 aspect-[4/3]", !surface && "max-w-[340px] sm:min-w-0 sm:flex-[1_1_0]")}>
-                    <CandidateTile name={userName} compact={surface !== null} />
-                  </div>
+                {/* Tiles fill the stage. Stack when the stage is narrow; sit side by side when it is wide. */}
+                <div className={cn("flex min-h-0 min-w-0 gap-2 p-2", surface ? "w-[220px] shrink-0 flex-col" : "h-full flex-1 flex-col @min-[48rem]:flex-row")}>
+                  <AnimatePresence>
+                    {introSrc && !introDone ? (
+                      <motion.div
+                        key="intro"
+                        {...tileMotion}
+                        className={cn("min-h-0 min-w-0", surface ? "aspect-[4/3] w-full shrink-0" : "flex-1")}
+                      >
+                        <ScenarioIntro
+                          key={agent}
+                          src={introPlaybackSrc ?? introSrc}
+                          onFinished={() => setIntroDone(true)}
+                          className="h-full min-h-0 w-full"
+                        />
+                      </motion.div>
+                    ) : connected && agentRoomName ? (
+                      <motion.div
+                        key="agent"
+                        {...tileMotion}
+                        className={cn("min-h-0 min-w-0", surface ? "aspect-[4/3] w-full shrink-0" : "flex-1")}
+                      >
+                        <AgentTile persona={sessionPersona?.slug ?? ""} name={agentRoomName} photoUrl={sessionPersona?.photoUrl ?? null} compact={surface !== null} />
+                      </motion.div>
+                    ) : null}
+                    {connected && (
+                      <motion.div
+                        key="candidate"
+                        {...tileMotion}
+                        className={cn("min-h-0 min-w-0", surface ? "aspect-[4/3] w-full shrink-0" : "flex-1")}
+                      >
+                        <CandidateTile name={userName} compact={surface !== null} />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
               </div>
 
-              {/* YouTube / Prime Video Style Streaming Subtitles */}
-              <LiveSubtitles
-                text={latestSpokenText}
-                visible={!sidebarOpen}
-                className="max-md:pointer-events-auto max-md:relative max-md:bottom-auto max-md:left-auto max-md:z-10 max-md:max-h-[30%] max-md:w-full max-md:max-w-none max-md:shrink-0 max-md:translate-x-0 max-md:overflow-y-auto max-md:px-3 max-md:pb-3"
-              />
             </Stage>
 
             {/* Bottom sheet on mobile; the desktop chat stays beside the stage. */}
             {isMobile ? (
               <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
-                <SheetContent side="bottom" showCloseButton={false} className="h-[70dvh]! max-h-[85dvh] gap-0 overflow-hidden">
+                <SheetContent side="bottom" showCloseButton={false} borderless className="h-[70dvh]! max-h-[85dvh] gap-0 overflow-hidden">
                   <SheetTitle className="sr-only">Chat</SheetTitle>
                   <SheetDescription className="sr-only">Your conversation with {trainerName || "the other person"}. Send a message or close chat to return to the call.</SheetDescription>
                   <SessionSidebar
@@ -1464,7 +1486,7 @@ export function SessionView({
                     onSendMessage={handleSendMessage}
                     onClose={() => setSidebarOpen(false)}
                     disabled={!connected}
-                    className="w-full rounded-none border-0"
+                    className="w-full rounded-none"
                   />
                 </SheetContent>
               </Sheet>
@@ -1472,25 +1494,39 @@ export function SessionView({
               {sidebarOpen && (
                 <motion.div
                   initial={reduceMotion ? false : { opacity: 0, width: 0 }}
-                  animate={{ opacity: 1, width: 360 }}
-                  exit={reduceMotion ? undefined : { opacity: 0, width: 0 }}
-                  transition={reduceMotion ? { duration: 0 } : { duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+                  animate={{ opacity: 1, width: 376 }}
+                  exit={{ opacity: 0, width: 0 }}
+                  transition={reduceMotion ? { duration: 0 } : { duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
                   className="shrink-0 overflow-hidden"
                 >
-                  <SessionSidebar
-                    entries={entries}
-                    trainerName={trainerName || undefined}
-                    onSendMessage={handleSendMessage}
-                    onClose={() => setSidebarOpen(false)}
-                    disabled={!connected}
-                    className="h-full"
-                  />
+                  <motion.div
+                    initial={reduceMotion ? false : { x: 24 }}
+                    animate={{ x: 0 }}
+                    exit={{ x: 24 }}
+                    transition={reduceMotion ? { duration: 0 } : { duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+                    className="h-full w-fit pl-4"
+                  >
+                    <SessionSidebar
+                      entries={entries}
+                      trainerName={trainerName || undefined}
+                      onSendMessage={handleSendMessage}
+                      onClose={() => setSidebarOpen(false)}
+                      disabled={!connected}
+                    />
+                  </motion.div>
                 </motion.div>
               )}
             </AnimatePresence>}
           </main>
 
-          <footer className="grid shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1 px-3 py-2 md:h-20 md:grid-cols-[1fr_auto_1fr] md:gap-3 md:px-6 md:py-0">
+          <CallTranscript entries={entries} live={latestSpokenText} />
+
+          <motion.footer
+            className="flex shrink-0 items-center gap-3 px-4 py-3 md:h-20 md:px-6"
+            initial={reduceMotion ? false : { y: "100%", opacity: 0 }}
+            animate={{ y: connected || reduceMotion ? "0%" : "100%", opacity: connected || reduceMotion ? 1 : 0 }}
+            transition={{ duration: reduceMotion ? 0 : 0.35, ease: [0.16, 1, 0.3, 1] }}
+          >
             <time className="col-span-2 text-center font-mono text-sm tabular-nums md:col-span-1 md:text-left" aria-label="Session time">{elapsedLabel}</time>
             <SessionControlBar
               room={room}
@@ -1514,7 +1550,7 @@ export function SessionView({
                 }}
               />
             ) : null}
-          </footer>
+          </motion.footer>
 
           {error && (
             <div className="absolute inset-0 z-50 grid place-items-center bg-black/30 p-6 backdrop-blur-sm">
@@ -1543,16 +1579,29 @@ export function SessionView({
         </LiveKitWorkspaceProvider>
         <RoomAudioRenderer />
       </RoomContext.Provider>
-    </div>
+    </motion.div>
   );
 }
 
 const GET_READY_SECONDS = 5;
-/** The stage card: #f7f7f7 with the prototype's aurora, light in both themes like the role-play cards. */
-function Stage({ aurora = true, children }: { aurora?: boolean; children: React.ReactNode }) {
+// Use connection readiness instead of a fixed countdown; set false to restore the numbered screen.
+const SKIP_GET_READY_COUNTDOWN = true;
+
+/** The agent's last line only, under the stage and above the controls. */
+function CallTranscript({ entries, live }: { entries: Entry[]; live: string }) {
+  const spoken = live.trim();
+  const last = [...entries].reverse().find((line) => line.role === "trainer")?.text ?? "";
+  const text = !spoken ? last : last && (spoken.startsWith(last) || last.startsWith(spoken)) ? (spoken.length > last.length ? spoken : last) : spoken;
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl bg-stage md:flex-row">
-      {aurora ? <Aurora className="pointer-events-none absolute inset-0 size-full opacity-80" /> : null}
+    <div className="flex h-[100px] w-full shrink-0 items-center px-8 py-5">
+      <p className="line-clamp-2 w-full text-center text-xl leading-7.5 text-foreground">{text}</p>
+    </div>
+  );
+}
+/** The call stage. The page behind it stays dark; the tiles fill this box. */
+function Stage({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
       {children}
     </div>
   );
@@ -1563,18 +1612,18 @@ function SessionHeader({ title, linkHome, children }: { title: string; linkHome:
   const logo = (
     <>
       <Image src="/trainertwin-mark.svg" alt="" width={20} height={16} priority />
-      <span className="text-body font-semibold tracking-tight">TrainerTwin</span>
+      <span className="sr-only text-body font-semibold tracking-tight sm:not-sr-only">TrainerTwin</span>
     </>
   );
   return (
-    <header className="grid shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 px-4 py-3 md:h-[72px] md:grid-cols-[1fr_auto_1fr] md:gap-4 md:px-6 md:py-0">
+    <header className="grid h-14 shrink-0 grid-cols-[minmax(0,1fr)_minmax(0,2fr)_minmax(0,1fr)] items-center gap-3 px-4 md:h-[72px] md:px-6">
       {linkHome ? (
         <Link href={dashRoute("/")} className="flex w-fit items-center gap-2">{logo}</Link>
       ) : (
         <div className="flex items-center gap-2">{logo}</div>
       )}
-      <h1 className="col-span-2 row-start-2 min-w-0 truncate text-body font-medium md:col-span-1 md:col-start-2 md:row-start-1 md:max-w-[40vw] md:text-center">{title}</h1>
-      <div className="col-start-2 row-start-1 flex items-center justify-end gap-3 md:col-start-3">{children}</div>
+      <h1 className="min-w-0 truncate text-center text-body font-medium">{title}</h1>
+      <div className="flex min-w-0 items-center justify-end gap-3">{children}</div>
     </header>
   );
 }

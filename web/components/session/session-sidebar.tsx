@@ -43,12 +43,11 @@ export function SessionSidebar({
     <aside
       aria-label="Session chat"
       className={cn(
-        // A real border: the slide-in wrapper clips anything drawn outside the box.
-        "flex h-full min-h-0 w-[360px] flex-col overflow-hidden rounded-2xl border bg-card",
+        "flex h-full min-h-0 w-[360px] flex-col overflow-hidden rounded-2xl bg-card",
         className,
       )}
     >
-      <header className="flex h-14 shrink-0 items-center justify-between border-b px-4">
+      <header className="flex h-14 shrink-0 items-center justify-between px-4">
         <h2 className="text-base font-semibold tracking-title">Chat</h2>
         {onClose ? (
           <button
@@ -104,7 +103,7 @@ export function SessionSidebar({
       </div>
 
       <form
-        className="flex shrink-0 items-center gap-2 border-t p-3"
+        className="flex shrink-0 items-center gap-2 p-3"
         onSubmit={(e) => {
           e.preventDefault();
           handleSend();
@@ -117,7 +116,7 @@ export function SessionSidebar({
           onChange={(e) => setInputText(e.target.value)}
           placeholder={disabled ? "Connecting to trainer…" : "Message the trainer…"}
           aria-label="Message the trainer"
-          className="h-11 min-w-0 flex-1 rounded-full bg-card px-4 text-sm ring-1 ring-border outline-none ring-inset placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+          className="h-8 min-w-0 flex-1 rounded-full bg-muted px-4 text-base outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60 md:text-sm"
         />
         <button
           type="submit"

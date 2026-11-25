@@ -3,20 +3,19 @@
 import Image from "next/image";
 import { useVoiceAssistant } from "@livekit/components-react";
 import { cn } from "@/lib/utils";
+import { NameWave } from "./name-wave";
 
 /** The trainer's tile. Render this only for an agent participant who is already in the room; the name is theirs. */
 export function AgentTile({ persona, name: displayName, photoUrl = null, compact = false }: { persona: string; name?: string; photoUrl?: string | null; compact?: boolean }) {
   const { state } = useVoiceAssistant();
-  const isSpeaking = state === "speaking";
-  const isThinking = state === "thinking";
+  const tone = state === "speaking" ? "speaking" : state === "thinking" ? "thinking" : "listening";
 
   const name = displayName?.trim() || persona.replaceAll("-", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()) || "Trainer";
 
   return (
     <div
       className={cn(
-        "relative size-full overflow-hidden rounded-2xl bg-art-pastel shadow-elevation-2 transition-shadow duration-300",
-        isSpeaking && "ring-2 ring-success-border",
+        "relative size-full overflow-hidden rounded-2xl bg-art-pastel",
       )}
     >
       {photoUrl ? (
@@ -37,18 +36,9 @@ export function AgentTile({ persona, name: displayName, photoUrl = null, compact
         </div>
       )}
 
-      {isSpeaking || isThinking ? (
-        <span className="absolute top-3 left-3 flex items-center gap-1.5 rounded-full bg-black/45 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm">
-          <span
-            aria-hidden
-            className={cn("size-1.5 rounded-full", isSpeaking ? "bg-live" : "animate-pulse bg-caution")}
-          />
-          {isSpeaking ? "Speaking" : "Thinking"}
-        </span>
-      ) : null}
-
-      <span className="absolute bottom-3 left-3 max-w-[calc(100%-1.65rem)] truncate rounded-full bg-black/55 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm">
-        {name}
+      <span className="absolute right-4 bottom-4 flex max-w-[calc(100%-2rem)] items-center truncate rounded-full bg-black/55 px-3 py-1.5 text-xs font-medium text-white backdrop-blur-sm">
+        <NameWave tone={tone} />
+        <span className="truncate">{name}</span>
       </span>
     </div>
   );

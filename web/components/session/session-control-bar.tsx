@@ -11,14 +11,10 @@ import {
   AlertDialogDescription,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { cn } from "@/lib/utils";
-
-const CONTROL =
-  "grid size-11 shrink-0 place-items-center rounded-full outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring/50 md:size-10 [&_svg]:size-[18px]";
+import { Button } from "@/components/ui/button";
 
 /**
  * Call controls (V2 prototype): the toggle pill and the End button.
- * Renders two grid cells: controls + end on mobile, timer | controls | end on desktop.
  */
 export function SessionControlBar({
   room,
@@ -47,80 +43,84 @@ export function SessionControlBar({
 
   return (
     <>
-      <div aria-label="Session controls" role="toolbar" className="col-start-1 flex w-fit items-center gap-1 rounded-full bg-muted p-1 md:col-start-2 md:gap-2 md:p-1.5">
+      <div aria-label="Session controls" role="toolbar" className="flex w-fit min-w-0 flex-wrap items-center gap-1 rounded-full bg-muted p-1">
         {!canPlayAudio && (
-          <button {...audioProps} type="button" title="Enable audio" className={cn(CONTROL, "bg-card text-sm font-medium md:flex md:w-auto md:gap-2 md:px-4")}>
+          <Button {...audioProps} type="button" variant="secondary" title="Enable audio">
             <Volume2 />
-            <span className="sr-only md:not-sr-only">Enable audio</span>
-          </button>
+            Enable audio
+          </Button>
         )}
-        <button
+        <Button
           {...cameraProps}
           type="button"
+          variant={cameraOn ? "ghost" : "secondary"}
+          iconOnly
           aria-label={cameraOn ? "Turn off camera" : "Turn on camera"}
           title={cameraOn ? "Turn off camera" : "Turn on camera"}
-          className={cn(CONTROL, cameraOn ? "hover:bg-card" : "bg-live text-white hover:bg-live-hover")}
         >
           {cameraPending ? <LoaderCircle className="animate-spin" /> : cameraOn ? <Video /> : <VideoOff />}
-        </button>
-        <button
+        </Button>
+        <Button
           {...micProps}
           type="button"
+          variant={micOn ? "ghost" : "secondary"}
+          iconOnly
           aria-label={micOn ? "Mute microphone" : "Unmute microphone"}
           title={micOn ? "Mute microphone" : "Unmute microphone"}
-          className={cn(CONTROL, micOn ? "hover:bg-card" : "bg-live text-white hover:bg-live-hover")}
         >
           {micPending ? <LoaderCircle className="animate-spin" /> : micOn ? <Mic /> : <MicOff />}
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
           onClick={onChatToggle}
+          variant={chatOpen ? "secondary" : "ghost"}
+          iconOnly
           aria-label="Chat"
           aria-pressed={chatOpen}
           title={chatOpen ? "Hide chat" : "Show chat"}
-          className={cn(CONTROL, chatOpen ? "bg-card shadow-elevation-1" : "hover:bg-card")}
         >
           <MessageSquareText />
-        </button>
+        </Button>
         {onAttach ? (
-          <button
+          <Button
             type="button"
             onClick={onAttach}
             disabled={attaching}
+            variant="ghost"
+            iconOnly
             aria-label="Attach a file"
             title="Attach a file"
-            className={cn(CONTROL, "hover:bg-card disabled:opacity-60")}
           >
             {attaching ? <LoaderCircle className="animate-spin" /> : <Paperclip />}
-          </button>
+          </Button>
         ) : null}
       </div>
 
-      <button
+      <Button
         type="button"
         onClick={() => setConfirmOpen(true)}
         aria-label="End session"
-        className="col-start-2 inline-flex size-11 items-center justify-center gap-2 justify-self-end rounded-full bg-live text-body font-medium text-white outline-none transition-colors hover:bg-live-hover focus-visible:ring-3 focus-visible:ring-ring/50 md:col-start-3 md:h-10 md:w-auto md:px-5"
+        className="ml-auto"
       >
-        <PhoneOff className="size-[18px]" />
-        <span className="sr-only md:not-sr-only">End</span>
-      </button>
+        <PhoneOff />
+        End
+      </Button>
 
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent className="flex max-w-[420px]! flex-col items-center gap-2 px-6 pt-8 pb-6 text-center">
           <AlertDialogTitle className="text-xl leading-7 font-semibold tracking-title">End this session?</AlertDialogTitle>
           <AlertDialogDescription>Your transcript and feedback will be saved.</AlertDialogDescription>
           <div className="mt-4 grid w-full grid-cols-2 gap-2">
-            <button
+            <Button
               type="button"
+              variant="secondary"
               onClick={() => {
                 setConfirmOpen(false);
                 onEnd();
               }}
-              className="h-10 rounded-full bg-card px-4 text-sm font-semibold shadow-elevation-1 outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 dark:ring-1 dark:ring-border"
             >
               Yes, end session
-            </button>
+            </Button>
             <AlertDialogCancel variant="default">
               No, I’ll continue
             </AlertDialogCancel>

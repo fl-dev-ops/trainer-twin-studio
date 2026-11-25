@@ -11,17 +11,19 @@ import { ReportIssueDialog } from "@/components/report-issue-dialog";
  * learner session surface (SessionView with a sessionCode), never in
  * the admin studio chrome.
  */
-export function ReportIssueButton() {
+export function ReportIssueButton({ iconOnly = false }: { iconOnly?: boolean }) {
   const [open, setOpen] = useState(false);
 
   return (
     <>
       <Button
         variant="secondary"
+        iconOnly={iconOnly}
+        aria-label={iconOnly ? "Report an issue" : undefined}
         onClick={() => setOpen(true)}
       >
         <Flag data-icon="inline-start" />
-        Report an issue
+        {iconOnly ? null : "Report an issue"}
       </Button>
       <ReportIssueDialog open={open} onOpenChange={setOpen} />
     </>
