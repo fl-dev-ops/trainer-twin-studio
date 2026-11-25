@@ -88,6 +88,7 @@ export async function connectVoice(input: StartSessionInput, session: OpenedSess
       startedAt: true,
       allowedSeconds: true,
       anonymousId: true,
+      personaSlug: true,
     },
   });
   if (!row) throw refusals.notFound();
@@ -144,6 +145,13 @@ export async function connectVoice(input: StartSessionInput, session: OpenedSess
           : undefined,
       agentKind: row.agent.kind,
       anonymous: Boolean(row.anonymousId),
+      personaName: row.personaSlug
+        ? (await db.persona.findFirst({
+          where: { slug: row.personaSlug, OR: [{ orgId: input.orgId }, { orgId: null }] },
+          orderBy: { orgId: { sort: "asc", nulls: "last" } },
+          select: { name: true },
+        }))?.name
+        : undefined,
     });
     if (row.anonymousId) {
       const current = await db.interviewSession.findUnique({

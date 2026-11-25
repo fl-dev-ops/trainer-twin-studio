@@ -12,7 +12,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { UserAvatar } from "@/components/user-avatar";
+import { UserAvatar, UserAvatarGroup } from "@/components/user-avatar";
 import type { RoleplayOutputs } from "@/lib/roleplay/trpc";
 import { cn } from "@/lib/utils";
 import { PageContainer } from "@/components/page-container";
@@ -29,7 +29,7 @@ export function RoleplayMenu({ slug, name, trigger }: { slug: string; name: stri
         render={
           <Button
             variant={trigger === "header" ? "secondary" : "ghost"}
-            size="icon"
+            iconOnly
             className={trigger === "header" ? undefined : "ml-auto"}
             aria-label={`Actions for ${name}`}
           />
@@ -65,7 +65,28 @@ export function RoleplayMenu({ slug, name, trigger }: { slug: string; name: stri
   );
 }
 
-/** One role play (reference rp-card): the client's opening line on the art, title, brief, learners, actions. */
+/** Who can play this role play. One persona keeps the name; a pool must not collapse to the default. */
+function PersonaFace({ scenario }: { scenario: Scenario }) {
+  const people = scenario.personas.length ? scenario.personas : [scenario.client];
+  if (people.length === 1) {
+    return (
+      <div className="flex items-center gap-3">
+        <UserAvatar user={{ name: people[0].name, image: people[0].photoUrl }} size="xl" />
+        <span className="flex min-w-0 flex-col">
+          <span className="truncate text-body-s leading-body-s font-semibold text-(--foreground)">{people[0].name}</span>
+          <span className="line-clamp-2 text-body-s leading-body-s text-(--text-secondary)">{people[0].role ?? "Client"}</span>
+        </span>
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-center justify-center">
+      <UserAvatarGroup users={people.map((person) => ({ name: person.name, image: person.photoUrl }))} max={4} size="md" />
+    </div>
+  );
+}
+
+/** One role play (reference rp-card): who can play it, title, brief, learners, actions. */
 function ScenarioCard({ scenario, index }: { scenario: Scenario; index: number }) {
   return (
     <article className="flex flex-col overflow-visible rounded-tt-md border border-(--card-border) bg-card text-left shadow-elevation-1 transition-shadow hover:shadow-elevation-2">
@@ -73,13 +94,7 @@ function ScenarioCard({ scenario, index }: { scenario: Scenario; index: number }
         <div className={cn("relative flex min-h-[176px] items-center justify-center rounded-t-tt-md p-4", GRADIENTS[index % GRADIENTS.length])}>
           <div className="relative w-full rounded-tt-md bg-card p-3.5 shadow-elevation-2">
             <span className="absolute top-full right-3 left-3 -z-10 -mt-2 h-4 rounded-b-tt-md bg-white/28 dark:bg-black/25" />
-            <div className="flex items-center gap-3">
-              <UserAvatar user={{ name: scenario.client.name, image: scenario.client.photoUrl }} size="xl" />
-              <span className="flex min-w-0 flex-col">
-                <span className="truncate text-body-s leading-body-s font-semibold text-(--foreground)">{scenario.client.name}</span>
-                <span className="line-clamp-2 text-body-s leading-body-s text-(--text-secondary) ">{scenario.client.role ?? "Client"}</span>
-              </span>
-            </div>
+            <PersonaFace scenario={scenario} />
           </div>
         </div>
         <div className="flex flex-col gap-2 px-4 pt-3.5 pb-0">
@@ -106,7 +121,7 @@ export function RoleplayLibraryPage({ scenarios }: { scenarios: Scenario[] }) {
   const [query, setQuery] = useState("");
   const q = query.trim().toLowerCase();
   const shown = q
-    ? scenarios.filter((s) => `${s.name} ${s.description ?? ""} ${s.client.name}`.toLowerCase().includes(q))
+    ? scenarios.filter((s) => `${s.name} ${s.description ?? ""} ${s.personas.map((p) => p.name).join(" ")} ${s.client.name}`.toLowerCase().includes(q))
     : scenarios;
   const created = shown;
   return (

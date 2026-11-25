@@ -105,7 +105,7 @@ function ListField({ id, items, onChange, max, placeholder, addLabel }: {
           }}
           className={cn(input, "h-9 min-w-0 flex-1 disabled:opacity-60")}
         />
-        <Button variant="outline" onClick={add} disabled={full || !draft.trim()}>
+        <Button variant="secondary" onClick={add} disabled={full || !draft.trim()}>
           <Plus data-icon="inline-start" /> {addLabel}
         </Button>
       </div>
@@ -299,10 +299,10 @@ export function RoleplayBuilderPage({ slug, initial, character: initialCharacter
       {editing ? (
         <div className="flex items-center justify-end gap-2">
           {cardDirty ? <span className="mr-auto text-xs text-muted-foreground">Unsaved changes</span> : null}
-          <Button type="button" variant="ghost" size="sm" disabled={!cardDirty} onClick={() => setCard({ uploadTitle: before.uploadTitle, uploadInstruction: before.uploadInstruction })}>
+          <Button type="button" variant="ghost" disabled={!cardDirty} onClick={() => setCard({ uploadTitle: before.uploadTitle, uploadInstruction: before.uploadInstruction })}>
             Cancel
           </Button>
-          <Button type="submit" size="sm" disabled={!cardDirty}>
+          <Button type="submit" disabled={!cardDirty}>
             Save
           </Button>
         </div>
@@ -326,7 +326,7 @@ export function RoleplayBuilderPage({ slug, initial, character: initialCharacter
           <p className="mt-1 text-sm text-muted-foreground">The call the learner practises, how they’re scored, and what they set up first.</p>
         </div>
         {slug ? (
-          <Button variant="brand" nativeButton={false} render={<Link href={dashRoute(`/talk?agent=${encodeURIComponent(slug)}`)} />}>
+          <Button variant="default" nativeButton={false} render={<Link href={dashRoute(`/talk?agent=${encodeURIComponent(slug)}`)} />}>
             <Play data-icon="inline-start" /> Try role play
           </Button>
         ) : null}
@@ -433,7 +433,7 @@ export function RoleplayBuilderPage({ slug, initial, character: initialCharacter
               ))}
             </ol>
             <div className="flex items-center justify-between gap-3">
-              <Button variant="outline" disabled={b.rubric.length >= MAX_RUBRIC_CRITERIA} onClick={() => set("rubric", [...b.rubric, { name: "New score", points: 10 }])}>
+              <Button variant="secondary" disabled={b.rubric.length >= MAX_RUBRIC_CRITERIA} onClick={() => set("rubric", [...b.rubric, { name: "New score", points: 10 }])}>
                 <Plus data-icon="inline-start" /> Add score
               </Button>
               <span className="text-sm text-muted-foreground tabular-nums">
@@ -515,7 +515,7 @@ export function RoleplayBuilderPage({ slug, initial, character: initialCharacter
           <Button variant="ghost" nativeButton={false} render={<Link href={slug ? dashRoute(`/roleplay/${slug}`) : dashRoute("/roleplay")} />}>
             Cancel
           </Button>
-          <Button variant="brand" disabled={saving} onClick={() => void save()}>
+          <Button variant="default" disabled={saving} onClick={() => void save()}>
             <Check data-icon="inline-start" />
             {saving ? "Saving…" : slug ? "Save role play" : "Create role play"}
           </Button>

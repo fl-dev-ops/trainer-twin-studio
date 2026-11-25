@@ -186,12 +186,12 @@ export function AssignDialog({ variant, open, onOpenChange, title, assignedCount
             aria-label="Add by email"
             aria-invalid={invite.trim() !== "" && !inviteValid}
           />
-          <Button variant="outline" disabled={!inviteValid} onClick={addInvites}>Add</Button>
+          <Button variant="secondary" disabled={!inviteValid} onClick={addInvites}>Add</Button>
         </div>
 
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button variant="brand" disabled={!canAssign} onClick={() => void assign()} >
+          <Button variant="default" disabled={!canAssign} onClick={() => void assign()} >
             {busy ? "Assigning…" : picked.length > 1 ? `Assign ${picked.length}` : "Assign"}
           </Button>
         </DialogFooter>

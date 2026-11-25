@@ -5,7 +5,6 @@ import * as BasePhoneInput from "react-phone-number-input"
 import flags from "react-phone-number-input/flags"
 
 import { cn } from "cn"
-import { Button } from "@/components/ui/button"
 import {
   Combobox,
   ComboboxContent,
@@ -140,26 +139,20 @@ function CountrySelect({
       }}
     >
       <ComboboxTrigger
-        render={
-          <Button
-            variant="outline"
-            size={variant}
-            className={cn(
-              "rounded-s-lg rounded-e-none flex gap-1 border-e-0 px-2.5 py-0 leading-none hover:bg-transparent focus:z-10 data-pressed:bg-transparent",
-              disabled && "opacity-50"
-            )}
-            disabled={disabled}
-          >
-            <span className="sr-only">
-              <ComboboxValue />
-            </span>
-            <FlagComponent
-              country={selectedCountry}
-              countryName={selectedCountry}
-            />
-          </Button>
-        }
-      />
+        className={cn(
+          "flex shrink-0 items-center rounded-s-lg border border-input border-e-0 px-2.5 focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50",
+          variant === "sm" ? "h-7" : variant === "lg" ? "h-9" : "h-8"
+        )}
+        disabled={disabled}
+      >
+        <span className="sr-only">
+          <ComboboxValue />
+        </span>
+        <FlagComponent
+          country={selectedCountry}
+          countryName={selectedCountry}
+        />
+      </ComboboxTrigger>
       <ComboboxContent
         className={cn(
           "w-xs *:data-[slot=input-group]:bg-transparent",

@@ -209,7 +209,7 @@ export function TwinAvatarCapture({ personaName }: { personaName: string | null 
               <div className="flex flex-wrap items-center justify-center gap-3">
                 {photo ? (
                   <>
-                    <Button variant="outline" disabled={saving} onClick={clearPhoto}>
+                    <Button variant="secondary" disabled={saving} onClick={clearPhoto}>
                       <RotateCcw data-icon="inline-start" /> Retake
                     </Button>
                     <Button disabled={saving} onClick={() => void save()}>
@@ -220,7 +220,7 @@ export function TwinAvatarCapture({ personaName }: { personaName: string | null 
                 ) : (
                   <>
                     <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(event) => { void uploadPhoto(event.target.files?.[0]); event.target.value = ""; }} />
-                    <Button variant="outline" onClick={() => fileRef.current?.click()}>
+                    <Button variant="secondary" onClick={() => fileRef.current?.click()}>
                       <Upload data-icon="inline-start" /> Upload photo
                     </Button>
                     <Button disabled={!cameraReady} onClick={takePhoto}>

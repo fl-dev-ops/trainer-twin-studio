@@ -704,13 +704,12 @@ export function PreJoin({
 
         {/* Join button centered below device selects */}
         <section className="mt-6 flex flex-col items-center justify-center">
-          <Button size="xl" variant="brand"
+          <Button touchTarget variant="default"
             type="button"
             onClick={join}
             disabled={
               permission === "requesting" || (contextRequired && !docAttached)
             }
-            className="min-w-44"
           >
             {permission === "requesting" ? "Checking devices…" : "Join session"}
           </Button>

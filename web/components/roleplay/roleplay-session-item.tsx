@@ -26,7 +26,7 @@ export function RoleplaySessionItem({ session, divider = false }: { session: Rol
         <span className="flex min-w-0 flex-col gap-0.5">
           <span className="text-sm leading-5 font-semibold text-(--foreground)">{session.learner.name}</span>
           <span className="text-body-s leading-body-s text-muted-foreground">
-            {session.roleplay.name} · <SessionTime iso={session.at} />
+            {session.roleplay.name}{session.persona ? ` · with ${session.persona}` : ""} · <SessionTime iso={session.at} />
             {length ? ` · ${length}` : ""}
           </span>
           {session.summary ? <span className="truncate text-body-s leading-body-s text-muted-foreground">{session.summary}</span> : null}

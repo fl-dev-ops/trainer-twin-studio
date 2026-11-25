@@ -21,6 +21,13 @@ test("the copilot's brief schema has exactly the studio's shape", () => {
   expect(shape(copilotBrief)).toEqual(shape(roleplayBriefSchema));
 });
 
+test("shared lines stay on the stage; a line only some personas may say does not", () => {
+  expect(copilotBrief.shape.items.description).toContain("every persona on this stage");
+  expect(copilotBrief.shape.items.description).toContain("only some personas");
+  expect(copilotBrief.shape.items._zod.def.innerType._zod.def.element._zod.def.shape.tags.description).not.toMatch(/investor|end-user/);
+  expect(copilotBrief.shape.ending._zod.def.shape.exitLine.description).toContain("every persona");
+});
+
 test.each(Object.keys(briefFixtures))("%s: what the copilot accepts, the studio accepts identically", (name) => {
   const copilot = copilotBrief.parse(briefFixtures[name].brief);
   expect(roleplayBriefSchema.parse(copilot)).toEqual(roleplayBriefSchema.parse(briefFixtures[name].brief));

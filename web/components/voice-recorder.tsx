@@ -158,11 +158,10 @@ export function VoiceRecorder({
             </span>
             {recording ? (
               <>
-                <Button variant="ghost" size="sm" onClick={cancel}>
+                <Button variant="ghost" onClick={cancel}>
                   Re-record
                 </Button>
-                <Button variant="strong"
-                  size="sm"
+                <Button variant="secondary"
                   onClick={finish}
                   disabled={seconds < MIN_SECONDS}
                   
@@ -171,8 +170,7 @@ export function VoiceRecorder({
                 </Button>
               </>
             ) : (
-              <Button variant="strong"
-                size="lg"
+              <Button variant="secondary"
                 onClick={start}
                 onMouseEnter={() => micIconRef.current?.startAnimation()}
                 onMouseLeave={() => micIconRef.current?.stopAnimation()}

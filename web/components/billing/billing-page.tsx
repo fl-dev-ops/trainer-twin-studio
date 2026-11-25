@@ -71,7 +71,7 @@ const message = (error: unknown) => (error instanceof Error ? error.message : "S
 
 /** Razorpay's page for an invoice: in this tab, so the payer comes back here (Razorpay's callback). */
 function PayNow({ url, label = "Pay now" }: { url: string; label?: string }) {
-  return <Button variant="brand" size="sm" onClick={() => window.location.assign(url)}>{label}</Button>;
+  return <Button variant="default" onClick={() => window.location.assign(url)}>{label}</Button>;
 }
 
 /**
@@ -158,8 +158,8 @@ function PlanSection({ overview }: { overview: Billed }) {
           )}
           detail={paid ? `${price}${overview.renewsOn ? ` · renews ${day(overview.renewsOn)}` : ""}` : "Free, with no expiry. Credits come from minute packs and grants."}
         >
-          <Button variant="outline" size="sm" onClick={() => setSupport("")}>Support</Button>
-          {paid ? null : <Button variant="brand" size="sm" onClick={() => setSupport("Upgrade to a paid plan")}>Request upgrade</Button>}
+          <Button variant="secondary" onClick={() => setSupport("")}>Support</Button>
+          {paid ? null : <Button variant="default" onClick={() => setSupport("Upgrade to a paid plan")}>Request upgrade</Button>}
         </SectionRow>
         {paused && overview.overdueInvoice ? (
           <div className="border-t border-(--border) p-5">
@@ -214,8 +214,8 @@ function AddOnsSection({ overview }: { overview: Billed }) {
           title="Minute packs"
           detail={blocked ?? `${overview.pack.credits} credits for ${formatUsd(overview.pack.cents)}, tax included. Added when the invoice is paid; they expire a year later.`}
         >
-          <Button variant="ghost" size="sm" render={<Link href={dashRoute("/usage")} />} nativeButton={false}>See usage</Button>
-          <Button variant="brand" size="sm" disabled={Boolean(blocked)} onClick={() => setOpen(true)}>Buy credits</Button>
+          <Button variant="ghost" render={<Link href={dashRoute("/usage")} />} nativeButton={false}>See usage</Button>
+          <Button variant="default" disabled={Boolean(blocked)} onClick={() => setOpen(true)}>Buy credits</Button>
         </SectionRow>
       </div>
       <BuyPacksDialog overview={overview} open={open} onOpenChange={setOpen} />
@@ -257,9 +257,9 @@ function BuyPacksDialog({ overview, open, onOpenChange }: { overview: Billed; op
         </DialogHeader>
         <div className="flex items-center justify-between gap-4 py-2">
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="icon-sm" aria-label="One pack less" disabled={packs <= 1} onClick={() => choose(packs - 1)}><Minus /></Button>
+            <Button variant="secondary" iconOnly aria-label="One pack less" disabled={packs <= 1} onClick={() => choose(packs - 1)}><Minus /></Button>
             <span className="w-16 text-center text-sm tabular-nums" aria-live="polite">{packs} {packs === 1 ? "pack" : "packs"}</span>
-            <Button variant="outline" size="icon-sm" aria-label="One pack more" disabled={packs >= overview.pack.maxPacks} onClick={() => choose(packs + 1)}><Plus /></Button>
+            <Button variant="secondary" iconOnly aria-label="One pack more" disabled={packs >= overview.pack.maxPacks} onClick={() => choose(packs + 1)}><Plus /></Button>
           </div>
           <div className="text-right">
             <p className="m-0 text-sm font-medium tabular-nums">{(packs * overview.pack.credits).toLocaleString()} credits</p>
@@ -268,7 +268,7 @@ function BuyPacksDialog({ overview, open, onOpenChange }: { overview: Billed; op
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button variant="brand" disabled={busy} onClick={() => void buy()}>{busy ? "Creating invoice…" : "Continue to pay"}</Button>
+          <Button variant="default" disabled={busy} onClick={() => void buy()}>{busy ? "Creating invoice…" : "Continue to pay"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -281,7 +281,7 @@ function InvoicesSection({ invoices }: { invoices: Invoice[] }) {
   return (
     <PageSection
       title="Invoices"
-      action={invoices.length > INVOICES_SHOWN ? <Button variant="ghost" size="sm" onClick={() => setAll(!all)}>{all ? "Show fewer" : "View all"}</Button> : null}
+      action={invoices.length > INVOICES_SHOWN ? <Button variant="ghost" onClick={() => setAll(!all)}>{all ? "Show fewer" : "View all"}</Button> : null}
     >
       <div className={SECTION_CARD}>
         {shown.length ? shown.map((invoice) => {
@@ -296,7 +296,7 @@ function InvoicesSection({ invoices }: { invoices: Invoice[] }) {
               <span className="text-right tabular-nums">{formatMoney(invoice.totalCents, invoice.currency)}</span>
               <span className="hidden justify-end sm:flex">{payable ? <PayNow url={payable} label="Pay" /> : null}</span>
               <DropdownMenu>
-                <DropdownMenuTrigger render={<Button variant="subtle" size="icon-sm" aria-label={`More for ${invoice.number}`} />}>
+                <DropdownMenuTrigger render={<Button variant="ghost" iconOnly aria-label={`More for ${invoice.number}`} />}>
                   <MoreHorizontal />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
@@ -327,7 +327,7 @@ function DetailsSection({ details }: { details: BillingDetails | null }) {
     ? [details.line1, details.line2, [details.postalCode, details.city].filter(Boolean).join(" "), details.country === "IN" && details.state ? `${INDIAN_STATES[details.state]} (${details.state})` : null, countryList.find((c) => c.code === details.country)?.name].filter(Boolean)
     : [];
   return (
-    <PageSection title="Billing information" action={<Button variant="ghost" size="sm" onClick={() => setEditing(true)}>{details ? "Edit" : "Add"}</Button>}>
+    <PageSection title="Billing information" action={<Button variant="ghost" onClick={() => setEditing(true)}>{details ? "Edit" : "Add"}</Button>}>
       <div className={SECTION_CARD}>
         {details ? (
           <>
@@ -339,7 +339,7 @@ function DetailsSection({ details }: { details: BillingDetails | null }) {
           </>
         ) : (
           <SectionRow title="No billing details yet" detail="They go on every invoice, and you need them to buy minute packs." >
-            <Button variant="outline" size="sm" onClick={() => setEditing(true)}>Add billing details</Button>
+            <Button variant="secondary" onClick={() => setEditing(true)}>Add billing details</Button>
           </SectionRow>
         )}
       </div>
@@ -462,7 +462,7 @@ function DetailsForm({ details, onDone }: { details: BillingDetails | null; onDo
       {error && !FIELDS.includes(error.field) ? <p role="alert" className="text-sm text-destructive">{error.text}</p> : null}
       <div className="flex gap-2">
         <Button type="submit" disabled={busy}>{busy ? "Saving…" : "Save billing details"}</Button>
-        <Button type="button" variant="outline" onClick={onDone}>Cancel</Button>
+        <Button type="button" variant="secondary" onClick={onDone}>Cancel</Button>
       </div>
     </form>
   );

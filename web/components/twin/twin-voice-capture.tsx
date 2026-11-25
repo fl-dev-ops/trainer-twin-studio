@@ -174,7 +174,7 @@ export function TwinVoiceCapture({ personaName }: { personaName: string | null }
           ) : cameraError ? (
             <div role="alert" className="flex flex-col items-center gap-3 text-center">
               <p className="text-sm text-muted-foreground">{cameraError}</p>
-              <Button variant="outline" onClick={() => void openCamera()}>Try again</Button>
+              <Button variant="secondary" onClick={() => void openCamera()}>Try again</Button>
             </div>
           ) : (
             <>
@@ -206,8 +206,8 @@ export function TwinVoiceCapture({ personaName }: { personaName: string | null }
                 <div className="flex items-center justify-between">
                   <p className="text-sm text-muted-foreground">Read this out aloud</p>
                   <Button
-                    variant="subtle"
-                    size="icon-sm"
+                    variant="ghost"
+                    iconOnly
                     className="-mr-2"
                     aria-label="Try another text"
                     title="Try another text"
@@ -234,7 +234,7 @@ export function TwinVoiceCapture({ personaName }: { personaName: string | null }
                   )
                 ) : (
                   <>
-                    <Button variant="outline" disabled={stage === "saving"} onClick={() => { setTake(null); setStage("record"); }}>
+                    <Button variant="secondary" disabled={stage === "saving"} onClick={() => { setTake(null); setStage("record"); }}>
                       <RotateCcw data-icon="inline-start" /> Record again
                     </Button>
                     <Button disabled={stage === "saving"} onClick={() => void save()}>

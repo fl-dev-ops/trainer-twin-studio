@@ -154,7 +154,7 @@ export function PresentationViewer({
         <Button
           aria-label="Toggle slide thumbnails"
           variant={showThumbnails ? "secondary" : "ghost"}
-          size="icon-sm"
+          iconOnly
           disabled={!source}
           onClick={() => setShowThumbnails((visible) => !visible)}
         >
@@ -168,7 +168,7 @@ export function PresentationViewer({
           ) : null}
         </div>
 
-        <Button aria-label="Previous slide" variant="ghost" size="icon-sm" disabled={!source || slideIndex === 0} onClick={() => void goTo(slideIndex - 1)}>
+        <Button aria-label="Previous slide" variant="ghost" iconOnly disabled={!source || slideIndex === 0} onClick={() => void goTo(slideIndex - 1)}>
           <ChevronLeft />
         </Button>
         <label className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -183,27 +183,27 @@ export function PresentationViewer({
           />
           <span>/ {slideCount}</span>
         </label>
-        <Button aria-label="Next slide" variant="ghost" size="icon-sm" disabled={!source || slideIndex >= slideCount - 1} onClick={() => void goTo(slideIndex + 1)}>
+        <Button aria-label="Next slide" variant="ghost" iconOnly disabled={!source || slideIndex >= slideCount - 1} onClick={() => void goTo(slideIndex + 1)}>
           <ChevronRight />
         </Button>
 
         <div className="ml-auto flex items-center gap-1">
-          <Button aria-label="Zoom out" variant="ghost" size="icon-sm" disabled={!source || zoom <= 25} onClick={() => stepZoom(-1)}>
+          <Button aria-label="Zoom out" variant="ghost" iconOnly disabled={!source || zoom <= 25} onClick={() => stepZoom(-1)}>
             <ZoomOut />
           </Button>
           <button className="min-w-12 text-xs tabular-nums text-muted-foreground" disabled={!source} onClick={() => void setViewerZoom(100)}>
             {zoom}%
           </button>
-          <Button aria-label="Zoom in" variant="ghost" size="icon-sm" disabled={!source || zoom >= 400} onClick={() => stepZoom(1)}>
+          <Button aria-label="Zoom in" variant="ghost" iconOnly disabled={!source || zoom >= 400} onClick={() => stepZoom(1)}>
             <ZoomIn />
           </Button>
-          <Button aria-label="Fit slide" variant="ghost" size="icon-sm" disabled={!source} onClick={() => void controllerRef.current?.setFitMode("contain")}>
+          <Button aria-label="Fit slide" variant="ghost" iconOnly disabled={!source} onClick={() => void controllerRef.current?.setFitMode("contain")}>
             <Maximize2 />
           </Button>
-          <Button aria-label={fullscreen ? "Exit fullscreen" : "Enter fullscreen"} variant="ghost" size="icon-sm" disabled={!source} onClick={() => void toggleFullscreen()}>
+          <Button aria-label={fullscreen ? "Exit fullscreen" : "Enter fullscreen"} variant="ghost" iconOnly disabled={!source} onClick={() => void toggleFullscreen()}>
             {fullscreen ? <Minimize2 /> : <Expand />}
           </Button>
-          <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
+          <Button variant="secondary" onClick={() => fileInputRef.current?.click()}>
             <FileUp data-icon="inline-start" />
             {source ? "Replace" : "Open"}
           </Button>
@@ -221,7 +221,7 @@ export function PresentationViewer({
                 <h2 className="text-lg font-semibold tracking-tight">Bring a deck into the session</h2>
                 <p className="text-sm leading-6 text-muted-foreground">Open a PPTX or legacy PPT file. It stays in your browser and is rendered locally.</p>
               </div>
-              <Button size="lg" onClick={() => fileInputRef.current?.click()}>
+              <Button onClick={() => fileInputRef.current?.click()}>
                 <FileUp data-icon="inline-start" />
                 Choose presentation
               </Button>
@@ -273,7 +273,7 @@ export function PresentationViewer({
             <div className="flex max-w-sm flex-col items-center gap-3 text-center">
               <p className="font-medium">This presentation could not be rendered.</p>
               <p className="text-sm text-muted-foreground">{error}</p>
-              <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
+              <Button variant="secondary" onClick={() => fileInputRef.current?.click()}>
                 <RotateCcw data-icon="inline-start" />
                 Try another file
               </Button>

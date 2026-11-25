@@ -85,13 +85,14 @@ export const ConversationScrollButton = ({
     !isAtBottom && (
       <Button
         className={cn(
-          "absolute bottom-4 left-[50%] translate-x-[-50%] rounded-full dark:bg-background dark:hover:bg-muted",
+          "absolute bottom-4 left-1/2 -translate-x-1/2",
           className
         )}
         onClick={handleScrollToBottom}
-        size="icon"
+        aria-label="Scroll to bottom"
+        iconOnly
         type="button"
-        variant="outline"
+        variant="secondary"
         {...props}
       >
         <ArrowDownIcon className="size-4" />
@@ -153,13 +154,14 @@ export const ConversationDownload = ({
   return (
     <Button
       className={cn(
-        "absolute top-4 right-4 rounded-full dark:bg-background dark:hover:bg-muted",
+        "absolute top-4 right-4",
         className
       )}
       onClick={handleDownload}
-      size="icon"
+      aria-label="Download conversation"
+      iconOnly
       type="button"
-      variant="outline"
+      variant="secondary"
       {...props}
     >
       {children ?? <DownloadIcon className="size-4" />}

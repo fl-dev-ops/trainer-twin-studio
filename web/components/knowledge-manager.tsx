@@ -256,7 +256,7 @@ export function KnowledgeDetail({ slug }: { slug: string }) {
   return (
     <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <header className="flex shrink-0 items-center gap-3 border-b px-4 py-3 sm:px-6">
-        <Button variant="ghost" size="icon-sm" render={<Link href={dashRoute("/twin/knowledge")} />} nativeButton={false} aria-label="Back to knowledge bases">
+        <Button variant="ghost" iconOnly render={<Link href={dashRoute("/twin/knowledge")} />} nativeButton={false} aria-label="Back to knowledge bases">
           <ArrowLeft />
         </Button>
         <div className="min-w-0 flex-1">
@@ -278,14 +278,14 @@ export function KnowledgeDetail({ slug }: { slug: string }) {
               e.currentTarget.value = "";
             }}
           />
-          <Button variant="outline" size="sm" onClick={deleteBase}>
+          <Button variant="secondary" onClick={deleteBase}>
             <Trash2 data-icon="inline-start" /> Delete base
           </Button>
-          <Button variant="outline" size="sm" onClick={() => fileInput.current?.click()} disabled={uploading}>
+          <Button variant="secondary" onClick={() => fileInput.current?.click()} disabled={uploading}>
             {uploading ? <Spinner data-icon="inline-start" /> : <Upload data-icon="inline-start" />}
             Upload
           </Button>
-          <Button size="sm" onClick={() => digest()} disabled={digestingAll || !docs?.length}>
+          <Button onClick={() => digest()} disabled={digestingAll || !docs?.length}>
             {digestingAll ? <Spinner data-icon="inline-start" /> : <Sparkles data-icon="inline-start" />}
             Index all
           </Button>
@@ -341,7 +341,7 @@ export function KnowledgeDetail({ slug }: { slug: string }) {
                       <span className="flex items-center justify-end gap-1">
                         <Button
                           variant="ghost"
-                          size="icon-sm"
+                          iconOnly
                           aria-label={`Preview ${doc.slug}`}
                           onClick={() => openPreview(doc)}
                         >
@@ -349,7 +349,7 @@ export function KnowledgeDetail({ slug }: { slug: string }) {
                         </Button>
                         <Button
                           variant="ghost"
-                          size="icon-sm"
+                          iconOnly
                           aria-label={`Index ${doc.slug}`}
                           disabled={digestingDoc !== null || doc.status === "digesting"}
                           onClick={() => digest(doc.slug)}
@@ -362,7 +362,7 @@ export function KnowledgeDetail({ slug }: { slug: string }) {
                         </Button>
                         <Button
                           variant="ghost"
-                          size="icon-sm"
+                          iconOnly
                           aria-label={`Delete ${doc.slug}`}
                           onClick={() => removeDoc(doc)}
                         >

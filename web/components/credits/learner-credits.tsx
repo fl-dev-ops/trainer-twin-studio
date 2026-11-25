@@ -36,7 +36,7 @@ export function LearnerCreditsSummary({ email, name }: { email: string; name: st
         </span>
         <p className="m-0 text-xs text-muted-foreground tabular-nums">{data ? `${data.usedMinutes} of ${data.givenMinutes} min used` : "Loading…"}</p>
       </div>
-      <Button variant="brand" disabled={!data} onClick={() => setAdding(true)}>
+      <Button variant="default" disabled={!data} onClick={() => setAdding(true)}>
         <Plus data-icon="inline-start" /> Add credits
       </Button>
 

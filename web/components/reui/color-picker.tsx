@@ -1475,11 +1475,6 @@ export function ColorPickerValue({
   )
 }
 
-/* `normal-case` and `tracking-normal` undo sera's uppercase button text: the
-   trigger reads as a field, not an action. */
-const TRIGGER_CLASS =
-  "font-normal normal-case tracking-normal tabular-nums data-placeholder:text-muted-foreground"
-
 export type ColorPickerTriggerProps = ComponentProps<typeof Button> & {
   placeholder?: ReactNode
 }
@@ -1487,7 +1482,7 @@ export type ColorPickerTriggerProps = ComponentProps<typeof Button> & {
 /** A shadcn Button that opens the picker. Children replace the swatch, value and chevron. */
 export function ColorPickerTrigger({
   className,
-  variant = "outline",
+  variant = "secondary",
   placeholder,
   children,
   ref,
@@ -1516,11 +1511,7 @@ export function ColorPickerTrigger({
     },
     "data-slot": "color-picker-trigger",
     "data-placeholder": context.color ? undefined : "",
-    className: cn(
-      TRIGGER_CLASS,
-      children === undefined && "justify-start",
-      className
-    ),
+    className,
   }
   const content =
     children === undefined ? (
@@ -2265,7 +2256,7 @@ export type ColorPickerActionProps = ComponentProps<typeof Button>
  */
 export function ColorPickerEyeDropper({
   variant = "ghost",
-  size = "icon-sm",
+  iconOnly = true,
   onClick,
   children,
   ...props
@@ -2282,7 +2273,7 @@ export function ColorPickerEyeDropper({
     <Button
       type="button"
       variant={variant}
-      size={size}
+      iconOnly={iconOnly}
       disabled={!context.editable}
       aria-label={context.i18n.labels.eyeDropper}
       data-slot="color-picker-eye-dropper"
@@ -2323,7 +2314,7 @@ export type ColorPickerCopyProps = ColorPickerActionProps & {
 export function ColorPickerCopy({
   format,
   variant = "ghost",
-  size = "icon-sm",
+  iconOnly = true,
   onClick,
   children,
   ...props
@@ -2336,7 +2327,7 @@ export function ColorPickerCopy({
     <Button
       type="button"
       variant={variant}
-      size={size}
+      iconOnly={iconOnly}
       disabled={context.disabled || !context.color}
       aria-label={copied ? labels.copied : labels.copy}
       aria-keyshortcuts="Control+C Meta+C"
@@ -2367,7 +2358,6 @@ export function ColorPickerCopy({
  */
 export function ColorPickerClear({
   variant = "ghost",
-  size = "sm",
   onClick,
   children,
   ...props
@@ -2377,7 +2367,6 @@ export function ColorPickerClear({
     <Button
       type="button"
       variant={variant}
-      size={size}
       disabled={!context.editable}
       data-slot="color-picker-clear"
       onClick={(event) => {

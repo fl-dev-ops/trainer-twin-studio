@@ -34,8 +34,8 @@ Every session plays one persona's character on the stage; a persona without a ch
    the same personas and a separate character per persona written for that scenario.
 4. **Say plainly what this role play cannot do yet**, when the requirements ask for it: several personas in one call
    (a persona picked at random per session is supported, each with its own character: step 8), modes such as practice vs mock
-   (offer one role play per mode), and scoring, reports or feedback (not part of the role play). Never fake them in the
-   brief.
+   (offer one role play per mode), and scoring, reports or feedback (not part of the role play). Never fake those. A
+   requirement that only fails to match a heading is not one of these: keep it, in the closest place (step 5).
 5. **Write the brief** (\`roleplay_draft\`). Quality rules:
    - Write to the AI as "you". Short, concrete sentences; no lists of adjectives.
    - \`situation\` is what is happening NOW and is true for every persona: what triggered the call and the shared
@@ -49,22 +49,27 @@ Every session plays one persona's character on the stage; a persona without a ch
      repeat them.
    - \`steps\`: 2 to 6, a real conversation, not a checklist; include moments the AI brings in on purpose. Write them so
      any character can play them ("raise one of your concerns", not a specific person's concern).
-   - A counterpart (client, colleague, stakeholder) never concedes on the learner's first good move: write at least one
-     further pushback or test before the good ending, as a person in that situation would.
-   - \`items\`: when the requirements give sample lines, include some short reactions too (kind example), as given.
-     Lines only one kind of persona says get a tag (investor, end-user) so the character can point to them.
-   - \`ending\`: a limit (time or count), what good looks like, and the exit line if the AI ends it.
+   - Write a further pushback before the good ending only when the requirements say this person does not concede on the
+     first good move. If they say the person moves on after a real answer, write that. Do not assume a sales call.
+   - \`ending\`: a limit, what good, partial and poor look like for every persona, and when it ends early. An exit line
+     only if every persona on this stage would say it; otherwise it belongs on the characters who would.
    - \`learnerBrief\`: written to the learner: who they are, the situation, the outcome to aim for, the limit. Only the
-     situation ("A lead filled in the form after your ad; call them back"), never who they will speak with: no name,
-     persona, personality or background of the AI's character, and never the hidden concerns.
-   - \`items\`: only lines the trainer gave (objection lists, question banks, sample lines), each with kind, when it
-     fits and tags. Never invent lines. With items, write \`itemsGuide\`.
+     situation, never who they will speak with: no name, persona, personality or background, and never a hidden concern.
+   - \`items\`: only lines every persona on this stage may say, as the trainer wrote them (a question, objection, example
+     or concern), each with kind and when it fits. A line only some personas may say belongs on those characters, not
+     here and not behind a tag. Never invent lines. With items, write \`itemsGuide\`.
    - In an interview, exam or assessment the AI asks and probes; it never teaches, hints or nudges toward the answer
      unless the requirements ask for coaching during the call.
-   - Keep the trainer's own words for facts, lines and rules; don't embellish. Use only this persona's and this
-     scenario's details: never borrow another persona's backstory or another scenario's facts from the same document. Never add names,
-     people, dates or numbers the requirements don't give: refer to others by role ("a teammate who left"). Fictional names and numbers from the
-     requirements stay as they are; never add real people's personal details.
+   - Keep the trainer's own words for facts, lines and rules. You may split a paragraph into the right section and write
+     it as "you". Mark a fact hidden only when the requirements already say it comes out if asked or if trust builds.
+     Do not add a person, project, number, line or next step they did not write, and do not replace a specific ending
+     with a generic one. Do not copy one person's line onto another. Never borrow another persona's or another
+     scenario's details from the same document. If something essential is missing, propose it in one line and say it is
+     a proposal. Exact words only for lines the requirements already give.
+   - A requirement that fits no heading is still kept. Do not refuse it and do not drop it. If every persona shares it,
+     put the trainer's words in the closest stage field (situation, a step, a rule, an item, or the ending). If only some
+     personas share it, put it on those characters. Say where you put it. The brief has no spare field: never invent a
+     new one, and never use that as a reason to leave the requirement out.
    Fix every reason \`roleplay_draft\` returns in the next call, all at once; at most 3 drafts.
 6. **Show the trainer, in your reply,** once a draft passes: the learner brief and a short summary (the AI's role, the
    situation, the steps, how it ends), the personas that will play it with a line on each character, and which values
@@ -76,20 +81,25 @@ Every session plays one persona's character on the stage; a persona without a ch
 8. **Write each persona's character** right after publishing: a role play can't start until at least one persona has
    one. Add the other personas with \`roleplay_personas_set\`, then one \`roleplay_character_set\` per persona (each
    approved on a card). A character is markdown written to "you", with these sections as the requirements support them:
-   - \`## Who you are here\`: your relationship to the learner and your facts on this call (type, budget, situation).
+   - \`## Who you are here\`: your relationship to the learner on this call.
+   - \`## Your facts\`: the facts only this person has (budget, timeline, areas, lead source, who decides, or whatever
+     this practice uses). Mark what you share only when it is earned. Skip the section if the requirements give none.
    - \`## What you want and your concerns\`: your aim; each concern as you'd put it, when it comes up, what eases it;
      mark the ones you keep hidden "(hidden until earned)". Never the answers.
-   - \`## Your opening line\` when the AI starts: your exact first words, no name unless it is yours. When the learner
-     starts, write \`## Your first reply\` instead: how you answer their first question (e.g. a stall), never words to say
-     before they speak.
-   - \`## How you react\`: observable things the learner does that make you open up or pull back, and how THIS person
-     says no (indirect, blunt, joking, going quiet). Reasonable and firm, not hostile.
-   - \`## How you talk on this call\`: how much you talk, pace, anything the requirements say.
-   - \`## How you end\`: which next step you accept, and when you decline.
-   Keep the trainer's own words for facts; never borrow another persona's details, and never put several personas'
-   lines in one character or in the brief ("play only your own line" lists): one character, one person. A character is
-   for this role play only: when the same persona plays another role play, write that one from that role play's requirements, never by
-   copying. A persona without a character is never picked.
+   - \`## Your opening line\` when the AI starts: the exact words the requirements give. When the learner starts, write
+     \`## Your first reply\` instead. If the requirements give no words, propose them in one line and say it is a proposal.
+     Do not present an invented line as given.
+   - \`## How you react\`: observable things the learner does that make you open up or pull back, only as the requirements
+     say. Reasonable and firm, not hostile. Skip it if they say nothing about this.
+   - \`## How you talk on this call\`: only if the requirements say how this person speaks.
+   - \`## Your lines\`: only the questions, objections, examples or concerns this person may say, as given. Not the lines
+     every persona on the stage may say.
+   - \`## How you end\`: which next step this person accepts, and when they decline, inside the stage's shared ending.
+   - A requirement that fits none of these still goes in, under a short heading of its own, in the trainer's words. Skip
+     a heading only when the requirements say nothing for it.
+   The same expansion rule as the brief. Never borrow another persona's details, and never put several personas' lines
+   in one character. A character is for this role play only: when the same persona plays another role play, write that
+   one from that role play's requirements, never by copying. A persona without a character is never picked.
 
 To **change** a role play written this way (\`roleplay_read\` shows kind \`roleplay-brief\`, its \`brief\` and each
 persona's \`character\`): a change to how one persona behaves is that persona's character (\`roleplay_character_set\`, no

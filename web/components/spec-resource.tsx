@@ -95,7 +95,7 @@ export function SpecResourceEditor({
   return (
     <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <header className="flex shrink-0 items-center gap-3 border-b px-4 py-3 sm:px-6">
-        <Button variant="ghost" size="icon-sm" render={<Link href={dashRoute(`/${type}`)} />} nativeButton={false} aria-label={`Back to ${copy.title}`}>
+        <Button variant="ghost" iconOnly render={<Link href={dashRoute(`/${type}`)} />} nativeButton={false} aria-label={`Back to ${copy.title}`}>
           <ArrowLeft />
         </Button>
         <div className="min-w-0 flex-1">
@@ -110,7 +110,7 @@ export function SpecResourceEditor({
 
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
           <DropdownMenu>
-          <DropdownMenuTrigger render={<Button variant="outline" size="sm" />}>
+          <DropdownMenuTrigger render={<Button variant="secondary" />}>
             <History data-icon="inline-start" /> History
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-64">
@@ -130,18 +130,17 @@ export function SpecResourceEditor({
         </DropdownMenu>
 
         {historical ? (
-          <Button size="sm" onClick={restore} disabled={saving}>
+          <Button onClick={restore} disabled={saving}>
             {saving ? <Spinner data-icon="inline-start" /> : <RotateCcw data-icon="inline-start" />}
             Restore v{shownVersion}
           </Button>
         ) : (
           <>
-            <Button variant="outline" size="sm" onClick={remove}>
+            <Button variant="secondary" onClick={remove}>
               <Trash2 data-icon="inline-start" /> Delete
             </Button>
             {dirty && (
               <Button
-                size="sm"
                 onClick={() => save()}
                 disabled={!dirty || saving}
               >

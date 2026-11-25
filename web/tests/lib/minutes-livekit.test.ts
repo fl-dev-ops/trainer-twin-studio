@@ -39,6 +39,12 @@ test.each(["TWIN", "ROLEPLAY"])("room and dispatch metadata carry the absolute d
   expect(fetchMock).not.toHaveBeenCalled();
 });
 
+test("the voice worker is told the persona name it should join under", async () => {
+  await activateLiveKitSession({ ...input, agentKind: "ROLEPLAY", personaName: "Adam Miller" });
+  expect(JSON.parse(createRoom.mock.calls[0][0].metadata!).persona_name).toBe("Adam Miller");
+  expect(JSON.parse(createDispatch.mock.calls[0][2]!.metadata!).persona_name).toBe("Adam Miller");
+});
+
 test("studio metadata has no deadline, but keeps the kind for the correct goodbye", async () => {
   await activateLiveKitSession({ ...input, agentKind: "TWIN" });
   const metadata = JSON.parse(createRoom.mock.calls[0][0].metadata!);

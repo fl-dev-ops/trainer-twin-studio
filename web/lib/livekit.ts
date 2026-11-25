@@ -82,6 +82,8 @@ export async function activateLiveKitSession(input: {
   /** TWIN or ROLEPLAY: which goodbye the voice agent says before it ends the call at endsAt. */
   agentKind?: string;
   anonymous?: boolean;
+  /** The persona this call plays. The voice worker joins the room under this name. */
+  personaName?: string;
 }) {
   const { config, rooms, dispatches, egress } = clients();
   const room = input.sessionId;
@@ -94,6 +96,7 @@ export async function activateLiveKitSession(input: {
     ...(input.endsAt ? { ends_at: input.endsAt } : {}),
     ...(input.agentKind ? { agent_kind: input.agentKind } : {}),
     ...(input.anonymous ? { anonymous: true } : {}),
+    ...(input.personaName ? { persona_name: input.personaName } : {}),
   };
   // Every participant can read the room's metadata: the agent's runtime token goes only in its dispatch (rule 26).
   const metadata = JSON.stringify(shared);

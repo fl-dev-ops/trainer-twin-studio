@@ -140,7 +140,7 @@ export function PersonaEditor({ slug, initial, voice = null, photoUrl = null, vo
 
       <div className="mt-6 flex items-center justify-end gap-3">
         <Button variant="ghost" nativeButton={false} render={<Link href={back} />}>Cancel</Button>
-        <Button variant="brand" onClick={() => void save()} disabled={saving || !form.name.trim() || !form.role.trim()}>
+        <Button variant="default" onClick={() => void save()} disabled={saving || !form.name.trim() || !form.role.trim()}>
           <Check data-icon="inline-start" aria-hidden />
           {saving ? "Saving…" : slug ? "Save changes" : "Create persona"}
         </Button>
@@ -181,13 +181,13 @@ function VoiceSection({ saved, selected, voices, onSelect }: { saved: SavedVoice
           <VoicePicker voices={voices} current={saved?.id ?? null} selected={selected?.id ?? null} busy={false}
             onSelect={(id) => { const voice = voices.find((row) => row.id === id); if (voice) onSelect({ id: voice.id, name: voice.name }); }} />
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => { onSelect(previous); setChoosing(false); }}>Cancel</Button>
-            <Button size="sm" onClick={() => setChoosing(false)}>Use this voice</Button>
+            <Button variant="secondary" onClick={() => { onSelect(previous); setChoosing(false); }}>Cancel</Button>
+            <Button onClick={() => setChoosing(false)}>Use this voice</Button>
           </div>
         </>
       ) : (
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => { setPrevious(selected); setChoosing(true); }}>Choose a voice</Button>
+          <Button variant="secondary" onClick={() => { setPrevious(selected); setChoosing(true); }}>Choose a voice</Button>
           <AddVoiceDialog onCreated={(voice) => { onSelect({ id: voice.id, name: voice.name }); }} />
         </div>
       )}
@@ -262,7 +262,7 @@ function VoicePicker({ voices, current, selected, busy, onSelect }: { voices: Li
             {voiceDetailsLabel(voice, false) ? <span className="truncate text-xs text-muted-foreground">{voiceDetailsLabel(voice, false)}</span> : null}
             {current === voice.id ? <span className="text-xs text-muted-foreground">Current</span> : null}
           </label>
-          <Button size="sm" variant="ghost" onClick={() => void preview(voice)} disabled={loading !== null && loading !== voice.id} aria-label={playing === voice.id ? `Stop ${voice.name}` : `Listen to ${voice.name}`}>
+          <Button variant="ghost" onClick={() => void preview(voice)} disabled={loading !== null && loading !== voice.id} aria-label={playing === voice.id ? `Stop ${voice.name}` : `Listen to ${voice.name}`}>
             {loading === voice.id ? <LoaderCircle className="size-4 animate-spin" aria-hidden /> : playing === voice.id ? <Square aria-hidden /> : <Play aria-hidden />}
             {playing === voice.id ? "Stop" : "Listen"}
           </Button>

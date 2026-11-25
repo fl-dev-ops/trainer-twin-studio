@@ -104,7 +104,7 @@ export function ApiKeyManager({ initialKeys }: { initialKeys: ApiKeyRecord[] }) 
             <p className="text-sm font-semibold">Copy this key now. It will not be shown again.</p>
             <div className="mt-3 flex items-start gap-2">
               <code className="min-w-0 flex-1 break-all rounded bg-background/80 px-3 py-2 text-xs">{secret}</code>
-              <Button type="button" size="icon" variant="outline" onClick={copySecret} aria-label="Copy API key">
+              <Button type="button" iconOnly variant="secondary" onClick={copySecret} aria-label="Copy API key">
                 {copied ? <Check /> : <Copy />}
               </Button>
             </div>
@@ -129,8 +129,8 @@ export function ApiKeyManager({ initialKeys }: { initialKeys: ApiKeyRecord[] }) 
                   </div>
                   <Button
                     type="button"
-                    size="icon"
-                    variant="ghost-destructive"
+                    iconOnly
+                    variant="ghost"
                     className="shrink-0"
                     onClick={() => revokeKey(key.id)}
                     disabled={revoking === key.id}

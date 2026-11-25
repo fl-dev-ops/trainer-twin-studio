@@ -355,7 +355,7 @@ function DocxFileActionsMenu({
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger render={<Button type="button" variant="ghost" size="icon-sm" aria-label="Open DOCX actions" />}><HugeiconsIcon icon={MoreHorizontalIcon} className="size-4" /></DropdownMenuTrigger>
+      <DropdownMenuTrigger render={<Button type="button" variant="ghost" iconOnly aria-label="Open DOCX actions" />}><HugeiconsIcon icon={MoreHorizontalIcon} className="size-4" /></DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-52">
         {showNightRenderToggle ? (
           <>
@@ -493,8 +493,6 @@ function DocxPageNumberControl({
         <Button
           type="button"
           variant="ghost"
-          size="sm"
-          className="font-normal"
           aria-label={`Current page ${displayPage}. Edit page number`}
           disabled={controlsDisabled || !pageCount}
           onClick={() => {
@@ -564,7 +562,7 @@ function DocxToolbar({
             <Button
               type="button"
               variant="ghost"
-              size="icon-sm"
+              iconOnly
               aria-label="Toggle thumbnails"
               disabled={controlsDisabled}
               onClick={onToggleSidebar}
@@ -585,7 +583,7 @@ function DocxToolbar({
               <Button
                 type="button"
                 variant="ghost"
-                size="icon-sm"
+                iconOnly
                 disabled={controlsDisabled || !canZoomOut}
                 aria-label="Zoom out"
                 onClick={() =>
@@ -622,7 +620,7 @@ function DocxToolbar({
               <Button
                 type="button"
                 variant="ghost"
-                size="icon-sm"
+                iconOnly
                 disabled={controlsDisabled || !canZoomIn}
                 aria-label="Zoom in"
                 onClick={() =>
@@ -1502,8 +1500,7 @@ function DocxViewerContent({
                 </div>
                 <Button
                   type="button"
-                  variant="outline"
-                  size="sm"
+                  variant="secondary"
                   className="mt-4"
                   onClick={() => fileInputRef.current?.click()}
                 >

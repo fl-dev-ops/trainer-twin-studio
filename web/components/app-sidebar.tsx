@@ -113,9 +113,9 @@ function Brand() {
   return (
     <div className="flex min-h-8 items-center justify-between gap-2 group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:items-center">
       <SidebarTrigger
-        size={collapsed ? "icon" : "default"}
+        iconOnly={collapsed}
         aria-label="Toggle menu"
-        variant={"ghost"}
+        variant="ghost"
       >
         <BrandMark className="fill-brand" />
         <span className="text-base font-semibold leading-none tracking-title group-data-[collapsible=icon]:hidden">

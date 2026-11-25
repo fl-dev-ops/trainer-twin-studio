@@ -26,7 +26,7 @@ export default function NotFound() {
           <Button nativeButton={false} render={<Link href={dashRoute("/")} />}>
             <ArrowLeft data-icon="inline-start" /> Back to dashboard
           </Button>
-          <Button variant="outline" nativeButton={false} render={<Link href={dashRoute("/talk")} />}>
+          <Button variant="secondary" nativeButton={false} render={<Link href={dashRoute("/talk")} />}>
             <Play data-icon="inline-start" /> Start a session
           </Button>
         </div>

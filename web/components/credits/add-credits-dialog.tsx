@@ -82,7 +82,7 @@ export function AddCreditsDialog({ email, name, open, onOpenChange, givenMinutes
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button variant="brand" disabled={Boolean(blocked) || busy} onClick={() => void add()}>
+          <Button variant="default" disabled={Boolean(blocked) || busy} onClick={() => void add()}>
             {busy ? "Adding…" : minutes ? `Add ${minutes} min` : "Add"}
           </Button>
         </DialogFooter>

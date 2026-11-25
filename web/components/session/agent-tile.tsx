@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useVoiceAssistant } from "@livekit/components-react";
 import { cn } from "@/lib/utils";
 
-/** The trainer's tile (V2 prototype): the persona's photo, else an initial on the light wash; a status pill and a name tag. */
+/** The trainer's tile. Render this only for an agent participant who is already in the room; the name is theirs. */
 export function AgentTile({ persona, name: displayName, photoUrl = null, compact = false }: { persona: string; name?: string; photoUrl?: string | null; compact?: boolean }) {
   const { state } = useVoiceAssistant();
   const isSpeaking = state === "speaking";

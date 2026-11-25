@@ -44,16 +44,13 @@ export type ArtifactCloseProps = ComponentProps<typeof Button>;
 export const ArtifactClose = ({
   className,
   children,
-  size = "sm",
+  iconOnly = true,
   variant = "ghost",
   ...props
 }: ArtifactCloseProps) => (
   <Button
-    className={cn(
-      "size-8 p-0 text-muted-foreground hover:text-foreground",
-      className
-    )}
-    size={size}
+    className={className}
+    iconOnly={iconOnly}
     type="button"
     variant={variant}
     {...props}
@@ -102,17 +99,14 @@ export const ArtifactAction = ({
   icon: Icon,
   children,
   className,
-  size = "sm",
+  iconOnly = true,
   variant = "ghost",
   ...props
 }: ArtifactActionProps) => {
   const button = (
     <Button
-      className={cn(
-        "size-8 p-0 text-muted-foreground hover:text-foreground",
-        className
-      )}
-      size={size}
+      className={className}
+      iconOnly={iconOnly}
       type="button"
       variant={variant}
       {...props}

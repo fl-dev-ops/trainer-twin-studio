@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Check, Pencil, Search, Trash2 } from "lucide-react";
+import { ArrowLeft, Check, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { SupportingSkillsEditor } from "@/components/agents/supporting-skills-editor";
 import { BotIcon } from "@/components/icons";
@@ -46,7 +46,7 @@ function BotMenu({ slug, name, trigger, onDelete }: { slug: string; name: string
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        render={<Button variant={trigger === "header" ? "secondary" : "ghost"} size="icon" className={trigger === "header" ? undefined : "ml-auto"} aria-label={`Actions for ${name}`} />}
+        render={<Button variant={trigger === "header" ? "secondary" : "ghost"} iconOnly className={trigger === "header" ? undefined : "ml-auto"} aria-label={`Actions for ${name}`} />}
       >
         <DotsIcon />
       </DropdownMenuTrigger>
@@ -153,13 +153,10 @@ export function TwinBotsPage({ data }: { data: Bots }) {
             <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search..." autoComplete="off"
               className="w-36 bg-transparent text-foreground outline-none placeholder:text-muted-foreground" />
           </label>
-          <button type="button" onClick={() => setCreating(true)}
-            className="inline-flex h-8 cursor-pointer items-center gap-2 rounded-full bg-(--brand) px-3.5 text-body-s leading-5 font-medium text-white transition-colors hover:bg-brand-hover">
-            <svg viewBox="0 0 16 16" width={16} height={16} fill="none" aria-hidden>
-              <path d="M8 3.5v9M3.5 8h9" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" />
-            </svg>
+          <Button type="button" onClick={() => setCreating(true)}>
+            <Plus aria-hidden="true" />
             New bot
-          </button>
+          </Button>
         </div>
       </header>
 
@@ -228,7 +225,7 @@ function NewBotDialog({ open, onOpenChange, personas }: { open: boolean; onOpenC
         </form>
         <DialogFooter>
           <Button type="button" variant="ghost" disabled={busy} onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button type="submit" form="new-bot" variant="brand" disabled={busy}>{busy ? "Creating…" : "Create bot"}</Button>
+          <Button type="submit" form="new-bot" variant="default" disabled={busy}>{busy ? "Creating…" : "Create bot"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -336,7 +333,7 @@ function BotGeneral({ bot }: { bot: Bot }) {
         </fieldset>
         <div className="flex items-center justify-end gap-3">
           <Button type="button" variant="ghost" disabled={saving || !dirty} onClick={() => { setName(bot.name); setObjective(bot.objective); }}>Cancel</Button>
-          <Button variant="brand" type="submit" disabled={saving || !dirty}>
+          <Button variant="default" type="submit" disabled={saving || !dirty}>
             {saved && <Check data-icon="inline-start" />}
             {saving ? "Saving…" : saved ? "Saved" : "Save changes"}
           </Button>

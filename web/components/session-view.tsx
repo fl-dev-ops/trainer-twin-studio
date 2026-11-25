@@ -196,7 +196,8 @@ export function SessionView({
   });
   const [connection, setConnection] = useState<SessionConnection | null>(null);
   const [connected, setConnected] = useState(false);
-  const [agentInRoom, setAgentInRoom] = useState(false);
+  /** The agent participant's room name, set when they join and updated if they rename. Absent until they are in the room. */
+  const [agentRoomName, setAgentRoomName] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [saveFailed, setSaveFailed] = useState(false);
   const [ended, setEnded] = useState(false);
@@ -465,20 +466,27 @@ export function SessionView({
   }, [connected, room, ended, screenShareRequired]);
 
   useEffect(() => {
-    if (!connected) return;
-    const markAgent = () => setAgentInRoom(true);
-    if (room.remoteParticipants.size > 0) {
-      markAgent();
+    if (!connected) {
+      setAgentRoomName(null);
       return;
     }
-    room.on(RoomEvent.ParticipantConnected, markAgent);
+    const sync = () => {
+      const person = [...room.remoteParticipants.values()].find((participant) => participant.kind === ParticipantKind.AGENT);
+      setAgentRoomName(person?.name.trim() || (person ? "" : null));
+    };
+    sync();
+    room.on(RoomEvent.ParticipantConnected, sync);
+    room.on(RoomEvent.ParticipantDisconnected, sync);
+    room.on(RoomEvent.ParticipantNameChanged, sync);
     return () => {
-      room.off(RoomEvent.ParticipantConnected, markAgent);
+      room.off(RoomEvent.ParticipantConnected, sync);
+      room.off(RoomEvent.ParticipantDisconnected, sync);
+      room.off(RoomEvent.ParticipantNameChanged, sync);
     };
   }, [room, connected]);
 
   useEffect(() => {
-    if (!connected || !agentInRoom || ended || !launched) return;
+    if (!connected || agentRoomName === null || ended || !launched) return;
     if (introSrc && !introDone) return;
     if (releasedRef.current) return;
     releasedRef.current = true;
@@ -508,7 +516,7 @@ export function SessionView({
         console.error("Could not release agent opening:", dataError);
       }
     })();
-  }, [room, connected, agentInRoom, ended, launched, introSrc, introDone, prejoinMedia]);
+  }, [room, connected, agentRoomName, ended, launched, introSrc, introDone, prejoinMedia]);
 
   const finalizeSession = useCallback(
     async (status: "completed" | "abandoned") => {
@@ -986,8 +994,8 @@ export function SessionView({
   }, [room]);
 
   const title = scenarioName ?? agentNames[agent] ?? agent.replaceAll("-", " ");
-  // A role play has no name before the call (agentPersonaNames leaves it out): the learner knows only the situation.
-  const trainerName = sessionPersona?.name || agentPersonaNames[agent] || "";
+  // In the room, the name is the agent participant's. Before that, a role play names nobody: the default persona is not who will answer.
+  const trainerName = agentRoomName || sessionPersona?.name || (!agentPersonaPools[agent] ? agentPersonaNames[agent] : "") || "";
 
   if (sessionCode && !prejoinComplete) {
     return (
@@ -1048,11 +1056,10 @@ export function SessionView({
               {sessionCode ? <PractiseAgainActions /> : null}
               {!sessionCode && (
                 <CardContent className="flex justify-center gap-2">
-                  <Button variant="outline" className="h-10" nativeButton={false} render={<Link href={dashRoute("/sessions")} />}>
+                  <Button variant="secondary" nativeButton={false} render={<Link href={dashRoute("/sessions")} />}>
                     View sessions
                   </Button>
                   <Button
-                    className="h-10"
                     onClick={() => {
                       resetSessionState();
                       setEnded(false);
@@ -1084,7 +1091,7 @@ export function SessionView({
               <div className="flex max-w-sm flex-col gap-1.5">
                 <h2 className="text-xl font-semibold tracking-title">Get ready</h2>
                 <p className="text-sm text-night/70">
-                  {trainerName ? `${trainerName} will start` : "The conversation will start"} in a moment. Find a quiet spot and check your mic.
+                  {sessionPersona?.name ? `${sessionPersona.name} will start` : "The conversation will start"} in a moment. Find a quiet spot and check your mic.
                 </p>
               </div>
             </div>
@@ -1228,8 +1235,8 @@ export function SessionView({
                       }}
                     />
                     <Button
-                      variant="outline"
-                      size="icon"
+                      variant="secondary"
+                      iconOnly
                       className="shrink-0"
                       aria-label="Upload document"
                       disabled={uploadingContext}
@@ -1245,7 +1252,7 @@ export function SessionView({
                   <p role="alert" className="text-sm text-destructive">{error}</p>
                 )}
 
-                <Button size="xl"
+                <Button touchTarget
                   onClick={() => setCountdown(GET_READY_SECONDS)}
                   disabled={!persona || !agent || (isContextRequired && contextIds.length === 0)}
                   className="mt-2 w-full"
@@ -1298,7 +1305,7 @@ export function SessionView({
                   <div className="mt-6 w-full flex flex-col gap-2.5">
                     <Button
                       type="button"
-                      size="xl"
+                      touchTarget
                       disabled={isScreenSharePending}
                       onClick={() => void handleEnableScreenShare()}
                       className="w-full"
@@ -1415,28 +1422,21 @@ export function SessionView({
 
                 {/* Tiles: centred side by side, or a small stack beside the workspace. */}
                 <div className={surface ? "flex w-[220px] shrink-0 flex-col gap-3" : "contents"}>
-                  {/* Side by side the tiles share the row and shrink to fit; the intro video gets twice the share. */}
-                  <div
-                    className={cn(
-                      "w-full shrink-0",
-                      surface
-                        ? "aspect-[4/3]"
-                        : introSrc && !introDone
-                          ? "aspect-video max-w-[640px] sm:min-w-0 sm:flex-[2_1_0]"
-                          : "aspect-[4/3] max-w-[340px] sm:min-w-0 sm:flex-[1_1_0]",
-                    )}
-                  >
-                    {introSrc && !introDone ? (
+                  {/* The agent tile exists only once that participant is in the room. The intro, if any, holds the slot until then. */}
+                  {introSrc && !introDone ? (
+                    <div className={cn("w-full shrink-0", surface ? "aspect-[4/3]" : "aspect-video max-w-[640px] sm:min-w-0 sm:flex-[2_1_0]")}>
                       <ScenarioIntro
                         key={agent}
                         src={introPlaybackSrc ?? introSrc}
                         onFinished={() => setIntroDone(true)}
                         className="h-full min-h-0 w-full"
                       />
-                    ) : (
-                      <AgentTile persona={sessionPersona?.slug ?? persona} name={trainerName} photoUrl={sessionPersona ? sessionPersona.photoUrl : agentPhotos[agent] ?? null} compact={surface !== null} />
-                    )}
-                  </div>
+                    </div>
+                  ) : agentRoomName ? (
+                    <div className={cn("w-full shrink-0 aspect-[4/3]", !surface && "max-w-[340px] sm:min-w-0 sm:flex-[1_1_0]")}>
+                      <AgentTile persona={sessionPersona?.slug ?? ""} name={agentRoomName} photoUrl={sessionPersona?.photoUrl ?? null} compact={surface !== null} />
+                    </div>
+                  ) : null}
                   <div className={cn("w-full shrink-0 aspect-[4/3]", !surface && "max-w-[340px] sm:min-w-0 sm:flex-[1_1_0]")}>
                     <CandidateTile name={userName} compact={surface !== null} />
                   </div>
@@ -1525,8 +1525,7 @@ export function SessionView({
                 <CardContent className="flex justify-center gap-2">
                   {!autoStart && (
                     <Button
-                      variant="outline"
-                      className="h-10"
+                      variant="secondary"
                       onClick={() => {
                         resetSessionState();
                         setLaunched(false);
@@ -1535,7 +1534,7 @@ export function SessionView({
                       Back
                     </Button>
                   )}
-                  <Button className="h-10" onClick={saveFailed ? () => void handleDisconnect(pendingEndReasonRef.current) : handleRetry}>Try again</Button>
+                  <Button onClick={saveFailed ? () => void handleDisconnect(pendingEndReasonRef.current) : handleRetry}>Try again</Button>
                 </CardContent>
               </Card>
             </div>
@@ -1586,10 +1585,10 @@ function SessionHeader({ title, linkHome, children }: { title: string; linkHome:
 function PractiseAgainActions() {
   return (
     <CardContent className="flex justify-center gap-2">
-      <Button variant="outline" className="h-10" nativeButton={false} render={<Link href={dashRoute("/")} />}>
+      <Button variant="secondary" nativeButton={false} render={<Link href={dashRoute("/")} />}>
         Back to home
       </Button>
-      <Button className="h-10" onClick={() => window.location.reload()}>
+      <Button onClick={() => window.location.reload()}>
         <Play data-icon="inline-start" /> Practise again
       </Button>
     </CardContent>

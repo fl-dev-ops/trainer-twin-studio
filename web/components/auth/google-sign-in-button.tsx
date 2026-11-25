@@ -62,7 +62,7 @@ export function GoogleSignInButton({ label = "Continue with Google", callbackURL
     <div className="flex w-full flex-col gap-2">
       <Button
         type="button"
-        variant="outline"
+        variant="secondary"
         onClick={signIn}
         disabled={busy}
         className={className ?? "w-full"}

@@ -1129,17 +1129,14 @@ export type PromptInputButtonProps = ComponentProps<typeof InputGroupButton> & {
 export const PromptInputButton = ({
   variant = "ghost",
   className,
-  size,
+  iconOnly,
   tooltip,
   ...props
 }: PromptInputButtonProps) => {
-  const newSize =
-    size ?? (Children.count(props.children) > 1 ? "sm" : "icon-sm");
-
   const button = (
     <InputGroupButton
-      className={cn(className)}
-      size={newSize}
+      className={className}
+      iconOnly={iconOnly ?? Children.count(props.children) <= 1}
       type="button"
       variant={variant}
       {...props}
@@ -1214,7 +1211,7 @@ export type PromptInputSubmitProps = ComponentProps<typeof InputGroupButton> & {
 export const PromptInputSubmit = ({
   className,
   variant = "default",
-  size = "icon-sm",
+  iconOnly = true,
   status,
   onStop,
   onClick,
@@ -1250,7 +1247,7 @@ export const PromptInputSubmit = ({
       aria-label={isGenerating ? "Stop" : "Submit"}
       className={cn(className)}
       onClick={handleClick}
-      size={size}
+      iconOnly={iconOnly}
       type={isGenerating && onStop ? "button" : "submit"}
       variant={variant}
       {...props}

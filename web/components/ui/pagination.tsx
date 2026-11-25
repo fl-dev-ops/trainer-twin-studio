@@ -35,19 +35,19 @@ function PaginationItem({ ...props }: React.ComponentProps<"li">) {
 
 type PaginationLinkProps = {
   isActive?: boolean
-} & Pick<React.ComponentProps<typeof Button>, "size"> &
+} & Pick<React.ComponentProps<typeof Button>, "iconOnly"> &
   React.ComponentProps<"a">
 
 function PaginationLink({
   className,
   isActive,
-  size = "icon",
+  iconOnly = true,
   ...props
 }: PaginationLinkProps) {
   return (
     <Button
-      variant={isActive ? "outline" : "ghost"}
-      size={size}
+      variant={isActive ? "secondary" : "ghost"}
+      iconOnly={iconOnly}
       className={cn(className)}
       nativeButton={false}
       render={
@@ -70,8 +70,8 @@ function PaginationPrevious({
   return (
     <PaginationLink
       aria-label="Go to previous page"
-      size="default"
-      className={cn("pl-1.5!", className)}
+      iconOnly={false}
+      className={className}
       {...props}
     >
       <ChevronLeftIcon data-icon="inline-start" />
@@ -88,8 +88,8 @@ function PaginationNext({
   return (
     <PaginationLink
       aria-label="Go to next page"
-      size="default"
-      className={cn("pr-1.5!", className)}
+      iconOnly={false}
+      className={className}
       {...props}
     >
       <span className="hidden sm:block">{text}</span>

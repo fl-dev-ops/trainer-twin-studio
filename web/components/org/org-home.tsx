@@ -94,7 +94,7 @@ export function OrgHome({ org, viewer, twins, trainer, roleplays }: {
         </span>
         {viewer ? (
           <DropdownMenu>
-            <DropdownMenuTrigger render={<Button variant="ghost" size="lg" />}>
+            <DropdownMenuTrigger render={<Button variant="ghost" />}>
               <span data-icon="inline-start" className="-ml-2">
                 <UserAvatar user={{ name: viewer.name, email: viewer.email }} size="sm" />
               </span>
@@ -114,7 +114,7 @@ export function OrgHome({ org, viewer, twins, trainer, roleplays }: {
             </DropdownMenuContent>
           </DropdownMenu>
         ) : (
-          <Button variant="ghost" className="h-9" onClick={() => setSigningIn(true)}>
+          <Button variant="ghost" onClick={() => setSigningIn(true)}>
             <LogIn data-icon="inline-start" />
             Sign in
           </Button>
@@ -221,7 +221,7 @@ export function OrgHome({ org, viewer, twins, trainer, roleplays }: {
                   <h3 className={TITLE}>{roleplay.name}</h3>
                   {roleplay.description ? <p className={cn(BODY, "line-clamp-3")}>{roleplay.description}</p> : null}
                 </div>
-                <Button variant="outline" className="w-fit" nativeButton={false} render={<Link href={roleplay.href} />}>
+                <Button variant="secondary" className="w-fit" nativeButton={false} render={<Link href={roleplay.href} />}>
                   <Sparkles data-icon="inline-start" />
                   Start role play
                 </Button>
@@ -252,7 +252,7 @@ export function OrgHome({ org, viewer, twins, trainer, roleplays }: {
       {main && !blocked ? (
         <div className="fixed inset-x-0 bottom-0 z-10 flex flex-col items-center gap-2 bg-linear-to-t from-background via-background/90 to-transparent px-5 pt-10 pb-5">
           <div className="flex items-center gap-3 rounded-full border border-(--card-border) bg-card p-1.5 shadow-elevation-2">
-            <Button size="xl" variant="brand" onClick={start}>
+            <Button touchTarget variant="default" onClick={start}>
               <PhoneIcon data-icon="inline-start" className="size-[18px]" />
               {main.access?.ok ? `Talk to ${coach}'s twin` : "Start conversation"}
             </Button>
@@ -311,9 +311,9 @@ function OtherTrainer({ item, signedIn, onSignIn }: { item: OrgHomeTwin; signedI
         <p className="m-0 truncate text-sm text-muted-foreground">{blocked ? blocked.title : item.trainer.title ?? item.twin.name}</p>
       </div>
       {blocked ? null : signedIn ? (
-        <Button variant="outline" nativeButton={false} render={<Link href={item.href} />}>Talk</Button>
+        <Button variant="secondary" nativeButton={false} render={<Link href={item.href} />}>Talk</Button>
       ) : (
-        <Button variant="outline" onClick={onSignIn}>Sign in</Button>
+        <Button variant="secondary" onClick={onSignIn}>Sign in</Button>
       )}
     </article>
   );

@@ -513,6 +513,12 @@ async def entrypoint(ctx: agents.JobContext) -> None:
     ctx.room.on("data_received", on_data_received)
 
     await ctx.connect()
+    persona_name = str(metadata.get("persona_name") or "").strip()[:120]
+    if persona_name:
+        try:
+            await ctx.room.local_participant.set_name(persona_name)
+        except Exception as exc:
+            logger.warning("Could not name agent participant room=%s error=%s", ctx.room.name, exc)
     logger.info("Agent connected to room %s for session %s", ctx.room.name, session_id)
 
     for _ in range(60):

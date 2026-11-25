@@ -530,7 +530,7 @@ function PDFViewerFallbackShell({
               <Button
                 type="button"
                 variant="ghost"
-                size="icon-sm"
+                iconOnly
                 aria-label="Search text"
                 disabled
               >
@@ -630,7 +630,7 @@ function PDFViewerFileActionsMenu({
         />
       ) : null}
       <DropdownMenu>
-        <DropdownMenuTrigger render={<Button type="button" variant="ghost" size="icon-sm" aria-label="Open PDF actions" />}><HugeiconsIcon icon={MoreHorizontalIcon} className="size-4" /></DropdownMenuTrigger>
+        <DropdownMenuTrigger render={<Button type="button" variant="ghost" iconOnly aria-label="Open PDF actions" />}><HugeiconsIcon icon={MoreHorizontalIcon} className="size-4" /></DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-40">
           {showDownload ? (
             <DropdownMenuItem disabled={downloadDisabled} onClick={onDownload}>
@@ -721,8 +721,6 @@ function PDFViewerPageNumberControl({
         <Button
           type="button"
           variant="ghost"
-          size="sm"
-          className="font-normal"
           aria-label={`Current page ${displayPage}. Edit page number`}
           disabled={controlsDisabled || !numPages}
           onClick={() => {
@@ -899,7 +897,7 @@ function PDFViewerSearchControl({
   return (
     <Popover>
       <ToolbarTooltip label="Search text">
-        <PopoverTrigger render={<Button type="button" variant="ghost" size="icon-sm" aria-label="Search text" disabled={controlsDisabled} />}><HugeiconsIcon icon={Search01Icon} className="size-4" /></PopoverTrigger>
+        <PopoverTrigger render={<Button type="button" variant="ghost" iconOnly aria-label="Search text" disabled={controlsDisabled} />}><HugeiconsIcon icon={Search01Icon} className="size-4" /></PopoverTrigger>
       </ToolbarTooltip>
       <PopoverContent align="end" className="w-72">
         <div className="space-y-3">
@@ -938,8 +936,8 @@ function PDFViewerSearchControl({
             <div className="flex shrink-0 items-center gap-1">
               <Button
                 type="button"
-                variant="outline"
-                size="icon-sm"
+                variant="secondary"
+                iconOnly
                 aria-label="Previous result"
                 disabled={isSearching || state.total === 0}
                 onClick={() => navigate(-1)}
@@ -948,8 +946,8 @@ function PDFViewerSearchControl({
               </Button>
               <Button
                 type="button"
-                variant="outline"
-                size="icon-sm"
+                variant="secondary"
+                iconOnly
                 aria-label="Next result"
                 disabled={isSearching || state.total === 0}
                 onClick={() => navigate(1)}
@@ -961,8 +959,7 @@ function PDFViewerSearchControl({
           <div className="flex justify-end">
             <Button
               type="button"
-              variant="outline"
-              size="sm"
+              variant="secondary"
               onClick={clearSearch}
             >
               Clear
@@ -1019,7 +1016,7 @@ function PDFViewerToolbar({
             <Button
               type="button"
               variant="ghost"
-              size="icon-sm"
+              iconOnly
               aria-label="Toggle thumbnails"
               disabled={controlsDisabled}
               onClick={onToggleSidebar}
@@ -1044,7 +1041,7 @@ function PDFViewerToolbar({
                   <Button
                     type="button"
                     variant="ghost"
-                    size="icon-sm"
+                    iconOnly
                     aria-label="Rotate counterclockwise"
                     disabled={controlsDisabled}
                     onClick={() => onRotate(-1)}
@@ -1059,7 +1056,7 @@ function PDFViewerToolbar({
                   <Button
                     type="button"
                     variant="ghost"
-                    size="icon-sm"
+                    iconOnly
                     aria-label="Rotate clockwise"
                     disabled={controlsDisabled}
                     onClick={() => onRotate(1)}
@@ -1082,7 +1079,7 @@ function PDFViewerToolbar({
               <Button
                 type="button"
                 variant="ghost"
-                size="icon-sm"
+                iconOnly
                 aria-label="Zoom out"
                 disabled={
                   controlsDisabled || currentZoomLevel <= ZOOM_OPTIONS[0]
@@ -1121,7 +1118,7 @@ function PDFViewerToolbar({
               <Button
                 type="button"
                 variant="ghost"
-                size="icon-sm"
+                iconOnly
                 aria-label="Zoom in"
                 disabled={
                   controlsDisabled ||

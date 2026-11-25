@@ -135,7 +135,7 @@ export function ReportIssueDialog({
           <DialogFooter className="mt-2 gap-2 sm:gap-0">
             <Button
               type="button"
-              variant="outline"
+              variant="secondary"
               onClick={() => onOpenChange(false)}
               disabled={submitting}
             >

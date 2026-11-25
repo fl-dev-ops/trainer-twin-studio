@@ -75,15 +75,11 @@ export function RoleplayCreatePage({ personas }: { personas: Persona[] }) {
             }}
             className="w-full resize-y bg-transparent p-3 text-sm leading-6 text-(--foreground) outline-none"
           />
-          <div className="flex items-center justify-between gap-3 px-2 pb-1">
-            <button
-              type="button"
-              onClick={() => setPickPersona((v) => !v)}
-              className="text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-            >
-              {persona ? `Played by ${choices.find((p) => p.slug === persona)?.name ?? persona}` : "Choose who plays it (optional)"}
-            </button>
-            <Button type="submit" variant="brand" disabled={!what.trim()}>
+          <div className="flex flex-wrap items-center justify-between gap-3 px-2 pb-1">
+            <Button type="button" variant="ghost" aria-expanded={pickPersona} onClick={() => setPickPersona((v) => !v)}>
+              {persona ? `Played by ${choices.find((p) => p.slug === persona)?.name ?? persona}` : "Choose a persona"}
+            </Button>
+            <Button type="submit" variant="default" disabled={!what.trim()}>
               <Sparkles data-icon="inline-start" /> Create
             </Button>
           </div>
