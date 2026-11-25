@@ -58,13 +58,11 @@ class _Session:
         return speech
 
 
-async def test_goodbye_waits_for_speech_that_has_not_started():
+async def test_goodbye_does_not_wait_for_a_line_that_has_not_started():
     session = _Session()
-    waiting = asyncio.create_task(agent.wait_for_goodbye(session, speak=True))
-    await asyncio.sleep(0)
+    await asyncio.wait_for(agent.wait_for_goodbye(session, speak=True), timeout=0.2)
     speech = session.start_speech()
-    await waiting
-    assert speech.played is True
+    assert speech.played is False
 
 
 async def test_goodbye_without_a_new_line_does_not_wait():

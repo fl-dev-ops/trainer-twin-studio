@@ -55,6 +55,12 @@ const END_CALL_FALLBACK_GOODBYE: Record<string, string> = {
   completed: "Okay, thank you.",
 };
 
+/** A spoken close. "buyer" does not match. Used when the model says goodbye and forgets end_call. */
+function saidGoodbye(text: string): boolean {
+  const spoken = text.trim().toLowerCase();
+  return /\b(?:bye|goodbye)\b[.!?]?\s*$/.test(spoken) || /\bi(?:'ve| have) got to go\b/.test(spoken);
+}
+
 type ChatMessage = {
   role: "system" | "developer" | "user" | "assistant" | "tool";
   content?: unknown;
@@ -353,6 +359,9 @@ export default defineChannel({
         let textStarted = false;
         /** end_call came before any words: speak a fallback goodbye at the end of the step only if none follows. */
         let pendingGoodbye: string | null = null;
+        /** A successful end_call, and the step it happened in. A later step is not the tool reply. */
+        let hungUp = false;
+        let hangupStep = 0;
         let sawTurnStarted = false;
         let ttftMs: number | null = null;
         let tFirstEvent = 0;
@@ -445,6 +454,7 @@ export default defineChannel({
 
             // Text deltas
             if (ev.type === "message.appended" && typeof ev.data.messageDelta === "string") {
+              if (hungUp && stepCount > hangupStep) continue;
               sawActivity = true;
               let content: string = ev.data.messageDelta;
               if (!textStarted) {
@@ -479,9 +489,13 @@ export default defineChannel({
             if (ev.type === "action.result") {
               const result = ev.data.result;
               if (result?.kind === "tool-result") {
-                if (result.toolName === "end_call" && !result.isError && !textStarted) {
+                if (result.toolName === "end_call" && !result.isError) {
                   const close = result.output as { status?: string; outcome?: string } | undefined;
-                  if (close?.status === "ended") pendingGoodbye = close.outcome ?? "";
+                  if (close?.status === "ended") {
+                    hungUp = true;
+                    hangupStep = stepCount;
+                    if (!textStarted) pendingGoodbye = close.outcome ?? "";
+                  }
                 }
                 const callId = result.callId ?? "";
                 const timing = toolExecutionTimes[callId];
@@ -558,7 +572,13 @@ export default defineChannel({
               sawActivity = true;
               textStarted = true;
               markSpoken();
-              await writeText(END_CALL_FALLBACK_GOODBYE[pendingGoodbye] ?? END_CALL_FALLBACK_GOODBYE.declined);
+              const fallback = END_CALL_FALLBACK_GOODBYE[pendingGoodbye] ?? END_CALL_FALLBACK_GOODBYE.declined;
+              replyText += fallback;
+              await writeText(fallback);
+            }
+            if (terminal && !hungUp && sessionIdHeader && saidGoodbye(replyText)) {
+              hungUp = true;
+              await studioFetch(orgId, { action: "finishSession", sessionId: sessionIdHeader, speak: true }, undefined, anonymous ? { sessionId: sessionIdHeader, token: runtimeToken!, anonymous: true } : undefined).catch((error) => console.error("[openai-compat] goodbye without end_call", error));
             }
 
             if (terminal && (sawActivity || sawTurnStarted) && (textStarted || allToolsCalled.length > 0 || ev.status === "turn.cancelled")) {

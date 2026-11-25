@@ -10,7 +10,7 @@ export const endCallTool = defineTool({
 
 Call it in the SAME reply as your short goodbye, after the goodbye words. A builder's client call ends when you agree to a next step, decline, or your guard reaches 5. An authored practice ends when its own procedure is complete.
 Never call it while the conversation is still going, for a pause, or because the learner asked you to stay on.
-After it returns, say nothing more.`,
+After it returns, say one short goodbye only if this reply has not already said one, then stop.`,
   inputSchema: z.object({
     outcome: z.enum(["agreed", "declined", "guard_ran_out", "completed"]).describe("How the role play ended; completed for an authored practice that reached its ending condition."),
   }),
@@ -23,7 +23,12 @@ After it returns, say nothing more.`,
     if (!orgId || !sessionId) throw new Error("No session attached to this conversation");
     console.info("[TOOL:end_call]", { sessionId, outcome: input.outcome });
     await studioFetch(orgId, { action: "finishSession", sessionId, speak: true });
-    return { status: "ended", outcome: input.outcome, instruction: "The call has ended. If you have not said goodbye yet, say one short goodbye in character; otherwise say nothing. Never mention the role play, the practice or the call having ended." };
+    // LiveKit EndCallTool: this is the tool reply the model may turn into one goodbye. It is not a line to read out.
+    return {
+      status: "ended",
+      outcome: input.outcome,
+      end_instructions: "Say one short goodbye in character if this reply has not already said goodbye. Otherwise say nothing.",
+    };
   },
 });
 

@@ -41,33 +41,19 @@ if os.path.exists(_default_ca) and "SSL_CERT_FILE" not in os.environ:
 logger = logging.getLogger("trainertwin_agent")
 logging.basicConfig(level=logging.INFO)
 
-GOODBYE_SPEAK_TIMEOUT = 8.0
 GOODBYE_PLAYOUT_TIMEOUT = 20.0
 
 
-async def wait_for_goodbye(session: Any, *, speak: bool) -> None:
-    """Let the line already playing finish. If the hangup still has a goodbye to say, wait for that too."""
-    loop = asyncio.get_running_loop()
-    started: asyncio.Future[Any] = loop.create_future()
-
-    def on_speech(event: Any) -> None:
-        if not started.done():
-            started.set_result(getattr(event, "speech_handle", event))
-
-    session.on("speech_created", on_speech)
+async def wait_for_goodbye(session: Any, *, speak: bool = False) -> None:
+    """Finish the line already being spoken, then return. No idle wait for another line."""
+    del speak
+    current = session.current_speech
+    if current is None:
+        return
     try:
-        current = session.current_speech
-        if current is not None:
-            await asyncio.wait_for(current.wait_for_playout(), GOODBYE_PLAYOUT_TIMEOUT)
-            return
-        if not speak:
-            return
-        handle = await asyncio.wait_for(started, GOODBYE_SPEAK_TIMEOUT)
-        await asyncio.wait_for(handle.wait_for_playout(), GOODBYE_PLAYOUT_TIMEOUT)
+        await asyncio.wait_for(current.wait_for_playout(), GOODBYE_PLAYOUT_TIMEOUT)
     except asyncio.TimeoutError:
         return
-    finally:
-        session.off("speech_created", on_speech)
 
 # Transport-only prompt. The configured remote brain owns all behavioral and session instructions.
 COMMON_VOICE_PROMPT_PATH = Path(__file__).with_name("prompt.md")
@@ -378,7 +364,8 @@ async def entrypoint(ctx: agents.JobContext) -> None:
         state = _sessions.setdefault(ctx.room.name, {})
         state["end_status"] = "COMPLETED"
         if session is not None:
-            session.shutdown(drain=True)
+            # The one goodbye was already awaited. Do not drain a second speech handle.
+            session.shutdown(drain=False)
         else:
             ctx.shutdown(reason="call_ended")
 

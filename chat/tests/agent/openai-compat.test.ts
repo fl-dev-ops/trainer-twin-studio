@@ -144,12 +144,16 @@ for (const [name, outcome, result, spoken, expected] of [
   test(`end_call SSE: ${name}`, async () => {
     const { response, body } = await complete(undefined, [
       { type: "turn.started", data: { turnId: "t1" } },
+      ...(spoken ? [{ type: "content.delta", data: { partId: "p1", kind: "text", delta: spoken } }] : []),
       { type: "call.requested", data: { callId: "hangup", capability: { kind: "tool", name: "end_call" }, input: { outcome } } },
       { type: "call.settled", data: {
         callId: "hangup", outcome: result === "failed" ? "failed" : "completed",
         output: result === "disabled" ? { disabled: true } : { status: result, outcome },
       } },
-      { type: "content.delta", data: { partId: "p1", kind: "text", delta: spoken || "  " } },
+      ...(result === "ended" ? [
+        { type: "model.started", data: { runId: "after-hangup" } },
+        { type: "content.delta", data: { partId: "p2", kind: "text", delta: "(The call has ended.)" } },
+      ] : []),
       { type: "delivery.settled", data: { deliveryId: "d1", outcome: "completed" } },
     ]);
     assert.equal(response.status, 200);
@@ -160,6 +164,49 @@ for (const [name, outcome, result, spoken, expected] of [
     assert.equal(choices.at(-1)?.finish_reason, "stop");
   });
 }
+
+test("a goodbye without end_call still hangs the call up", async () => {
+  const actions: string[] = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (_input: string | URL | Request, init?: RequestInit) => {
+    const payload = JSON.parse(String(init?.body)) as { action?: string };
+    actions.push(payload.action ?? "");
+    if (payload.action === "authorizeRuntimeSession") return Response.json({ valid: true, anonymous: false });
+    return Response.json({ status: "queued" });
+  };
+  try {
+    const response: Response = await handler(new Request("http://localhost/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Basic ${Buffer.from("org-test:test-secret").toString("base64")}`,
+        "x-trainertwin-session-id": "call-1",
+      },
+      body: JSON.stringify({ messages: [{ role: "user", content: "Thursday works." }] }),
+    }), {
+      waitUntil: (work: Promise<unknown>) => work,
+      from: () => ({
+        cancel: async () => {},
+        send: async () => ({
+          sessionId: "s1",
+          deliveryId: "d1",
+          stream: async function* () {
+            yield { type: "turn.started", data: { turnId: "t1" } };
+            yield { type: "content.delta", data: { partId: "p1", kind: "text", delta: "Thursday at seven works. Talk then, bye." } };
+            yield { type: "delivery.settled", data: { deliveryId: "d1", outcome: "completed" } };
+          },
+        }),
+      }),
+    });
+    assert.equal(response.status, 200);
+    const body = await response.text();
+    assert.equal(body.includes("Talk then, bye."), true);
+    assert.equal(body.includes("(The call has ended.)"), false);
+    assert.equal(actions.includes("finishSession"), true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
 
 for (const [name, facts] of [
   ["provider fails before any reply", [
