@@ -1,7 +1,7 @@
 import type { Prisma } from "@/lib/generated/prisma/client";
 import { randomUUID } from "node:crypto";
 import { db } from "@/lib/db";
-import { chatCompletionItems, gatewayProvider, meterUsage } from "@/lib/usage";
+import { chatCompletionItems, gatewayProvider, meterUsage, type UsageMeter } from "@/lib/usage";
 
 /**
  * After the call: the one model call every Workflow-run session report makes (twin, role play), with failures
@@ -29,13 +29,17 @@ export class ReportError extends Error {
   }
 }
 
-/** One structured-output call through the AI gateway; returns the reply's content. Throws a ReportError on failure. */
+/**
+ * One structured-output call through the AI gateway; returns the reply's content. Throws a ReportError on failure.
+ * Metered as the session's report unless `meter` says otherwise (calibration questions: the org's evaluate work).
+ */
 export async function callReportModel(input: {
   sessionId: string;
   system: string;
   user: string;
   schemaName: string;
   schema: Record<string, unknown>;
+  meter?: UsageMeter;
 }): Promise<unknown> {
   // shortcut: AI gateway only (the older session report also supports a direct Gemini key); add it if a deploy lacks the gateway.
   if (!AI_GATEWAY_API_KEY) throw new ReportError("AI_GATEWAY_API_KEY is not configured", true);
@@ -62,7 +66,7 @@ export async function callReportModel(input: {
   }
   const data = await res.json();
   await meterUsage(
-    { source: "report", sessionId: input.sessionId },
+    input.meter ?? { source: "report", sessionId: input.sessionId },
     data?.id ? `gen:${data.id}` : `${input.schemaName}:${input.sessionId}:${randomUUID()}`,
     chatCompletionItems(gatewayProvider(AI_GATEWAY_BASE_URL), REPORT_MODEL, data?.usage),
   );

@@ -30,7 +30,7 @@ Dependency pointers below are relative to `web/node_modules/better-auth/` (insta
 
 | Record | Fields / writers |
 | --- | --- |
-| User | Unique email, name, emailVerified, image, timestamps. People/founder script create; OTP verifies email and creates a login, Google may link its provider to an existing unverified account (`web/lib/org-people.ts`; `web/scripts/founder-invite.ts`; `dist/plugins/email-otp/routes.mjs` signInEmailOTP; `dist/oauth2/link-account.mjs`). |
+| User | Unique email, name, emailVerified, image, timestamps. People/founder script create; OTP verifies email and creates a login, Google may link its provider to an existing unverified account, and every Google sign-in replaces name and image with the Google profile's (`overrideUserInfoOnSignIn` in `web/lib/auth.ts`; `web/lib/org-people.ts`; `web/scripts/founder-invite.ts`; `dist/plugins/email-otp/routes.mjs` signInEmailOTP; `dist/oauth2/link-account.mjs`). |
 | Account | userId/provider/accountId, optional historical password and OAuth tokens. Password storage fields were not dropped. Google linking writes provider data (`web/prisma/schema.prisma`; `web/lib/auth.ts`). |
 | Session | Unique token, userId, expiry, IP/user agent, activeOrganizationId. Better Auth creates/refreshes/deletes; disabling last enabled org deletes DB login sessions (`web/lib/auth.ts`; `web/lib/members.ts`). |
 | Verification | Identifier, hashed OTP value plus attempt state, expiresAt. emailOTP stores sign-in codes; successful use consumes them (`web/lib/auth.ts`; `dist/plugins/email-otp/{routes,otp-token}.mjs`). |

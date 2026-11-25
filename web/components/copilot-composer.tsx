@@ -7,6 +7,7 @@ import { FileThumbnail } from "@/components/extend/file-thumbnail";
 import { PromptInputButton, PromptInputHeader, usePromptInputAttachments } from "@/components/ai-elements/prompt-input";
 import { Button } from "@/components/ui/button";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { COPILOT_SKILLS, type CopilotSkillName, type PickedFile } from "@/lib/copilot-message";
 import { renderPdfThumbnailUrl } from "@/lib/pdf-thumbnail-utils";
@@ -265,8 +266,10 @@ function PendingUploadCard({ file, onRemove }: { file: { url: string; mediaType?
   return <PendingFileCard name={file.filename || "file"} mediaType={file.mediaType} preview={preview} loading={loading} onRemove={onRemove} />;
 }
 
-/** A file in a sent message: a small preview (or its type), name and type label; opens the file when it can. */
+/** A file in a sent message: a small preview (or its type), name and type label; opens the file when it can,
+ *  or, for an image with no link (session and calibration review), opens it full-size in a dialog. */
 export function MessageFileCard({ name, mediaType, href, previewUrl }: { name: string; mediaType?: string; href?: string; previewUrl?: string }) {
+  const [previewOpen, setPreviewOpen] = useState(false);
   const body = (
     <>
       {previewUrl ? (
@@ -283,11 +286,22 @@ export function MessageFileCard({ name, mediaType, href, previewUrl }: { name: s
     </>
   );
   const className = "flex w-72 max-w-full items-center gap-3 rounded-xl border bg-card px-3 py-2.5 text-left";
-  return href ? (
-    <a href={href} target="_blank" rel="noreferrer" className={cn(className, "hover:bg-accent/50")}>{body}</a>
-  ) : (
-    <div className={className}>{body}</div>
-  );
+  if (href) return <a href={href} target="_blank" rel="noreferrer" className={cn(className, "hover:bg-accent/50")}>{body}</a>;
+  if (previewUrl && mediaType?.startsWith("image/")) {
+    return (
+      <>
+        <button type="button" onClick={() => setPreviewOpen(true)} className={cn(className, "cursor-zoom-in hover:bg-accent/50")} aria-label={`View ${name}`}>{body}</button>
+        <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+          <DialogContent className="w-auto max-w-[calc(100%-2rem)] sm:max-w-[min(90vw,72rem)]">
+            <DialogTitle className="truncate pr-8">{name}</DialogTitle>
+            {/* eslint-disable-next-line @next/next/no-img-element -- a signed upload URL behind /api/uploads, not a static asset */}
+            <img src={previewUrl} alt={name} className="max-h-[80vh] w-auto max-w-full justify-self-center rounded-md object-contain" />
+          </DialogContent>
+        </Dialog>
+      </>
+    );
+  }
+  return <div className={className}>{body}</div>;
 }
 
 export function CopilotChips({ skill, files, onRemoveSkill, onRemoveFile, className }: {

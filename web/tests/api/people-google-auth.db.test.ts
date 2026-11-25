@@ -64,13 +64,14 @@ describe.skipIf(!localMinutesDb)("Google sign-in has no self-sign-up (local data
     expect(await db.account.count({ where: { accountId: `${f.org.id}-google` } })).toBe(0);
   });
 
-  test("Google links an existing unverified account, creates no new account/member, and returns to its requested session", async () => {
+  test("Google links an existing unverified account, takes its Google name, creates no new account/member, and returns to its requested session", async () => {
     address = f.learner.email;
-    await db.user.update({ where: { id: f.learner.id }, data: { emailVerified: false } });
+    await db.user.update({ where: { id: f.learner.id }, data: { emailVerified: false, name: address.split("@")[0] } });
     const { response, back } = await callback();
     expect(response.status).toBe(302);
     expect(response.headers.get("location")).toBe(back);
     expect(await db.user.count({ where: { email: address } })).toBe(1);
+    expect(await db.user.findUniqueOrThrow({ where: { id: f.learner.id } })).toMatchObject({ name: "Google person", email: address });
     expect(await db.account.findFirstOrThrow({ where: { userId: f.learner.id } })).toMatchObject({ providerId: "google", accountId: `${f.org.id}-google` });
     expect(await db.session.count({ where: { userId: f.learner.id } })).toBe(1);
     expect(await db.member.count({ where: { userId: f.learner.id } })).toBe(1);

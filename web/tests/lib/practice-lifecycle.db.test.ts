@@ -199,6 +199,13 @@ describe.skipIf(!localMinutesDb)("Module 2 atomic start/end/assignment scenarios
     expect(await db.minuteLedger.count({ where: { sessionId: old.id } })).toBe(0);
   });
 
+  test("a studio member's twin calibration may be text; a studio twin chat that isn't a calibration is still voice_only", async () => {
+    await expect(activateSession({ orgId: f.org.id, userId: f.trainer.id, agentSlug: f.twin.slug, mode: "chat" })).rejects.toMatchObject({ code: "voice_only", status: 400 });
+    const started = await activateSession({ orgId: f.org.id, userId: f.trainer.id, agentSlug: f.twin.slug, mode: "chat", calibrate: true });
+    expect(started.calibrationId).toBeTruthy();
+    expect(await db.interviewSession.findUniqueOrThrow({ where: { id: started.id } })).toMatchObject({ mode: "chat", status: "active" });
+  });
+
   test("finalize twice writes one usage row in the end transaction and preserves its first end", async () => {
     const call = await oldCall({ allowedSeconds: 60 });
     await finalizeInterviewSession({ sessionId: call.id, requestedStatus: "completed" });

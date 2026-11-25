@@ -36,6 +36,9 @@ export const auth = betterAuth({
           clientId: process.env.GOOGLE_CLIENT_ID,
           clientSecret: process.env.GOOGLE_CLIENT_SECRET,
           disableSignUp: true,
+          // Accounts are created with the email's local part as the name (lib/org-people.ts); each Google sign-in
+          // replaces it (and the photo) with the Google profile's, so coaches see real names.
+          overrideUserInfoOnSignIn: true,
           // Sign-in must not adopt scopes the user granted to the Drive/YouTube connectors (same OAuth client):
           // their combination is rejected by Google ("scopes that cannot be requested together").
           includeGrantedScopes: false,

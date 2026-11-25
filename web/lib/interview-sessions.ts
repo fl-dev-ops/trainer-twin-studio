@@ -280,7 +280,8 @@ export async function activateSession(input: {
   // Calibrating a role play or another agent (rule 12).
   if (input.calibrate && !twin) throw refusals.notFound();
   // All twin sessions go through LiveKit (also enforced by a DB trigger); the agent cuts metered calls at the deadline.
-  if (twin && mode !== "voice") throw practiceRefusals.voiceOnly();
+  // Calibrations may be text: card calibrations ask the twin in chat (lib/twin/calibration-cards.ts).
+  if (twin && mode !== "voice" && !input.calibrate) throw practiceRefusals.voiceOnly();
   let existing = await db.interviewSession.findUnique({ where: { activationKey } });
   if (existing && ["activating", "active"].includes(existing.status)) {
     // Resume (rule 18): under the credits lock, and only while it is still live (an ended call never comes back).

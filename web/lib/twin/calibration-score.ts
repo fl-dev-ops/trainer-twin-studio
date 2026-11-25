@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { decide, topChoice, type JevQuestion } from "@/lib/jev";
-import { attachRatings, isFeelsOffMessage, transcriptTurns, type CalibrationScore } from "@/lib/twin/stats";
+import { attachRatings, cardScore, isFeelsOffMessage, transcriptTurns, type CalibrationScore } from "@/lib/twin/stats";
 
 type RatedTurn = ReturnType<typeof attachRatings>[number];
 export type { CalibrationScore };
@@ -89,9 +89,15 @@ export async function scoreCalibrationOnce(sessionId: string) {
     select: {
       id: true,
       session: { select: { transcript: true, agent: { select: { name: true } } } },
-      ratings: { select: { turnIndex: true, question: true, reply: true, rating: true } },
+      ratings: { select: { turnIndex: true, question: true, reply: true, rating: true, cardId: true } },
     },
   });
+  // Card calibrations: every rated reply is one item, judged on the twin's answer as given; nothing for Jev to sort.
+  const cards = cardScore(row.ratings);
+  if (cards) {
+    await db.twinCalibration.update({ where: { id: row.id }, data: { turns: cards.turns, offTurns: cards.off, scoredAt: new Date() } });
+    return cards;
+  }
   const turns = attachRatings(transcriptTurns(row.session.transcript), row.ratings);
   const questions = scoreQuestions(turns);
   try {

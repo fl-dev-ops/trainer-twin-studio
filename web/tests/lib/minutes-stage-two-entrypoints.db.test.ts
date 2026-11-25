@@ -43,6 +43,19 @@ describe.skipIf(!localMinutesDb)("credits stage two assignment entrypoints (loca
     expect(await db.minuteLedger.count({ where: { orgId: f.org.id, type: "grant" } })).toBe(2);
   });
 
+  test("twin users.list counts each learner's twin sessions as the Twin sessions page lists them", async () => {
+    await fund(45);
+    await caller().assignments.assign({ slug: f.twin.slug, emails: [f.learner.email], startingMinutes: 45 });
+    const assignment = await db.twinAssignment.findFirstOrThrow({ where: { orgId: f.org.id, userId: f.learner.id } });
+    const twin = { agentId: f.twin.id, agentSlug: f.twin.slug, twinAssignmentId: assignment.id, mode: "voice" as const };
+    await f.session(twin);
+    await f.session(twin);
+    await f.session({ ...twin, status: "failed" }); // failed: not counted
+    await f.session({ ...twin, startedAt: null }); // never started: not counted
+    await f.session(); // a role play: not a twin session
+    expect((await caller().users.list()).find((row) => row.email === f.learner.email)).toMatchObject({ sessions: 2 });
+  });
+
   test("role-play PUT passes startingMinutes to new people and leaves existing grants unchanged", async () => {
     await fund(65);
     await grantMinutes({ orgId: f.org.id, email: f.learner.email, minutes: 20 });

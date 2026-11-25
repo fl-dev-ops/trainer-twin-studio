@@ -130,6 +130,15 @@ export function titleFrom(text: string | null | undefined, fallback: string): st
 export type CalibrationScore = { turns: number; off: number };
 
 /**
+ * A card calibration's score (calibration v2): every rated reply on a card is one item, judged on the twin's answer as
+ * given (there are no retries); null when no reply was rated on a card (a voice-call calibration).
+ */
+export const cardScore = (ratings: { rating: string; cardId?: string | null }[]): CalibrationScore | null => {
+  const cards = ratings.filter((rating) => rating.cardId);
+  return cards.length ? { turns: cards.length, off: cards.filter((rating) => rating.rating === "off").length } : null;
+};
+
+/**
  * What the "Feels off" button sends as the trainer's message; never a turn of its own. The chat brain's own rule
  * (chat/agent/channels/openai-compat.ts), so both agree (specs/practice.md rule 16): case and punctuation ignored.
  */

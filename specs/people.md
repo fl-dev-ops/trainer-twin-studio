@@ -27,8 +27,8 @@
 ## Rules
 
 1. **Account first.** Adding an email to an org creates its account when none exists (lower-cased email, name from
-   the part before `@`). Operators also create founder accounts with `web/scripts/founder-invite.ts`. Sign-in never
-   creates an account.
+   the part before `@`; each Google sign-in replaces the name and photo with the Google profile's). Operators also
+   create founder accounts with `web/scripts/founder-invite.ts`. Sign-in never creates an account.
 2. **Then a member.** The account becomes a member of the org with the chosen role in the same action. There is no
    "invited, not joined" state for any role: a member just signs in. One member row per account per org (database
    unique `(organizationId, userId)`).

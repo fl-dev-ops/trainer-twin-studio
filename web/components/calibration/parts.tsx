@@ -4,7 +4,7 @@ import { MessageFileCard } from "@/components/copilot-composer";
 import type { CalibrationTurn, Rating } from "@/components/calibration/mock";
 import { Spinner } from "@/components/ui/spinner";
 import { stripAttachments } from "@/lib/markers";
-import { accuracyOf, type CalibrationScore } from "@/lib/twin/stats";
+import type { CalibrationScore } from "@/lib/twin/stats";
 import { cn } from "@/lib/utils";
 
 /** Shared prototype shadows. */
@@ -87,16 +87,17 @@ export function RatingLabel({ rating, className }: { rating: Rating; className?:
 }
 
 /**
- * Turns / Feels off / Accuracy for a calibration: the trainer's real turns, the "Feels off" they meant (both counted by
- * Jev after the call), and the share of turns that felt like them. `score` null: still counting.
+ * Answers / Feels off / Felt like you for a calibration pack: the answers marked, the ones marked off, and how many
+ * felt like the coach (a count). `score` null: still counting.
  */
 export function CalibrationStats({ score }: { score: CalibrationScore | null }) {
-  const accuracy = score ? accuracyOf(score) : null;
   const counting = <Spinner className="size-5 text-muted-foreground" />;
   const stats = [
-    { label: "Turns", value: score ? score.turns : counting, note: score?.turns === 1 ? "turn" : "turns" },
+    { label: "Answers", value: score ? score.turns : counting, note: score?.turns === 1 ? "answer marked" : "answers marked" },
     { label: "Feels off", value: score ? score.off : counting, note: score?.off === 1 ? "response" : "responses" },
-    { label: "Accuracy", value: score ? (accuracy === null ? "—" : `${accuracy}%`) : counting, note: "Turns that felt like you" },
+    // Counts, not a percentage: one pack is too small for a percentage to mean much (the twin's accuracy shows once
+    // the coach's packs make it reliable).
+    { label: "Felt like you", value: score ? (score.turns ? `${score.turns - score.off} of ${score.turns}` : "—") : counting, note: "answers that felt like you" },
   ];
   return (
     <dl className="grid w-full grid-cols-1 gap-3 sm:grid-cols-3">

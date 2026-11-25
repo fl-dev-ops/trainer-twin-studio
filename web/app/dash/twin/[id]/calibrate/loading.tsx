@@ -1,6 +1,12 @@
-import { LoadingCalibrationCall } from "@/components/page-skeletons";
+import { LoadingCard, LoadingPage, LoadingTitleBar } from "@/components/page-skeletons";
 
-/** A twin calibration call (full screen). */
+/** Calibrate (text cards): a studio page with the left navigation. */
 export default function Loading() {
-  return <LoadingCalibrationCall />;
+  return (
+    <LoadingPage className="max-w-[760px]">
+      <LoadingTitleBar actions={2} />
+      <LoadingCard className="mt-6" lines={2} />
+      <LoadingCard className="mt-4" lines={4} />
+    </LoadingPage>
+  );
 }

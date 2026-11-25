@@ -32,8 +32,9 @@ import { twinClient } from "@/lib/twin/client";
 import { isFeelsOffMessage, joinsLearnerTurn, type CalibrationScore } from "@/lib/twin/stats";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { attachedMessage, uploadFile } from "@/lib/upload-client";
-import { DURING_UPLOAD_ACCEPT, DURING_UPLOAD_RULE, duringUploadProblem } from "@/lib/context-upload";
+import { AttachTray, MAX_ATTACH, useStagedAttachments } from "@/components/session/attach-tray";
+import { useEndCallOnLeave, useLeaveWarning } from "@/components/session/call-exit";
+import { DURING_UPLOAD_ACCEPT, DURING_UPLOAD_RULE } from "@/lib/context-upload";
 
 /** ready: the pre-join (mic access, Start); leaving: a saved twin calibration on its way to its page. */
 type Phase = "ready" | "connecting" | "live" | "ended" | "leaving" | "error";
@@ -107,9 +108,11 @@ function micProblem(error: unknown, retry = "click the mic") {
 
 export function CalibrationCall(props: CallProps) {
   const room = useMemo(
-    () => new Room({ adaptiveStream: true, audioCaptureDefaults: { autoGainControl: true, echoCancellation: true, noiseSuppression: true } }),
+    () => new Room({ adaptiveStream: true, disconnectOnPageLeave: false, audioCaptureDefaults: { autoGainControl: true, echoCancellation: true, noiseSuppression: true } }),
     [],
   );
+  // The page leaving is handled by useEndCallOnLeave (after "Leave site?"), not by the room's own default.
+  useEndCallOnLeave(room);
   return (
     <RoomContext.Provider value={room}>
       <Call room={room} {...props} />
@@ -166,6 +169,7 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
   const { state: agentState, audioTrack: agentAudio } = useVoiceAssistant();
   /** After you finish speaking, while the twin works out its answer (before its words start streaming). */
   const thinking = phase === "live" && agentState === "thinking" && !liveText;
+  useLeaveWarning(phase === "live");
   const { microphoneTrack } = useLocalParticipant({ room });
   const { mergedProps: audioProps, canPlayAudio } = useStartAudio({ room, props: {} });
 
@@ -470,36 +474,18 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
   const [whyFor, setWhyFor] = useState<{ id: string; text: string; evidence: TurnEvidence } | null>(null);
   // Evidence lands just after each reply; poll mildly so icons appear once a lookup actually pulled something.
   const evidenceTurns = useEvidenceTurns(twin && !learner ? connection?.sessionId : undefined, 3000);
-  const [attaching, setAttaching] = useState(false);
   /** Files attached this call, by marker id: the transcript line is re-rendered as a card above the message. */
   const [attachedFiles, setAttachedFiles] = useState<Map<string, { name: string; mediaType: string | null }>>(new Map());
   const attachInput = useRef<HTMLInputElement>(null);
-  /** Mid-call file, as in the learner's session: upload it, link it to this session, then tell the twin its ID (it reads by ID). */
-  async function attachFile(file: File) {
-    const sessionId = connectionRef.current?.sessionId;
-    if (!sessionId || phase !== "live") return;
-    const problem = duringUploadProblem(file);
-    if (problem) return void toast.error(problem);
-    setAttaching(true);
-    try {
-      const doc = await uploadFile(file, { purpose: "during" });
-      const linked = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/documents`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ documentId: doc.id }),
-      });
-      const result = await linked.json().catch(() => null);
-      if (!linked.ok) throw new Error(result?.error ?? "Could not attach the file");
-      setAttachedFiles((map) => new Map(map).set(doc.id, { name: doc.name, mediaType: file.type || null }));
-      // The bridge turns the marker into the file itself for the twin (chat/agent/channels/openai-compat.ts).
-      await say(attachedMessage(doc));
-      toast.success(`${doc.name} attached`);
-    } catch (attachError) {
-      toast.error(attachError instanceof Error ? attachError.message : "Could not attach the file");
-    } finally {
-      setAttaching(false);
-    }
-  }
+  /**
+   * Mid-call files, as in the learner's session: staged in a tray, each uploaded and linked to this session, then sent
+   * to the twin together (it reads each by ID), so it answers once about all of them.
+   */
+  const tray = useStagedAttachments({
+    sessionId: phase === "live" ? connection?.sessionId ?? null : null,
+    onSend: say,
+    onUploaded: (doc, file) => setAttachedFiles((map) => new Map(map).set(doc.id, { name: doc.name, mediaType: file.type || null })),
+  });
 
   /** The browser's mic track, if it was stopped or paused by the browser itself (Safari does) rather than muted by you. */
   const pausedMic = () => {
@@ -743,6 +729,7 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
                   </button>
                 </form>
               ) : null}
+            {attach ? <AttachTray tray={tray} onAddMore={() => attachInput.current?.click()} /> : null}
             <div className="relative flex justify-center gap-4">
               <button
                 type="button"
@@ -768,23 +755,24 @@ function Call({ room, slug, scenarioName, twinName, twin = false, photoUrl = nul
                 <>
                   <button
                     type="button"
-                    aria-label="Attach a file"
-                    title={`Attach a file. ${DURING_UPLOAD_RULE}`}
-                    disabled={phase !== "live" || attaching}
+                    aria-label={`Attach files (up to ${MAX_ATTACH})`}
+                    title={`Attach files (up to ${MAX_ATTACH}). ${DURING_UPLOAD_RULE}`}
+                    disabled={phase !== "live"}
                     onClick={() => attachInput.current?.click()}
                     className={cn(CONTROL, "border bg-muted hover:bg-border")}
                   >
-                    {attaching ? <LoaderCircle className="size-5 animate-spin" aria-hidden /> : <Paperclip className="size-5" aria-hidden />}
+                    <Paperclip className="size-5" aria-hidden />
                   </button>
                   <input
                     ref={attachInput}
                     type="file"
                     hidden
+                    multiple
                     accept={DURING_UPLOAD_ACCEPT}
                     onChange={(event) => {
-                      const file = event.target.files?.[0];
+                      const picked = Array.from(event.target.files ?? []);
                       event.currentTarget.value = "";
-                      if (file) void attachFile(file);
+                      tray.add(picked);
                     }}
                   />
                 </>

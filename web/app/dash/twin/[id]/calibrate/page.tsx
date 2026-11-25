@@ -1,14 +1,25 @@
 "use client";
 
-import { useParams } from "next/navigation";
-import { CalibrationCall } from "@/components/calibration/calibration-call";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useEffect } from "react";
+import { CalibrationCards } from "@/components/calibration/calibration-cards";
 import { api, useApi } from "@/lib/api";
 
-export default function TwinLiveCalibrateRoute() {
+/** Calibrate, card by card in text (calibration v2); the voice call lives at `/calibrate/call`. */
+export default function TwinCalibrateRoute() {
   const { id } = useParams<{ id: string }>();
-  const [{ name, face, blocked }, agent] = useApi(["twin.calibrate", id], () =>
-    Promise.all([api.twin.calibrations.list.query({ slug: id }), api.twin.agents.get.query({ slug: id })]),
-  );
-  // The trainer rehearses what learners get: Attach shows only when the twin allows images during the call.
-  return <CalibrationCall slug={id} scenarioName={name} twinName={name} photoUrl={face.avatarUrl} twin attach={agent.settings.duringUpload} blocked={blocked} />;
+  // An older "?mode=call" link goes to the call.
+  const call = useSearchParams().get("mode") === "call";
+  const router = useRouter();
+  useEffect(() => {
+    if (call) router.replace(`/twin/${encodeURIComponent(id)}/calibrate/call`);
+  }, [call, id, router]);
+  if (call) return null;
+  return <Cards slug={id} />;
+}
+
+function Cards({ slug }: { slug: string }) {
+  const agent = useApi(["twin.agents.get", slug], () => api.twin.agents.get.query({ slug }));
+  // Attach on a question only when the twin takes files during a conversation, as on a call.
+  return <CalibrationCards key={slug} slug={slug} attach={agent.settings.duringUpload} />;
 }

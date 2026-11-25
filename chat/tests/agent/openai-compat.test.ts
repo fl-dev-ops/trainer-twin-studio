@@ -86,3 +86,43 @@ test("forwards valid thinking-budget headers unchanged", async () => {
     assert.equal(sentAttributes?.thinkingBudget, budget);
   }
 });
+
+test("a calibration card's conversation id gives the card its own history, whichever visit (session) asks", async () => {
+  let sessionId = crypto.randomUUID();
+  const send = async (conversation?: string) => {
+    let address: string | undefined;
+    let attributes: Record<string, string> | undefined;
+    const response: Response = await handler(new Request("http://localhost/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json", authorization: `Basic ${Buffer.from("org-test:test-secret").toString("base64")}`,
+        "x-trainertwin-session-id": sessionId, ...(conversation !== undefined ? { "x-trainertwin-conversation-id": conversation } : {}),
+      },
+      body: JSON.stringify({ messages: [{ role: "user", content: "My client says 3% is too much." }] }),
+    }), {
+      from: (to: string) => {
+        address = to;
+        return { cancel: async () => {}, send: async (_message: string, { auth }: { auth: { attributes: Record<string, string> } }) => {
+          attributes = auth.attributes;
+          return { sessionId: "s1", deliveryId: "d1", stream: async function* () { yield { type: "delivery.settled", data: { deliveryId: "d1", outcome: "completed" } }; } };
+        } };
+      },
+    });
+    await response.text();
+    return { status: response.status, address, attributes };
+  };
+  const plain = await send();
+  const card = await send("card_1");
+  assert.equal(plain.address, sessionId);
+  assert.equal(card.address, "calibration-card:card_1");
+  assert.equal(card.attributes?.sessionId, sessionId); // context still comes from the visit's session
+  sessionId = crypto.randomUUID(); // a later visit: same card, same history
+  const later = await send("card_1");
+  assert.equal(later.address, "calibration-card:card_1");
+  assert.equal(later.attributes?.sessionId, sessionId);
+  for (const bad of ["", "has space", "a:b", "x".repeat(65)]) {
+    const refused = await send(bad);
+    assert.equal(refused.status, 400, bad);
+    assert.equal(refused.address, undefined);
+  }
+});

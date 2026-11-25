@@ -449,7 +449,9 @@ export function TwinAgentDetailPage({ twin }: { twin: TwinDetail }) {
                     <span className="text-body font-medium text-foreground">{item.title}</span>
                     <span className="text-body-s text-muted-foreground">
                       <SessionTime iso={item.at} />
-                      {minutesLabel(item.seconds) ? ` · ${minutesLabel(item.seconds)}` : ""} · {item.turns} turns
+                      {minutesLabel(item.seconds) ? ` · ${minutesLabel(item.seconds)}` : ""}
+                      {item.by ? ` · ${item.by}` : ""}
+                      {item.counts ? "" : " · Team test, not counted"}
                     </span>
                   </div>
                   <ArrowUpRight className="size-4 shrink-0 text-muted-foreground" />

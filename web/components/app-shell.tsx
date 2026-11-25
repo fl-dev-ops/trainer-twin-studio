@@ -21,9 +21,12 @@ const FULLSCREEN = [
   "/dash/calibration",
 ];
 
+/** A twin's Calibrate (text cards) is a studio page; its call (`/calibrate/call`) and role-play calibrate calls are not. */
+const TWIN_CARDS = /^(\/dash)?\/twin\/[^/]+\/calibrate$/;
+
 const isFullscreen = (pathname: string) =>
   FULLSCREEN.some((p) => pathname === p || pathname.startsWith(`${p}/`)) ||
-  pathname.endsWith("/calibrate") ||
+  (pathname.endsWith("/calibrate") && !TWIN_CARDS.test(pathname)) ||
   pathname.includes("/calibrate/");
 
 /**

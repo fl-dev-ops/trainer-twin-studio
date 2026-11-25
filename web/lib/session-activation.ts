@@ -67,6 +67,24 @@ export async function startSessionNow(input: StartSessionInput): Promise<Session
   return { ...opened, ...(await connectVoice(input, opened.session)) };
 }
 
+/**
+ * The voice an agent speaks with: its own (an explicit override) when ready, else the one its persona owns, else the
+ * first shared ready voice. Calls and card calibrations (their answers read aloud) use the same.
+ */
+export async function agentVoiceId(orgId: string, agent: { data: unknown; persona: { voiceId: string | null } }): Promise<string | undefined> {
+  const agentData = agent.data as { voiceId?: unknown } | null;
+  const configuredVoiceId = typeof agentData?.voiceId === "string" && agentData.voiceId ? agentData.voiceId : agent.persona.voiceId ?? "";
+  const configuredVoice = configuredVoiceId
+    ? await db.voice.findFirst({
+        where: { id: configuredVoiceId, status: "ready", OR: [{ orgId }, { orgId: null }] },
+        select: { id: true },
+      })
+    : null;
+  if (configuredVoice) return configuredVoice.id;
+  const sharedDefault = await db.voice.findFirst({ where: { status: "ready", orgId: null }, orderBy: { name: "asc" }, select: { id: true } });
+  return sharedDefault?.id;
+}
+
 /** Step 2 (voice): the session's LiveKit room, the agent's dispatch and the recording. Failed: the session is closed. */
 export async function connectVoice(input: StartSessionInput, session: OpenedSession): Promise<{ participantToken: string; room: string }> {
   const row = await db.interviewSession.findUniqueOrThrow({
@@ -82,19 +100,7 @@ export async function connectVoice(input: StartSessionInput, session: OpenedSess
     },
   });
   const agentData = row.agent.data as { introVideo?: unknown; voiceId?: unknown } | null;
-  // The agent's own voice (an explicit override) wins; otherwise the voice its persona owns.
-  const configuredVoiceId = typeof agentData?.voiceId === "string" && agentData.voiceId ? agentData.voiceId : row.agent.persona.voiceId ?? "";
-  const configuredVoice = configuredVoiceId
-    ? await db.voice.findFirst({
-        where: { id: configuredVoiceId, status: "ready", OR: [{ orgId: input.orgId }, { orgId: null }] },
-        select: { id: true },
-      })
-    : null;
-  const sharedDefault = configuredVoice ? null : await db.voice.findFirst({
-    where: { status: "ready", orgId: null },
-    orderBy: { name: "asc" },
-    select: { id: true },
-  });
+  const voice = await agentVoiceId(input.orgId, row.agent);
 
   try {
     const livekit = await activateLiveKitSession({
@@ -105,7 +111,7 @@ export async function connectVoice(input: StartSessionInput, session: OpenedSess
       orgId: input.orgId,
       agentSlug: row.agentSlug,
       holdOpening: Boolean(agentData?.introVideo) || Boolean(input.holdOpening),
-      voice: configuredVoice?.id ?? sharedDefault?.id,
+      voice,
       // Learner minutes: the voice agent ends the call at this moment (absolute, so agent and web count the same span).
       endsAt: "secondsLeft" in session && session.secondsLeft != null
         ? Math.floor(Date.now() / 1000) + session.secondsLeft

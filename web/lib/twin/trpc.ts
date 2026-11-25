@@ -27,8 +27,10 @@ import { isTwinReport, reportState } from "@/lib/twin/session-report";
 import { stripAttachments } from "@/lib/markers";
 import { rawScore, type CalibrationScore } from "@/lib/twin/calibration-score";
 import { sessionEvidence } from "@/lib/twin/evidence";
+import { addDoDont, editDoDont, removeDoDont, twinDosDonts } from "@/lib/twin/dos-donts";
+import { MAX_TURNS_PER_CARD, askCard, calibrationCoach, rateCard, startCardCalibration, twinScore } from "@/lib/twin/calibration-cards";
 import { updateTwin } from "@/lib/twin/manage";
-import { attachRatings, durationSeconds, firstExchange, lastSevenDays, likeRateByWeek, mostAsked, titleFrom, transcriptTurns } from "@/lib/twin/stats";
+import { attachRatings, cardScore, durationSeconds, firstExchange, lastSevenDays, likeRateByWeek, mostAsked, titleFrom, transcriptTurns } from "@/lib/twin/stats";
 
 /**
  * Twin-scoped tRPC surface, mounted at /api/twin. Studio members (admin, team) only; every query is
@@ -132,22 +134,43 @@ export function learnerActivity(
     .sort((a, b) => (b.lastAt ?? "").localeCompare(a.lastAt ?? ""));
 }
 
-/** Calibrations of one twin, newest first, with their rating counts. */
+/**
+ * Calibrations of one twin, newest first, with their rating counts: voice-call calibrations, and calibration packs
+ * (one row per pack with any answer marked; the text visits a pack was answered in aren't rows of their own).
+ * Each says who did it; only the coach's count (`counts`) toward the twin's numbers: a team member's are tests.
+ */
 async function calibrationRows(orgId: string, agentId: string) {
-  const rows = await db.twinCalibration.findMany({
-    where: { session: { orgId, agentId, deletedAt: null } },
+  const [rows, packs, coach] = await Promise.all([db.twinCalibration.findMany({
+    where: { session: { orgId, agentId, deletedAt: null, mode: { not: "chat" } } },
     orderBy: { createdAt: "desc" },
     take: 100, // the newest (specs/practice.md rule 15)
     select: {
       id: true,
       createdAt: true,
+      createdByUserId: true,
       turns: true,
       offTurns: true,
       session: { select: { startedAt: true, endedAt: true, transcript: true } },
-      ratings: { select: { turnIndex: true, reply: true, rating: true, question: true, createdAt: true } },
+      ratings: { select: { turnIndex: true, reply: true, rating: true, question: true, createdAt: true, cardId: true } },
     },
-  });
-  return rows.map((row) => {
+  }), db.twinCalibrationPack.findMany({
+    where: { orgId, agentId, cards: { some: { ratings: { some: {} } } } },
+    orderBy: { createdAt: "desc" },
+    take: 100,
+    select: {
+      id: true,
+      createdAt: true,
+      status: true,
+      createdByUserId: true,
+      cards: { select: { ratings: { select: { turnIndex: true, reply: true, rating: true, question: true, createdAt: true, cardId: true } } } },
+    },
+  }), calibrationCoach(orgId).then((coach) => coach?.userId ?? null)]);
+  const names = new Map((await db.user.findMany({
+    where: { id: { in: [...new Set([...rows, ...packs].map((row) => row.createdByUserId))] } },
+    select: { id: true, name: true, email: true },
+  })).map((user) => [user.id, user.name || user.email]));
+  const author = (userId: string) => ({ by: names.get(userId) ?? null, counts: userId === coach });
+  const calls = rows.map((row) => {
     const turns = transcriptTurns(row.session.transcript);
     return {
       id: row.id,
@@ -156,15 +179,33 @@ async function calibrationRows(orgId: string, agentId: string) {
       seconds: durationSeconds(row.session.startedAt, row.session.endedAt),
       ...savedScore(row, turns),
       ratings: row.ratings,
+      ...author(row.createdByUserId),
     };
   });
+  const packRows = packs.map((pack) => {
+    const ratings = pack.cards.flatMap((card) => card.ratings);
+    const score = cardScore(ratings) ?? { turns: 0, off: 0 };
+    return {
+      id: pack.id,
+      title: `Calibration pack · ${score.turns} of ${pack.cards.length * MAX_TURNS_PER_CARD} answers${pack.status === "open" ? " · in progress" : ""}`,
+      at: pack.createdAt.toISOString(),
+      seconds: null,
+      ...score,
+      ratings,
+      ...author(pack.createdByUserId),
+    };
+  });
+  return [...calls, ...packRows].sort((a, b) => b.at.localeCompare(a.at));
 }
 
 /** Jev's saved turns / meant "Feels off" for a calibration; the raw counts until it has been scored. */
 function savedScore(
-  row: { turns: number | null; offTurns: number | null; ratings: { turnIndex: number; question: string | null; reply: string; rating: string }[] },
+  row: { turns: number | null; offTurns: number | null; ratings: { turnIndex: number; question: string | null; reply: string; rating: string; cardId?: string | null }[] },
   turns: ReturnType<typeof transcriptTurns>,
 ): CalibrationScore {
+  // A card calibration counts its rated answers, live and after it ends alike.
+  const cards = cardScore(row.ratings);
+  if (cards) return cards;
   if (row.turns !== null && row.offTurns !== null) return { turns: row.turns, off: row.offTurns };
   return rawScore(attachRatings(turns, row.ratings));
 }
@@ -284,7 +325,9 @@ const agentsRouter = t.router({
         helpScore: rated.length ? Math.round((rated.reduce((a, b) => a + b, 0) / rated.length) * 10) / 10 : null,
         avgMinutes: lengths.length ? Math.round(lengths.reduce((a, b) => a + b, 0) / lengths.length / 6) / 10 : null,
         week: lastSevenDays(sessions.map((row) => row.startedAt ?? row.createdAt)),
-        feelsLikeMe: likeRateByWeek(calibrations.flatMap((row) => row.ratings.map((rating) => ({ rating: rating.rating, at: rating.createdAt })))),
+        // The coach's card answers only (calibration v2): each a real answer, judged as first given (voice-call ratings
+        // also counted greetings); a team member's calibrations are tests (calibrationRows `counts`).
+        feelsLikeMe: likeRateByWeek(calibrations.filter((row) => row.counts).flatMap((row) => row.ratings.filter((rating) => rating.cardId).map((rating) => ({ rating: rating.rating, at: rating.createdAt })))),
         mostAsked: mostAsked(sessions.map((row) => (isTwinReport(row.report) ? row.report.questions : []))),
         /** What learners asked that the twin declined ("please ask the real …"), counted like mostAsked. */
         couldntAnswer: mostAsked(sessions.map((row) => (isTwinReport(row.report) ? row.report.unanswered ?? [] : []))),
@@ -467,15 +510,20 @@ async function sessionReportState(orgId: string, id: string) {
 const laterEnd = (a: Date | null, b: Date | null) => (a && b ? (a > b ? a : b) : null);
 
 const usersRouter = t.router({
-  /** The org's learners with twin access: how many twins, and their minutes (given and used, shared by twins and role plays). */
+  /**
+   * The org's learners with twin access: how many twins, their minutes (given and used, shared by twins and role
+   * plays) and their twin sessions, counted as the Twin sessions page lists them (learnerSessions).
+   */
   list: studioProcedure.query(async ({ ctx }) => {
-    const [learners, rows] = await Promise.all([
+    const [learners, rows, sessionCounts] = await Promise.all([
       orgPeople(ctx.user.orgId, { roles: [LEARNER] }),
       db.twinAssignment.findMany({ where: { orgId: ctx.user.orgId, status: "active" }, select: { userId: true, accessUntil: true } }),
+      db.interviewSession.groupBy({ by: ["userId"], where: learnerSessions(ctx.user.orgId), _count: { _all: true } }),
     ]);
     const minutes = await learnerMinutes(ctx.user.orgId, learners.map((person) => person.email));
+    const sessionsOf = new Map(sessionCounts.map((row) => [row.userId, row._count._all]));
     // until: when this person's access ends; the latest of their twins, null when any twin has no end date.
-    const people = new Map<string, { email: string; name: string; image: string | null; agents: number; minutes: number; used: number; until: Date | null }>();
+    const people = new Map<string, { email: string; name: string; image: string | null; agents: number; sessions: number; minutes: number; used: number; until: Date | null }>();
     const learnerById = new Map(learners.map((person) => [person.userId, person]));
     for (const row of rows) {
       const learner = learnerById.get(row.userId);
@@ -484,7 +532,7 @@ const usersRouter = t.router({
       const own = minutes.get(learner.email);
       const person = known
         ?? {
-          email: learner.email, name: learner.name, image: learner.image, agents: 0,
+          email: learner.email, name: learner.name, image: learner.image, agents: 0, sessions: sessionsOf.get(row.userId) ?? 0,
           minutes: Math.floor((own?.grantedSeconds ?? 0) / 60), used: Math.round((own?.usedSeconds ?? 0) / 60), until: row.accessUntil,
         };
       if (known) person.until = laterEnd(person.until, row.accessUntil);
@@ -514,14 +562,107 @@ const usersRouter = t.router({
 /** One calibration of this org that can still be seen: its call not deleted, its twin not archived (rule 15). */
 const orgCalibration = (orgId: string, id: string) => ({ id, session: { orgId, deletedAt: null, agent: { archivedAt: null } } });
 
+/**
+ * One calibration pack for the review page, in the shape of a calibration: each card's question with the twin's
+ * answer as marked, scored on its marked answers. Its "Why this answer" reads the latest visit.
+ */
+async function packReview(orgId: string, id: string) {
+  const pack = await db.twinCalibrationPack.findFirst({
+    where: { id, orgId, agent: { archivedAt: null } },
+    select: {
+      createdAt: true,
+      agent: { select: { slug: true, name: true, persona: personaFace } },
+      cards: {
+        orderBy: { position: "asc" },
+        select: { ratings: { orderBy: { turnIndex: "asc" }, select: { question: true, reply: true, rating: true, cardId: true, createdAt: true, calibration: { select: { sessionId: true } } } } },
+      },
+    },
+  });
+  if (!pack) throw refusals.notFound();
+  const ratings = pack.cards.flatMap((card) => card.ratings);
+  const latest = [...ratings].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
+  const turns = await withTurnAttachments(
+    orgId,
+    ratings.flatMap((rating, i) => [
+      { id: `${i}-you`, speaker: "you" as const, text: rating.question ?? "", rating: undefined },
+      { id: `${i}-twin`, speaker: "twin" as const, text: rating.reply, rating: rating.rating as "like" | "off" },
+    ]),
+  );
+  return {
+    score: cardScore(ratings) ?? { turns: 0, off: 0 },
+    slug: pack.agent.slug,
+    twinName: pack.agent.name,
+    photoUrl: aiAvatarUrl(pack.agent.persona),
+    startedAt: pack.createdAt.toISOString(),
+    sessionId: latest?.calibration.sessionId ?? "",
+    turns,
+  };
+}
+
+/** A twin's Do's & Don'ts per topic (the Configure tab): picked once from each playbook, then changed only by the coach. */
+const dosDontsRouter = t.router({
+  list: studioProcedure.input(slugInput).query(async ({ ctx, input }) => {
+    const found = await findTwinAgent(ctx.user.orgId, input.slug);
+    return twinDosDonts({ orgId: ctx.user.orgId, agentId: found.id });
+  }),
+  edit: studioProcedure
+    .input(z.object({ id: z.string().min(1).max(100), text: z.string().min(1).max(2000) }))
+    .mutation(({ ctx, input }) => editDoDont({ orgId: ctx.user.orgId, userId: ctx.user.id, ...input })),
+  add: studioProcedure
+    .input(z.object({ slug: z.string().min(1).max(200), skillAgentId: z.string().min(1).max(100), kind: z.enum(["do", "dont"]), text: z.string().min(1).max(2000) }))
+    .mutation(async ({ ctx, input }) => {
+      const found = await findTwinAgent(ctx.user.orgId, input.slug);
+      return addDoDont({ orgId: ctx.user.orgId, userId: ctx.user.id, agentId: found.id, skillAgentId: input.skillAgentId, kind: input.kind, text: input.text });
+    }),
+  remove: studioProcedure
+    .input(z.object({ id: z.string().min(1).max(100), restore: z.boolean().optional() }))
+    .mutation(({ ctx, input }) => removeDoDont({ orgId: ctx.user.orgId, userId: ctx.user.id, ...input })),
+});
+
+/** Card calibrations (calibration v2): the coach asks the twin in text, card by card, and marks every answer. */
+const cardsRouter = t.router({
+  /** Starts a visit to Calibrate: a text calibration session and the coach's open pack (made now when she has none). */
+  start: studioProcedure.input(slugInput).mutation(async ({ ctx, input }) => {
+    const found = await findTwinAgent(ctx.user.orgId, input.slug);
+    return startCardCalibration({ orgId: ctx.user.orgId, user: ctx.user, slug: found.slug });
+  }),
+  /** Asks the twin on one of the pack's cards: its question (maybe reworded). */
+  ask: studioProcedure
+    .input(z.object({
+      calibrationId: z.string().min(1).max(100),
+      cardId: z.string().min(1).max(100),
+      text: z.string().trim().min(1).max(2000),
+      /** "Ask your own instead": her question replaces the card's suggested one (which goes back to the pool). */
+      own: z.boolean().optional(),
+    }))
+    .mutation(({ ctx, input }) => askCard({ orgId: ctx.user.orgId, userId: ctx.user.id, ...input })),
+  /** Marks one answer; "off" keeps the reasons and the coach's own answer (typed, or spoken and transcribed). */
+  rate: studioProcedure
+    .input(z.object({
+      calibrationId: z.string().min(1).max(100),
+      cardId: z.string().min(1).max(100),
+      turnIndex: z.number().int().min(0).max(10_000),
+      learner: z.string().trim().min(1).max(2000),
+      learnerSource: z.enum(["suggested", "edited", "own"]),
+      reply: z.string().trim().min(1).max(8000),
+      rating: z.enum(["like", "off"]),
+      reasons: z.array(z.string().trim().min(1).max(60)).max(10).optional(),
+      correction: z.string().trim().max(4000).nullable().optional(),
+      correctionAudioKey: z.string().min(1).max(500).nullable().optional(),
+      correctionInput: z.enum(["typed", "voice"]).nullable().optional(),
+    }))
+    .mutation(({ ctx, input }) => rateCard({ orgId: ctx.user.orgId, userId: ctx.user.id, ...input })),
+});
+
 const calibrationsRouter = t.router({
   /** One twin's calibrations with their like/off counts. */
   list: studioProcedure.input(slugInput).query(({ ctx, input }) => twinCall(async () => {
     const found = await findTwinAgent(ctx.user.orgId, input.slug);
-    const [rows, persona, admin] = await Promise.all([
+    const [rows, persona, admin, score] = await Promise.all([
       calibrationRows(ctx.user.orgId, found.id),
       db.agent.findUniqueOrThrow({ where: { id: found.id }, select: { persona: personaFace } }),
       orgAdmin(ctx.user.orgId),
+      twinScore(ctx.user.orgId, found.id),
     ]);
     // The practice check Start runs (specs/practice.md rules 1, 12): the calibrate page shows its refusal instead of Start.
     const blocked = await practicePerson(ctx.user.orgId, ctx.user.id)
@@ -534,6 +675,8 @@ const calibrationsRouter = t.router({
       name: found.name,
       face: { person: admin, avatarUrl: aiAvatarUrl(persona.persona) },
       calibrations: rows.map((row) => omitRatings(row)),
+      // The coach's packs toward a reliable score; the accuracy once they're done.
+      score,
       blocked,
     };
   })),
@@ -548,10 +691,10 @@ const calibrationsRouter = t.router({
         offTurns: true,
         sessionId: true,
         session: { select: { startedAt: true, transcript: true, agent: { select: { slug: true, name: true, persona: personaFace } } } },
-        ratings: { orderBy: { turnIndex: "asc" }, select: { turnIndex: true, question: true, reply: true, rating: true } },
+        ratings: { orderBy: { turnIndex: "asc" }, select: { turnIndex: true, question: true, reply: true, rating: true, cardId: true } },
       },
     });
-    if (!row) throw refusals.notFound();
+    if (!row) return packReview(ctx.user.orgId, input.id);
     // The saved transcript usually comes from the voice agent, so ratings are matched to it by the reply they rated.
     const turns = await withTurnAttachments(
       ctx.user.orgId,
@@ -601,6 +744,8 @@ const calibrationsRouter = t.router({
       });
       return { ok: true };
     }),
+
+  cards: cardsRouter,
 });
 
 /** "Voice and avatar" on Twin's brain: photo (avatar), reference video, cloned voice. */
@@ -634,6 +779,7 @@ export const twinRouter = t.router({
   assignments: assignmentsRouter,
   sessions: sessionsRouter,
   users: usersRouter,
+  dosDonts: dosDontsRouter,
   calibrations: calibrationsRouter,
   avatar: avatarRouter,
 });

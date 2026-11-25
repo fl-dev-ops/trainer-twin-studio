@@ -45,27 +45,32 @@ enum AgentKind {
 }
 
 model Agent {
-  orgId           String?
-  visibility      String             @default("public") // public | private (within the org)
-  id              String             @id @default(cuid())
-  slug            String             @unique
-  name            String
-  version         Int                @default(1)
-  personaId       String
-  persona         Persona            @relation(fields: [personaId], references: [id], onDelete: Restrict)
+  orgId                     String?
+  visibility                String                    @default("public") // public | private (within the org)
+  id                        String                    @id @default(cuid())
+  slug                      String                    @unique
+  name                      String
+  version                   Int                       @default(1)
+  personaId                 String
+  persona                   Persona                   @relation(fields: [personaId], references: [id], onDelete: Restrict)
   // No default: every writer must choose the module.
-  kind            AgentKind
-  data            Json
-  order           Int                @default(0)
+  kind                      AgentKind
+  data                      Json
+  order                     Int                       @default(0)
   /// Soft delete: hidden from lists, twin playbooks and new sessions; restore clears it. Versions and S3 artifacts stay.
-  archivedAt      DateTime?
-  createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
-  deployments     Deployment[]
-  skillSources    SkillSource[]
-  sessions        InterviewSession[]
-  twinAssignments TwinAssignment[]
-  twinShareLinks  TwinShareLink[]
+  archivedAt                DateTime?
+  createdAt                 DateTime                  @default(now())
+  updatedAt                 DateTime                  @updatedAt
+  deployments               Deployment[]
+  skillSources              SkillSource[]
+  sessions                  InterviewSession[]
+  twinAssignments           TwinAssignment[]
+  twinShareLinks            TwinShareLink[]
+  calibrationQuestions      TwinCalibrationQuestion[] @relation("CalibrationQuestionTwin")
+  calibrationSkillQuestions TwinCalibrationQuestion[] @relation("CalibrationQuestionSkill")
+  calibrationPacks          TwinCalibrationPack[]
+  dosDonts                  TwinDoDont[]              @relation("DoDontTwin")
+  skillDosDonts             TwinDoDont[]              @relation("DoDontSkill")
 
   @@index([orgId])
   @@index([personaId])
@@ -984,22 +989,121 @@ model TwinCalibration {
 
   session InterviewSession        @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   ratings TwinCalibrationRating[]
+  cards   TwinCalibrationCard[]
 }
 
 /// One rated twin reply. The text is kept as rated, so the review shows exactly what was judged.
+/// Card calibrations (plans: calibration v2) also keep who wrote the learner line and, for "off", the coach's
+/// reasons and her own answer (text, and the audio when she spoke it). Voice-call ratings leave these empty.
 model TwinCalibrationRating {
-  id            String   @id @default(cuid())
-  calibrationId String
-  turnIndex     Int // position in the call's turns (>= 0, CHECK)
-  question      String? // what the trainer said just before
-  reply         String
-  rating        String // like | off (CHECK)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id                 String   @id @default(cuid())
+  calibrationId      String
+  turnIndex          Int // position in the call's turns (>= 0, CHECK)
+  question           String? // what the trainer said just before
+  reply              String
+  rating             String // like | off (CHECK)
+  cardId             String?
+  learnerSource      String? // suggested | edited | own (CHECK): who wrote the learner line this reply answers
+  reasons            String[] @default([]) // "Feels off" reasons, as picked
+  correction         String? // the coach's answer, as she saved it
+  correctionAudioKey String? // S3 key of her spoken answer
+  correctionInput    String? // typed | voice (CHECK)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
-  calibration TwinCalibration @relation(fields: [calibrationId], references: [id], onDelete: Cascade)
+  calibration TwinCalibration      @relation(fields: [calibrationId], references: [id], onDelete: Cascade)
+  card        TwinCalibrationCard? @relation(fields: [cardId], references: [id], onDelete: Cascade)
 
   @@unique([calibrationId, turnIndex])
+  @@index([cardId])
+}
+
+/// A question a learner might ask a twin, generated for calibration (or the coach's own), kept so coaches can see
+/// what their twin has been tested on. One pool per twin; "10 more questions" draws from it.
+model TwinCalibrationQuestion {
+  id           String    @id @default(cuid())
+  orgId        String
+  agentId      String // the twin being calibrated
+  skillAgentId String? // the skill twin it tests, when it came from one
+  topic        String // e.g. a skill situation's name
+  text         String
+  source       String // where it came from, as shown: "Skill situation", "Course FAQ", "Your own question"
+  origin       String // generated | own (CHECK)
+  status       String    @default("new") // new | asked | skipped (CHECK)
+  createdAt    DateTime  @default(now())
+  askedAt      DateTime?
+
+  agent      Agent                 @relation("CalibrationQuestionTwin", fields: [agentId], references: [id], onDelete: Cascade)
+  skillAgent Agent?                @relation("CalibrationQuestionSkill", fields: [skillAgentId], references: [id], onDelete: SetNull)
+  cards      TwinCalibrationCard[]
+
+  @@index([agentId, status])
+}
+
+/// One card in a card calibration: a question and the twin's rated answer. Each card starts the
+/// twin fresh. The twin's version is kept so later results say which version answered.
+model TwinCalibrationCard {
+  id            String   @id @default(cuid())
+  /// A pack's card (calibration packs): it outlives the visits, each answer keeps the visit it was given in.
+  packId        String?
+  /// A card asked within one visit (before packs). A card has a pack or a calibration (CHECK).
+  calibrationId String?
+  questionId    String?
+  position      Int // order within its pack or calibration (>= 0, CHECK)
+  topic         String
+  agentVersion  Int // the twin's Agent.version when the card was asked
+  createdAt     DateTime @default(now())
+
+  pack        TwinCalibrationPack?     @relation(fields: [packId], references: [id], onDelete: Cascade)
+  calibration TwinCalibration?         @relation(fields: [calibrationId], references: [id], onDelete: Cascade)
+  question    TwinCalibrationQuestion? @relation(fields: [questionId], references: [id], onDelete: SetNull)
+  ratings     TwinCalibrationRating[]
+
+  @@unique([calibrationId, position])
+  @@unique([packId, position])
+}
+
+/// A calibration pack: one coach's set of questions for a twin (10 questions, one answer each),
+/// open until every answer is marked. It outlives visits (a call ends after 3 hours or when another starts), so she
+/// comes back to the same pack. One open pack per coach per twin (partial unique index).
+model TwinCalibrationPack {
+  id              String    @id @default(cuid())
+  orgId           String
+  agentId         String // the twin
+  createdByUserId String
+  status          String    @default("open") // open | complete (CHECK)
+  createdAt       DateTime  @default(now())
+  completedAt     DateTime?
+
+  agent Agent                 @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  cards TwinCalibrationCard[]
+
+  @@index([agentId, createdByUserId, status])
+}
+
+/// A twin's Do's & Don'ts per topic (the Configure tab): the main rules picked once from a skill's playbook, quoted as
+/// written, then only changed by the coach (edit, add, remove). Kept with the playbook's own wording beside hers, and not
+/// applied to the skill file yet (that comes later). One list per org + twin + topic, shared by the studio.
+model TwinDoDont {
+  id             String    @id @default(cuid())
+  orgId          String
+  agentId        String // the twin
+  skillAgentId   String // the topic: the skill twin whose playbook it came from
+  skillVersion   Int // the playbook's version when it was picked
+  kind           String // do | dont (CHECK)
+  position       Int // order within its topic and kind (>= 0, CHECK)
+  text           String // as shown now
+  originalText   String? // as written in the playbook; null for a line she added
+  source         String // playbook | edited | added (CHECK)
+  editedByUserId String? // who last changed it (a team member's change is a suggestion until the coach's)
+  removedAt      DateTime? // removed from the list (kept, can be restored)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  agent      Agent @relation("DoDontTwin", fields: [agentId], references: [id], onDelete: Cascade)
+  skillAgent Agent @relation("DoDontSkill", fields: [skillAgentId], references: [id], onDelete: Cascade)
+
+  @@unique([agentId, skillAgentId, kind, position])
 }
 
 /// A copilot conversation (an eve session) and who it belongs to. eve has no per-session access control, so the web

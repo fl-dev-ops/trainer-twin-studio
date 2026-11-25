@@ -267,7 +267,15 @@ export default defineChannel({
 
       // Address = durable conversation cursor
       const sessionIdHeader = request.headers.get("x-trainertwin-session-id")?.trim();
-      const address = sessionIdHeader || (bearer ? `token:${bearer}` : `sess:${crypto.randomUUID()}`);
+      // A calibration card is its own conversation (the card's id): the twin starts fresh on every card, and a card
+      // keeps its history across visits (a pack outlives sessions). Its context still comes from the visit's session.
+      const conversationHeader = request.headers.get("x-trainertwin-conversation-id")?.trim();
+      if (conversationHeader !== undefined && (!sessionIdHeader || !/^[A-Za-z0-9_-]{1,64}$/.test(conversationHeader))) {
+        return Response.json({ error: "x-trainertwin-conversation-id needs a session and must be 1-64 letters, digits, _ or -" }, { status: 400 });
+      }
+      const address = sessionIdHeader
+        ? (conversationHeader ? `calibration-card:${conversationHeader}` : sessionIdHeader)
+        : (bearer ? `token:${bearer}` : `sess:${crypto.randomUUID()}`);
       const sessionId = sessionIdHeader || (bearer ? bearer : address);
 
       const modeHeader = request.headers.get("x-trainertwin-mode")?.trim();

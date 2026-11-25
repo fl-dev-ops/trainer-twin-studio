@@ -87,8 +87,8 @@ export function SessionControlBar({
             type="button"
             onClick={onAttach}
             disabled={attaching}
-            aria-label="Attach a file"
-            title="Attach a file"
+            aria-label="Attach files (up to 4)"
+            title="Attach files (up to 4)"
             className={cn(CONTROL, "hover:bg-card disabled:opacity-60")}
           >
             {attaching ? <LoaderCircle className="animate-spin" /> : <Paperclip />}

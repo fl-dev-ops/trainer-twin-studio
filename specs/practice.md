@@ -62,7 +62,9 @@
    abandoned. If setting up the new call then fails, it is `failed` and uncharged; the call it replaced stays ended.
    A call that a newer start ended while it was still being set up never becomes live (`call_replaced`).
    Twin calls don't resume: every start is a new call (the agent's short LiveKit reconnect is not a resume).
-6. **Twin calls are voice only** (`voice_only`).
+6. **Twin calls are voice only** (`voice_only`), except calibrations: a studio member's calibration may be text (card
+   calibrations ask each card in its own chat conversation, `web/lib/twin/calibration-cards.ts`). The DB checks it at
+   commit (`twin_session_mode`, migration `20261119120000_calibration_cards`).
 7. **During the call** the voice agent ends it at the allowance (the deadline). Every 5 minutes the platform ends, as
    `abandoned`, any call still live 2 minutes after its deadline (agent crashed, tab closed), charging it up to its
    allowance and voiding its runtime token; a call with no allowance (a free studio call) after 3 hours; a call stuck
@@ -183,7 +185,7 @@ Same columns as [People](people.md#refusals). **Where**: PG page loader (`/t/`, 
 | `org_credits_short` | 403 | Your organization needs at least 5 credits to start a call; it has {n}. Contact TrainerTwin to add more. | Studio on a billed org, 1–4 minutes | PG, ST |
 | `calibration_ended` | 409 | This calibration call has ended. | Rating after the call ended | T (`calibrations.rate`) |
 | `call_replaced` | 409 | This call was replaced by one you started elsewhere. | A newer start ended this call while it was being set up | ST |
-| `voice_only` | 400 | Twin calls are voice only. | A twin call in another mode | ST |
+| `voice_only` | 400 | Twin calls are voice only. | A twin call in another mode (calibrations excepted) | ST |
 | `roleplay_not_assigned` | 403 | This role play isn't assigned to you. | A link of another account (studio members included) | PG, ST |
 | `roleplay_access_removed` | 403 | Your access to this role play was removed. Ask your trainer. | Link cancelled or expired | PG, ST |
 | `mode_not_allowed` | 400 | This role play can't be started as {mode}. | Mode outside the deployment's allowed modes, or a learner not calling by voice | ST |

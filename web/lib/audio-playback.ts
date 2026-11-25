@@ -44,8 +44,11 @@ export function splitPcm(carry: Uint8Array, chunk: Uint8Array, sliceSamples: num
   return { slices, carry: bytes.slice(offset) };
 }
 
-/** Consume a /api/tts/speech response (raw 16-bit PCM) and play it live. */
-export async function playPcmStream(response: Response): Promise<void> {
+/**
+ * Consume a /api/tts/speech response (raw 16-bit PCM) and play it live. Resolves once the audio has arrived (it may
+ * still be playing); with `untilEnd`, once it has finished playing or was stopped (stopPlayback).
+ */
+export async function playPcmStream(response: Response, options: { untilEnd?: boolean } = {}): Promise<void> {
   if (!response.ok || !response.body) {
     const detail = await response.json().catch(() => null);
     throw new Error(detail?.error ?? `TTS failed (${response.status})`);
@@ -55,7 +58,7 @@ export async function playPcmStream(response: Response): Promise<void> {
   const sliceSamples = Math.floor(sampleRate * 0.2);
   let nextTime = context.currentTime + 0.05;
 
-  function schedule(samples: Int16Array) {
+  function schedule(samples: Int16Array): AudioBufferSourceNode {
     const buffer = context.createBuffer(1, samples.length, sampleRate);
     const channel = buffer.getChannelData(0);
     for (let i = 0; i < samples.length; i++) channel[i] = samples[i] / 32768;
@@ -67,17 +70,25 @@ export async function playPcmStream(response: Response): Promise<void> {
     nextTime = Math.max(nextTime, context.currentTime + 0.02);
     source.start(nextTime);
     nextTime += buffer.duration;
+    return source;
   }
 
   const reader = response.body.getReader();
   let carry: Uint8Array = new Uint8Array(0);
+  const mine = new Set<AudioBufferSourceNode>();
   while (true) {
     const { done, value } = await reader.read();
     const next = splitPcm(carry, value ?? new Uint8Array(0), sliceSamples, done);
-    next.slices.forEach(schedule);
+    for (const slice of next.slices) mine.add(schedule(slice));
     carry = next.carry;
     if (done) break;
   }
+  if (!options.untilEnd) return;
+  // Every buffer of this speech has ended (played out, or stopped by stopPlayback, which fires onended too).
+  await Promise.all([...mine].map((source) => new Promise<void>((resolve) => {
+    if (!liveSources.has(source)) return resolve();
+    source.addEventListener("ended", () => resolve(), { once: true });
+  })));
 }
 
 export async function generateSpeech(voice: string, input: string, stream = true): Promise<Response> {

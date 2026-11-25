@@ -11,6 +11,7 @@ import os
 import sys
 import time
 from pathlib import Path
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from dotenv import load_dotenv
@@ -99,6 +100,19 @@ ROLEPLAY_GOODBYE_LINE = "Sorry, I have to jump to another call now. Let's pick t
 def goodbye_line(metadata: dict[str, Any]) -> str:
     """The goodbye before the minutes run out: the client's own for a role play, the twin's otherwise."""
     return ROLEPLAY_GOODBYE_LINE if metadata.get("agent_kind") == "ROLEPLAY" else GOODBYE_LINE
+
+
+# A learner silent this long is treated as gone: a short goodbye, then the call ends (counted from the last time
+# anyone spoke; "away" itself fires after session.py's user_away_timeout, when the nudge is sent).
+SILENCE_CUTOFF_SECONDS = 120.0
+USER_AWAY_SECONDS = 60.0
+SILENCE_GOODBYE_LINE = "It's gone quiet, so I'll end the call here. Come back any time."
+ROLEPLAY_SILENCE_GOODBYE_LINE = "Seems you've stepped away, so I'll let you go. Bye for now."
+
+
+def silence_goodbye_line(metadata: dict[str, Any]) -> str:
+    """The goodbye when the learner has gone quiet: the client's own for a role play, the twin's otherwise."""
+    return ROLEPLAY_SILENCE_GOODBYE_LINE if metadata.get("agent_kind") == "ROLEPLAY" else SILENCE_GOODBYE_LINE
 
 
 def goodbye_delay(limit: float) -> float | None:
@@ -199,7 +213,48 @@ def register_inactivity_nudge(session: Any, agent: TrainerAgent) -> None:
         if event.new_state != "away" or not agent.opening_complete:
             return
         logger.info("User inactive for 60s in room %s; sending nudge", agent.room_name)
-        asyncio.create_task(session.generate_reply(instructions=USER_INACTIVE_SIGNAL))
+        # generate_reply schedules the reply itself and returns its SpeechHandle (older versions returned a
+        # coroutine). Wrapping a handle in create_task raised a TypeError here, which also stopped the session
+        # from calling this event's other handlers (the silence cutoff never started).
+        reply = session.generate_reply(instructions=USER_INACTIVE_SIGNAL)
+        if asyncio.iscoroutine(reply):
+            asyncio.create_task(reply)
+
+
+def register_silence_cutoff(
+    session: Any,
+    agent: TrainerAgent,
+    end_call: Callable[[], Awaitable[None]],
+    *,
+    goodbye: str,
+    wait: float = SILENCE_CUTOFF_SECONDS - USER_AWAY_SECONDS,
+) -> None:
+    """Ends a call the learner has walked away from (a switched tab, a locked phone): once they've been away (after
+    the nudge), a further `wait` of silence brings a goodbye and the end. Only their speaking resets it; the
+    twin's own nudge doesn't."""
+    pending: dict[str, asyncio.Task[None] | None] = {"task": None}
+
+    async def cut() -> None:
+        await asyncio.sleep(wait)
+        logger.info("User silent for %ss in room %s; ending the call", SILENCE_CUTOFF_SECONDS, agent.room_name)
+        try:
+            handle = session.say(goodbye, allow_interruptions=False)
+            await asyncio.wait_for(handle.wait_for_playout(), timeout=15)
+        except Exception as exc:
+            logger.warning("Silence goodbye failed room=%s error=%s", agent.room_name, exc)
+        await end_call()
+
+    @session.on("user_state_changed")
+    def on_user_state_changed(event: Any) -> None:
+        task = pending["task"]
+        if event.new_state == "away":
+            if agent.opening_complete and task is None:
+                logger.info("User away in room %s; ending the call in %ss unless they speak", agent.room_name, wait)
+                pending["task"] = asyncio.create_task(cut())
+        elif event.new_state == "speaking" and task is not None:
+            logger.info("User spoke in room %s; silence cutoff cancelled", agent.room_name)
+            task.cancel()
+            pending["task"] = None
 
 
 def register_latency_logging(session: Any, *, session_id: str, room_name: str) -> None:
@@ -514,6 +569,17 @@ async def entrypoint(ctx: agents.JobContext) -> None:
         pending_input=pending_chat_messages,
     )
     register_inactivity_nudge(session, agent)
+
+    async def end_for_silence() -> None:
+        state = _sessions.get(ctx.room.name)
+        if state is not None:
+            state["end_status"] = "ABANDONED"
+        try:
+            await ctx.api.room.delete_room(api.DeleteRoomRequest(room=ctx.room.name))
+        except Exception as exc:
+            logger.debug("Room teardown note: %s", exc)
+
+    register_silence_cutoff(session, agent, end_for_silence, goodbye=silence_goodbye_line(metadata))
     register_latency_logging(session, session_id=session_id, room_name=ctx.room.name)
     screen_feedback = ScreenFeedbackRuntime(
         room=ctx.room,

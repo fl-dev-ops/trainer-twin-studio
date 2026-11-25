@@ -17,6 +17,7 @@ import { UserAvatar } from "@/components/user-avatar";
 import { useRefresh } from "@/lib/use-refresh";
 import { PageContainer } from "@/components/page-container";
 import { AccessUntil } from "@/components/twin/access-until";
+import { TwinDosDonts } from "@/components/twin/twin-dos-donts";
 import { TWIN_UPLOAD_TITLE_DEFAULT } from "@/lib/context-upload";
 import { SettingCard, SettingsPanel, SettingsSection } from "@/components/settings-cards";
 
@@ -62,7 +63,7 @@ export function TwinEditPage({
   twin: Pick<TwinOutputs["agents"]["get"], "slug" | "name" | "description" | "settings">;
   learners: LearnerAssign[];
   /** /edit opens on General, /assign on Learners. General saves with its button; the other tabs save as you go. */
-  defaultTab?: "general" | "conversation" | "learners";
+  defaultTab?: "general" | "conversation" | "dos-donts" | "learners";
 }) {
   const id = twin.slug;
   const refresh = useRefresh();
@@ -199,14 +200,18 @@ export function TwinEditPage({
 
       <div className="mt-6 flex flex-col gap-4">
       <Tabs defaultValue={defaultTab} className="gap-4">
-        <TabsList>
-          <TabsTrigger value="general">General</TabsTrigger>
-          <TabsTrigger value="conversation">Conversation</TabsTrigger>
-          <TabsTrigger value="learners">
-            Learners
-            <span className="text-muted-foreground tabular-nums">· {assigned.length}</span>
-          </TabsTrigger>
-        </TabsList>
+        {/* Four tabs are wider than a phone: the row scrolls sideways on its own instead of widening the page. */}
+        <div className="-mx-1 max-w-full overflow-x-auto px-1 pb-1">
+          <TabsList>
+            <TabsTrigger value="general">General</TabsTrigger>
+            <TabsTrigger value="dos-donts">Do&apos;s &amp; Don&apos;ts</TabsTrigger>
+            <TabsTrigger value="conversation">Conversation</TabsTrigger>
+            <TabsTrigger value="learners">
+              Learners
+              <span className="text-muted-foreground tabular-nums">· {assigned.length}</span>
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
       {/* Card 1: name and description */}
       <TabsContent value="general">
@@ -353,6 +358,11 @@ export function TwinEditPage({
       </TabsContent>
 
       {/* Card 3: learners assigned to this twin; Assign opens the shared dialog */}
+      {/* Do's & Don'ts per topic: picked once from the playbooks, then changed only by the coach (saved as she goes). */}
+      <TabsContent value="dos-donts">
+        <TwinDosDonts slug={id} />
+      </TabsContent>
+
       <TabsContent value="learners">
       <article id="assign" className="flex flex-col gap-4 rounded-tt-lg border border-(--card-border) bg-card p-6 shadow-card">
         <div className="flex flex-wrap items-start justify-between gap-3">

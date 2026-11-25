@@ -168,3 +168,97 @@ def test_on_session_end_sends_transcript(monkeypatch):
     asyncio.set_event_loop(loop)
     loop.run_until_complete(agent.on_session_end(Ctx()))
     assert sent["transcript"] == [{"role": "trainer", "text": "Tell me about a project."}]
+
+
+async def test_silence_cutoff_says_goodbye_then_ends_and_speaking_resets_it():
+    class Handle:
+        async def wait_for_playout(self):
+            return None
+
+    class Session:
+        def __init__(self):
+            self.callback = None
+            self.said: list[str] = []
+
+        def on(self, _event):
+            def register(callback):
+                self.callback = callback
+                return callback
+            return register
+
+        def say(self, text, *, allow_interruptions):
+            self.said.append(text)
+            return Handle()
+
+    ended: list[bool] = []
+
+    async def end_call():
+        ended.append(True)
+
+    session = Session()
+    trainer = SimpleNamespace(opening_complete=True, room_name="room-1")
+    agent.register_silence_cutoff(session, trainer, end_call, goodbye="bye", wait=0.05)
+
+    # Away, then the learner speaks before the cutoff: nothing ends.
+    session.callback(SimpleNamespace(new_state="away"))
+    await asyncio.sleep(0.01)
+    session.callback(SimpleNamespace(new_state="speaking"))
+    await asyncio.sleep(0.08)
+    assert session.said == [] and ended == []
+
+    # Away again; the twin's nudge (listening) doesn't reset it: goodbye, then the end.
+    session.callback(SimpleNamespace(new_state="away"))
+    session.callback(SimpleNamespace(new_state="listening"))
+    await asyncio.sleep(0.08)
+    assert session.said == ["bye"] and ended == [True]
+
+
+def test_silence_goodbye_matches_the_agent():
+    assert agent.silence_goodbye_line({"agent_kind": "ROLEPLAY"}) == agent.ROLEPLAY_SILENCE_GOODBYE_LINE
+    assert agent.silence_goodbye_line({"agent_kind": "TWIN"}) == agent.SILENCE_GOODBYE_LINE
+    assert agent.SILENCE_CUTOFF_SECONDS == 120.0 and agent.USER_AWAY_SECONDS == 60.0
+
+
+async def test_nudge_with_a_speech_handle_lets_the_silence_cutoff_run_too():
+    """generate_reply returns a SpeechHandle (no coroutine): the nudge mustn't raise, so later handlers still run."""
+    class Handle:
+        async def wait_for_playout(self):
+            return None
+
+    class Session:
+        def __init__(self):
+            self.callbacks = []
+            self.replies: list[str] = []
+            self.said: list[str] = []
+
+        def on(self, _event):
+            def register(callback):
+                self.callbacks.append(callback)
+                return callback
+            return register
+
+        def emit(self, event):
+            for callback in self.callbacks:
+                callback(event)  # as livekit's emitter: one raising stops the rest
+
+        def generate_reply(self, *, instructions):
+            self.replies.append(instructions)
+            return Handle()
+
+        def say(self, text, *, allow_interruptions):
+            self.said.append(text)
+            return Handle()
+
+    ended: list[bool] = []
+
+    async def end_call():
+        ended.append(True)
+
+    session = Session()
+    trainer = SimpleNamespace(opening_complete=True, room_name="room-1")
+    agent.register_inactivity_nudge(session, trainer)
+    agent.register_silence_cutoff(session, trainer, end_call, goodbye="bye", wait=0.02)
+    session.emit(SimpleNamespace(new_state="away"))
+    await asyncio.sleep(0.05)
+    assert session.replies == [agent.USER_INACTIVE_SIGNAL]
+    assert session.said == ["bye"] and ended == [True]

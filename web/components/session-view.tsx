@@ -6,8 +6,10 @@ import Link from "next/link";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { toast } from "sonner";
 import { Check, LoaderCircle, Play, ScreenShare, Upload as UploadIcon, Volume2 } from "lucide-react";
-import { type AgentContextUpload, BEFORE_UPLOAD_ACCEPT, beforeUploadProblem, DURING_UPLOAD_ACCEPT, duringUploadProblem } from "@/lib/context-upload";
-import { attachedMessage, uploadFile } from "@/lib/upload-client";
+import { type AgentContextUpload, BEFORE_UPLOAD_ACCEPT, beforeUploadProblem, DURING_UPLOAD_ACCEPT } from "@/lib/context-upload";
+import { AttachTray, useStagedAttachments } from "@/components/session/attach-tray";
+import { useEndCallOnLeave, useLeaveWarning } from "@/components/session/call-exit";
+import { uploadFile } from "@/lib/upload-client";
 import "@livekit/components-styles";
 import {
   RoomAudioRenderer,
@@ -149,6 +151,9 @@ export function SessionView({
     () =>
       new Room({
         adaptiveStream: true,
+        // Leaving the page is handled by useEndCallOnLeave, after the "Leave site?" prompt; the room's default
+        // disconnected on beforeunload, so Cancel kept the page but lost the call.
+        disconnectOnPageLeave: false,
         audioCaptureDefaults: {
           autoGainControl: true,
           echoCancellation: true,
@@ -157,6 +162,7 @@ export function SessionView({
       }),
     [],
   );
+  useEndCallOnLeave(room);
 
   const roomState = useConnectionState(room);
   const workspaceConnected = roomState === ConnectionState.Connected;
@@ -553,35 +559,10 @@ export function SessionView({
     [room],
   );
 
-  const [attaching, setAttaching] = useState(false);
+  useLeaveWarning(connected && !ended);
   const attachInput = useRef<HTMLInputElement>(null);
-  /** Mid-call file: upload it, link it to this session, then tell the twin which file to read (it reads by ID). */
-  const handleAttach = useCallback(
-    async (file: File) => {
-      if (!connection) return;
-      const problem = duringUploadProblem(file);
-      if (problem) return void toast.error(problem);
-      setAttaching(true);
-      try {
-        const doc = await uploadFile(file, { purpose: "during", shareCode: sessionCode });
-        const linked = await fetch(`/api/sessions/${encodeURIComponent(connection.sessionId)}/documents`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ documentId: doc.id }),
-        });
-        const result = await linked.json().catch(() => null);
-        if (!linked.ok) throw new Error(result?.error ?? "Could not attach the file");
-        // The bridge turns the marker into the file itself for the agent (chat/agent/channels/openai-compat.ts).
-        await handleSendMessage(attachedMessage(doc));
-        toast.success(`${doc.name} attached`);
-      } catch (attachError) {
-        toast.error(attachError instanceof Error ? attachError.message : "Could not attach the file");
-      } finally {
-        setAttaching(false);
-      }
-    },
-    [connection, sessionCode, handleSendMessage],
-  );
+  /** Mid-call files: staged in a tray, then sent to the twin together (it reads each by ID), so it answers once. */
+  const tray = useStagedAttachments({ sessionId: connection?.sessionId ?? null, shareCode: sessionCode, onSend: handleSendMessage });
 
   const handleSurface = useCallback((nextSurface: AgentSurface) => {
     const nextKey = nextSurface?.key ?? null;
@@ -1440,6 +1421,7 @@ export function SessionView({
             </AnimatePresence>}
           </main>
 
+          {attachDuringSession ? <AttachTray tray={tray} onAddMore={() => attachInput.current?.click()} /> : null}
           <footer className="grid shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1 px-3 py-2 md:h-20 md:grid-cols-[1fr_auto_1fr] md:gap-3 md:px-6 md:py-0">
             <time className="col-span-2 text-center font-mono text-sm tabular-nums md:col-span-1 md:text-left" aria-label="Session time">{elapsedLabel}</time>
             <SessionControlBar
@@ -1449,18 +1431,18 @@ export function SessionView({
               onChatToggle={() => setSidebarOpen((v) => !v)}
               onEnd={() => void handleDisconnect("manual")}
               onAttach={attachDuringSession ? () => attachInput.current?.click() : undefined}
-              attaching={attaching}
             />
             {attachDuringSession ? (
               <input
                 ref={attachInput}
                 type="file"
                 hidden
+                multiple
                 accept={DURING_UPLOAD_ACCEPT}
                 onChange={(event) => {
-                  const file = event.target.files?.[0];
+                  const picked = Array.from(event.target.files ?? []);
                   event.currentTarget.value = "";
-                  if (file) void handleAttach(file);
+                  tray.add(picked);
                 }}
               />
             ) : null}
