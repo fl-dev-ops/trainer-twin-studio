@@ -36,6 +36,7 @@ export type BeforeSettings = {
 export const CALL_MINUTES = [2, 3, 4, 5, 6, 8, 10, 15, 20, 30] as const;
 
 export const TWIN_UPLOAD_TITLE_DEFAULT = "Documents";
+export const INTRO_VIDEO_MAX_BYTES = 100 * 1024 * 1024;
 
 /**
  * What may be uploaded, fixed for every agent (twins and role plays) and the copilot. Before a call: a PDF or an image,

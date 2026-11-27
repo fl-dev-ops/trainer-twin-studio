@@ -2,7 +2,7 @@ import yaml from "js-yaml";
 import { orgPeople, type OrgPerson } from "@/lib/org-people";
 import { randomUUID } from "node:crypto";
 import type { AgentKind, Prisma } from "@/lib/generated/prisma/client";
-import { deletePrefix, getObjectText, kbPrefix, presignedGetUrl, putObject } from "@/lib/s3";
+import { deletePrefix, getObjectText, kbPrefix, presignedGetUrl, putObject, roleplayIntroKey } from "@/lib/s3";
 import { db, withLock } from "@/lib/db";
 import { refusals } from "@/lib/errors";
 import { ROLEPLAY_SOURCE } from "@/lib/scenario-ingest";
@@ -288,11 +288,16 @@ export async function listScenarioIntroVideos(orgId: string, slugs: string[]) {
   if (slugs.length === 0) return {};
   const agents = await db.agent.findMany({
     where: { orgId, slug: { in: slugs } },
-    select: { slug: true, data: true, kind: true, _count: { select: { personas: { where: { active: true } } } } },
+    select: { id: true, slug: true, data: true, kind: true, _count: { select: { personas: { where: { active: true } } } } },
   });
   const resolved = await Promise.all(
     agents.map(async (agent) => {
       if (agent.kind === "ROLEPLAY") {
+        const upload = (agent.data as { introVideoUpload?: unknown } | null)?.introVideoUpload;
+        if (upload === null) return [agent.slug, null] as const;
+        if (typeof upload === "string" && /^[\da-f-]{36}$/i.test(upload)) {
+          return [agent.slug, await presignedGetUrl(roleplayIntroKey(orgId, agent.id, upload))] as const;
+        }
         const configured = beforeSettings(agent.data).introVideoUrl;
         if (configured !== undefined) return [agent.slug, configured] as const;
         if (agent._count.personas > 1) return [agent.slug, null] as const;

@@ -1,7 +1,9 @@
 import { listAgentBriefs } from "@/lib/specs";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { beforeSettings } from "@/lib/context-upload";
+import { randomUUID } from "node:crypto";
+import { beforeSettings, INTRO_VIDEO_MAX_BYTES } from "@/lib/context-upload";
+import { isUploadedMp4, presignedPutUrl, roleplayIntroKey } from "@/lib/s3";
 import { db, withLock } from "@/lib/db";
 import { ownershipLock, packageFieldsOmitted, skillOwnership } from "@/lib/skill-ownership";
 import { reportStateOf, type ReportState } from "@/lib/report-model";
@@ -333,13 +335,18 @@ const builderRouter = t.router({
     const agent = await findRoleplay(ctx.user.orgId, input.slug);
     const brief = briefOf(agent.data);
     const builder = roleplayBuilderFrom(agent.data);
+    const before = beforeSettings(agent.data);
+    const data = asRecord(agent.data);
+    const intro = data.introVideoUpload === undefined
+      ? (before.introVideoUrl === undefined ? data.introVideo : before.introVideoUrl)
+      : data.introVideoUpload;
     return {
       slug: agent.slug,
       builder: builder ? { ...builder, persona: agent.persona.slug } : null,
       // The main persona's character for this role play (the builder edits it with the persona it picks).
       character: (await db.agentPersona.findFirst({ where: { agentId: agent.id, persona: { slug: agent.persona.slug } }, select: { character: true } }))?.character ?? "",
-      before: beforeSettings(agent.data),
-      hasLegacyIntroVideo: Boolean(text(asRecord(agent.data).introVideo)),
+      before,
+      hasIntroVideo: Boolean(text(intro)),
       tools: toolSettings(agent.data),
       // A role play the copilot wrote: its core fields (editable here) and its script (changed through the copilot).
       brief: brief ? {
@@ -437,6 +444,35 @@ const builderRouter = t.router({
         }
         throw error;
       }
+    }),
+
+  introVideoUploadUrl: studioProcedure
+    .input(slugInput.extend({ size: z.number().int().min(12).max(INTRO_VIDEO_MAX_BYTES) }))
+    .mutation(async ({ ctx, input }) => {
+      const orgId = ctx.user.orgId;
+      const agent = await findRoleplay(orgId, input.slug);
+      const uploadId = randomUUID();
+      const url = await presignedPutUrl(roleplayIntroKey(orgId, agent.id, uploadId), "video/mp4", 600, input.size);
+      return { uploadId, url };
+    }),
+
+  saveIntroVideo: studioProcedure
+    .input(slugInput.extend({ uploadId: z.uuid().nullable() }))
+    .mutation(async ({ ctx, input }) => {
+      const orgId = ctx.user.orgId;
+      const agent = await findRoleplay(orgId, input.slug);
+      if (input.uploadId && !(await isUploadedMp4(roleplayIntroKey(orgId, agent.id, input.uploadId), INTRO_VIDEO_MAX_BYTES))) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Could not verify that upload. Choose an MP4 video and try again." });
+      }
+      await withLock([ownershipLock(orgId), `agent:${agent.slug}`], async (tx) => {
+        const current = await tx.agent.findFirst({ where: { id: agent.id, orgId, archivedAt: null }, select: { data: true, primarySkillId: true } });
+        if (!current) throw refusals.notFound();
+        const data = asRecord(current.data);
+        const managed = current.primarySkillId && (await skillOwnership(orgId, tx)).mode === "managed";
+        // shortcut: keep replaced files for calls already playing them; add lifecycle cleanup if storage grows.
+        await tx.agent.update({ where: { id: agent.id }, data: { data: { ...(managed ? packageFieldsOmitted(data) : data), introVideoUpload: input.uploadId } as Prisma.InputJsonValue } });
+      });
+      return { ok: true };
     }),
 
   /** Each new session picks one of the active personas at random (specs/agents.md). */

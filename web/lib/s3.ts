@@ -51,6 +51,10 @@ export function avatarPrefix(orgId: string | null, avatarId: string) {
   return `${orgId ? orgPrefix(orgId) : `${basePrefix}/global`}/avatars/${avatarId}`;
 }
 
+export function roleplayIntroKey(orgId: string, agentId: string, uploadId: string) {
+  return `${orgPrefix(orgId)}/roleplays/${agentId}/intro/${uploadId}.mp4`;
+}
+
 export function recordingKey(orgId: string, sessionId: string) {
   return `${orgPrefix(orgId)}/recordings/${sessionId}.wav`;
 }
@@ -92,6 +96,18 @@ export async function putObject(key: string, body: Uint8Array | string, contentT
 export async function getObjectText(key: string): Promise<string> {
   const res = await client().send(new GetObjectCommand({ Bucket: bucket, Key: key }));
   return (await res.Body?.transformToString("utf-8")) ?? "";
+}
+
+export async function isUploadedMp4(key: string, maxBytes: number) {
+  const response = await client().send(new GetObjectCommand({ Bucket: bucket, Key: key, Range: "bytes=0-11" })).catch((error: unknown) => {
+    if (error instanceof Error && (error.name === "NoSuchKey" || error.name === "InvalidRange")) return null;
+    throw error;
+  });
+  if (!response?.Body) return false;
+  const bytes = await response.Body.transformToByteArray();
+  const size = Number(response.ContentRange?.split("/").at(-1));
+  return response.ContentType === "video/mp4" && size >= 12 && size <= maxBytes
+    && bytes[4] === 0x66 && bytes[5] === 0x74 && bytes[6] === 0x79 && bytes[7] === 0x70;
 }
 
 export async function presignedGetUrl(key: string, expiresIn = 3600) {

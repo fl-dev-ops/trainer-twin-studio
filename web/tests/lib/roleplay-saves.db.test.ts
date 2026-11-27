@@ -55,7 +55,37 @@ describe.skipIf(!localMinutesDb)("Module 4 role-play saves (real Postgres locks)
   const row = () => db.agent.findUniqueOrThrow({ where: { id: f.roleplay.id } });
   const versions = () => db.specVersion.findMany({ where: { orgId: f.org.id, entitySlug: f.roleplay.slug }, orderBy: { version: "asc" } });
 
-  test("the Before settings accept an HTTPS intro, preserve it on other saves, and can turn it off", async () => {
+  test("intro video uploads are size-limited, scoped to the role play, and survive settings and script saves", async () => {
+    await saveRoleplay(f.org.id, builder(), f.roleplay.slug);
+    await saveRoleplay(other.org.id, { ...builder(), persona: other.org.slug }, other.roleplay.slug);
+    const slug = f.roleplay.slug;
+    const url = "https://example.com/put";
+    const sign = spyOn(s3, "presignedPutUrl").mockResolvedValue(url);
+    const verify = spyOn(s3, "isUploadedMp4").mockResolvedValue(false);
+    spies.push(sign, verify);
+    await expect(caller().builder.introVideoUploadUrl({ slug, size: 100 * 1024 * 1024 + 1 })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(caller().builder.introVideoUploadUrl({ slug: other.roleplay.slug, size: 32 })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    const upload = await caller().builder.introVideoUploadUrl({ slug, size: 32 });
+    expect(upload.url).toBe(url);
+    const key = s3.roleplayIntroKey(f.org.id, f.roleplay.id, upload.uploadId);
+    expect(sign).toHaveBeenCalledWith(key, "video/mp4", 600, 32);
+    await expect(caller().builder.saveIntroVideo({ slug, uploadId: upload.uploadId })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    verify.mockImplementation(async (uploadedKey) => uploadedKey === key);
+    await caller().builder.saveIntroVideo({ slug, uploadId: upload.uploadId });
+    await caller().builder.saveSettings({ slug, before });
+    await saveRoleplay(f.org.id, builder("Republish the script"), slug);
+    expect(await row()).toMatchObject({ data: { introVideoUpload: upload.uploadId } });
+    const signGet = spyOn(s3, "presignedGetUrl").mockResolvedValue("https://example.com/intro.mp4");
+    spies.push(signGet);
+    const { listScenarioIntroVideos } = await import("@/lib/specs");
+    expect(await listScenarioIntroVideos(f.org.id, [slug])).toEqual({ [slug]: "https://example.com/intro.mp4" });
+    expect(signGet).toHaveBeenCalledWith(key);
+    await caller().builder.saveIntroVideo({ slug, uploadId: null });
+    expect(await listScenarioIntroVideos(f.org.id, [slug])).toEqual({ [slug]: null });
+    expect((await caller().builder.get({ slug })).hasIntroVideo).toBe(false);
+  });
+
+  test("saved HTTPS links continue to work for role plays created before the uploader", async () => {
     await saveRoleplay(f.org.id, builder(), f.roleplay.slug);
     const slug = f.roleplay.slug;
     const introVideoUrl = "https://example.com/intro.mp4";
