@@ -1,4 +1,5 @@
 import {
+  CopyObjectCommand,
   DeleteObjectCommand,
   DeleteObjectsCommand,
   GetObjectCommand,
@@ -121,6 +122,11 @@ export async function presignedPutUrl(key: string, contentType: string, expiresI
     expiresIn,
     ...(contentLength ? { signableHeaders: new Set(["content-type", "content-length"]) } : {}),
   });
+}
+
+export async function copyObject(source: string, key: string) {
+  const copySource = [bucket, ...source.split("/")].map(encodeURIComponent).join("/");
+  await client().send(new CopyObjectCommand({ Bucket: bucket, CopySource: copySource, Key: key }));
 }
 
 export async function deleteObject(key: string) {
