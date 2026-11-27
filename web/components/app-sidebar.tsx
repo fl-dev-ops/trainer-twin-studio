@@ -12,6 +12,7 @@ import {
   TwinIcon,
   UsersIcon,
 } from "@/components/icons";
+import { CopilotRailEntry } from "@/components/copilot/entry";
 import { OrgSwitcher, type SwitchableOrg } from "@/components/org-switcher";
 import { SidebarAccountMenu } from "@/components/sidebar-account-menu";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -154,6 +155,8 @@ export function AppSidebar({
             </SidebarMenuItem>
           </SidebarMenu>
         ) : null}
+        {/* Above the sections: the copilot works across all of them. */}
+        <CopilotRailEntry />
       </SidebarHeader>
       <SidebarContent className="group-data-[collapsible=icon]:overflow-y-auto">
         <nav aria-label="Sections" className="flex flex-col gap-4">

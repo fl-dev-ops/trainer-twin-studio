@@ -519,3 +519,109 @@
   mask-image: linear-gradient(to bottom, transparent 0, black 24px, black calc(100% - 24px), transparent 100%);
 }
 
+
+/*
+ * The copilot beside every page (components/copilot/panel.tsx, plans/copilot-everywhere.md "Motion spec"). Entries ease
+ * out on the studio curve (session-view, sign-in); exits are shorter and accelerate away. The only loop is "working".
+ */
+:root {
+  --ease-studio: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+}
+
+/* The dock pushes the page over; the panel rides its edge. Opening is long and settles; closing gets out of the way. */
+[data-copilot-dock] {
+  transition: width 320ms var(--ease-studio);
+}
+[data-copilot-dock][data-state="closed"] {
+  transition: width 200ms var(--ease-exit);
+}
+[data-copilot-dock][data-resizing] {
+  transition: none;
+  cursor: col-resize;
+  user-select: none;
+}
+/* The conversation arrives a beat after the panel opens (it reads as the panel's content, not part of the wall) and
+   leaves first. */
+[data-copilot-body] {
+  transition: opacity 220ms var(--ease-studio) 60ms, translate 220ms var(--ease-studio) 60ms;
+}
+[data-copilot-dock][data-state="closed"] [data-copilot-body] {
+  opacity: 0;
+  translate: 12px 0;
+  transition: opacity 120ms var(--ease-exit), translate 120ms var(--ease-exit);
+}
+/* The resize edge: a hairline that thickens into a handle under the pointer, brand-tinted while held. */
+.copilot-resize-line {
+  background: transparent;
+  transition: background-color 120ms ease-out, width 120ms var(--ease-studio);
+}
+[data-copilot-resize]:hover .copilot-resize-line,
+[data-copilot-resize]:focus-visible .copilot-resize-line {
+  width: 2px;
+  background: var(--sidebar-border);
+  transition-delay: 80ms;
+}
+[data-copilot-dock][data-resizing] .copilot-resize-line,
+[data-copilot-resize]:focus-visible .copilot-resize-line {
+  width: 2px;
+  background: var(--brand);
+  transition-delay: 0ms;
+}
+
+/* The rail's Copilot icon while the conversation works with the panel closed: a slow breath, not a spinner. */
+@keyframes copilot-breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+@utility animate-copilot-breathe {
+  animation: copilot-breathe 1.6s ease-in-out infinite;
+}
+/* A status dot arriving on the rail's icon (needs you, new reply): it pops once and stays still. */
+@keyframes copilot-dot-in {
+  from { scale: 0.4; opacity: 0; }
+  to { scale: 1; opacity: 1; }
+}
+@utility animate-copilot-dot {
+  animation: copilot-dot-in 240ms var(--ease-studio) both;
+}
+/* "Reading knowledge…": what the copilot is doing, with light passing over the words. */
+@keyframes copilot-shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: 0% 0; }
+}
+@utility animate-copilot-shimmer {
+  background-image: linear-gradient(90deg, var(--muted-foreground) 0%, var(--muted-foreground) 35%, var(--foreground) 50%, var(--muted-foreground) 65%, var(--muted-foreground) 100%);
+  background-size: 300% 100%;
+  background-clip: text;
+  color: transparent;
+  animation: copilot-shimmer 1.8s linear infinite;
+}
+/* A chip entering the composer (the page you're on, a skill): it settles in rather than appearing. */
+@keyframes copilot-chip-in {
+  from { opacity: 0; scale: 0.96; }
+  to { opacity: 1; scale: 1; }
+}
+@utility animate-copilot-chip {
+  animation: copilot-chip-in 160ms var(--ease-studio) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-copilot-dock],
+  [data-copilot-dock][data-state="closed"],
+  [data-copilot-body],
+  [data-copilot-dock][data-state="closed"] [data-copilot-body] {
+    transition: none;
+    translate: none;
+  }
+  .animate-copilot-breathe,
+  .animate-copilot-dot,
+  .animate-copilot-chip {
+    animation: none;
+  }
+  .animate-copilot-shimmer {
+    animation: none;
+    background: none;
+    color: var(--muted-foreground);
+  }
+}

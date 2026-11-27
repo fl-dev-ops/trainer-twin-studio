@@ -3,6 +3,8 @@
 import type { CSSProperties, ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { AppSidebar } from "@/components/app-sidebar";
+import { CopilotTopBarButton } from "@/components/copilot/entry";
+import { CopilotPanelProvider } from "@/components/copilot/panel";
 import type { SwitchableOrg } from "@/components/org-switcher";
 import { LoadingTable } from "@/components/page-skeletons";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
@@ -34,8 +36,10 @@ export function ShellFallback() {
   return isFullscreen(usePathname()) ? null : <LoadingTable />;
 }
 
-export function AppShell({ children, hideRoleplay = false, bots = false, orgs = [], orgId = null }: {
+export function AppShell({ children, hideRoleplay = false, bots = false, orgs = [], orgId = null, copilot }: {
   children: ReactNode;
+  /** The copilot panel as this person left it (cookies read by the layout), so a reload doesn't animate it open. */
+  copilot?: { open: boolean; width?: number };
   hideRoleplay?: boolean;
   /** The org may use bots (org metadata flag). */
   bots?: boolean;
@@ -52,15 +56,19 @@ export function AppShell({ children, hideRoleplay = false, bots = false, orgs = 
       className="h-svh min-h-0 overflow-hidden"
       style={{ "--sidebar-width-left": "18rem" } as CSSProperties}
     >
-      <AppSidebar hideRoleplay={hideRoleplay} bots={bots} orgs={orgs} orgId={orgId} />
-      {/* Prototype: flat content panel, flush against the rail (reference .main). */}
-      <SidebarInset className="min-h-0 overflow-hidden">
-        {/* Desktop collapses via the sidebar logo; on mobile the sidebar is a drawer and needs an opener. */}
-        <div className="flex h-12 shrink-0 items-center px-3 md:hidden">
-          <SidebarTrigger />
-        </div>
-        <div className="flex min-h-0 flex-1 flex-col w-full overflow-hidden">{children}</div>
-      </SidebarInset>
+      {/* The copilot sits beside every page (components/copilot/panel.tsx): its dock is the row's last column. */}
+      <CopilotPanelProvider defaultOpen={copilot?.open} defaultWidth={copilot?.width}>
+        <AppSidebar hideRoleplay={hideRoleplay} bots={bots} orgs={orgs} orgId={orgId} />
+        {/* Prototype: flat content panel, flush against the rail (reference .main). */}
+        <SidebarInset className="min-h-0 min-w-0 overflow-hidden">
+          {/* Desktop collapses via the sidebar logo; on mobile the sidebar is a drawer and needs an opener. */}
+          <div className="flex h-12 shrink-0 items-center px-3 md:hidden">
+            <SidebarTrigger />
+            <CopilotTopBarButton />
+          </div>
+          <div className="flex min-h-0 flex-1 flex-col w-full overflow-hidden">{children}</div>
+        </SidebarInset>
+      </CopilotPanelProvider>
     </SidebarProvider>
   );
 }

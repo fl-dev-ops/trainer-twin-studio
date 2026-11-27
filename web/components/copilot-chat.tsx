@@ -1,9 +1,11 @@
 "use client";
 
-import type { ComponentProps } from "react";
-import { useEffect, useState } from "react";
+import type { ComponentProps, CSSProperties } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { Route } from "next";
 import Image from "next/image";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import type { FileUIPart } from "ai";
 import type { EveMessage, EveToolPart } from "eve/react";
 import { useEveAgent } from "eve/react";
@@ -11,13 +13,14 @@ import {
   Check,
   Circle,
   CircleAlert,
+  CircleSlash,
   ChevronDown,
+  CornerDownRight,
   Layers3,
   ListTodo,
   LoaderCircle,
   Maximize2,
   Plus,
-  Sparkles,
   X,
 } from "lucide-react";
 import {
@@ -48,7 +51,10 @@ import {
 } from "@/components/ai-elements/prompt-input";
 import { CircularLoader } from "@/components/prompt-kit/loader";
 import { Button } from "@/components/ui/button";
-import { Sidebar, SidebarTrigger } from "@/components/ui/sidebar";
+import { Kbd } from "@/components/ui/kbd";
+import { SidebarTrigger } from "@/components/ui/sidebar";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { type CopilotStatus, useCopilotPanel } from "@/components/copilot/panel";
 import {
   Sheet,
   SheetContent,
@@ -85,6 +91,8 @@ import {
   LEGACY_COPILOT_KEYS,
   takeCopilotSeed,
 } from "@/lib/copilot-handoff";
+import { type CopilotPage, copilotPageOf, startersFor } from "@/lib/copilot-page";
+import { dashRoute } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 
 const TOOL_TITLES: Record<string, string> = {
@@ -121,7 +129,97 @@ const TOOL_TITLES: Record<string, string> = {
   roleplay_tools_update: "Change role-play tools",
   persona_update: "Change persona",
   note_write: "Write notes",
+  twin_skills_set: "Change twin skills",
+  roleplay_personas_set: "Change role-play personas",
+  roleplay_character_set: "Write persona character",
+  bot_list: "List website bots",
+  bot_read: "Read website bot",
+  bot_create: "Create website bot",
+  bot_update: "Change website bot",
 };
+
+/**
+ * A tool row as the trainer reads it: what's happening ("Reading knowledge") while it runs, what happened ("Read
+ * knowledge") once done. Titles start with their verb (TOOL_TITLES); an unknown verb keeps the title as it is.
+ */
+const VERBS: Record<string, [doing: string, done: string]> = {
+  Read: ["Reading", "Read"],
+  List: ["Listing", "Listed"],
+  Search: ["Searching", "Searched"],
+  Load: ["Loading", "Loaded"],
+  Create: ["Creating", "Created"],
+  Build: ["Building", "Built"],
+  Publish: ["Publishing", "Published"],
+  Draft: ["Drafting", "Drafted"],
+  Check: ["Checking", "Checked"],
+  Change: ["Changing", "Changed"],
+  Write: ["Writing", "Wrote"],
+};
+function toolPhrase(title: string, tense: "doing" | "done") {
+  const [verb, ...rest] = title.split(" ");
+  const forms = VERBS[verb];
+  if (!forms) return title;
+  const object = rest.join(" ");
+  return `${forms[tense === "doing" ? 0 : 1]}${object ? ` ${object.charAt(0).toLowerCase()}${object.slice(1)}` : ""}`;
+}
+const toolTitle = (part: EveToolPart) => TOOL_TITLES[part.name] ?? part.label ?? part.name;
+const isRunning = (state: EveToolPart["state"]) => state === "streaming" || state === "requested" || state === "running";
+
+/** What the copilot is doing right now, for the waiting line: its latest running tool, or thinking. */
+function currentActivity(messages: readonly EveMessage[]): string {
+  const last = messages.at(-1);
+  if (last?.role === "assistant") {
+    for (let index = last.parts.length - 1; index >= 0; index--) {
+      const part = last.parts[index];
+      if (part.type === "tool" && part.name !== "todo" && part.kind !== "control" && isRunning(part.state)) {
+        return toolPhrase(toolTitle(part), "doing");
+      }
+    }
+  }
+  return "Thinking";
+}
+
+/** The conversation's name for the panel header: the first thing the trainer asked, without the composer's tags. */
+function conversationTitle(messages: readonly EveMessage[]): string | null {
+  const first = messages.find((message) => message.role === "user");
+  const text = first?.parts.find((part) => part.type === "text");
+  if (!text || text.type !== "text") return null;
+  const plain = decodeCopilotMessage(text.text).text.replace(/^USER=.*\n/, "").replace(/\s+/g, " ").trim();
+  return plain ? plain.slice(0, 80) : null;
+}
+
+/**
+ * The studio page the panel sits beside, named the way the trainer knows it: the section from the URL, refined by
+ * the page's own heading once it has loaded (pages load their data in the browser, so the heading comes a beat later).
+ */
+function useCurrentPage(enabled: boolean): CopilotPage | null {
+  const pathname = usePathname();
+  const [heading, setHeading] = useState<{ path: string; text: string | null }>({ path: pathname, text: null });
+  useEffect(() => {
+    if (!enabled) return;
+    const read = () => {
+      // The page title, or on detail pages (a Back link instead of a title) the first heading: the item's name.
+      const inset = document.querySelector('[data-slot="sidebar-inset"]');
+      const text = (inset?.querySelector('[data-slot="page-header"] h1') ?? inset?.querySelector("h1, h2"))?.textContent ?? null;
+      setHeading((current) => (current.path === pathname && current.text === text ? current : { path: pathname, text }));
+    };
+    read();
+    const root = document.querySelector('[data-slot="sidebar-inset"]');
+    if (!root) return;
+    let frame = 0;
+    const observer = new MutationObserver(() => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(read);
+    });
+    observer.observe(root, { childList: true, subtree: true, characterData: true });
+    return () => {
+      observer.disconnect();
+      cancelAnimationFrame(frame);
+    };
+  }, [enabled, pathname]);
+  if (!enabled) return null;
+  return copilotPageOf(pathname, heading.path === pathname ? heading.text : null);
+}
 type Respond = ReturnType<typeof useEveAgent>["respond"];
 type TodoItem = {
   content: string;
@@ -205,7 +303,7 @@ export function CopilotChat(props: { variant?: "page" | "panel"; onExpand?: () =
       </main>
     );
   }
-  if (!scope) return <main className="min-h-0 flex-1 bg-background" aria-busy="true" />;
+  if (!scope) return props.variant === "panel" ? <CopilotPanelSkeleton /> : <main className="min-h-0 flex-1 bg-background" aria-busy="true" />;
   return <CopilotConversation key={scope.sessionKey} {...props} {...scope} />;
 }
 
@@ -220,6 +318,12 @@ function CopilotConversation({
   onExpand?: () => void;
 } & ChatScope) {
   const panel = variant === "panel";
+  const copilot = useCopilotPanel();
+  const root = useRef<HTMLElement>(null);
+  const page = useCurrentPage(panel);
+  // × on the page chip leaves the page out of the next message only; another page brings it back.
+  const [droppedPage, setDroppedPage] = useState<string | null>(null);
+  const sentPage = page && droppedPage !== page.path ? page : undefined;
   const SESSION_KEY = sessionKey;
   const INPUT_KEY = inputKey;
   const [input, setInput] = useState(
@@ -253,6 +357,21 @@ function CopilotConversation({
   const showWorkspace = !panel && workspaceVisible;
   const slash = skill ? null : slashQuery(input);
   const slashSkills = slash === null ? [] : matchingSkills(slash);
+  const status: CopilotStatus = awaitingApproval ? "needs-you" : busy || uploading ? "working" : "idle";
+  const title = conversationTitle(agent.messages);
+
+  // The rail shows what this conversation is doing while the panel is closed (components/copilot/entry.tsx).
+  const report = copilot?.report;
+  useEffect(() => {
+    report?.(status);
+  }, [report, status]);
+
+  // Opening the panel (or ⌘J on home) puts you in the composer; a first load of home doesn't steal focus.
+  const focusSignal = copilot?.focusSignal ?? 0;
+  useEffect(() => {
+    if (!panel && focusSignal === 0) return;
+    root.current?.querySelector<HTMLTextAreaElement>("[data-copilot-composer] textarea")?.focus({ preventScroll: true });
+  }, [panel, focusSignal]);
 
   // Send a message queued by another page (e.g. "Create a twin skill" on the twin agents page).
   useEffect(() => {
@@ -293,7 +412,7 @@ function CopilotConversation({
         setUploading(false);
       }
     }
-    const message = encodeCopilotMessage({ skill, files: pickedFiles, text: typed });
+    const message = encodeCopilotMessage({ page: sentPage, skill, files: pickedFiles, text: typed });
     const content = [
       ...(message ? [{ type: "text" as const, text: message }] : []),
       ...uploaded.map(({ id, name, mediaType }) => ({
@@ -309,6 +428,7 @@ function CopilotConversation({
     const sentFiles = pickedFiles;
     setSkill(undefined);
     setPickedFiles([]);
+    setDroppedPage(null);
     try {
       await agent.send(content);
     } catch (cause) {
@@ -339,9 +459,11 @@ function CopilotConversation({
 
   const content = (
     <main
+      ref={root}
       className={cn(
-        "relative flex min-h-0 flex-1 overflow-hidden bg-background",
-        panel && "h-full bg-sidebar text-sidebar-foreground",
+        "relative flex min-h-0 flex-1 overflow-hidden",
+        // The panel takes the rail's tone, so the page between them stays the one bright surface.
+        panel ? "h-full bg-sidebar text-sidebar-foreground" : "bg-background",
       )}
     >
       <section
@@ -371,8 +493,14 @@ function CopilotConversation({
             )}
           >
             {!panel && <SidebarTrigger />}
-            <h1 className="min-w-0 flex-1 truncate text-sm font-medium">
-              Copilot
+            <h1 className="flex min-w-0 flex-1 items-baseline gap-2 text-sm font-medium">
+              <span className="shrink-0">Copilot</span>
+              {panel && title && (
+                // The conversation's name settles in once there is one, quieter than "Copilot".
+                <span key={title} className="animate-copilot-chip truncate font-normal text-muted-foreground" title={title}>
+                  {title}
+                </span>
+              )}
             </h1>
             <div className="ml-auto flex shrink-0 items-center gap-1">
               {showWorkspace && (
@@ -386,29 +514,28 @@ function CopilotConversation({
                   <span className="hidden sm:inline">Workspace</span>
                 </Button>
               )}
-              {panel && (
-                <SidebarTrigger
-                  side="right"
-                  nativeButton={false}
-                  render={<Link href="/" onClick={onExpand} />}
-                  aria-label="Open Copilot full screen"
+              {panel ? (
+                <>
+                  <HeaderAction label="New conversation" onClick={newConversation} disabled={busy}>
+                    <Plus />
+                  </HeaderAction>
+                  <HeaderAction label="Open full page" href={dashRoute("/")} onClick={onExpand}>
+                    <Maximize2 />
+                  </HeaderAction>
+                  <HeaderAction label="Close" shortcut onClick={() => copilot?.setOpen(false)}>
+                    <X />
+                  </HeaderAction>
+                </>
+              ) : (
+                <Button
+                  variant="ghost"
+                  aria-label="New conversation"
+                  onClick={newConversation}
+                  disabled={busy}
                 >
-                  <Maximize2 />
-                </SidebarTrigger>
-              )}
-              <Button
-                variant="ghost"
-                aria-label="New conversation"
-                onClick={newConversation}
-                disabled={busy}
-              >
-                <Plus data-icon="inline-start" aria-hidden="true" />{" "}
-                <span className="hidden sm:inline">New</span>
-              </Button>
-              {panel && (
-                <SidebarTrigger side="right" aria-label="Close Copilot">
-                  <X />
-                </SidebarTrigger>
+                  <Plus data-icon="inline-start" aria-hidden="true" />{" "}
+                  <span className="hidden sm:inline">New</span>
+                </Button>
               )}
             </div>
           </div>
@@ -424,33 +551,42 @@ function CopilotConversation({
             {panel && workspaceVisible && (
               <WorkspacePanel todos={todos} busy={busy} />
             )}
-            {agent.messages.length === 0 && !restoring ? (
+            {agent.messages.length === 0 && !restoring && panel ? (
+              <PanelWelcome
+                page={page}
+                onStart={(text) => {
+                  setInput(text);
+                  sessionStorage.setItem(INPUT_KEY, text);
+                  // Put the caret at the end, ready to add the details.
+                  requestAnimationFrame(() => {
+                    const box = root.current?.querySelector<HTMLTextAreaElement>("[data-copilot-composer] textarea");
+                    box?.focus();
+                    box?.setSelectionRange(text.length, text.length);
+                  });
+                }}
+              />
+            ) : agent.messages.length === 0 && !restoring ? (
               <ConversationEmptyState
                 title=""
                 description=""
                 className="flex-1"
               >
                 <div className="my-auto flex flex-col items-center text-center">
-                  <Image
-                    src="/trainertwin-mark.svg"
-                    alt=""
-                    width={panel ? 30 : 37}
-                    height={panel ? 23 : 28}
-                    priority
-                  />
-                  <h2
-                    className={cn(
-                      "mt-6 font-semibold tracking-tight text-balance",
-                      panel ? "text-xl" : "text-2xl sm:text-3xl",
-                    )}
-                  >
-                    {panel ? "How can I help?" : "What should we work on?"}
-                  </h2>
-                  <p className="mt-2 max-w-sm text-sm leading-6 text-muted-foreground">
-                    Build or update a twin skill or role play from your
-                    knowledge, change their settings, or invite learners. Type
-                    / for skills, or pick Files to work from.
-                  </p>
+                    <Image
+                      src="/trainertwin-mark.svg"
+                      alt=""
+                      width={37}
+                      height={28}
+                      priority
+                    />
+                    <h2 className="mt-6 text-2xl font-semibold tracking-tight text-balance sm:text-3xl">
+                      What should we work on?
+                    </h2>
+                    <p className="mt-2 max-w-sm text-sm leading-6 text-muted-foreground">
+                      Build or update a twin skill or role play from your
+                      knowledge, set them up, and create personas. Type / for
+                      skills, or pick Files to work from.
+                    </p>
                 </div>
               </ConversationEmptyState>
             ) : (
@@ -463,7 +599,7 @@ function CopilotConversation({
                 />
               ))
             )}
-            {busy && <Working />}
+            {busy && <Working activity={currentActivity(agent.messages)} />}
             {agent.error && (
               <div
                 role="alert"
@@ -496,6 +632,7 @@ function CopilotConversation({
               />
             )}
             <PromptInput
+              data-copilot-composer=""
               className="pointer-events-auto **:data-[slot=input-group]:rounded-2xl **:data-[slot=input-group]:bg-background! "
               // Images and PDFs for this conversation (kept 30 days); lasting material goes in the knowledge base.
               accept={COPILOT_ATTACH_ACCEPT}
@@ -519,6 +656,8 @@ function CopilotConversation({
               onSubmit={async ({ text, files }) => send(text, files)}
             >
               <ComposerHeader
+                page={sentPage}
+                onRemovePage={page ? () => setDroppedPage(page.path) : undefined}
                 skill={skill}
                 files={pickedFiles}
                 onRemoveSkill={() => setSkill(undefined)}
@@ -536,6 +675,12 @@ function CopilotConversation({
                     else sessionStorage.removeItem(INPUT_KEY);
                   }}
                   onKeyDown={(event) => {
+                    // Esc in an empty composer puts the panel away (focus goes back to the page).
+                    if (event.key === "Escape" && slash === null && panel && !event.currentTarget.value) {
+                      event.preventDefault();
+                      copilot?.setOpen(false);
+                      return;
+                    }
                     // The "/" menu owns the arrows, Enter/Tab and Escape while it is open.
                     if (slash === null) return;
                     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
@@ -554,7 +699,9 @@ function CopilotConversation({
                     skill
                       ? "What should it build or update?"
                       : panel
-                        ? "Ask Copilot… (/ for skills)"
+                        ? page
+                          ? "Ask about this page, or type / for skills"
+                          : "Ask Copilot, or type / for skills"
                         : "What should we work on? Type / for skills"
                   }
                   suppressHydrationWarning
@@ -607,17 +754,94 @@ function CopilotConversation({
     </main>
   );
 
-  if (!panel) return content;
+  return content;
+}
 
+/**
+ * The panel while the chat loads (first open): its header and composer where the real ones will be, so the
+ * conversation fills in instead of the panel jumping from empty to full.
+ */
+export function CopilotPanelSkeleton() {
   return (
-    <Sidebar
-      id="copilot-panel"
-      side="right"
-      variant="inset"
-      collapsible="offcanvas"
-    >
-      <div className="flex min-h-0 flex-1">{content}</div>
-    </Sidebar>
+    <div aria-busy="true" aria-label="Loading Copilot" className="flex h-full min-h-0 flex-1 flex-col bg-sidebar">
+      <div className="flex h-12 shrink-0 items-center px-3 text-sm font-medium sm:px-4">Copilot</div>
+      <div className="mt-auto px-3 pb-4">
+        <div className="mx-auto h-[7.25rem] max-w-2xl rounded-2xl border border-sidebar-border bg-background" />
+      </div>
+    </div>
+  );
+}
+
+/** The panel header's icon buttons, with a tooltip each (Close also names its shortcut). */
+function HeaderAction({
+  label,
+  href,
+  onClick,
+  disabled,
+  shortcut,
+  children,
+}: {
+  label: string;
+  href?: Route;
+  onClick?: () => void;
+  disabled?: boolean;
+  shortcut?: boolean;
+  children: React.ReactNode;
+}) {
+  const mac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          href ? (
+            <Button variant="ghost" iconOnly aria-label={label} nativeButton={false} render={<Link href={href} onClick={onClick} />} />
+          ) : (
+            <Button variant="ghost" iconOnly aria-label={label} onClick={onClick} disabled={disabled} />
+          )
+        }
+      >
+        {children}
+      </TooltipTrigger>
+      <TooltipContent side="bottom">
+        {label}
+        {shortcut && <Kbd>{mac ? "⌘J" : "Ctrl J"}</Kbd>}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+/**
+ * The panel's first screen: where you are, and a couple of things to start from on this page, only ones the copilot
+ * can do today (lib/copilot-page.ts). Picking one fills the composer rather than sending it, so you can add the details.
+ */
+function PanelWelcome({ page, onStart }: { page: CopilotPage | null; onStart: (text: string) => void }) {
+  // Sits just above the composer, where your eyes and hands already are, rather than floating mid-panel.
+  return (
+    <div className="mt-auto flex w-full flex-col items-start gap-5 px-1 pb-2 text-left">
+      <div className="flex flex-col gap-1.5">
+        <h2 className="text-title-s font-semibold tracking-title text-balance">
+          {page ? <>Working on <span className="text-foreground">{page.title}</span>?</> : "What should we work on?"}
+        </h2>
+        <p className="text-sm leading-6 text-muted-foreground">
+          I build and update twin skills and role plays from your knowledge, set them up, and create personas.
+        </p>
+      </div>
+      <ul className="flex w-full flex-col gap-1" aria-label="Ways to start">
+        {startersFor(page).map((starter, index) => (
+          // Each starter settles in a beat after the one above it.
+          <li key={starter} className="animate-copilot-chip [animation-delay:calc(80ms+var(--i)*40ms)]" style={{ "--i": index } as CSSProperties}>
+            <button
+              type="button"
+              onClick={() => onStart(starter)}
+              className="group/start flex w-full items-center gap-2.5 rounded-tt-sm px-2.5 py-2 text-left text-sm text-(--text-secondary) outline-none transition-colors hover:bg-(--tone-control) hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <CornerDownRight className="size-3.5 shrink-0 text-muted-foreground transition-transform duration-200 ease-(--ease-studio) group-hover/start:translate-x-0.5" aria-hidden="true" />
+              {starter}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -716,7 +940,7 @@ function ToolPartView({
     setAnswered(true);
     void respond(response).catch(() => setAnswered(false));
   };
-  const title = TOOL_TITLES[part.name] ?? part.label;
+  const title = toolTitle(part);
 
   if (interaction && request) {
     return (
@@ -775,8 +999,20 @@ function ToolPartView({
       title={part.state === "failed" ? part.error?.message : undefined}
     >
       <ToolStateIcon state={part.state} />
-      <span className="font-medium">tool_call</span>
-      <span className="truncate text-xs text-muted-foreground">{title}</span>
+      <span className={cn("truncate", isRunning(part.state) ? "animate-copilot-shimmer" : "text-muted-foreground")}>
+        {part.state === "failed"
+          ? `Couldn't ${title.charAt(0).toLowerCase()}${title.slice(1)}`
+          : part.state === "rejected"
+            ? `Declined: ${title.charAt(0).toLowerCase()}${title.slice(1)}`
+            : part.state === "cancelled"
+              ? `Stopped: ${title.charAt(0).toLowerCase()}${title.slice(1)}`
+          : part.state === "approval" || part.state === "blocked"
+            ? `${title}: waiting for you`
+            : toolPhrase(title, part.state === "completed" ? "done" : "doing")}
+      </span>
+      {part.state === "failed" && part.error?.message && (
+        <span className="min-w-0 truncate text-xs text-destructive">{part.error.message}</span>
+      )}
     </div>
   );
 }
@@ -793,14 +1029,14 @@ function ToolStateIcon({ state }: { state: EveToolPart["state"] }) {
       />
     );
   }
-  return (
-    <CircleAlert
-      className="size-4 shrink-0 text-destructive"
-      aria-label={
-        state === "approval" || state === "blocked" ? "Waiting for input" : "Tool error"
-      }
-    />
-  );
+  // Your "no" (or Stop) isn't an error: a quiet mark, not a red one.
+  if (state === "rejected" || state === "cancelled") {
+    return <CircleSlash className="size-4 shrink-0 text-muted-foreground" aria-label={state === "rejected" ? "Declined" : "Stopped"} />;
+  }
+  if (state === "approval" || state === "blocked") {
+    return <CircleAlert className="size-4 shrink-0 text-caution" aria-label="Waiting for you" />;
+  }
+  return <CircleAlert className="size-4 shrink-0 text-destructive" aria-label="Tool error" />;
 }
 
 function WorkspacePanel({
@@ -893,12 +1129,16 @@ function WorkspaceCard({
   );
 }
 
-function Working() {
+/** While the copilot works: what it's doing in its own words ("Reading knowledge"), with light passing over them. */
+function Working({ activity }: { activity: string }) {
   return (
     <Message from="assistant">
       <MessageContent>
-        <p className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Sparkles className="size-3.5" /> Working…
+        <p role="status" className="text-sm">
+          {/* A new activity settles in; the words themselves carry the shimmer. */}
+          <span key={activity} className="animate-copilot-chip inline-block">
+            <span className="animate-copilot-shimmer">{activity}…</span>
+          </span>
         </p>
       </MessageContent>
     </Message>
@@ -942,9 +1182,17 @@ function findTodos(messages: readonly EveMessage[]): TodoItem[] {
 /** A trainer's message: the skill and files they picked as chips, then what they typed. */
 /** A trainer's message: the skill chip and their words (picked knowledge files show as cards above the bubble). */
 function UserText({ raw }: { raw: string }) {
-  const { skill, text } = decodeCopilotMessage(raw);
+  const { page, skill, text } = decodeCopilotMessage(raw);
   return (
     <div className="flex flex-col gap-2">
+      {page && (
+        <Link
+          href={page.path as Route}
+          className="w-fit max-w-full truncate text-xs text-muted-foreground underline-offset-2 outline-none hover:text-foreground hover:underline focus-visible:underline"
+        >
+          On {page.title}
+        </Link>
+      )}
       {skill && <CopilotChips skill={skill} files={[]} />}
       {text && <p className="whitespace-pre-wrap">{text}</p>}
     </div>

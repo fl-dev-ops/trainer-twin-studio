@@ -20,7 +20,7 @@ async function ownsSession(org: TrainerOrg, sessionId: string) {
   return row !== null && row.orgId === org.id && row.userId === org.user.id;
 }
 
-/** The first words of the trainer's first message, as the conversation's title (tags from the composer left out). */
+/** The first words of the trainer's first message, as the conversation's title (the composer's page, skill and file tags left out). */
 function titleOf(body: ArrayBuffer | undefined) {
   if (!body?.byteLength) return "New conversation";
   try {
@@ -28,7 +28,7 @@ function titleOf(body: ArrayBuffer | undefined) {
     const text = typeof message === "string"
       ? message
       : Array.isArray(message) ? message.map((part) => (part && typeof part === "object" && "text" in part ? String(part.text) : "")).join(" ") : "";
-    const plain = text.replace(/<use-skill[^>]*\/>|<selected-files>[\s\S]*?<\/selected-files>/g, " ").replace(/\s+/g, " ").trim();
+    const plain = text.replace(/<page [^>]*\/>|<use-skill[^>]*\/>|<selected-files>[\s\S]*?<\/selected-files>/g, " ").replace(/\s+/g, " ").trim();
     return plain.slice(0, 120) || "New conversation";
   } catch {
     return "New conversation";

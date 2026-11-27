@@ -36,6 +36,12 @@ export const SessionsIcon = tabler(
   "SessionsIcon",
 );
 
+/** Copilot: a conversation with the studio (Tabler message-2). */
+export const CopilotIcon = tabler(
+  ["M8 9h8", "M8 13h6", "M18 4a3 3 0 0 1 3 3v8a3 3 0 0 1 -3 3h-5l-5 3v-3h-2a3 3 0 0 1 -3 -3v-8a3 3 0 0 1 3 -3h12z"],
+  "CopilotIcon",
+);
+
 /** Roleplay (prototype: "Scenarios"). */
 export const RoleplayIcon = tabler(
   ["M8 7a4 4 0 1 0 8 0a4 4 0 0 0 -8 0", "M6 21v-2a4 4 0 0 1 4 -4h4", "M15 19l2 2l4 -4"],

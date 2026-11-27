@@ -2,13 +2,14 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowUpRight, Brain, Check, FileText, FileVideo, ImageIcon, Library, MessagesSquare, Paperclip, X } from "lucide-react";
+import { AppWindow, ArrowUpRight, Brain, Check, FileText, FileVideo, ImageIcon, Library, MessagesSquare, Paperclip, X } from "lucide-react";
 import { FileThumbnail } from "@/components/extend/file-thumbnail";
 import { PromptInputButton, PromptInputHeader, usePromptInputAttachments } from "@/components/ai-elements/prompt-input";
 import { Button } from "@/components/ui/button";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { COPILOT_SKILLS, type CopilotSkillName, type PickedFile } from "@/lib/copilot-message";
+import type { CopilotPage } from "@/lib/copilot-page";
 import { renderPdfThumbnailUrl } from "@/lib/pdf-thumbnail-utils";
 import { cn } from "@/lib/utils";
 import { dashRoute } from "@/lib/routes";
@@ -146,17 +147,21 @@ export function AttachFileButton({ disabled }: { disabled?: boolean }) {
 }
 
 /** The composer's header: the skill and knowledge chips, and the files waiting to be sent. Nothing when empty. */
-export function ComposerHeader({ skill, files, onRemoveSkill, onRemoveFile }: {
+export function ComposerHeader({ page, skill, files, onRemovePage, onRemoveSkill, onRemoveFile }: {
+  /** The studio page this message goes with (the panel); dropped for one message with its ×. */
+  page?: CopilotPage;
   skill?: CopilotSkillName;
   files: PickedFile[];
+  onRemovePage?: () => void;
   onRemoveSkill: () => void;
   onRemoveFile: (id: string) => void;
 }) {
   const attachments = usePromptInputAttachments();
-  if (!skill && !files.length && !attachments.files.length) return null;
+  if (!page && !skill && !files.length && !attachments.files.length) return null;
   return (
     <PromptInputHeader>
       <div className="flex w-full flex-col gap-2">
+        {page && <PageChip page={page} onRemove={onRemovePage} />}
         {(attachments.files.length > 0 || files.length > 0) && (
           <div className="flex flex-wrap gap-2">
             {attachments.files.map((file) => (
@@ -312,9 +317,38 @@ export function CopilotChips({ skill, files, onRemoveSkill, onRemoveFile, classN
   );
 }
 
+/**
+ * "On Twin sessions": the page the copilot will take this message from. Keyed by the page, so moving to another one
+ * settles the new name in (the copilot followed you) instead of swapping text in place.
+ */
+function PageChip({ page, onRemove }: { page: CopilotPage; onRemove?: () => void }) {
+  return (
+    <span
+      key={page.path}
+      title={`The copilot will know you're on ${page.title}`}
+      className="animate-copilot-chip inline-flex max-w-full items-center gap-1.5 self-start rounded-full py-0.5 pr-1 pl-2 text-xs text-muted-foreground"
+    >
+      <AppWindow className="size-3.5 shrink-0" aria-hidden="true" />
+      <span className="truncate">
+        On <span className="text-foreground">{page.title}</span>
+      </span>
+      {onRemove && (
+        <button
+          type="button"
+          onClick={onRemove}
+          aria-label={`Don't include ${page.title}`}
+          className="grid size-5 shrink-0 place-items-center rounded-full outline-none transition-colors hover:bg-foreground/10 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <X className="size-3" aria-hidden="true" />
+        </button>
+      )}
+    </span>
+  );
+}
+
 function Chip({ label, icon, onRemove, tone }: { label: string; icon: React.ReactNode; onRemove?: () => void; tone?: "skill" }) {
   return (
-    <span className={cn("inline-flex max-w-64 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs", tone === "skill" ? "border-brand/40 bg-brand/10 text-foreground" : "bg-muted/60")}>
+    <span className={cn("animate-copilot-chip inline-flex max-w-64 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs", tone === "skill" ? "border-brand/40 bg-brand/10 text-foreground" : "bg-muted/60")}>
       {icon}
       <span className="truncate">{label}</span>
       {onRemove && (

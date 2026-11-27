@@ -1,6 +1,5 @@
 "use client";
 
-import type { Route } from "next";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -18,7 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import type { ToolSettings } from "@/lib/agent-tools";
 import { INTRO_VIDEO_MAX_BYTES, type BeforeSettings } from "@/lib/context-upload";
-import { seedCopilot } from "@/lib/copilot-handoff";
+import { useCopilotHandoff } from "@/components/copilot/panel";
 import { encodeCopilotMessage } from "@/lib/copilot-message";
 import { roleplayClient } from "@/lib/roleplay/client";
 import type { RoleplayOutputs } from "@/lib/roleplay/trpc";
@@ -32,10 +31,9 @@ type Persona = RoleplayOutputs["builder"]["personas"][number];
 
 const kicker = "m-0 text-xs font-semibold tracking-wide text-muted-foreground uppercase";
 
-/** Opens the copilot on this role play, with the trainer's change request typed in. */
-export function editWithCopilot(slug: string, title: string, change: string, go: (href: Route) => void) {
-  seedCopilot(encodeCopilotMessage({ skill: "roleplay-creator", files: [], text: `Change the role play "${title}" (${slug}): ${change}` }));
-  go(dashRoute("/"));
+/** The copilot's request to change this role play, with the trainer's words (handed to useCopilotHandoff). */
+export function editWithCopilot(slug: string, title: string, change: string) {
+  return encodeCopilotMessage({ skill: "roleplay-creator", files: [], text: `Change the role play "${title}" (${slug}): ${change}` });
 }
 
 /** The script the copilot wrote, read-only: who plays whom, the situation, how it goes and how it ends. */
@@ -95,6 +93,7 @@ export function RoleplayBriefEditPage({ slug, brief, before: initialBefore, intr
   pool: RoleplayOutputs["builder"]["personaPool"];
 }) {
   const router = useRouter();
+  const handOff = useCopilotHandoff();
   const refresh = useRefresh();
   const initial = { title: brief.title, learnerBrief: brief.learnerBrief, limit: brief.limit };
   const [form, setForm] = useState(initial);
@@ -237,7 +236,10 @@ export function RoleplayBriefEditPage({ slug, brief, before: initialBefore, intr
             <PageSection title="Change the script with the copilot" description="Describe what you want to change in the conversation.">
               <form className="flex flex-col gap-3" onSubmit={(event) => {
                 event.preventDefault();
-                if (change.trim()) editWithCopilot(slug, brief.title, change.trim(), router.push);
+                if (!change.trim()) return;
+                // The copilot opens beside the script it's changing; the request is sent, so the box clears.
+                handOff(editWithCopilot(slug, brief.title, change.trim()));
+                setChange("");
               }}>
                 <div className={cn(SECTION_CARD, "px-5 py-4")}>
                   <Textarea aria-label="Change the script with the copilot" rows={2} value={change}

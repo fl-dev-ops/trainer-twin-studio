@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ChevronDown, Play, Settings2, Share2, Sliders, Trash2, UserPlus } from "lucide-react";
 import { SetupIcon } from "@/components/icons";
@@ -12,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { seedCopilot } from "@/lib/copilot-handoff";
+import { useCopilotHandoff } from "@/components/copilot/panel";
 import { encodeCopilotMessage } from "@/lib/copilot-message";
 import { DotsIcon, GRADIENTS, LearnerAvatars } from "@/components/library-card-parts";
 import {
@@ -181,7 +180,7 @@ function TwinBotCard({ bot, index }: { bot: TwinCard; index: number }) {
  * (plans/twin-skill-ingest.md). The request is handed to the copilot chat, which shows the run until it publishes.
  */
 function CreateSkillDialog({ personaSlug }: { personaSlug: string | null }) {
-  const router = useRouter();
+  const handOff = useCopilotHandoff();
   const [open, setOpen] = useState(false);
   const [what, setWhat] = useState("");
   // The copilot names its source folder after USER (lowercase letters, digits, dashes).
@@ -190,14 +189,16 @@ function CreateSkillDialog({ personaSlug }: { personaSlug: string | null }) {
   function create(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!personaSlug || !what.trim()) return;
-    seedCopilot(
+    // The build runs in the copilot beside this page: you watch it next to the twin's skills it will add to.
+    handOff(
       encodeCopilotMessage({
         skill: "twin-creator",
         files: [],
         text: `USER=${user}\nBuild a twin skill from my knowledge base: ${what.trim()}\nPublish it for persona ${personaSlug}.`,
       }),
     );
-    router.push(dashRoute("/"));
+    setOpen(false);
+    setWhat("");
   }
 
   return (

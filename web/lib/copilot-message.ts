@@ -1,7 +1,9 @@
+import type { CopilotPage } from "@/lib/copilot-page";
+
 /**
- * What the copilot composer adds to a message (plans/copilot-v2.md): the skill picked from the "/" menu and the
- * knowledge-base files picked from Files, as tags the copilot reads (copilot/agent/instructions.md). The chat shows
- * them as chips, not as text.
+ * What the copilot composer adds to a message (plans/copilot-v2.md): the studio page it was sent from, the skill picked
+ * from the "/" menu and the knowledge-base files picked from Files, as tags the copilot reads
+ * (copilot/agent/instructions/copilot.md). The chat shows them as chips, not as text.
  */
 
 export const COPILOT_SKILLS = [
@@ -10,13 +12,14 @@ export const COPILOT_SKILLS = [
 ] as const;
 export type CopilotSkillName = (typeof COPILOT_SKILLS)[number]["name"];
 export type PickedFile = { id: string; title: string; ext?: string };
-export type CopilotMessage = { skill?: CopilotSkillName; files: PickedFile[]; text: string };
+export type CopilotMessage = { page?: CopilotPage; skill?: CopilotSkillName; files: PickedFile[]; text: string };
 
 const attr = (value: string) => value.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 const unattr = (value: string) => value.replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
 
-export function encodeCopilotMessage({ skill, files, text }: CopilotMessage): string {
+export function encodeCopilotMessage({ page, skill, files, text }: CopilotMessage): string {
   const head = [
+    ...(page ? [`<page path="${attr(page.path)}" title="${attr(page.title)}" />`] : []),
     ...(skill ? [`<use-skill name="${skill}" />`] : []),
     ...(files.length
       ? ["<selected-files>", ...files.map((file) => `<file id="${attr(file.id)}" title="${attr(file.title)}"${file.ext ? ` ext="${attr(file.ext)}"` : ""} />`), "</selected-files>"]
@@ -25,6 +28,7 @@ export function encodeCopilotMessage({ skill, files, text }: CopilotMessage): st
   return head.length ? `${head.join("\n")}\n\n${text}`.trimEnd() : text;
 }
 
+const PAGE_TAG = /^<page path="([^"]*)" title="([^"]*)" \/>\n?/;
 const SKILL_TAG = /^<use-skill name="([a-z-]+)" \/>\n?/;
 const FILES_BLOCK = /^<selected-files>\n([\s\S]*?)\n?<\/selected-files>\n?/;
 const FILE_TAG = /<file id="([^"]*)" title="([^"]*)"(?: ext="([^"]*)")? \/>/g;
@@ -32,8 +36,14 @@ const FILE_TAG = /<file id="([^"]*)" title="([^"]*)"(?: ext="([^"]*)")? \/>/g;
 /** The skill and files a sent message carries, and the text the trainer typed. */
 export function decodeCopilotMessage(raw: string): CopilotMessage {
   let rest = raw;
+  let page: CopilotPage | undefined;
   let skill: CopilotSkillName | undefined;
   const files: PickedFile[] = [];
+  const pageMatch = rest.match(PAGE_TAG);
+  if (pageMatch) {
+    page = { path: unattr(pageMatch[1]), title: unattr(pageMatch[2]) };
+    rest = rest.slice(pageMatch[0].length);
+  }
   const skillMatch = rest.match(SKILL_TAG);
   if (skillMatch && COPILOT_SKILLS.some((s) => s.name === skillMatch[1])) {
     skill = skillMatch[1] as CopilotSkillName;
@@ -44,7 +54,7 @@ export function decodeCopilotMessage(raw: string): CopilotMessage {
     for (const m of filesMatch[1].matchAll(FILE_TAG)) files.push({ id: unattr(m[1]), title: unattr(m[2]), ...(m[3] ? { ext: unattr(m[3]) } : {}) });
     rest = rest.slice(filesMatch[0].length);
   }
-  return { skill, files, text: rest.replace(/^\n+/, "") };
+  return { ...(page ? { page } : {}), skill, files, text: rest.replace(/^\n+/, "") };
 }
 
 /** The "/" menu: open while the input is "/" plus an optional filter, and no skill is picked yet. */
