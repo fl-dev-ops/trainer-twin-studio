@@ -132,6 +132,8 @@ describe("prompt: the workspace for this call", () => {
     assert.match(text, /# Workspace for this call/);
     assert.match(text, /open_pdf/);
     assert.match(text, /read_document/);
+    assert.match(text, /Before quoting or referring to a specific line in a PDF, call surface\(\{ action: "highlight_document"/);
+    assert.match(text, /Do this on the opening turn too/);
     assert.match(text, /Stay in character/);
     assert.doesNotMatch(text, /open_whiteboard|open_code_editor|open_choice/);
   });

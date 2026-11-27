@@ -5,6 +5,7 @@ import { useVoiceAssistant } from "@livekit/components-react";
 import { ArrowUp, X } from "lucide-react";
 import type { Entry } from "@/lib/session-transcript";
 import { cn } from "@/lib/utils";
+import { sessionActivityColors } from "./name-wave";
 
 /** Live chat (V2 prototype): the conversation so far and a message box to the trainer. */
 export function SessionSidebar({
@@ -93,7 +94,7 @@ export function SessionSidebar({
                 <span
                   key={delay}
                   style={{ "--delay": `${delay}s` } as CSSProperties}
-                  className={cn("size-1 animate-pulse rounded-full [animation-delay:var(--delay)]", isSpeaking ? "bg-success" : "bg-caution")}
+                  className={cn("size-1 animate-pulse rounded-full [animation-delay:var(--delay)]", sessionActivityColors[isSpeaking ? "speaking" : "thinking"])}
                 />
               ))}
             </span>

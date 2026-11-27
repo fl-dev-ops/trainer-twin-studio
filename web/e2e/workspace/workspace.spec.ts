@@ -110,6 +110,7 @@ test("PDF loads, an image loads, and real presentation navigation uses zero-base
   await visit(page);
   expect(await open("open_pdf", { fileId: contextId })).toMatchObject({ status: "completed" });
   await expect(page.getByTestId("surface")).toHaveText("pdf");
+  await expect(page.getByRole("button", { name: "Replace", exact: true })).toHaveCount(0);
   expect(await open("highlight_document", { fileId: contextId, highlightQuery: "Built reliable distributed systems" })).toMatchObject({ status: "completed" });
   expect(await open("highlight_document", { fileId: contextId, highlightQuery: "This phrase does not occur in the document" })).toMatchObject({ status: "failed", result: { ok: false } });
   expect(await open("open_image", { sourceUrl: "http://127.0.0.1:4174/fixture.png" })).toMatchObject({ status: "completed" });

@@ -26,11 +26,12 @@ export function PdfViewerSurface({
   title?: string;
 }) {
   const register = useWorkspaceHandlers();
+  const canChooseLocalFile = !resumeDocument && !sourceUrl;
   const fileInput = useRef<HTMLInputElement>(null);
   const viewerRef = useRef<PDFViewerHandle>(null);
-  const [localFile, setLocalFile] = useState<{ url: string; name: string; originalSource?: string }>();
+  const [localFile, setLocalFile] = useState<{ url: string; name: string }>();
   const [loadedSource, setLoadedSource] = useState<string | undefined>();
-  const local = localFile?.originalSource === sourceUrl ? localFile : undefined;
+  const local = canChooseLocalFile ? localFile : undefined;
   const source = local?.url ?? sourceUrl;
   const fileName = local?.name ?? title ?? (sourceUrl ? decodeURIComponent(sourceUrl.split("/").pop()?.split("?")[0] || "Document.pdf") : "Document.pdf");
   useEffect(() => () => { if (localFile) URL.revokeObjectURL(localFile.url); }, [localFile]);
@@ -105,12 +106,12 @@ export function PdfViewerSurface({
           const file = event.target.files?.[0];
           event.currentTarget.value = "";
           if (!file) return;
-          setLocalFile({ url: URL.createObjectURL(file), name: file.name, originalSource: sourceUrl });
+          setLocalFile({ url: URL.createObjectURL(file), name: file.name });
         }}
       />
       <header className="flex min-h-12 shrink-0 items-center gap-2 border-b bg-card px-3">
         <span className="truncate text-sm font-medium">{fileName}</span>
-        {!resumeDocument && <Button
+        {canChooseLocalFile && <Button
           variant="secondary"
           className="ml-auto"
           onClick={() => fileInput.current?.click()}
@@ -150,7 +151,7 @@ export function PdfViewerSurface({
                   Choose a document to read together. It stays in your browser.
                 </p>
               </div>
-              {!resumeDocument && <Button onClick={() => fileInput.current?.click()}>
+              {canChooseLocalFile && <Button onClick={() => fileInput.current?.click()}>
                 Choose PDF
               </Button>}
             </div>

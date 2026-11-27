@@ -1450,13 +1450,13 @@ export function SessionView({
                           className="h-full min-h-0 w-full"
                         />
                       </motion.div>
-                    ) : connected && agentRoomName ? (
+                    ) : connected && agentRoomName !== null ? (
                       <motion.div
                         key="agent"
                         {...tileMotion}
                         className={cn("min-h-0 min-w-0", surface ? "aspect-[4/3] w-full shrink-0" : "flex-1")}
                       >
-                        <AgentTile persona={sessionPersona?.slug ?? ""} name={agentRoomName} photoUrl={sessionPersona?.photoUrl ?? null} compact={surface !== null} />
+                        <AgentTile persona={sessionPersona?.slug ?? ""} name={agentRoomName || sessionPersona?.name} photoUrl={sessionPersona?.photoUrl ?? null} compact={surface !== null} />
                       </motion.div>
                     ) : null}
                     {connected && (

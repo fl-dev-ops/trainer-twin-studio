@@ -1,12 +1,12 @@
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { cn } from "@/lib/utils";
 
-const colors = {
-  speaking: "bg-success-border dark:bg-success",
-  thinking: "bg-brand",
+export const sessionActivityColors = {
+  speaking: "bg-success",
+  thinking: "bg-caution",
 };
 
-export function NameWave({ tone }: { tone: keyof typeof colors | "listening" }) {
+export function NameWave({ tone }: { tone: keyof typeof sessionActivityColors | "listening" }) {
   const reduceMotion = useReducedMotion();
   return (
     <AnimatePresence initial={false}>
@@ -27,7 +27,7 @@ export function NameWave({ tone }: { tone: keyof typeof colors | "listening" }) 
                 className={cn(
                   "w-0.5 origin-center rounded-full motion-safe:animate-participant-wave",
                   height,
-                  colors[tone],
+                  sessionActivityColors[tone],
                 )}
               />
             ))}
