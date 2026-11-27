@@ -78,37 +78,68 @@ export function copilotPageOf(pathname: string, heading?: string | null): Copilo
   return { path: dashPath(pathname), title: `${named}${action ? ` · ${action}` : ""}` };
 }
 
+/** A way to start a conversation: the words it fills the composer with, a line on what it does, and its area. */
+export type Starter = { text: string; hint: string; area: "twin" | "roleplay" | "persona" | "people" };
+
+const S = {
+  buildSkill: { text: "Build a twin skill from my knowledge", hint: "From the files in Twin’s brain", area: "twin" },
+  updateSkill: { text: "Update a twin skill with new material", hint: "Adds to what it already knows", area: "twin" },
+  listSkills: { text: "What twin skills do I have?", hint: "Each one, and what it covers", area: "twin" },
+  twinAccess: { text: "Who has access to my twin?", hint: "Learners and their assignments", area: "people" },
+  writeRoleplay: { text: "Write a new role play", hint: "From a brief or your recordings", area: "roleplay" },
+  listRoleplays: { text: "Which role plays do I have?", hint: "With who plays them", area: "roleplay" },
+  changeRoleplay: { text: "Change this role play", hint: "Its script, settings or tools", area: "roleplay" },
+  roleplayAccess: { text: "Who is assigned this role play?", hint: "Learners and invites", area: "people" },
+  createPersona: { text: "Create a persona for a role play", hint: "A name, a role and a voice", area: "persona" },
+  listVoices: { text: "Which voices can a persona use?", hint: "By language and accent", area: "persona" },
+  assignments: { text: "Who is assigned which role play?", hint: "Across the organization", area: "people" },
+} satisfies Record<string, Starter>;
+
 /**
- * What the copilot can start from on this page, phrased as the trainer would ask. Only what it can do today: building
- * and changing twin skills and role plays, personas, and reading people's assignments (copilot/agent/instructions).
+ * What the copilot can start from on this page, phrased as the trainer would ask. Only what it can do today (building
+ * and changing twin skills and role plays, personas, reading people's assignments: copilot/agent/instructions), and
+ * never role plays in a twin-only org.
  */
-export function startersFor(page: CopilotPage | null): string[] {
+export function startersFor(page: CopilotPage | null, { roleplay = true }: { roleplay?: boolean } = {}): Starter[] {
   const section = page ? sectionOf(page.path) : null;
-  switch (section) {
-    case "Twin agents":
-    case "Twin":
-    case "Twin: configure":
-    case "Twin’s brain":
-    case "Knowledge file":
-      return ["Build a twin skill from my knowledge", "What twin skills do I have?"];
-    case "Scenarios":
-    case "New role play":
-      return ["Write a new role play", "Which role plays do I have?"];
-    case "Role play":
-    case "Role play: edit":
-    case "Role play: assign learners":
-      return ["Change this role play", "Who is assigned this role play?"];
-    case "Personas":
-    case "Persona":
-    case "New persona":
-      return ["Create a persona for a role play", "Which voices can a persona use?"];
-    case "Users":
-    case "User":
-    case "Twin users":
-    case "Roleplay users":
-    case "Twin: assign learners":
-      return ["Who is assigned which role play?", "Who has access to my twin?"];
-    default:
-      return ["Build a twin skill from my knowledge", "Write a new role play"];
-  }
+  const pick = (...list: Starter[]) => list.filter((s) => roleplay || (s.area !== "roleplay" && s.area !== "persona"));
+  const choice = (() => {
+    switch (section) {
+      case "Twin agents":
+      case "Twin":
+      case "Twin: configure":
+      case "Twin’s brain":
+      case "Knowledge file":
+        return pick(S.buildSkill, S.listSkills);
+      case "Scenarios":
+      case "New role play":
+        return pick(S.writeRoleplay, S.listRoleplays);
+      case "Role play":
+      case "Role play: edit":
+      case "Role play: assign learners":
+        return pick(S.changeRoleplay, S.roleplayAccess);
+      case "Personas":
+      case "Persona":
+      case "New persona":
+        return pick(S.createPersona, S.listVoices);
+      case "Users":
+      case "User":
+      case "Twin users":
+      case "Roleplay users":
+      case "Twin: assign learners":
+        return pick(roleplay ? S.assignments : S.twinAccess, S.twinAccess);
+      default:
+        return pick(S.buildSkill, roleplay ? S.writeRoleplay : S.listSkills);
+    }
+  })();
+  // Never fewer than two: a twin-only org on a role-play page falls back to its twin starters.
+  const unique = [...new Map(choice.map((s) => [s.text, s])).values()];
+  return unique.length >= 2 ? unique : [...unique, ...pick(S.buildSkill, S.listSkills)].filter((s, i, all) => all.findIndex((o) => o.text === s.text) === i).slice(0, 2);
+}
+
+/** Home, the full-page copilot: the four main ways in, for what this org uses. */
+export function homeStarters({ roleplay = true }: { roleplay?: boolean } = {}): Starter[] {
+  return roleplay
+    ? [S.buildSkill, S.writeRoleplay, S.createPersona, S.assignments]
+    : [S.buildSkill, S.updateSkill, S.listSkills, S.twinAccess];
 }

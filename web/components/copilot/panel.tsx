@@ -17,7 +17,8 @@ import {
   useState,
 } from "react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { COPILOT_OPEN_COOKIE, COPILOT_WIDTH_COOKIE } from "@/components/copilot/cookies";
+import { COPILOT_LAYOUT_COOKIE, COPILOT_OPEN_COOKIE, COPILOT_WIDTH_COOKIE, type CopilotLayout } from "@/components/copilot/cookies";
+import { CopilotFloating } from "@/components/copilot/floating";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { seedCopilot } from "@/lib/copilot-handoff";
 import { isCopilotHome } from "@/lib/copilot-page";
@@ -71,8 +72,16 @@ type CopilotPanelContext = {
   status: CopilotStatus;
   /** A reply finished while the panel was closed. */
   unread: boolean;
-  /** Each mounted chat reports its conversation's status here. */
-  report: (status: CopilotStatus) => void;
+  /** Each mounted chat reports its conversation's status here, and what it's doing ("Listing twins"). */
+  report: (status: CopilotStatus, activity?: string) => void;
+  /** Docked beside the page, or floating over it in the corner (a per-person choice). */
+  layout: CopilotLayout;
+  setLayout: (layout: CopilotLayout) => void;
+  /** Floating only: grown into the middle of the screen. */
+  expanded: boolean;
+  setExpanded: (expanded: boolean) => void;
+  /** The org runs role plays (twin-only orgs don't): what the copilot offers to start from. */
+  roleplay: boolean;
   /** Start a new conversation with this message, in the panel, without leaving the page. */
   openWith: (text: string) => void;
   /** Load the chat's code ahead of the first open (hover or focus on an entry point). */
@@ -104,10 +113,14 @@ export function CopilotPanelProvider({
   children,
   defaultOpen = false,
   defaultWidth = COPILOT_DEFAULT_WIDTH,
+  defaultLayout = "docked",
+  roleplay = true,
 }: {
   children: ReactNode;
   defaultOpen?: boolean;
   defaultWidth?: number;
+  defaultLayout?: CopilotLayout;
+  roleplay?: boolean;
 }) {
   const pathname = usePathname();
   const onHome = isCopilotHome(pathname);
@@ -123,6 +136,9 @@ export function CopilotPanelProvider({
   const [unread, setUnread] = useState(false);
   const [announcement, setAnnouncement] = useState("");
   const [focusSignal, setFocusSignal] = useState(0);
+  const [layout, setLayoutState] = useState<CopilotLayout>(defaultLayout);
+  const [expanded, setExpanded] = useState(false);
+  const [activity, setActivity] = useState("Thinking");
   // The same start on the server and in the browser (no window here); the window clamps it after mount, below.
   const [width, setWidth] = useState(() => Math.round(Math.min(Math.max(defaultWidth, MIN_WIDTH), MAX_WIDTH)));
   const returnFocus = useRef<HTMLElement | null>(null);
@@ -163,13 +179,23 @@ export function CopilotPanelProvider({
       const back = returnFocus.current?.isConnected ? returnFocus.current : document.querySelector<HTMLElement>("[data-copilot-entry]");
       back?.focus({ preventScroll: true });
     }
+    if (!next) setExpanded(false);
     if (window.matchMedia("(max-width: 767px)").matches) setMobileOpen(next);
     else setDesktopOpen(next);
   }, []);
 
+  const setLayout = useCallback((next: CopilotLayout) => {
+    setLayoutState(next);
+    setExpanded(false);
+    saveCookie(COPILOT_LAYOUT_COOKIE, next);
+    // The conversation moves to its new home; keep the caret in it.
+    setFocusSignal((n) => n + 1);
+  }, []);
+
   const toggle = useCallback(() => setOpen(!live.current.open), [setOpen]);
 
-  const report = useCallback((next: CopilotStatus) => {
+  const report = useCallback((next: CopilotStatus, step?: string) => {
+    if (step) setActivity((current) => (current === step ? current : step));
     const { open, onHome, status: before } = live.current;
     if (next === before) return;
     setStatus(next);
@@ -212,8 +238,11 @@ export function CopilotPanelProvider({
   }, []);
 
   const value = useMemo<CopilotPanelContext>(
-    () => ({ open: open && !onHome, setOpen, toggle, onHome, status, unread, report, openWith, prefetch, focusSignal }),
-    [open, onHome, setOpen, toggle, status, unread, report, openWith, prefetch, focusSignal],
+    () => ({
+      open: open && !onHome, setOpen, toggle, onHome, status, unread, report, openWith, prefetch, focusSignal,
+      layout, setLayout, expanded, setExpanded, roleplay,
+    }),
+    [open, onHome, setOpen, toggle, status, unread, report, openWith, prefetch, focusSignal, layout, setLayout, expanded, roleplay],
   );
 
   // Never two chats on one conversation: on home the page's chat runs it and the panel's is unmounted.
@@ -238,8 +267,22 @@ export function CopilotPanelProvider({
             <div className="flex h-full min-h-0 flex-col bg-sidebar">{chat}</div>
           </SheetContent>
         </Sheet>
+      ) : onHome ? null : layout === "floating" ? (
+        <CopilotFloating
+          ref={dock}
+          open={desktopOpen}
+          expanded={expanded}
+          status={status}
+          unread={unread}
+          activity={activity}
+          onOpen={() => setOpen(true)}
+          onFold={() => setExpanded(false)}
+          onPrefetch={prefetch}
+        >
+          {chat}
+        </CopilotFloating>
       ) : (
-        <Dock ref={dock} open={desktopOpen && !onHome} width={width} onWidth={setWidth}>
+        <Dock ref={dock} open={desktopOpen} width={width} onWidth={setWidth}>
           {chat}
         </Dock>
       )}

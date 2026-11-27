@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { AppShell, ShellFallback } from "@/components/app-shell";
 import { BillingBanner } from "@/components/billing/billing-banner";
 import { ClientOnly } from "@/components/client-only";
-import { COPILOT_OPEN_COOKIE, COPILOT_WIDTH_COOKIE } from "@/components/copilot/cookies";
+import { COPILOT_LAYOUT_COOKIE, COPILOT_OPEN_COOKIE, COPILOT_WIDTH_COOKIE, isCopilotLayout } from "@/components/copilot/cookies";
 import { NamePrompt } from "@/components/name-prompt";
 import { OrgAccentProvider } from "@/components/org-accent-provider";
 import { OrgPin } from "@/components/org-pin";
@@ -20,7 +20,12 @@ export default async function DashLayout({ children }: { children: ReactNode }) 
   if (!session) redirect("/auth/sign-in");
   const [org, orgs, jar] = await Promise.all([getSessionOrg(), studioOrgsOf(session.user.id), cookies()]);
   const copilotWidth = Number(jar.get(COPILOT_WIDTH_COOKIE)?.value);
-  const copilot = { open: jar.get(COPILOT_OPEN_COOKIE)?.value === "1", width: Number.isFinite(copilotWidth) && copilotWidth > 0 ? copilotWidth : undefined };
+  const copilotLayout = jar.get(COPILOT_LAYOUT_COOKIE)?.value;
+  const copilot = {
+    open: jar.get(COPILOT_OPEN_COOKIE)?.value === "1",
+    width: Number.isFinite(copilotWidth) && copilotWidth > 0 ? copilotWidth : undefined,
+    layout: isCopilotLayout(copilotLayout) ? copilotLayout : undefined,
+  };
   return (
     <OrgAccentProvider accentColor={org?.accentColor ?? null}>
       {/* First, so this tab's requests carry its org before any page below loads data. */}

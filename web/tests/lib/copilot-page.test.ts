@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { decodeCopilotMessage, encodeCopilotMessage } from "@/lib/copilot-message";
-import { copilotPageOf, dashPath, isCopilotHome, sectionOf, startersFor } from "@/lib/copilot-page";
+import { copilotPageOf, dashPath, homeStarters, isCopilotHome, sectionOf, startersFor } from "@/lib/copilot-page";
 
 describe("copilot page context", () => {
   test("the dash URL is the same with or without the /dash folder prefix", () => {
@@ -42,12 +42,23 @@ describe("copilot page context", () => {
   });
 
   test("starters follow the page and only offer what the copilot can do", () => {
-    expect(startersFor({ path: "/roleplay/x", title: "Role play: X" })[0]).toBe("Change this role play");
-    expect(startersFor({ path: "/twin/brain", title: "Twin’s brain" })[0]).toBe("Build a twin skill from my knowledge");
+    expect(startersFor({ path: "/roleplay/x", title: "Role play: X" })[0].text).toBe("Change this role play");
+    expect(startersFor({ path: "/twin/brain", title: "Twin’s brain" })[0].text).toBe("Build a twin skill from my knowledge");
     expect(startersFor(null)).toHaveLength(2);
     for (const starter of ["/twin", "/roleplay", "/personas", "/users", "/usage"].flatMap((path) => startersFor({ path, title: "" }))) {
-      expect(starter.toLowerCase()).not.toContain("invite");
+      expect(starter.text.toLowerCase()).not.toContain("invite");
     }
+  });
+
+  test("a twin-only org is never offered role plays or personas, and still gets two starters", () => {
+    for (const path of ["/twin", "/twin/sessions", "/roleplay", "/roleplay/x", "/personas", "/users", "/usage"]) {
+      const starters = startersFor({ path, title: "" }, { roleplay: false });
+      expect(starters).toHaveLength(2);
+      expect(starters.every((s) => s.area === "twin" || s.area === "people")).toBe(true);
+      expect(new Set(starters.map((s) => s.text)).size).toBe(2);
+    }
+    expect(homeStarters({ roleplay: false }).some((s) => /role play|persona/i.test(s.text))).toBe(false);
+    expect(homeStarters()).toHaveLength(4);
   });
 
   test("the page tag round-trips ahead of the skill and files, and plain messages are unchanged", () => {

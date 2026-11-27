@@ -625,3 +625,67 @@
     color: var(--muted-foreground);
   }
 }
+
+/*
+ * The floating copilot (components/copilot/floating.tsx). The shape moves in JS (motion); what's inside cross-fades
+ * here, the way the website widget changes screens: the outgoing face fades with a slight blur, the incoming one rises.
+ */
+[data-copilot-pill] {
+  transition: opacity 160ms var(--ease-exit), filter 160ms var(--ease-exit);
+}
+[data-copilot-floating]:not([data-shape="pill"]) [data-copilot-pill] {
+  opacity: 0;
+  filter: blur(3px);
+  pointer-events: none;
+}
+[data-copilot-card] {
+  opacity: 0;
+  translate: 0 10px;
+  filter: blur(4px);
+  transition: opacity 120ms var(--ease-exit), translate 120ms var(--ease-exit), filter 120ms var(--ease-exit);
+}
+[data-copilot-floating]:not([data-shape="pill"]) [data-copilot-card] {
+  opacity: 1;
+  translate: 0 0;
+  filter: none;
+  transition: opacity 280ms var(--ease-studio) 140ms, translate 380ms var(--ease-studio) 140ms, filter 280ms var(--ease-studio) 140ms;
+}
+/* The pill is ink; the open card is the rail's tone. The shape recolours as it grows, like the widget's card. */
+[data-copilot-floating] {
+  background: var(--foreground);
+  transition: background-color 300ms var(--ease-studio);
+}
+[data-copilot-floating]:not([data-shape="pill"]) {
+  background: var(--sidebar);
+}
+[data-copilot-backdrop] {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 260ms var(--ease-exit);
+}
+[data-copilot-backdrop][data-state="open"] {
+  opacity: 1;
+  pointer-events: auto;
+  transition: opacity 360ms var(--ease-studio);
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-copilot-pill],
+  [data-copilot-card],
+  [data-copilot-floating],
+  [data-copilot-backdrop] {
+    transition: none !important;
+    filter: none !important;
+    translate: none !important;
+  }
+}
+/* Home's heading: each word rises in after the one before it (the website widget's SwapText). */
+@keyframes copilot-word-in {
+  from { opacity: 0; translate: 0 5px; filter: blur(3px); }
+  to { opacity: 1; translate: 0 0; filter: none; }
+}
+@utility animate-copilot-word {
+  animation: copilot-word-in 500ms var(--ease-studio) calc(var(--i, 0) * 45ms) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-copilot-word { animation: none; }
+}

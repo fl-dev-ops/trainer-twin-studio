@@ -10,6 +10,7 @@ import type { FileUIPart } from "ai";
 import type { EveMessage, EveToolPart } from "eve/react";
 import { useEveAgent } from "eve/react";
 import {
+  Brain,
   Check,
   Circle,
   CircleAlert,
@@ -18,8 +19,13 @@ import {
   CornerDownRight,
   Layers3,
   ListTodo,
+  MessagesSquare,
   LoaderCircle,
   Maximize2,
+  Minimize2,
+  Minus,
+  PanelRight,
+  PictureInPicture2,
   Plus,
   X,
 } from "lucide-react";
@@ -33,7 +39,6 @@ import {
 import {
   Conversation,
   ConversationContent,
-  ConversationEmptyState,
   ConversationScrollButton,
 } from "@/components/ai-elements/conversation";
 import {
@@ -91,7 +96,8 @@ import {
   LEGACY_COPILOT_KEYS,
   takeCopilotSeed,
 } from "@/lib/copilot-handoff";
-import { type CopilotPage, copilotPageOf, startersFor } from "@/lib/copilot-page";
+import { type CopilotPage, copilotPageOf, homeStarters, startersFor } from "@/lib/copilot-page";
+import { PersonaIcon, UsersIcon } from "@/components/icons";
 import { dashRoute } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 
@@ -362,9 +368,10 @@ function CopilotConversation({
 
   // The rail shows what this conversation is doing while the panel is closed (components/copilot/entry.tsx).
   const report = copilot?.report;
+  const activity = currentActivity(agent.messages);
   useEffect(() => {
-    report?.(status);
-  }, [report, status]);
+    report?.(status, activity);
+  }, [report, status, activity]);
 
   // Opening the panel (or ⌘J on home) puts you in the composer; a first load of home doesn't steal focus.
   const focusSignal = copilot?.focusSignal ?? 0;
@@ -457,6 +464,19 @@ function CopilotConversation({
     agent.newSession();
   }
 
+  // A starter fills the composer (it doesn't send): the trainer adds the details, caret at the end.
+  const start = (text: string) => {
+    setInput(text);
+    sessionStorage.setItem(INPUT_KEY, text);
+    requestAnimationFrame(() => {
+      const box = root.current?.querySelector<HTMLTextAreaElement>("[data-copilot-composer] textarea");
+      box?.focus();
+      box?.setSelectionRange(text.length, text.length);
+    });
+  };
+  const roleplay = copilot?.roleplay ?? true;
+  const floating = panel && copilot?.layout === "floating";
+
   const content = (
     <main
       ref={root}
@@ -495,7 +515,7 @@ function CopilotConversation({
             {!panel && <SidebarTrigger />}
             <h1 className="flex min-w-0 flex-1 items-baseline gap-2 text-sm font-medium">
               <span className="shrink-0">Copilot</span>
-              {panel && title && (
+              {title && (
                 // The conversation's name settles in once there is one, quieter than "Copilot".
                 <span key={title} className="animate-copilot-chip truncate font-normal text-muted-foreground" title={title}>
                   {title}
@@ -514,10 +534,31 @@ function CopilotConversation({
                   <span className="hidden sm:inline">Workspace</span>
                 </Button>
               )}
-              {panel ? (
+              {floating ? (
                 <>
                   <HeaderAction label="New conversation" onClick={newConversation} disabled={busy}>
                     <Plus />
+                  </HeaderAction>
+                  <HeaderAction label="Dock beside the page" onClick={() => copilot?.setLayout("docked")}>
+                    <PanelRight />
+                  </HeaderAction>
+                  <HeaderAction
+                    label={copilot?.expanded ? "Shrink" : "Expand"}
+                    onClick={() => copilot?.setExpanded(!copilot.expanded)}
+                  >
+                    {copilot?.expanded ? <Minimize2 /> : <Maximize2 />}
+                  </HeaderAction>
+                  <HeaderAction label="Minimize" shortcut onClick={() => copilot?.setOpen(false)}>
+                    <Minus />
+                  </HeaderAction>
+                </>
+              ) : panel ? (
+                <>
+                  <HeaderAction label="New conversation" onClick={newConversation} disabled={busy}>
+                    <Plus />
+                  </HeaderAction>
+                  <HeaderAction label="Float over the page" onClick={() => copilot?.setLayout("floating")}>
+                    <PictureInPicture2 />
                   </HeaderAction>
                   <HeaderAction label="Open full page" href={dashRoute("/")} onClick={onExpand}>
                     <Maximize2 />
@@ -552,43 +593,9 @@ function CopilotConversation({
               <WorkspacePanel todos={todos} busy={busy} />
             )}
             {agent.messages.length === 0 && !restoring && panel ? (
-              <PanelWelcome
-                page={page}
-                onStart={(text) => {
-                  setInput(text);
-                  sessionStorage.setItem(INPUT_KEY, text);
-                  // Put the caret at the end, ready to add the details.
-                  requestAnimationFrame(() => {
-                    const box = root.current?.querySelector<HTMLTextAreaElement>("[data-copilot-composer] textarea");
-                    box?.focus();
-                    box?.setSelectionRange(text.length, text.length);
-                  });
-                }}
-              />
+              <PanelWelcome page={page} roleplay={roleplay} onStart={start} />
             ) : agent.messages.length === 0 && !restoring ? (
-              <ConversationEmptyState
-                title=""
-                description=""
-                className="flex-1"
-              >
-                <div className="my-auto flex flex-col items-center text-center">
-                    <Image
-                      src="/trainertwin-mark.svg"
-                      alt=""
-                      width={37}
-                      height={28}
-                      priority
-                    />
-                    <h2 className="mt-6 text-2xl font-semibold tracking-tight text-balance sm:text-3xl">
-                      What should we work on?
-                    </h2>
-                    <p className="mt-2 max-w-sm text-sm leading-6 text-muted-foreground">
-                      Build or update a twin skill or role play from your
-                      knowledge, set them up, and create personas. Type / for
-                      skills, or pick Files to work from.
-                    </p>
-                </div>
-              </ConversationEmptyState>
+              <HomeWelcome roleplay={roleplay} onStart={start} />
             ) : (
               agent.messages.map((message) => (
                 <ChatMessage
@@ -676,9 +683,11 @@ function CopilotConversation({
                   }}
                   onKeyDown={(event) => {
                     // Esc in an empty composer puts the panel away (focus goes back to the page).
+                    // Floating and expanded, it first folds back to the card; the next Esc puts it away.
                     if (event.key === "Escape" && slash === null && panel && !event.currentTarget.value) {
                       event.preventDefault();
-                      copilot?.setOpen(false);
+                      if (floating && copilot?.expanded) copilot.setExpanded(false);
+                      else copilot?.setOpen(false);
                       return;
                     }
                     // The "/" menu owns the arrows, Enter/Tab and Escape while it is open.
@@ -814,7 +823,7 @@ function HeaderAction({
  * The panel's first screen: where you are, and a couple of things to start from on this page, only ones the copilot
  * can do today (lib/copilot-page.ts). Picking one fills the composer rather than sending it, so you can add the details.
  */
-function PanelWelcome({ page, onStart }: { page: CopilotPage | null; onStart: (text: string) => void }) {
+function PanelWelcome({ page, roleplay, onStart }: { page: CopilotPage | null; roleplay: boolean; onStart: (text: string) => void }) {
   // Sits just above the composer, where your eyes and hands already are, rather than floating mid-panel.
   return (
     <div className="mt-auto flex w-full flex-col items-start gap-5 px-1 pb-2 text-left">
@@ -823,23 +832,83 @@ function PanelWelcome({ page, onStart }: { page: CopilotPage | null; onStart: (t
           {page ? <>Working on <span className="text-foreground">{page.title}</span>?</> : "What should we work on?"}
         </h2>
         <p className="text-sm leading-6 text-muted-foreground">
-          I build and update twin skills and role plays from your knowledge, set them up, and create personas.
+          {roleplay
+            ? "I build and update twin skills and role plays from your knowledge, set them up, and create personas."
+            : "I build and update your twin’s skills from your knowledge, and set your twin up."}
         </p>
       </div>
       <ul className="flex w-full flex-col gap-1" aria-label="Ways to start">
-        {startersFor(page).map((starter, index) => (
+        {startersFor(page, { roleplay }).map((starter, index) => (
           // Each starter settles in a beat after the one above it.
-          <li key={starter} className="animate-copilot-chip [animation-delay:calc(80ms+var(--i)*40ms)]" style={{ "--i": index } as CSSProperties}>
+          <li key={starter.text} className="animate-copilot-chip [animation-delay:calc(80ms+var(--i)*40ms)]" style={{ "--i": index } as CSSProperties}>
             <button
               type="button"
-              onClick={() => onStart(starter)}
+              onClick={() => onStart(starter.text)}
               className="group/start flex w-full items-center gap-2.5 rounded-tt-sm px-2.5 py-2 text-left text-sm text-(--text-secondary) outline-none transition-colors hover:bg-(--tone-control) hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
             >
               <CornerDownRight className="size-3.5 shrink-0 text-muted-foreground transition-transform duration-200 ease-(--ease-studio) group-hover/start:translate-x-0.5" aria-hidden="true" />
-              {starter}
+              {starter.text}
             </button>
           </li>
         ))}
+      </ul>
+    </div>
+  );
+}
+
+const AREA_ICONS = { twin: Brain, roleplay: MessagesSquare, persona: PersonaIcon, people: UsersIcon } as const;
+
+/** A heading whose words rise in one after another (as the website widget's do): it reads as being said, once. */
+function RisingWords({ text, className }: { text: string; className?: string }) {
+  return (
+    <h2 className={className} aria-label={text}>
+      {text.split(" ").map((word, index) => (
+        <span key={`${text}-${index}`} aria-hidden className="animate-copilot-word inline-block" style={{ "--i": index } as CSSProperties}>
+          {word}
+          {index < text.split(" ").length - 1 ? "\u00a0" : ""}
+        </span>
+      ))}
+    </h2>
+  );
+}
+
+/**
+ * Home, the full-page copilot with nothing said yet: the four main ways in for what this org uses, as cards. A card
+ * fills the composer (it doesn't send), so the trainer adds the specifics.
+ */
+function HomeWelcome({ roleplay, onStart }: { roleplay: boolean; onStart: (text: string) => void }) {
+  return (
+    <div className="my-auto flex w-full flex-col items-center gap-8 py-8">
+      <div className="flex flex-col items-center gap-3 text-center">
+        <Image src="/trainertwin-mark.svg" alt="" width={30} height={23} priority className="animate-copilot-chip" />
+        <RisingWords text="What should we work on?" className="text-2xl font-semibold tracking-title text-balance sm:text-3xl" />
+        <p className="animate-copilot-chip max-w-md text-sm leading-6 text-muted-foreground [animation-delay:220ms]">
+          {roleplay
+            ? "Build and update twin skills and role plays from your knowledge, set them up, and create personas. Type / for skills, or pick Files to work from."
+            : "Build and update your twin’s skills from your knowledge, and set your twin up. Type / for skills, or pick Files to work from."}
+        </p>
+      </div>
+      <ul className="grid w-full max-w-2xl grid-cols-1 gap-2.5 sm:grid-cols-2" aria-label="Ways to start">
+        {homeStarters({ roleplay }).map((starter, index) => {
+          const Icon = AREA_ICONS[starter.area];
+          return (
+            <li key={starter.text} className="animate-copilot-chip [animation-delay:calc(260ms+var(--i)*50ms)]" style={{ "--i": index } as CSSProperties}>
+              <button
+                type="button"
+                onClick={() => onStart(starter.text)}
+                className="group/card flex h-full w-full items-start gap-3 rounded-tt-md border border-card-border bg-card p-3.5 text-left shadow-card outline-none transition-[translate,box-shadow,border-color] duration-200 ease-(--ease-studio) hover:-translate-y-0.5 hover:border-border hover:shadow-elevation-2 focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <span className="grid size-8 shrink-0 place-items-center rounded-tt-sm bg-(--tone-control) text-(--text-secondary) transition-colors duration-200 group-hover/card:text-brand">
+                  <Icon className="size-4" aria-hidden />
+                </span>
+                <span className="flex min-w-0 flex-col gap-0.5">
+                  <span className="text-sm font-medium text-foreground">{starter.text}</span>
+                  <span className="text-xs text-muted-foreground">{starter.hint}</span>
+                </span>
+              </button>
+            </li>
+          );
+        })}
       </ul>
     </div>
   );
