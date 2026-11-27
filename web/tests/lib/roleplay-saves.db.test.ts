@@ -55,6 +55,18 @@ describe.skipIf(!localMinutesDb)("Module 4 role-play saves (real Postgres locks)
   const row = () => db.agent.findUniqueOrThrow({ where: { id: f.roleplay.id } });
   const versions = () => db.specVersion.findMany({ where: { orgId: f.org.id, entitySlug: f.roleplay.slug }, orderBy: { version: "asc" } });
 
+  test("the Before settings accept an HTTPS intro, preserve it on other saves, and can turn it off", async () => {
+    await saveRoleplay(f.org.id, builder(), f.roleplay.slug);
+    const slug = f.roleplay.slug;
+    const introVideoUrl = "https://example.com/intro.mp4";
+    await expect(caller().builder.saveSettings({ slug, before: { ...before, introVideoUrl: "http://example.com/intro.mp4" } })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await caller().builder.saveSettings({ slug, before: { ...before, introVideoUrl } });
+    await caller().builder.saveSettings({ slug, before: { ...before, preScreenshare: true } });
+    expect((await caller().builder.get({ slug })).before).toMatchObject({ introVideoUrl, preScreenshare: true });
+    await caller().builder.saveSettings({ slug, before: { ...before, introVideoUrl: null } });
+    expect((await caller().builder.get({ slug })).before.introVideoUrl).toBeNull();
+  });
+
   test("two concurrent identical storeSkillAgent saves bump once; files, examples and row agree on the version", async () => {
     const first = await saveRoleplay(f.org.id, builder(), f.roleplay.slug);
     const previousFiles = new Map(files); const previousVersion = first.version;

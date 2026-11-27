@@ -84,10 +84,11 @@ export function ScriptView({ script }: { script: Script }) {
  * the few things a trainer changes by hand; Script is read-only and changed by asking the copilot; Settings save as
  * they change.
  */
-export function RoleplayBriefEditPage({ slug, brief, before: initialBefore, tools: initialTools, personas, pool }: {
+export function RoleplayBriefEditPage({ slug, brief, before: initialBefore, hasLegacyIntroVideo, tools: initialTools, personas, pool }: {
   slug: string;
   brief: Brief;
   before: BeforeSettings;
+  hasLegacyIntroVideo: boolean;
   tools: ToolSettings;
   personas: Persona[];
   /** Personas available to play this role in new sessions. */
@@ -100,6 +101,10 @@ export function RoleplayBriefEditPage({ slug, brief, before: initialBefore, tool
   const [saving, setSaving] = useState(false);
   const [change, setChange] = useState("");
   const [before, setBefore] = useState(initialBefore);
+  const [introVideoDraft, setIntroVideoDraft] = useState<string>();
+  const introVideo = introVideoDraft ?? before.introVideoUrl ?? "";
+  const introVideoChanged = introVideo.trim() !== (before.introVideoUrl ?? "");
+  const usesLegacyIntro = hasLegacyIntroVideo && before.introVideoUrl === undefined;
   const [tools, setTools] = useState(initialTools);
   const saved = useRef({ before: initialBefore, tools: initialTools });
   const queue = useRef(Promise.resolve());
@@ -227,8 +232,30 @@ export function RoleplayBriefEditPage({ slug, brief, before: initialBefore, tool
 
         <TabsContent value="settings">
           <div className="flex flex-col gap-10">
-            <PageSection title="Before the conversation" description="What learners share before the call begins. Switches save automatically.">
+            <PageSection title="Before the conversation" description="Set up what learners see and share before the call. Switches save automatically.">
               <div className={SECTION_CARD}>
+                <SectionRow
+                  title={<label htmlFor="rp-intro-video">Intro video URL</label>}
+                  detail={<span id="rp-intro-video-help">Use a direct HTTPS video link to a short clip that works for every persona.{usesLegacyIntro ? " The existing clip plays when the role play has one active persona." : " Leave blank for no intro."}</span>}
+                  className="sm:flex-col sm:items-stretch sm:gap-3"
+                >
+                  <form className="flex w-full flex-wrap items-center gap-2" onSubmit={(event) => {
+                    event.preventDefault();
+                    if (!introVideoChanged) return;
+                    const url = introVideo.trim();
+                    saveSettings({ before: { ...before, introVideoUrl: url || null } }, url ? "Intro video saved" : "Intro video removed");
+                    setIntroVideoDraft(undefined);
+                  }}>
+                    <Input id="rp-intro-video" type="url" aria-describedby="rp-intro-video-help" maxLength={2048} placeholder="https://…/intro.mp4" value={introVideo} onChange={(event) => setIntroVideoDraft(event.target.value)} className="flex-1" />
+                    {usesLegacyIntro && !introVideoChanged ? (
+                      <Button type="button" variant="ghost" onClick={() => saveSettings({ before: { ...before, introVideoUrl: null } }, "Intro video removed")}>
+                        Remove existing intro
+                      </Button>
+                    ) : null}
+                    <Button type="button" variant="ghost" disabled={!introVideoChanged} onClick={() => setIntroVideoDraft(undefined)}>Cancel</Button>
+                    <Button type="submit" variant="secondary" disabled={!introVideoChanged}>Save video</Button>
+                  </form>
+                </SectionRow>
                 <SectionRow title="Call length" detail="The call ends at this point, with the client's goodbye.">
                   <CallLengthSelect value={before.callMinutes} onChange={(minutes) => saveSettings({ before: { ...before, callMinutes: minutes } }, minutes ? `Calls now end at ${minutes} minutes` : "Call length limit removed")} />
                 </SectionRow>

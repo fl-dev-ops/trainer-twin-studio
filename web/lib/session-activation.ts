@@ -93,7 +93,7 @@ export async function connectVoice(input: StartSessionInput, session: OpenedSess
   });
   if (!row) throw refusals.notFound();
   requireVoiceMode(row.mode);
-  // A role play has no intro video: any persona of its pool may answer (lib/agent-personas).
+  // Role-play pages request the opening hold themselves; clients without intro playback must not wait for it.
   const roleplay = row.agent.kind === "ROLEPLAY";
   const agentData = row.agent.data as { introVideo?: unknown; voiceId?: unknown } | null;
 

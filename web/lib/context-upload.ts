@@ -28,6 +28,8 @@ export type BeforeSettings = {
   uploadInstruction: string;
   /** A role play's call length in minutes: the call ends (with the client's goodbye) at this point. Null: no limit. */
   callMinutes?: number | null;
+  /** Scenario-wide clip. Omitted keeps a legacy intro, null explicitly turns it off. */
+  introVideoUrl?: string | null;
 };
 
 /** The call lengths a role play can be limited to (minutes). */
@@ -177,6 +179,7 @@ export function beforeSettings(data: unknown): BeforeSettings {
     uploadTitle: text(settings?.uploadTitle),
     uploadInstruction: text(settings?.uploadInstruction),
     callMinutes: typeof settings?.callMinutes === "number" && Number.isInteger(settings.callMinutes) && settings.callMinutes >= 1 && settings.callMinutes <= 60 ? settings.callMinutes : null,
+    ...(settings?.introVideoUrl === null || typeof settings?.introVideoUrl === "string" ? { introVideoUrl: settings.introVideoUrl } : {}),
   };
 }
 

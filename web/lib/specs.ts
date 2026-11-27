@@ -19,7 +19,7 @@ import { ChromaTenantService } from "@/lib/chroma-tenant";
 import { enqueueIngestionWork } from "@/lib/ingestion-queue";
 import { type DocumentManifest } from "@/lib/context-document-service";
 import { saveUploadToS3 } from "@/lib/uploads";
-import { contextUploadFromAgentData, type AgentContextUpload } from "@/lib/context-upload";
+import { beforeSettings, contextUploadFromAgentData, type AgentContextUpload } from "@/lib/context-upload";
 import { hydrateAgentSkill, readAgentSkillVersion } from "@/lib/skill-history";
 import { skillRefusals } from "@/lib/skills";
 import { assertVoiceObjectKeys, availableVoiceWhere } from "@/lib/voices";
@@ -281,18 +281,22 @@ export async function listAgentContextRequired(orgId: string, slugs: string[]): 
 }
 
 /**
- * Playable intro video per scenario, keyed by slug. The stored value is an S3 object key;
- * an absolute URL is passed through so a CDN-fronted video needs no special casing.
+ * Configured intros are scenario-wide. Legacy clips may identify the persona, so only use
+ * those for a role play with at most one active persona.
  */
 export async function listScenarioIntroVideos(orgId: string, slugs: string[]) {
   if (slugs.length === 0) return {};
   const agents = await db.agent.findMany({
-    // Role plays have none: any persona of the pool may answer, so no one face introduces them.
-    where: { orgId, slug: { in: slugs }, kind: { not: "ROLEPLAY" } },
-    select: { slug: true, data: true },
+    where: { orgId, slug: { in: slugs } },
+    select: { slug: true, data: true, kind: true, _count: { select: { personas: { where: { active: true } } } } },
   });
   const resolved = await Promise.all(
     agents.map(async (agent) => {
+      if (agent.kind === "ROLEPLAY") {
+        const configured = beforeSettings(agent.data).introVideoUrl;
+        if (configured !== undefined) return [agent.slug, configured] as const;
+        if (agent._count.personas > 1) return [agent.slug, null] as const;
+      }
       const stored = (agent.data as { introVideo?: unknown } | null)?.introVideo;
       if (typeof stored !== "string" || !stored.trim()) return [agent.slug, null] as const;
       const value = stored.trim();

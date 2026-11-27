@@ -324,6 +324,7 @@ const beforeInput = z.object({
   uploadTitle: z.string().trim().max(80),
   uploadInstruction: z.string().trim().max(300),
   callMinutes: z.number().int().min(1).max(60).nullable().optional(),
+  introVideoUrl: z.string().trim().max(2048).pipe(z.url({ protocol: /^https$/, error: "Enter a direct HTTPS video URL" })).nullable().optional(),
 }).strict();
 
 const builderRouter = t.router({
@@ -338,6 +339,7 @@ const builderRouter = t.router({
       // The main persona's character for this role play (the builder edits it with the persona it picks).
       character: (await db.agentPersona.findFirst({ where: { agentId: agent.id, persona: { slug: agent.persona.slug } }, select: { character: true } }))?.character ?? "",
       before: beforeSettings(agent.data),
+      hasLegacyIntroVideo: Boolean(text(asRecord(agent.data).introVideo)),
       tools: toolSettings(agent.data),
       // A role play the copilot wrote: its core fields (editable here) and its script (changed through the copilot).
       brief: brief ? {
@@ -542,7 +544,7 @@ const builderRouter = t.router({
         const managed = current.primarySkillId && (await skillOwnership(ctx.user.orgId, tx)).mode === "managed";
         await tx.agent.update({
           where: { id: agent.id },
-          data: { data: { ...(managed ? packageFieldsOmitted(data) : data), ...(input.before ? { before: input.before } : {}), ...(input.tools ? { tools: input.tools } : {}) } as Prisma.InputJsonValue },
+          data: { data: { ...(managed ? packageFieldsOmitted(data) : data), ...(input.before ? { before: { ...beforeSettings(data), ...input.before } } : {}), ...(input.tools ? { tools: input.tools } : {}) } as Prisma.InputJsonValue },
         });
       });
       return { ok: true };

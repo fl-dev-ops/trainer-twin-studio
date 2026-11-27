@@ -191,7 +191,20 @@ describe.skipIf(!localMinutesDb)("role play persona pool, learner side (local da
     expect(played.has(daniel.slug) && played.has(mute.slug)).toBe(true);
   });
 
-  test("before the call the learner sees only the situation: no name, photo or intro video of who will answer", async () => {
+  test("single-persona role plays still play their saved legacy intro", async () => {
+    const introVideo = "https://example.com/interview.mp4";
+    await db.agent.update({ where: { id: f.roleplay.id }, data: { data: { introVideo } } });
+    const view = await loadSharedSession(code());
+    if (view.kind !== "session") throw new Error(`expected the call screen, got ${view.kind}`);
+    expect(view.props.introVideos?.[f.roleplay.slug]).toBe(introVideo);
+
+    await db.agent.update({ where: { id: f.roleplay.id }, data: { data: { introVideo, before: { introVideoUrl: null } } } });
+    const disabled = await loadSharedSession(code());
+    if (disabled.kind !== "session") throw new Error(`expected the call screen, got ${disabled.kind}`);
+    expect(disabled.props.introVideos?.[f.roleplay.slug]).toBeNull();
+  });
+
+  test("pooled role plays hide the legacy persona intro but can play a scenario-wide clip", async () => {
     const daniel = await persona("Daniel");
     await db.$transaction((tx) => setAgentPersonas(f.roleplay.id, [{ personaId: main.id, active: true }, { personaId: daniel.id, active: true }], tx));
     await db.agent.update({ where: { id: f.roleplay.id }, data: { data: { introVideo: "https://example.com/intro.mp4", learnerBrief: "A lead filled in the form after your ad. Call them back." } } });
@@ -200,5 +213,12 @@ describe.skipIf(!localMinutesDb)("role play persona pool, learner side (local da
     expect(view.props.agentPersonaNames).toBeUndefined();
     expect(view.props.agentPhotos?.[f.roleplay.slug] ?? null).toBeNull();
     expect(view.props.introVideos?.[f.roleplay.slug] ?? null).toBeNull();
+
+    const introVideoUrl = "https://example.com/scenario.mp4";
+    await db.agent.update({ where: { id: f.roleplay.id }, data: { data: { introVideo: "https://example.com/intro.mp4", before: { introVideoUrl } } } });
+    const configured = await loadSharedSession(code());
+    if (configured.kind !== "session") throw new Error(`expected the call screen, got ${configured.kind}`);
+    expect(configured.props.introVideos?.[f.roleplay.slug]).toBe(introVideoUrl);
+    expect(configured.props.agentPersonaNames).toBeUndefined();
   });
 });
