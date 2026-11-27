@@ -140,6 +140,12 @@ const TOOL_TITLES: Record<string, string> = {
   bot_read: "Read website bot",
   bot_create: "Create website bot",
   bot_update: "Change website bot",
+  session_list: "List sessions",
+  session_read: "Read session",
+  calibration_list: "List calibrations",
+  usage_read: "Read usage",
+  team_list: "List team",
+  org_read: "Read organization",
 };
 
 /**

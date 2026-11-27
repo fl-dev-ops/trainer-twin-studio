@@ -1,4 +1,6 @@
 import { resolveUpload, UploadError } from "@/lib/uploads";
+import { AppError } from "@/lib/errors";
+import { listCalibrations, listSessions, listTeam, readOrg, readSession, readUsage } from "@/lib/copilot-reads";
 import { z } from "zod";
 import { botBySlug, createBot, listBots, requireBots, publicSettingsOf, saveBotDetails, saveBotSkills, type PublicBot } from "@/lib/bots";
 import { setAgentPersonas } from "@/lib/agent-personas";
@@ -29,7 +31,25 @@ const before = z.object({
 }).partial().strict();
 const tools = z.object({ canvas: z.boolean(), codeEditor: z.boolean(), preview: z.boolean(), choice: z.boolean(), knowledge: z.boolean() }).partial().strict();
 
+const days = z.union([z.literal(7), z.literal(30), z.literal(90)]);
+const offset = z.number().int().nonnegative().max(10_000).optional();
+
 export const copilotStudioInput = z.discriminatedUnion("action", [
+  // Reads (lib/copilot-reads.ts): sessions with reports and transcripts, calibrations, usage, the team, the org.
+  // Each answer is built field by field there; see its header for what is never read.
+  z.object({
+    action: z.literal("listSessions"),
+    kind: z.enum(["twin", "roleplay", "bot"]).optional(),
+    learner: z.string().trim().min(1).max(120).optional(),
+    agent: slug.optional(),
+    days: days.optional(),
+    offset,
+  }).strict(),
+  z.object({ action: z.literal("readSession"), id: z.string().trim().min(1).max(100), fromTurn: z.number().int().min(1).max(100_000).optional() }).strict(),
+  z.object({ action: z.literal("listCalibrations"), twin: slug.optional(), offset }).strict(),
+  z.object({ action: z.literal("readUsage"), days: days.optional() }).strict(),
+  z.object({ action: z.literal("listTeam") }).strict(),
+  z.object({ action: z.literal("readOrg") }).strict(),
   z.object({ action: z.literal("context") }).strict(),
   // kind: the copilot's list_twins / list_roleplays and get_twin / get_roleplay read only their own module.
   z.object({ action: z.literal("list"), kind: z.enum(["twin", "roleplay"]).optional(), includeArchived: z.boolean().optional() }).strict(),
@@ -108,6 +128,21 @@ async function findAgent(d: CopilotStudioDeps, orgId: string, agentSlug: string,
 export async function runCopilotStudio(actor: Actor, input: CopilotStudioInput, d: CopilotStudioDeps = defaultDeps) {
   const orgId = actor.org.id;
   switch (input.action) {
+    case "listSessions":
+      return listSessions(actor.org.id, input);
+    case "readSession": {
+      const session = await readSession(actor.org.id, input.id, input.fromTurn);
+      if (!session) throw new AppError("not_found", "No session with that id in this organization.", 404);
+      return session;
+    }
+    case "listCalibrations":
+      return listCalibrations(actor.org.id, input);
+    case "readUsage":
+      return readUsage(actor.org.id, input.days);
+    case "listTeam":
+      return listTeam(actor.org.id);
+    case "readOrg":
+      return readOrg(actor.org.id);
     case "context": {
       // Who the copilot works for: the org and its trainers' own personas (the USER / persona of the skill tools).
       const personas = await d.db.persona.findMany({ where: { orgId, isOwn: true }, orderBy: { createdAt: "asc" }, select: { slug: true, name: true } });
