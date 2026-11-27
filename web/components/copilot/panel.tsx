@@ -224,7 +224,13 @@ export function CopilotPanelProvider({
       {children}
       {isMobile ? (
         <Sheet open={mobileOpen && !onHome} onOpenChange={setOpen}>
-          <SheetContent side="right" showCloseButton={false} className="w-full gap-0 p-0 sm:max-w-md">
+          <SheetContent
+            side="right"
+            showCloseButton={false}
+            borderless
+            // Full screen on a phone: the sheet's own 3/4 width leaves a sliver of page too thin to use or read.
+            className="gap-0 p-0 data-[side=right]:w-full data-[side=right]:max-w-none"
+          >
             <SheetHeader className="sr-only">
               <SheetTitle>Copilot</SheetTitle>
               <SheetDescription>Ask the copilot about this page, or build a twin skill or role play.</SheetDescription>
