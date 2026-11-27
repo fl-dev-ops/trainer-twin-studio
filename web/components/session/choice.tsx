@@ -83,8 +83,9 @@ export function ChoicePanel({
 
   return (
     <div className="space-y-4 overflow-y-auto p-6 pb-20">
-      <p className="text-sm font-medium">{question}</p>
+      {/* Code first: questions refer to "the code shown above". */}
       {code ? <CodeViewer language={code.language} code={code.content} /> : null}
+      <p className="text-sm font-medium">{question}</p>
       <div className="space-y-2">
         {options.map((option) => (
           <label

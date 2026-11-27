@@ -4,7 +4,7 @@ import { callStudio, runtimeFromContext } from "../lib/studio";
 
 export default defineTool({
   description:
-    "Only for sessions run from a SCENARIO PLAYBOOK, a TWIN or a CLIENT ROLE PLAY. Returns real lines from the trainer's sessions (in a role play: the client's lines) for this scenario: what was said, by which side, in which step and move, and the situation it answered. Call when you enter a playbook step or a new kind of moment. Use the lines for tone, length and shape only; never repeat them word for word and never reuse past learners' details.",
+    "Search this scenario's items (a playbook, twin or role play): each has its text, side, step, the situation it answered, and a kind. Two kinds: example lines from real sessions, used for tone, length and shape only (never repeated word for word, never reusing a past learner's details); and bank questions (context starts \"<type> question\"), which you ask as written, choosing one you have not asked this session. Call when you enter a step, meet a new kind of moment, or need your next main question (situation like \"mcq question about closures\").",
   inputSchema: z.object({
     playbook: z.string().trim().min(1).max(200).optional().describe("Twin sessions only: the playbook's skill name from YOUR PLAYBOOKS. Omit to search all of them"),
     step: z.string().trim().min(1).max(100).optional().describe("Step id from STEPS AND MOVES, e.g. 'anchor-claim'"),

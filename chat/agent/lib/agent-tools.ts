@@ -125,24 +125,32 @@ export function sessionToolSettings(ctx: SessionCtx): Promise<ToolSettings> {
 }
 
 /**
- * The prompt's description of the workspace for this call: only the switched-on surfaces, a line or two each. Empty
- * when nothing is on (the caller keeps its own "no workspace" wording). `client` frames it for a client role play.
+ * The prompt's description of the workspace for this call: only the switched-on surfaces. Empty when nothing is on
+ * (the caller keeps its own "no workspace" wording). `client` frames it for a client role play. Tool names and payloads
+ * here match the tool descriptions (chat/agent/tools/workspace.ts) word for word; a scenario's skill decides WHEN a
+ * surface is used, this block only says HOW.
  */
 export function formatWorkspaceBlock(tools: ToolSettings, { client }: { client: boolean }): string {
   if (!anyToolOn(tools)) return "";
-  const who = client ? "Stay in character as the client while you use it" : "Keep talking to the learner while you use it";
+  const when = client
+    ? "Stay in character as the client while you use it. Open a surface only when it genuinely helps the call or the learner asks."
+    : "Open a surface when the skill's procedure calls for it or the learner asks; don't wait to be asked.";
   const lines = [
     tools.canvas &&
-      "- Whiteboard: open it with surface({ action: \"open_whiteboard\", payload: { question } }), where question is the problem they are drawing for, when a quick sketch helps (numbers, a comparison, a plan). Use read_canvas_scene when the learner says they drew or changed something, and highlight_whiteboard to point at one label they wrote.",
+      "- Whiteboard: surface open_whiteboard { questionId, question } shows a blank board with the question on top. read_canvas_scene when the learner says they drew or changed something, and before you ask about their diagram; an empty scene means the board is blank, so never describe a drawing you have not read. highlight_whiteboard { component_label } points at one label exactly as read_canvas_scene returned it.",
     tools.codeEditor &&
-      "- Code editor: open it with surface({ action: \"open_code_editor\", payload: { questionId, question, language, starterCode, readOnly } }) when the conversation calls for code. Read what they wrote with get_code_state or read_code_range before reacting, and run it with run_code.",
-    tools.preview &&
-      "- Preview: show an attached PDF with surface({ action: \"open_pdf\", payload: { fileId } }), an image with open_image, or slides with open_presentation. Read PDFs with read_document. Before quoting or referring to a specific line in a PDF, call surface({ action: \"highlight_document\", payload: { fileId, highlightQuery } }) with an exact phrase from the returned text. Do this on the opening turn too; opening the PDF is not a substitute for highlighting. If the highlight fails, do not claim it succeeded. Navigate slides with get_presentation_state, set_presentation_slide (zero-based slide_index), next_presentation_slide, or previous_presentation_slide. Only use real fileIds from ATTACHED ARTIFACTS; never invent one.",
+      "- Code editor: surface open_code_editor { questionId, question, language, starterCode, readOnly }: readOnly true with the snippet as starterCode for code to read; readOnly false with starterCode \"\" for code to write. Read with get_code_state or read_code_range before reacting. highlight_code { from_line, to_line } marks the smallest relevant whole-line range. run_code runs it and returns the output.",
     tools.choice &&
-      "- Multiple choice: put a short question on screen with surface({ action: \"open_choice\", payload: { questionId, question, options: [{ id, text }], correctOptionId } }). Call get_choice_state before reacting to their pick and trust its isCorrect.",
+      "- Multiple choice: surface open_choice { questionId, question, options: [{ id, text }], correctOptionId, code? }. The learner sees only this payload: when the question is about code, put the full snippet in code as { language, content } (it shows above the question). Never read the options aloud. get_choice_state before reacting to their pick: selectedId is their answer even before they submit; trust isCorrect, which never reaches the learner. highlight_choice { option_id } points at one option.",
+    tools.preview &&
+      "- Preview: surface open_pdf { fileId }, open_image { fileId }, open_presentation { fileId, slideNumber? }; fileIds only from ATTACHED ARTIFACTS, never invented. Read a PDF with read_document. Before quoting or referring to a specific line in a PDF, call surface({ action: \"highlight_document\", payload: { fileId, highlightQuery } }) with an exact phrase from read_document. Do this on the opening turn too; opening the PDF is not a substitute for highlighting. If the highlight fails, do not claim it succeeded. Slides: get_presentation_state, set_presentation_slide (zero-based slide_index), next_presentation_slide, previous_presentation_slide.",
   ].filter(Boolean);
   return `# Workspace for this call
-You can show these on the learner's screen. Open one only when it genuinely helps the conversation or the learner asks for it, never as a gimmick. ${who}, and never describe it as a tool or a system. Close it with surface({ action: "close_surface" }) when you move on.
+${when} Never call it a tool or a system.
+- One surface at a time: opening one replaces the last. surface close_surface when you move to something that needs none.
+- A new question gets a new questionId and a fresh surface. Never reopen a surface for a follow-up: it wipes the learner's work.
+- Read before you react (read_canvas_scene, get_code_state, read_code_range, get_choice_state, read_document); never guess what is on screen.
+- To talk about one part, highlight it first (highlight_whiteboard, highlight_code, highlight_choice, highlight_document), then say "the highlighted …". Never read code or options aloud.
 ${lines.join("\n")}`;
 }
 

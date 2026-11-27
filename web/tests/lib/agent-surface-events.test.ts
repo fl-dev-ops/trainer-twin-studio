@@ -321,6 +321,16 @@ describe("session document surfaces", () => {
     }
   });
 
+  it("shows a choice question's code whether it arrives as { language, content } or a plain string", () => {
+    const options = [{ id: "A", text: "A, D, C, B" }, { id: "B", text: "A, B, C, D" }];
+    const choice = (code: unknown, extra = {}) =>
+      parseWorkspaceCommandSurface({ id: "mcq", tool: "surface", input: { action: "open_choice", payload: { questionId: "q", question: "What is logged?", options, code, ...extra } } })?.surface;
+    expect(choice({ language: "javascript", content: "console.log('A')" })).toMatchObject({ code: { language: "javascript", content: "console.log('A')" } });
+    expect(choice("console.log('A')")).toMatchObject({ code: { language: "javascript", content: "console.log('A')" } });
+    expect(choice("print(1)", { language: "python" })).toMatchObject({ code: { language: "python", content: "print(1)" } });
+    expect(choice(undefined)).toMatchObject({ tool: "choice", code: undefined });
+  });
+
   it("rejects unknown surface commands and missing or unsafe file sources", () => {
     for (const action of ["invented", "open_pdf", "highlight_document", "open_image"]) {
       expect(parseWorkspaceCommandSurface({ id: "invalid", tool: "surface", input: { action } })).toBeNull();

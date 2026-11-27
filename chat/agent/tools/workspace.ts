@@ -49,17 +49,20 @@ async function getChoiceState(input: z.infer<typeof noInput>, ctx: unknown) {
   return { ...response, result: { ...response?.result, result: { ...choice, isCorrect } } };
 }
 
-/** The surface tool's description: only the actions this session's switches allow. */
+/** The surface tool's description: only the actions this session's switches allow, with their exact payloads. */
 function surfaceDescription(tools: ToolSettings): string {
   const actions = [
-    tools.canvas && "open_whiteboard (payload { question }: the problem the learner is drawing for)",
-    tools.codeEditor && "open_code_editor (payload { questionId, question, language, starterCode, readOnly })",
-    tools.choice && "open_choice (payload { questionId, question, options: [{ id, text }], correctOptionId, code? })",
+    tools.canvas &&
+      "open_whiteboard { questionId, question }: a blank whiteboard with the question on top.",
+    tools.codeEditor &&
+      "open_code_editor { questionId, question, language, starterCode, readOnly }: readOnly true + the snippet as starterCode = code to read; readOnly false + starterCode \"\" = a blank editor to write in.",
+    tools.choice &&
+      "open_choice { questionId, question, options: [{ id, text }], correctOptionId, code? }: a multiple-choice card. The learner sees only this payload: if the question is about code, put the complete snippet in code as { language, content } (shown above the question). correctOptionId stays private.",
     tools.preview &&
-      "open_pdf (payload { fileId }) for an attached PDF, open_image (payload { fileId }), open_presentation (payload { fileId, slideNumber? }), highlight_document (payload { fileId, highlightQuery }) to search for a phrase",
-    "close_surface",
+      "open_pdf { fileId }, open_image { fileId }, open_presentation { fileId, slideNumber? }: show an attached file. highlight_document { fileId, highlightQuery }: highlight an exact phrase (copied from read_document) in the open PDF.",
+    "close_surface: clear the screen.",
   ].filter(Boolean);
-  return `Open or change the learner-visible workspace. Actions available in this conversation: ${actions.join("; ")}. For documents, pass a SESSION DATA fileId; never invent IDs.`;
+  return `Open, change or close what the learner sees; one action per call, opening one replaces the last. A new question gets a new questionId (a fresh surface); never reopen for a follow-up, it wipes the learner's work. fileIds only from ATTACHED ARTIFACTS. Actions: ${actions.join(" ")}`;
 }
 
 export default defineDynamic(async (ctx) => {
@@ -69,56 +72,56 @@ export default defineDynamic(async (ctx) => {
       return {
         surface: defineTool({ description: surfaceDescription(tools), inputSchema: surfaceInput, execute: runSurface }),
         workspace_request: defineTool({
-          description: "Request an action or state from the browser workspace over RPC.",
+          description: "Low-level browser workspace call (method, action, payload). Use the named workspace tools; this is only for an action none of them covers.",
           inputSchema: workspaceRequestInput,
           execute: executeWorkspaceTool,
         }),
         ...(tools.preview && presentationTools),
         ...(tools.canvas && {
           add_canvas_component: defineTool({
-            description: "Add a system architecture component box with a label to the whiteboard canvas.",
+            description: "Draw one labelled box on the whiteboard yourself (e.g. a given starting component). Never to redraw the learner's work.",
             inputSchema: canvasComponentInput,
             execute: executeWorkspaceTool,
           }),
-          clear_canvas: defineTool({ description: "Clear all elements from the whiteboard canvas.", inputSchema: noInput, execute: executeWorkspaceTool }),
+          clear_canvas: defineTool({ description: "Erase the whole whiteboard, including the learner's drawing. Only when the learner asks.", inputSchema: noInput, execute: executeWorkspaceTool }),
           highlight_canvas_element: defineTool({
-            description: "Highlight and scroll to a specific component element on the whiteboard canvas by ID.",
+            description: "Highlight and scroll to one whiteboard element by its id from read_canvas_scene. Prefer highlight_whiteboard when you know the label.",
             inputSchema: canvasElementInput,
             execute: executeWorkspaceTool,
           }),
           highlight_whiteboard: defineTool({
             description:
-              "Highlight one exact visible component label on the candidate's whiteboard, then ask one targeted follow-up about that component's responsibility, connection, bottleneck, failure mode, scale, or trade-off. Only call when the whiteboard diagram is relevant to the active system-design question. Never call to highlight components of an off-topic or irrelevant diagram. The label must match text the candidate actually wrote on the whiteboard; never invent a label.",
+              "Point at one component on the learner's whiteboard by its label, exactly as read_canvas_scene returned it (never invented). Call read_canvas_scene first. Then ask about \"the highlighted <label>\". Only for a diagram that answers the current question.",
             inputSchema: whiteboardLabelInput,
             execute: executeWorkspaceTool,
           }),
           read_canvas_scene: defineTool({
             description:
-              "Retrieve all elements and diagrams currently drawn on the whiteboard canvas. MUST call when the candidate says they have drawn, sketched, or updated the whiteboard ('I have drawn', 'Check my diagram', 'Here is my architecture'), or before asking follow-ups about their design.",
+              "Read everything on the whiteboard: labels, ids and connections. Call when the learner says they drew or changed something, and before you ask about or highlight their diagram. An empty result means the board is blank: never describe a drawing you have not read.",
             inputSchema: noInput,
             execute: executeWorkspaceTool,
           }),
         }),
         ...(tools.codeEditor && {
           get_code_state: defineTool({
-            description: "Get the full code, active programming language, and cursor selection in the editor.",
+            description: "Read the editor: the full code, its language, cursor and selection. Call before reacting to anything the learner wrote.",
             inputSchema: noInput,
             execute: executeWorkspaceTool,
           }),
           read_code_range: defineTool({
             description:
-              "Required before replying when a candidate is unsure, stuck, does not know, or requests help about an active Coding, Machine coding, or Code output editor, or after an incorrect or unexplained code-output run. Read inclusive one-based lines 1 through 200 and never read the returned code aloud.",
+              "Read editor lines from_line to to_line (one-based, inclusive), numbered. Use it to pick the exact lines for highlight_code; lines 1 to 200 when unsure. Never read code aloud.",
             inputSchema: lineRangeInput,
             execute: executeWorkspaceTool,
           }),
           highlight_code: defineTool({
             description:
-              "Use after read_code_range. Highlight the smallest relevant inclusive one-based whole-line range without changing the code, then ask one targeted question that leads the candidate to calculate the exact output or next implementation step.",
+              "Highlight editor lines from_line to to_line (one-based, inclusive; the smallest whole-line range that matters) without changing the code. Read the code first (read_code_range or get_code_state). Then ask about \"the highlighted line\" or \"lines\"; never read the code aloud.",
             inputSchema: lineRangeInput,
             execute: executeWorkspaceTool,
           }),
           run_code: defineTool({
-            description: "Execute the current code in the candidate editor and retrieve execution output.",
+            description: "Run the editor's current code and return its output and errors.",
             inputSchema: noInput,
             execute: executeWorkspaceTool,
           }),
@@ -126,12 +129,12 @@ export default defineDynamic(async (ctx) => {
         ...(tools.choice && {
           get_choice_state: defineTool({
             description:
-              "Get the on-screen MCQ and server-computed isCorrect result. MUST call before evaluating a selected answer. Trust isCorrect; never infer correctness from the learner's explanation or option wording.",
+              "Read the open multiple-choice card: selectedId, submitted, and isCorrect (graded on the server against correctOptionId). Call before reacting to the learner's pick. selectedId is their answer even if not submitted; never ask them to press Submit. Trust isCorrect; never judge from their explanation or the option wording.",
             inputSchema: noInput,
             execute: getChoiceState,
           }),
           highlight_choice: defineTool({
-            description: "Highlight one option on the open MCQ by id (A, B, C, …) without changing the learner's selection. MUST call when discussing a specific option.",
+            description: "Point at one option on the open card by id (A, B, C, …) without changing the learner's selection. Call before you talk about a specific option.",
             inputSchema: choiceOptionInput,
             execute: executeWorkspaceTool,
           }),
