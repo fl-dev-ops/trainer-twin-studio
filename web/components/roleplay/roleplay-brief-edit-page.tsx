@@ -261,57 +261,69 @@ export function RoleplayBriefEditPage({ slug, brief, before: initialBefore, intr
 
         <TabsContent value="settings">
           <div className="flex flex-col gap-10">
-            <PageSection title="Before the conversation" description="Set up what learners see and share before the call. Switches save automatically.">
+            <PageSection title="Before the call" description="What learners see and provide before speaking. Switches save automatically.">
               <div className={SECTION_CARD}>
                 <SectionRow
-                  title={<label htmlFor="rp-intro-video">Intro video</label>}
-                  detail={<span id="rp-intro-video-help">{introVideoUrl
-                    ? "Learners see this video before the call. Choose a new MP4 (up to 100 MB) to replace it."
-                    : "No intro video yet. Choose a short MP4 (up to 100 MB) that works for every persona."}</span>}
-                  className="sm:flex-col sm:items-stretch sm:gap-3"
+                  title="Intro video"
+                  detail={
+                    <div className="flex flex-col gap-3">
+                      <span id="rp-intro-video-help">{introVideoUrl
+                        ? "Learners see this video before the call. Choose an MP4 (up to 100 MB) to replace it."
+                        : "No intro video yet. Choose a short MP4 (up to 100 MB) that works for every persona."}</span>
+                      <form className="flex flex-col items-start gap-2" onSubmit={(event) => {
+                        event.preventDefault();
+                        if (introVideoFile) void saveIntroVideo(introVideoFile);
+                      }}>
+                        <input ref={introVideoInput} type="file" accept=".mp4,video/mp4" aria-label="Intro video file" hidden disabled={savingVideo} onChange={(event) => setIntroVideoFile(event.target.files?.[0] ?? null)} />
+                        {introVideoFile ? <span className="max-w-full wrap-anywhere" role="status">Selected: {introVideoFile.name}</span> : null}
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Button type="button" variant="secondary" disabled={savingVideo} aria-describedby="rp-intro-video-help" onClick={() => introVideoInput.current?.click()}>
+                            {introVideoUrl ? "Change video" : "Upload video"}
+                          </Button>
+                          {introVideoFile ? (
+                            <>
+                              <Button type="submit" loading={savingVideo}>Save video</Button>
+                              <Button type="button" variant="ghost" disabled={savingVideo} onClick={clearIntroVideoFile}>Cancel</Button>
+                            </>
+                          ) : introVideoUrl ? (
+                            <Button type="button" variant="ghost" loading={savingVideo} onClick={() => void saveIntroVideo(null)}>Remove video</Button>
+                          ) : null}
+                        </div>
+                      </form>
+                    </div>
+                  }
+                  className="sm:flex-col sm:items-stretch lg:flex-row lg:items-start"
                 >
-                  <div className="flex min-w-0 flex-1 flex-col gap-3">
-                    {introVideoUrl ? (
-                      <video src={introVideoUrl} controls playsInline preload="metadata" aria-label="Current intro video" className="aspect-video w-full max-w-sm rounded-md bg-black object-contain" />
-                    ) : null}
-                    <form className="flex w-full flex-wrap items-center gap-2" onSubmit={(event) => {
-                      event.preventDefault();
-                      if (introVideoFile) void saveIntroVideo(introVideoFile);
-                    }}>
-                      <Input ref={introVideoInput} id="rp-intro-video" type="file" accept=".mp4,video/mp4" aria-describedby="rp-intro-video-help" disabled={savingVideo} onChange={(event) => setIntroVideoFile(event.target.files?.[0] ?? null)} className="min-w-0 flex-1" />
-                      {introVideoFile ? (
-                        <Button type="button" variant="ghost" disabled={savingVideo} onClick={clearIntroVideoFile}>Cancel</Button>
-                      ) : introVideoUrl ? (
-                        <Button type="button" variant="ghost" disabled={savingVideo} onClick={() => void saveIntroVideo(null)}>Remove video</Button>
-                      ) : null}
-                      <Button type="submit" variant="secondary" disabled={!introVideoFile} loading={savingVideo && Boolean(introVideoFile)}>Save video</Button>
-                    </form>
-                  </div>
+                  {introVideoUrl ? (
+                    <video src={introVideoUrl} controls playsInline preload="metadata" aria-label="Current intro video" className="aspect-video w-full max-w-sm rounded-md bg-black object-contain lg:w-72 xl:w-80" />
+                  ) : null}
                 </SectionRow>
+                <div className="border-t border-(--border)">
+                  <SectionRow title="Upload a file before the call" detail="Learners may add a PDF or an image, up to 10 MB.">
+                    <SwitchToggle checked={before.preUpload} onChange={(on) => saveSettings({ before: { ...before, preUpload: on, preUploadRequired: on && before.preUploadRequired } }, `File upload before the call turned ${on ? "on" : "off"}`)} label="Upload a file before the call" />
+                  </SectionRow>
+                  {before.preUpload ? (
+                    <SectionRow title="Require a file" detail="The call can't start until the learner adds the file." className="pl-9">
+                      <SwitchToggle checked={before.preUploadRequired === true} onChange={(on) => saveSettings({ before: { ...before, preUploadRequired: on } }, on ? "The file is now required" : "The file is now optional")} label="Require a file" />
+                    </SectionRow>
+                  ) : null}
+                </div>
+              </div>
+            </PageSection>
+            <PageSection title="During the call" description="How long the call lasts and what learners can share.">
+              <div className={SECTION_CARD}>
                 <SectionRow title="Call length" detail="The call ends at this point, with the client's goodbye.">
                   <CallLengthSelect value={before.callMinutes} onChange={(minutes) => saveSettings({ before: { ...before, callMinutes: minutes } }, minutes ? `Calls now end at ${minutes} minutes` : "Call length limit removed")} />
                 </SectionRow>
-                <SectionRow title="Share screen" detail="Learners share their entire screen for the whole call.">
-                  <SwitchToggle checked={before.preScreenshare} onChange={(on) => saveSettings({ before: { ...before, preScreenshare: on } }, `Screen share turned ${on ? "on" : "off"}`)} label="Share screen" />
+                <SectionRow title="Require screen sharing" detail="Learners share their entire screen for the whole call.">
+                  <SwitchToggle checked={before.preScreenshare} onChange={(on) => saveSettings({ before: { ...before, preScreenshare: on } }, `Screen share turned ${on ? "on" : "off"}`)} label="Require screen sharing" />
                 </SectionRow>
-                <SectionRow title="Upload a file before the call" detail="Learners may add a PDF or an image, up to 10 MB.">
-                  <SwitchToggle checked={before.preUpload} onChange={(on) => saveSettings({ before: { ...before, preUpload: on, preUploadRequired: on && before.preUploadRequired } }, `File upload before the call turned ${on ? "on" : "off"}`)} label="Upload a file before the call" />
-                </SectionRow>
-                {before.preUpload ? (
-                  <SectionRow title="Required" detail="The call can't start until the learner adds the file.">
-                    <SwitchToggle checked={before.preUploadRequired === true} onChange={(on) => saveSettings({ before: { ...before, preUploadRequired: on } }, on ? "The file is now required" : "The file is now optional")} label="File required" />
-                  </SectionRow>
-                ) : null}
-              </div>
-            </PageSection>
-            <PageSection title="During the conversation" description="What learners can share while they talk.">
-              <div className={SECTION_CARD}>
-                <SectionRow title="Attach during the call" detail="Learners can share an image or a PDF while they talk.">
-                  <SwitchToggle checked={before.duringUpload} onChange={(on) => saveSettings({ before: { ...before, duringUpload: on } }, `Attach during the call turned ${on ? "on" : "off"}`)} label="Attach files during the call" />
+                <SectionRow title="Allow file attachments" detail="Learners can share an image or a PDF while they talk.">
+                  <SwitchToggle checked={before.duringUpload} onChange={(on) => saveSettings({ before: { ...before, duringUpload: on } }, `Attach during the call turned ${on ? "on" : "off"}`)} label="Allow file attachments" />
                 </SectionRow>
               </div>
             </PageSection>
-            <PageSection title="Workspace tools" description="What the AI can show on the learner's screen. All off unless you switch them on.">
+            <PageSection title="AI tools" description="Tools the AI can use during the call. Turn on only what this role play needs.">
               <div className={SECTION_CARD}>
                 {TOOL_ROWS.map((row) => (
                   <SectionRow key={row.key} title={row.label} detail={row.description}>

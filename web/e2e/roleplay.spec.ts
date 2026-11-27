@@ -36,7 +36,7 @@ test("edit page: all tabs use section panels that fit desktop and mobile", async
     General: ["Role play details"],
     Persona: ["Who the learner talks to"],
     Script: ["Change the script with the copilot", "Current script"],
-    Settings: ["Before the conversation", "During the conversation", "Workspace tools"],
+    Settings: ["Before the call", "During the call", "AI tools"],
   };
   for (const width of [1280, 390]) {
     await page.setViewportSize({ width, height: 900 });
@@ -44,11 +44,30 @@ test("edit page: all tabs use section panels that fit desktop and mobile", async
       await page.getByRole("tab", { name: tab, exact: true }).click();
       const panel = page.getByRole("tabpanel", { name: tab, exact: true });
       for (const name of names) await expect(panel.getByRole("region", { name, exact: true })).toBeVisible();
+      if (tab === "Settings") {
+        const before = panel.getByRole("region", { name: "Before the call", exact: true });
+        const during = panel.getByRole("region", { name: "During the call", exact: true });
+        const tools = panel.getByRole("region", { name: "AI tools", exact: true });
+        await expect(before.getByRole("button", { name: "Upload video", exact: true })).toBeVisible();
+        await expect(before.getByRole("switch", { name: "Upload a file before the call" })).toBeVisible();
+        await expect(during.getByText("Call length", { exact: true })).toBeVisible();
+        await expect(during.getByRole("switch", { name: "Require screen sharing" })).toBeVisible();
+        await expect(during.getByRole("switch", { name: "Allow file attachments" })).toBeVisible();
+        await expect(tools.getByRole("switch", { name: "Knowledge search" })).toBeVisible();
+      }
       await expect(panel.locator('[data-slot="card"]')).toHaveCount(0);
       expect(await panel.evaluate((element) => element.scrollWidth)).toBeLessThanOrEqual((await panel.boundingBox())!.width + 1);
       await panel.screenshot({ path: testInfo.outputPath(`${tab.toLowerCase()}-${width}.png`), animations: "disabled" });
     }
   }
+  const chooser = page.waitForEvent("filechooser");
+  await page.getByRole("button", { name: "Upload video", exact: true }).click();
+  await (await chooser).setFiles({ name: "intro.mp4", mimeType: "video/mp4", buffer: Buffer.from("a draft selection") });
+  await expect(page.getByText("Selected: intro.mp4")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Save video", exact: true })).toBeEnabled();
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Save video", exact: true })).toHaveCount(0);
+
   const script = page.getByRole("tab", { name: "Script", exact: true });
   await script.click();
   const ask = page.getByRole("button", { name: "Ask the copilot" });
@@ -63,10 +82,10 @@ test("edit page: saved upload requirements control whether the learner can join"
   for (const tab of ["General", "Persona", "Script", "Settings"]) await expect(page.getByRole("tab", { name: tab })).toBeVisible();
   await page.getByRole("tab", { name: "Settings" }).click();
   const upload = page.getByRole("switch", { name: "Upload a file before the call" });
-  await expect(page.getByRole("switch", { name: "File required" })).toHaveCount(0);
+  const required = page.getByRole("region", { name: "Before the call", exact: true }).getByRole("switch", { name: "Require a file" });
+  await expect(required).toHaveCount(0);
   if ((await upload.getAttribute("aria-checked")) !== "true") await upload.click();
   await expect(upload).toHaveAttribute("aria-checked", "true");
-  const required = page.getByRole("switch", { name: "File required" });
   await required.click();
   await expect(required).toHaveAttribute("aria-checked", "true");
   const knowledge = page.getByRole("switch", { name: "Knowledge search" });
@@ -78,7 +97,7 @@ test("edit page: saved upload requirements control whether the learner can join"
   await page.reload();
   await page.getByRole("tab", { name: "Settings" }).click();
   await expect(page.getByRole("switch", { name: "Upload a file before the call" })).toHaveAttribute("aria-checked", "true");
-  await expect(page.getByRole("switch", { name: "File required" })).toHaveAttribute("aria-checked", "true");
+  await expect(required).toHaveAttribute("aria-checked", "true");
   await expect(page.getByRole("switch", { name: "Knowledge search" })).toHaveAttribute("aria-checked", "true");
 
   const { org, codes } = seed();
@@ -110,12 +129,12 @@ test("edit page: saved upload requirements control whether the learner can join"
 
   // Turning the upload off turns Required off with it.
   await page.getByRole("switch", { name: "Upload a file before the call" }).click();
-  await expect(page.getByRole("switch", { name: "File required" })).toHaveCount(0);
+  await expect(required).toHaveCount(0);
   await expect(page.getByText("File upload before the call turned off")).toBeVisible();
   await page.reload();
   await page.getByRole("tab", { name: "Settings" }).click();
   await page.getByRole("switch", { name: "Upload a file before the call" }).click();
-  await expect(page.getByRole("switch", { name: "File required" })).toHaveAttribute("aria-checked", "false");
+  await expect(required).toHaveAttribute("aria-checked", "false");
   await expect(page.getByText("File upload before the call turned on")).toBeVisible();
   await page.getByRole("switch", { name: "Upload a file before the call" }).click();
   await expect(page.getByText("File upload before the call turned off")).toBeVisible();
