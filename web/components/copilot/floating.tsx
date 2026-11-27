@@ -1,10 +1,10 @@
 "use client";
 
 import { animate, motion, useMotionValue, useReducedMotion, useTransform } from "motion/react";
-import { type ReactNode, type Ref, useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
-import { CopilotIcon } from "@/components/icons";
+import { type ReactNode, type Ref, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Kbd } from "@/components/ui/kbd";
 import type { CopilotStatus } from "@/components/copilot/panel";
+import { CopilotPillFace, PILL_CLASS, pillLabel, useCopilotShortcut } from "@/components/copilot/pill";
 import { cn } from "@/lib/utils";
 
 /**
@@ -23,9 +23,6 @@ const OPEN_W = 400;
 const OPEN_H = 640;
 const EASE = [0.16, 1, 0.3, 1] as const;
 
-const subscribe = () => () => {};
-const useShortcut = () => useSyncExternalStore(subscribe, () => (/Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? "⌘J" : "Ctrl J"), () => "");
-
 function geometry(shape: Shape, pillW: number) {
   const vw = window.innerWidth;
   const vh = window.innerHeight;
@@ -38,14 +35,6 @@ function geometry(shape: Shape, pillW: number) {
   const w = Math.min(760, vw - 64);
   const h = Math.min(Math.round(vh * 0.84), 860);
   return { w, h, x: Math.round((vw - w) / 2), y: Math.round((vh - h) / 2), r: 24 };
-}
-
-/** What the pill says: the copilot's name at rest, otherwise what it's doing or waiting for. */
-function pillLabel(status: CopilotStatus, unread: boolean, activity: string) {
-  if (status === "needs-you") return { text: "Needs your approval", tone: "caution" as const };
-  if (status === "working") return { text: `${activity}…`, tone: "working" as const };
-  if (unread) return { text: "New reply", tone: "brand" as const };
-  return { text: "Ask Copilot", tone: null };
 }
 
 export function CopilotFloating({
@@ -74,7 +63,7 @@ export function CopilotFloating({
 }) {
   const shape: Shape = !open ? "pill" : expanded ? "expanded" : "open";
   const reduce = useReducedMotion();
-  const shortcut = useShortcut();
+  const shortcut = useCopilotShortcut();
   const label = pillLabel(status, unread, activity);
 
   // The pill fits its words: measured from a hidden copy, so a longer step ("Listing knowledge files…") widens it smoothly.
@@ -146,42 +135,24 @@ export function CopilotFloating({
         className="fixed top-0 left-0 z-40 hidden h-(--fh) w-(--fw) translate-x-(--fx) translate-y-(--fy) overflow-hidden rounded-(--fr) shadow-elevation-3 md:block"
         style={vars as unknown as React.CSSProperties}
       >
-        {/* The resting pill. Ink on the page, so it reads as the studio's assistant, not one more page control. */}
+        {/* The resting pill: the same button as the docked layout's launcher (components/copilot/pill.tsx). */}
         <button
           type="button"
           data-copilot-pill=""
+          data-copilot-entry=""
           inert={open}
           onClick={onOpen}
           onPointerEnter={onPrefetch}
           onFocus={onPrefetch}
           aria-label={label.tone ? `Copilot: ${label.text}` : "Open Copilot"}
           aria-keyshortcuts="Meta+J Control+J"
-          className="group/pill absolute inset-0 flex items-center gap-2.5 bg-foreground pr-4 pl-3.5 text-sm font-medium text-background outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-inset"
+          className={cn(PILL_CLASS, "absolute inset-0 focus-visible:ring-inset focus-visible:ring-offset-0")}
         >
-          <span className="relative grid shrink-0 place-items-center">
-            <CopilotIcon className={cn("size-[18px]", label.tone === "working" && "animate-copilot-breathe text-brand")} />
-            {(label.tone === "caution" || label.tone === "brand") && (
-              <span
-                aria-hidden
-                key={label.tone}
-                className={cn(
-                  "animate-copilot-dot absolute -top-0.5 -right-0.5 size-2 rounded-full ring-2 ring-foreground",
-                  label.tone === "caution" ? "bg-caution" : "bg-brand",
-                )}
-              />
-            )}
-          </span>
-          {/* The words cross-fade when they change: a new step settles in rather than swapping in place. */}
-          <span key={label.text} className="animate-copilot-chip min-w-0 truncate">{label.text}</span>
-          {shortcut && !label.tone && (
-            <span aria-hidden className="ml-auto flex opacity-0 transition-opacity duration-150 group-hover/pill:opacity-60 group-focus-visible/pill:opacity-60">
-              <Kbd>{shortcut}</Kbd>
-            </span>
-          )}
+          <CopilotPillFace text={label.text} tone={label.tone} shortcut={shortcut} />
         </button>
         {/* Off-screen twin of the pill's contents, for its natural width. */}
-        <span ref={measure} aria-hidden className="invisible absolute flex items-center gap-2.5 pr-4 pl-3.5 text-sm font-medium whitespace-nowrap">
-          <span className="size-[18px]" />
+        <span ref={measure} aria-hidden className="invisible absolute flex items-center gap-2 pr-4 pl-3.5 text-body font-semibold whitespace-nowrap">
+          <span className="size-4" />
           {label.text}
           {shortcut && !label.tone && <Kbd>{shortcut}</Kbd>}
         </span>

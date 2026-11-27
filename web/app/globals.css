@@ -689,3 +689,17 @@
 @media (prefers-reduced-motion: reduce) {
   .animate-copilot-word { animation: none; }
 }
+
+/* The launcher steps aside while the copilot is open (the panel or sheet is right there), sinking as it fades. */
+[data-copilot-launcher] {
+  transition: opacity 220ms var(--ease-studio), translate 320ms var(--ease-studio), background-color 150ms ease-out;
+}
+[data-copilot-launcher][data-state="hidden"] {
+  opacity: 0;
+  translate: 0 12px;
+  pointer-events: none;
+  transition: opacity 140ms var(--ease-exit), translate 180ms var(--ease-exit);
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-copilot-launcher] { transition: none; translate: none; }
+}

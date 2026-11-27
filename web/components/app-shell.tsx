@@ -3,7 +3,6 @@
 import type { CSSProperties, ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { AppSidebar } from "@/components/app-sidebar";
-import { CopilotTopBarButton } from "@/components/copilot/entry";
 import type { CopilotLayout } from "@/components/copilot/cookies";
 import { CopilotPanelProvider } from "@/components/copilot/panel";
 import type { SwitchableOrg } from "@/components/org-switcher";
@@ -65,7 +64,6 @@ export function AppShell({ children, hideRoleplay = false, bots = false, orgs = 
           {/* Desktop collapses via the sidebar logo; on mobile the sidebar is a drawer and needs an opener. */}
           <div className="flex h-12 shrink-0 items-center px-3 md:hidden">
             <SidebarTrigger />
-            <CopilotTopBarButton />
           </div>
           <div className="flex min-h-0 flex-1 flex-col w-full overflow-hidden">{children}</div>
         </SidebarInset>

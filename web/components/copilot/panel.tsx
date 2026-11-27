@@ -19,6 +19,7 @@ import {
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { COPILOT_LAYOUT_COOKIE, COPILOT_OPEN_COOKIE, COPILOT_WIDTH_COOKIE, type CopilotLayout } from "@/components/copilot/cookies";
 import { CopilotFloating } from "@/components/copilot/floating";
+import { CopilotLauncher } from "@/components/copilot/pill";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { seedCopilot } from "@/lib/copilot-handoff";
 import { isCopilotHome } from "@/lib/copilot-page";
@@ -169,15 +170,19 @@ export function CopilotPanelProvider({
   const setOpen = useCallback((next: boolean) => {
     if (next) {
       const active = document.activeElement;
-      // Where focus goes back to on close; nothing focused (<body>) means the rail's entry.
+      // Where focus goes back to on close; nothing focused (<body>) means the launcher.
       if (active instanceof HTMLElement && active !== document.body && !dock.current?.contains(active)) returnFocus.current = active;
       setMounted(true);
       setUnread(false);
       setFocusSignal((n) => n + 1);
     } else if (dock.current?.contains(document.activeElement)) {
-      // Focus goes back where it came from, or to the rail's entry: never lost on <body>.
-      const back = returnFocus.current?.isConnected ? returnFocus.current : document.querySelector<HTMLElement>("[data-copilot-entry]");
-      back?.focus({ preventScroll: true });
+      // Focus goes back where it came from, or to the launcher: never lost on <body>. A frame later, once the
+      // launcher is no longer inert.
+      const back = returnFocus.current;
+      requestAnimationFrame(() => {
+        const target = back?.isConnected ? back : document.querySelector<HTMLElement>("[data-copilot-entry]:not([inert])");
+        target?.focus({ preventScroll: true });
+      });
     }
     if (!next) setExpanded(false);
     if (window.matchMedia("(max-width: 767px)").matches) setMobileOpen(next);
@@ -285,6 +290,17 @@ export function CopilotPanelProvider({
         <Dock ref={dock} open={desktopOpen} width={width} onWidth={setWidth}>
           {chat}
         </Dock>
+      )}
+      {/* The way in, bottom right: in the docked layout and on phones (floating has it built into its shape). */}
+      {!onHome && (isMobile || layout === "docked") && (
+        <CopilotLauncher
+          hidden={open}
+          status={status}
+          unread={unread}
+          activity={activity}
+          onOpen={() => setOpen(true)}
+          onPrefetch={prefetch}
+        />
       )}
       <p aria-live="polite" className="sr-only">{announcement}</p>
     </Context.Provider>

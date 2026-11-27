@@ -10,7 +10,7 @@ import type { FileUIPart } from "ai";
 import type { EveMessage, EveToolPart } from "eve/react";
 import { useEveAgent } from "eve/react";
 import {
-  Brain,
+  ArrowRight,
   Check,
   Circle,
   CircleAlert,
@@ -19,7 +19,6 @@ import {
   CornerDownRight,
   Layers3,
   ListTodo,
-  MessagesSquare,
   LoaderCircle,
   Maximize2,
   Minimize2,
@@ -97,7 +96,6 @@ import {
   takeCopilotSeed,
 } from "@/lib/copilot-handoff";
 import { type CopilotPage, copilotPageOf, homeStarters, startersFor } from "@/lib/copilot-page";
-import { PersonaIcon, UsersIcon } from "@/components/icons";
 import { dashRoute } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 
@@ -366,7 +364,7 @@ function CopilotConversation({
   const status: CopilotStatus = awaitingApproval ? "needs-you" : busy || uploading ? "working" : "idle";
   const title = conversationTitle(agent.messages);
 
-  // The rail shows what this conversation is doing while the panel is closed (components/copilot/entry.tsx).
+  // The launcher shows what this conversation is doing while the copilot is closed (components/copilot/pill.tsx).
   const report = copilot?.report;
   const activity = currentActivity(agent.messages);
   useEffect(() => {
@@ -629,7 +627,8 @@ function CopilotConversation({
               panel ? "to-sidebar" : "to-background",
             )}
           />
-          <div className="relative mx-auto max-w-2xl">
+          {/* In the panel and the floating card the composer spans the card, lined up with the messages above it. */}
+          <div className={cn("relative mx-auto", panel ? "max-w-3xl" : "max-w-2xl")}>
             {slash !== null && (
               <SkillMenu
                 skills={slashSkills}
@@ -856,8 +855,6 @@ function PanelWelcome({ page, roleplay, onStart }: { page: CopilotPage | null; r
   );
 }
 
-const AREA_ICONS = { twin: Brain, roleplay: MessagesSquare, persona: PersonaIcon, people: UsersIcon } as const;
-
 /** A heading whose words rise in one after another (as the website widget's do): it reads as being said, once. */
 function RisingWords({ text, className }: { text: string; className?: string }) {
   return (
@@ -873,42 +870,41 @@ function RisingWords({ text, className }: { text: string; className?: string }) 
 }
 
 /**
- * Home, the full-page copilot with nothing said yet: the four main ways in for what this org uses, as cards. A card
- * fills the composer (it doesn't send), so the trainer adds the specifics.
+ * Home, the full-page copilot with nothing said yet. Lined up with the composer's left edge and sitting just above it
+ * (as the panel's welcome does), with the four main ways in for what this org uses as plain text, not cards: a title,
+ * a quiet hint, and an arrow that comes in on hover. One fills the composer (it doesn't send), for the specifics.
  */
 function HomeWelcome({ roleplay, onStart }: { roleplay: boolean; onStart: (text: string) => void }) {
   return (
-    <div className="my-auto flex w-full flex-col items-center gap-8 py-8">
-      <div className="flex flex-col items-center gap-3 text-center">
-        <Image src="/trainertwin-mark.svg" alt="" width={30} height={23} priority className="animate-copilot-chip" />
+    <div className="mx-auto mt-auto flex w-full max-w-2xl flex-col gap-8 px-1 pb-4">
+      <div className="flex flex-col gap-3">
+        <Image src="/trainertwin-mark.svg" alt="" width={26} height={20} priority className="animate-copilot-chip" />
         <RisingWords text="What should we work on?" className="text-2xl font-semibold tracking-title text-balance sm:text-3xl" />
-        <p className="animate-copilot-chip max-w-md text-sm leading-6 text-muted-foreground [animation-delay:220ms]">
+        <p className="animate-copilot-chip max-w-lg text-sm leading-6 text-muted-foreground [animation-delay:220ms]">
           {roleplay
             ? "Build and update twin skills and role plays from your knowledge, set them up, and create personas. Type / for skills, or pick Files to work from."
             : "Build and update your twin’s skills from your knowledge, and set your twin up. Type / for skills, or pick Files to work from."}
         </p>
       </div>
-      <ul className="grid w-full max-w-2xl grid-cols-1 gap-2.5 sm:grid-cols-2" aria-label="Ways to start">
-        {homeStarters({ roleplay }).map((starter, index) => {
-          const Icon = AREA_ICONS[starter.area];
-          return (
-            <li key={starter.text} className="animate-copilot-chip [animation-delay:calc(260ms+var(--i)*50ms)]" style={{ "--i": index } as CSSProperties}>
-              <button
-                type="button"
-                onClick={() => onStart(starter.text)}
-                className="group/card flex h-full w-full items-start gap-3 rounded-tt-md border border-card-border bg-card p-3.5 text-left shadow-card outline-none transition-[translate,box-shadow,border-color] duration-200 ease-(--ease-studio) hover:-translate-y-0.5 hover:border-border hover:shadow-elevation-2 focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <span className="grid size-8 shrink-0 place-items-center rounded-tt-sm bg-(--tone-control) text-(--text-secondary) transition-colors duration-200 group-hover/card:text-brand">
-                  <Icon className="size-4" aria-hidden />
-                </span>
-                <span className="flex min-w-0 flex-col gap-0.5">
-                  <span className="text-sm font-medium text-foreground">{starter.text}</span>
-                  <span className="text-xs text-muted-foreground">{starter.hint}</span>
-                </span>
-              </button>
-            </li>
-          );
-        })}
+      <ul className="grid grid-cols-1 gap-x-10 gap-y-1 sm:grid-cols-2" aria-label="Ways to start">
+        {homeStarters({ roleplay }).map((starter, index) => (
+          <li key={starter.text} className="animate-copilot-chip [animation-delay:calc(260ms+var(--i)*50ms)]" style={{ "--i": index } as CSSProperties}>
+            <button
+              type="button"
+              onClick={() => onStart(starter.text)}
+              className="group/start -mx-2 flex w-[calc(100%+1rem)] flex-col gap-0.5 rounded-tt-sm px-2 py-2.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <span className="flex items-center gap-1.5 text-body text-(--text-secondary) transition-colors duration-150 group-hover/start:text-foreground">
+                {starter.text}
+                <ArrowRight
+                  aria-hidden
+                  className="size-3.5 -translate-x-1 text-brand opacity-0 transition-[opacity,translate] duration-200 ease-(--ease-studio) group-hover/start:translate-x-0 group-hover/start:opacity-100 group-focus-visible/start:translate-x-0 group-focus-visible/start:opacity-100"
+                />
+              </span>
+              <span className="text-xs text-muted-foreground">{starter.hint}</span>
+            </button>
+          </li>
+        ))}
       </ul>
     </div>
   );
