@@ -46,10 +46,13 @@ function record(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
-function questionCode(value: unknown): { language: string; content: string } | undefined {
+/** The code shown with a question: { language, content }, or a plain string (shown as JavaScript). */
+function questionCode(value: unknown, language?: unknown): { language: string; content: string } | undefined {
+  const fallback = typeof language === "string" && language.trim() ? language.trim() : "javascript";
+  if (typeof value === "string") return value.trim() ? { language: fallback, content: value } : undefined;
   const code = record(value);
-  return code && typeof code.language === "string" && typeof code.content === "string"
-    ? { language: code.language, content: code.content }
+  return code && typeof code.content === "string" && code.content.trim()
+    ? { language: typeof code.language === "string" && code.language.trim() ? code.language : fallback, content: code.content }
     : undefined;
 }
 export function resolveCodeSurfaceId(source: Record<string, unknown>): string | undefined {
@@ -139,7 +142,7 @@ export function parseAgentSurfaceMessage(value: unknown):
           })
         : [];
       const questionId = String(event.questionId ?? event.eventId ?? "current");
-      return { surface: { key: `agent-choice-${questionId}`, questionId, tool: "choice", question: typeof event.question === "string" ? event.question : "Choose an answer", options, code: questionCode(event.code) } };
+      return { surface: { key: `agent-choice-${questionId}`, questionId, tool: "choice", question: typeof event.question === "string" ? event.question : "Choose an answer", options, code: questionCode(event.code, event.language) } };
     }
     if (event.type === "open_pdf") {
       const sourceUrl = typeof event.sourceUrl === "string" ? event.sourceUrl : undefined;

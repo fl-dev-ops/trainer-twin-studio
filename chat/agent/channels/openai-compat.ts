@@ -52,7 +52,7 @@ const END_CALL_FALLBACK_GOODBYE: Record<string, string> = {
   declined: "Sorry, I have to go. Bye.",
   guard_ran_out: "Sorry, I have to go. Bye.",
   // An authored practice that reached its ending: no verdict either way (the skill's own close follows when given).
-  completed: "Okay, thank you.",
+  completed: "Thank you, that's all for today.",
 };
 
 /** A spoken close. "buyer" does not match. Used when the model says goodbye and forgets end_call. */

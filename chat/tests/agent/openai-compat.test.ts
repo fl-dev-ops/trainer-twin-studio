@@ -136,7 +136,7 @@ for (const [name, outcome, result, spoken, expected] of [
   ["client agrees", "agreed", "ended", "", "Okay, speak then. Bye for now."],
   ["client declines", "declined", "ended", "", "Sorry, I have to go. Bye."],
   ["client runs out of patience", "guard_ran_out", "ended", "", "Sorry, I have to go. Bye."],
-  ["authored practice completes", "completed", "ended", "", "Okay, thank you."],
+  ["authored practice completes", "completed", "ended", "", "Thank you, that's all for today."],
   ["the model gives its own goodbye", "completed", "ended", "Thanks for walking me through it.", "Thanks for walking me through it."],
   ["the tool is disabled", "completed", "disabled", "", ""],
   ["closing the session fails", "completed", "failed", "", ""],

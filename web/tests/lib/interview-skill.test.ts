@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { interviewSkillPackage } from "@/lib/interview-skill";
+import { interviewCharacter, interviewSkillPackage, questionItem } from "@/lib/interview-skill";
 import { scenarioManifestSchema, skillBody, stepGoal } from "@/lib/scenario-ingest";
 
 // Synthetic interviewer-shaped fixtures with the same structure as the inventoried interviews (no real content).
@@ -47,12 +47,15 @@ test("a résumé interview ports verbatim into a valid authored skill with its u
   });
   // Authored text is carried verbatim.
   expect(pkg.skill).toContain("Challenge every number.\n\\- What was the baseline?");
-  for (const line of ["- One question at a time.", "Begin with: Hi, let's look at one number on your résumé.", "Ask 4 main questions",
-    "Up to 2 follow-up questions per main question", "at most 12 of your turns", "★ baseline: Value before the change.", "  - causal link: Why the work caused it.",
-    "Length: 6–10 of your turns.", "Open this stage with: Pick your strongest number.", "- strong: Fully explained.", "untested, partial, sufficient",
-    "Focus on baseline and method.", "At most 45 words per turn. One focal ask per turn. At most 1 question mark per turn.", "Use read_document", "end the call"]) {
+  for (const line of ["- One question at a time.", "Begin with: Hi, let's look at one number on your résumé.", "4 main questions, each on a different claim",
+    "Follow-ups: at most 2 per main question", "within about 12 of your turns", "★ baseline: Value before the change.", "  - causal link: Why the work caused it.",
+    "Open this stage with (your first main question): Pick your strongest number.", "- strong: Fully explained.", "untested, partial, sufficient",
+    "Focus on baseline and method.", "At most 45 words per turn. One focal ask per turn. At most 1 question mark per turn.",
+    "surface open_pdf", "read_document", "surface highlight_document", "end_call({ outcome: \"completed\" })"]) {
     expect(pkg.skill).toContain(line);
   }
+  // Runtime config labels are not prompt text; turn bounds no longer compete with the question counts.
+  for (const gone of ["Length:", "Grounding:", "Claims:", "Moves you may use", "Knowledge focus"]) expect(pkg.skill).not.toContain(gone);
   expect(pkg.skill.startsWith("---\nname: \"Impact Check\"\n")).toBe(true);
   expect(pkg.skill).toContain('ported_from: "impact-check@v7"');
   // The step goal is readable the way the runtime reads authored skills.
@@ -74,14 +77,23 @@ test("a résumé interview ports verbatim into a valid authored skill with its u
 
 test("a technical interview carries its question mix and topics, and switches on matching workspace tools", () => {
   const pkg = interviewSkillPackage(technicalInterview);
-  expect(pkg.skill).toContain("Main questions: 1 multiple-choice, 2 coding, 2 verbal.");
-  expect(pkg.skill).toContain("Draw questions only from these topics: closures, event-loop.");
-  expect(pkg.skill).toContain("Up to 3 follow-up questions per main question");
+  // The legacy planner's order and exact counts.
+  expect(pkg.skill).toContain("5 main questions, in this order: 2 verbal, then 1 multiple-choice, then 2 coding. Exactly these counts");
+  expect(pkg.skill).toContain("Topics, only these: closures, event-loop.");
+  expect(pkg.skill).toContain("Follow-ups: at most 3 per main question; after the last one, move to the next main question");
+  expect(pkg.skill).toContain("When the question type changes, say so");
+  // One flow per type used, naming the exact tools; types not used have none.
+  expect(pkg.skill).toContain("**Verbal.**");
+  expect(pkg.skill).toMatch(/\*\*Multiple choice\.\*\* surface open_choice .*code as \{ language, content \}.*never read the options.*get_choice_state.*isCorrect.*highlight_choice/);
+  expect(pkg.skill).toMatch(/\*\*Coding\.\*\* surface open_code_editor .*readOnly: false.*read_code_range.*highlight_code/);
+  expect(pkg.skill).not.toContain("**Code output.**");
+  expect(pkg.skill).not.toContain("**System design.**");
+  expect(pkg.skill).toContain("surface close_surface first");
   expect(pkg.skill).not.toContain("## Résumé");
   expect(pkg.settings.before).toMatchObject({ preUpload: false, preUploadRequired: false });
   expect(pkg.settings.tools).toEqual({ codeEditor: true, choice: true, canvas: false, preview: false, knowledge: false });
   // No questions given: the AI still states the problem first.
-  expect(pkg.skill).toContain("state the exact problem they will work on");
+  expect(pkg.skill).toContain("State the exact problem before you ask for an answer.");
 });
 
 test("bank questions become searchable items and the skill says to state the problem first; system design opens the whiteboard", () => {
@@ -89,17 +101,20 @@ test("bank questions become searchable items and the skill says to state the pro
     { id: "q1", text: "Design a news feed.", spokenText: "Design a news feed system.", questionType: "system-design", difficulty: "hard", topicSlugs: ["system-design"], keyPoints: ["fan-out", "pagination"] },
     { id: "q2", text: "What prints?", questionType: "code-output", code: { language: "js", content: "console.log(1)" } },
   ];
+  // An MCQ item carries its bank answer key for open_choice's correctOptionId.
+  const mcq = questionItem({ id: "q3", text: "Given the code shown above, what is logged?", questionType: "mcq", code: { language: "javascript", content: "console.log('A')" }, options: [{ id: "A", text: "A" }, { id: "B", text: "B" }], correctOptionId: "A" });
+  expect(mcq.context).toContain("Correct option (for you only; pass it as correctOptionId, never say it): A");
+  expect(mcq.text).toContain("Code (javascript):\nconsole.log('A')");
   const pkg = interviewSkillPackage({ ...technicalInterview, data: { ...technicalInterview.data, config: { interview: { type: "technical", topic_slugs: ["system-design"], question_counts: { "system-design": 1 } } } } }, { questions });
   // Only questions of the interview's types are kept.
   expect(pkg.items).toHaveLength(1);
   expect(pkg.items[0]).toMatchObject({ id: expect.stringMatching(/^question-[0-9a-f]{16}$/), role: "trainer", metadata: { kind: "question", source: "question-bank" } });
   expect(pkg.items[0].text).toContain("Say it as: Design a news feed system.");
   expect(pkg.items[0].context).toMatch(/system-design question\. hard difficulty\. topics: system-design\. What a strong answer covers \(for you only; never say it\): fan-out; pagination/);
-  expect(pkg.skill).toContain("## Questions");
-  expect(pkg.skill).toContain("call scenario_examples");
-  expect(pkg.skill).toContain("state the problem plainly");
-  expect(pkg.skill).toContain("## Whiteboard");
-  expect(pkg.skill).toContain('surface({ action: "open_whiteboard" })');
+  expect(pkg.skill).toContain("1 main question, in this order: 1 system-design.");
+  expect(pkg.skill).toContain("scenario_examples({ situation:");
+  expect(pkg.skill).toContain("ask it as written");
+  expect(pkg.skill).toMatch(/\*\*System design\.\*\* surface open_whiteboard \{ questionId, question \}.*read_canvas_scene.*at least two follow-ups.*highlight_whiteboard/);
   expect(pkg.settings.tools.canvas).toBe(true);
 });
 
@@ -121,6 +136,18 @@ test("the same agent always renders the same package (idempotent publication), a
   expect(interviewSkillPackage(resumeInterview).skill).toBe(interviewSkillPackage(resumeInterview).skill);
   const edited = { ...resumeInterview, data: { ...resumeInterview.data, instruction: "Challenge every number twice." } };
   expect(interviewSkillPackage(edited).skill).not.toBe(interviewSkillPackage(resumeInterview).skill);
+});
+
+test("code-output keeps its one reveal; the interviewer character carries identity only", () => {
+  const pkg = interviewSkillPackage({ ...technicalInterview, data: { ...technicalInterview.data, config: { interview: { type: "technical", topic_slugs: ["closures"], question_counts: { "code-output": 1 }, follow_ups_per_main_question: 1 } } } });
+  expect(pkg.skill).toMatch(/\*\*Code output\.\*\* surface open_code_editor .*readOnly: true.*Now run it.*highlight_code.*the only answer you ever reveal/);
+  expect(pkg.skill).toContain("One exception: the code-output reveal above.");
+  const character = interviewCharacter({ personaName: "Asha", interviewName: "Concepts", objective: "Probe conceptual understanding" });
+  expect(character).toContain('You are Asha, interviewing the candidate in "Concepts": Probe conceptual understanding.');
+  for (const procedure of ["surface", "highlight", "end_call", "main questions"]) expect(character).not.toContain(procedure);
+  // A trainer's own character template (from their recorded interviews) fills in only the interview's name and goal.
+  const vasanth = interviewCharacter({ personaName: "Vasanth", interviewName: "Concepts", objective: "Probe conceptual understanding", template: "In \"{{interview}}\": {{objective}} Close: \"Nice talking to you, <their name>.\"" });
+  expect(vasanth).toBe('In "Concepts": Probe conceptual understanding. Close: "Nice talking to you, <their name>."\n');
 });
 
 test("refuses agents that already run a skill or have no stages", () => {
