@@ -12,7 +12,7 @@ export default function EditRoleplayRoute() {
     Promise.all([api.roleplay.builder.get.query({ slug: id }), api.roleplay.builder.personas.query(), api.roleplay.builder.personaPool.query({ slug: id })]),
   );
   // Every role play: the simple edit page (basics, persona, read-only script, settings).
-  if (saved.brief) return <RoleplayBriefEditPage slug={saved.slug} brief={saved.brief} before={saved.before} hasIntroVideo={saved.hasIntroVideo} tools={saved.tools} personas={personas} pool={pool} />;
+  if (saved.brief) return <RoleplayBriefEditPage slug={saved.slug} brief={saved.brief} before={saved.before} introVideoUrl={saved.introVideoUrl} tools={saved.tools} personas={personas} pool={pool} />;
   if (!saved.builder) pageNotFound();
   return <RoleplayBuilderPage slug={saved.slug} initial={saved.builder} character={saved.character} before={saved.before} tools={saved.tools} personas={personas} />;
 }

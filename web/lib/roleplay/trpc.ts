@@ -1,4 +1,4 @@
-import { listAgentBriefs } from "@/lib/specs";
+import { listAgentBriefs, listScenarioIntroVideos } from "@/lib/specs";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
@@ -335,18 +335,14 @@ const builderRouter = t.router({
     const agent = await findRoleplay(ctx.user.orgId, input.slug);
     const brief = briefOf(agent.data);
     const builder = roleplayBuilderFrom(agent.data);
-    const before = beforeSettings(agent.data);
-    const data = asRecord(agent.data);
-    const intro = data.introVideoUpload === undefined
-      ? (before.introVideoUrl === undefined ? data.introVideo : before.introVideoUrl)
-      : data.introVideoUpload;
+    const introVideos = await listScenarioIntroVideos(ctx.user.orgId, [agent.slug]);
     return {
       slug: agent.slug,
       builder: builder ? { ...builder, persona: agent.persona.slug } : null,
       // The main persona's character for this role play (the builder edits it with the persona it picks).
       character: (await db.agentPersona.findFirst({ where: { agentId: agent.id, persona: { slug: agent.persona.slug } }, select: { character: true } }))?.character ?? "",
-      before,
-      hasIntroVideo: Boolean(text(intro)),
+      before: beforeSettings(agent.data),
+      introVideoUrl: introVideos[agent.slug] ?? null,
       tools: toolSettings(agent.data),
       // A role play the copilot wrote: its core fields (editable here) and its script (changed through the copilot).
       brief: brief ? {

@@ -84,11 +84,11 @@ export function ScriptView({ script }: { script: Script }) {
  * the few things a trainer changes by hand; Script is read-only and changed by asking the copilot; Settings save as
  * they change.
  */
-export function RoleplayBriefEditPage({ slug, brief, before: initialBefore, hasIntroVideo: initialHasIntroVideo, tools: initialTools, personas, pool }: {
+export function RoleplayBriefEditPage({ slug, brief, before: initialBefore, introVideoUrl, tools: initialTools, personas, pool }: {
   slug: string;
   brief: Brief;
   before: BeforeSettings;
-  hasIntroVideo: boolean;
+  introVideoUrl: string | null;
   tools: ToolSettings;
   personas: Persona[];
   /** Personas available to play this role in new sessions. */
@@ -101,7 +101,6 @@ export function RoleplayBriefEditPage({ slug, brief, before: initialBefore, hasI
   const [saving, setSaving] = useState(false);
   const [change, setChange] = useState("");
   const [before, setBefore] = useState(initialBefore);
-  const [hasIntroVideo, setHasIntroVideo] = useState(initialHasIntroVideo);
   const [introVideoFile, setIntroVideoFile] = useState<File | null>(null);
   const [savingVideo, setSavingVideo] = useState(false);
   const introVideoInput = useRef<HTMLInputElement>(null);
@@ -148,7 +147,6 @@ export function RoleplayBriefEditPage({ slug, brief, before: initialBefore, hasI
         uploadId = upload.uploadId;
       }
       await roleplayClient.builder.saveIntroVideo.mutate({ slug, uploadId });
-      setHasIntroVideo(uploadId !== null);
       clearIntroVideoFile();
       toast.success(file ? "Intro video saved" : "Intro video removed");
       refresh();
@@ -267,21 +265,28 @@ export function RoleplayBriefEditPage({ slug, brief, before: initialBefore, hasI
               <div className={SECTION_CARD}>
                 <SectionRow
                   title={<label htmlFor="rp-intro-video">Intro video</label>}
-                  detail={<span id="rp-intro-video-help">Choose a short MP4 that works for every persona (up to 100 MB). {hasIntroVideo ? "A video is saved." : "No video is saved."}</span>}
+                  detail={<span id="rp-intro-video-help">{introVideoUrl
+                    ? "Learners see this video before the call. Choose a new MP4 (up to 100 MB) to replace it."
+                    : "No intro video yet. Choose a short MP4 (up to 100 MB) that works for every persona."}</span>}
                   className="sm:flex-col sm:items-stretch sm:gap-3"
                 >
-                  <form className="flex w-full flex-wrap items-center gap-2" onSubmit={(event) => {
-                    event.preventDefault();
-                    if (introVideoFile) void saveIntroVideo(introVideoFile);
-                  }}>
-                    <Input ref={introVideoInput} id="rp-intro-video" type="file" accept=".mp4,video/mp4" aria-describedby="rp-intro-video-help" disabled={savingVideo} onChange={(event) => setIntroVideoFile(event.target.files?.[0] ?? null)} className="flex-1" />
-                    {introVideoFile ? (
-                      <Button type="button" variant="ghost" disabled={savingVideo} onClick={clearIntroVideoFile}>Cancel</Button>
-                    ) : hasIntroVideo ? (
-                      <Button type="button" variant="ghost" disabled={savingVideo} onClick={() => void saveIntroVideo(null)}>Remove video</Button>
+                  <div className="flex min-w-0 flex-1 flex-col gap-3">
+                    {introVideoUrl ? (
+                      <video src={introVideoUrl} controls playsInline preload="metadata" aria-label="Current intro video" className="aspect-video w-full max-w-sm rounded-md bg-black object-contain" />
                     ) : null}
-                    <Button type="submit" variant="secondary" disabled={!introVideoFile} loading={savingVideo && Boolean(introVideoFile)}>Save video</Button>
-                  </form>
+                    <form className="flex w-full flex-wrap items-center gap-2" onSubmit={(event) => {
+                      event.preventDefault();
+                      if (introVideoFile) void saveIntroVideo(introVideoFile);
+                    }}>
+                      <Input ref={introVideoInput} id="rp-intro-video" type="file" accept=".mp4,video/mp4" aria-describedby="rp-intro-video-help" disabled={savingVideo} onChange={(event) => setIntroVideoFile(event.target.files?.[0] ?? null)} className="min-w-0 flex-1" />
+                      {introVideoFile ? (
+                        <Button type="button" variant="ghost" disabled={savingVideo} onClick={clearIntroVideoFile}>Cancel</Button>
+                      ) : introVideoUrl ? (
+                        <Button type="button" variant="ghost" disabled={savingVideo} onClick={() => void saveIntroVideo(null)}>Remove video</Button>
+                      ) : null}
+                      <Button type="submit" variant="secondary" disabled={!introVideoFile} loading={savingVideo && Boolean(introVideoFile)}>Save video</Button>
+                    </form>
+                  </div>
                 </SectionRow>
                 <SectionRow title="Call length" detail="The call ends at this point, with the client's goodbye.">
                   <CallLengthSelect value={before.callMinutes} onChange={(minutes) => saveSettings({ before: { ...before, callMinutes: minutes } }, minutes ? `Calls now end at ${minutes} minutes` : "Call length limit removed")} />

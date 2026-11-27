@@ -80,9 +80,10 @@ describe.skipIf(!localMinutesDb)("Module 4 role-play saves (real Postgres locks)
     const { listScenarioIntroVideos } = await import("@/lib/specs");
     expect(await listScenarioIntroVideos(f.org.id, [slug])).toEqual({ [slug]: "https://example.com/intro.mp4" });
     expect(signGet).toHaveBeenCalledWith(key);
+    expect((await caller().builder.get({ slug })).introVideoUrl).toBe("https://example.com/intro.mp4");
     await caller().builder.saveIntroVideo({ slug, uploadId: null });
     expect(await listScenarioIntroVideos(f.org.id, [slug])).toEqual({ [slug]: null });
-    expect((await caller().builder.get({ slug })).hasIntroVideo).toBe(false);
+    expect((await caller().builder.get({ slug })).introVideoUrl).toBeNull();
   });
 
   test("saved HTTPS links continue to work for role plays created before the uploader", async () => {
