@@ -12,6 +12,7 @@ import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemMedia, 
 import { Progress, ProgressLabel } from "@/components/ui/progress";
 import { UserAvatar } from "@/components/user-avatar";
 import { dashRoute } from "@/lib/routes";
+import { LibraryCards, RoleplayCard, SessionCard, TwinCard } from "@/components/copilot/cards";
 
 /**
  * What the copilot read, shown with the studio's own pieces (phase 3.1, plans/copilot-everywhere.md): under a finished
@@ -31,14 +32,29 @@ const session = z.object({
   mode: z.enum(["chat", "voice"]).optional(),
   startedAt: z.string().nullable(),
   minutes: z.number().nullable(),
-  report: z.enum(["ready", "generating", "none"]),
+  // A list row says where the report is; a full read (session_read) carries the report itself in its place.
+  report: z.union([z.enum(["ready", "generating", "none"]), z.record(z.string(), z.unknown())]),
   score: z.number().optional(),
   tags: z.array(z.string()).optional(),
   learnerRating: z.number().optional(),
 });
 type Session = z.infer<typeof session>;
 
+const libraryItem = z.object({
+  slug: z.string(),
+  name: z.string(),
+  kind: z.string(),
+  version: z.number().optional(),
+  description: z.string().nullable().optional(),
+  archived: z.boolean().optional(),
+});
+const library = z.object({ items: z.array(libraryItem) });
+
 const SCHEMAS = {
+  twin_list: library,
+  roleplay_list: library,
+  twin_read: libraryItem,
+  roleplay_read: libraryItem,
   session_list: z.object({ days: z.number(), sessions: z.array(session), nextOffset: z.number().optional() }),
   session_read: session.extend({ hasRecording: z.boolean().optional() }),
   usage_read: z.object({
@@ -79,7 +95,19 @@ export function CopilotReadView({ name, output }: { name: string; output: unknow
       return list.sessions.length ? <SessionList sessions={list.sessions} more={list.nextOffset !== undefined} /> : null;
     }
     case "session_read":
-      return <SessionCard session={data as z.infer<typeof SCHEMAS.session_read>} />;
+      return <Frameless><SessionCard session={data as z.infer<typeof SCHEMAS.session_read>} /></Frameless>;
+    case "twin_list":
+    case "roleplay_list": {
+      // The main twin first, as on Twin agents; then the rest in the studio's order.
+      const items = (data as z.infer<typeof library>).items
+        .filter((item) => !item.archived)
+        .sort((a, b) => Number(b.kind === "main-twin") - Number(a.kind === "main-twin"));
+      return items.length ? <Frameless><LibraryList items={items} kind={name === "twin_list" ? "twin" : "roleplay"} /></Frameless> : null;
+    }
+    case "twin_read":
+      return <Frameless><TwinCard item={data as z.infer<typeof libraryItem>} /></Frameless>;
+    case "roleplay_read":
+      return <Frameless><RoleplayCard item={data as z.infer<typeof libraryItem>} /></Frameless>;
     case "usage_read":
       return <UsageView usage={data as z.infer<typeof SCHEMAS.usage_read>} />;
     case "calibration_list": {
@@ -91,6 +119,18 @@ export function CopilotReadView({ name, output }: { name: string; output: unknow
       return list.team.length ? <TeamList team={list.team} /> : null;
     }
   }
+}
+
+/** Cards bring their own surface: they only need setting in under the step line, like the framed views. */
+function Frameless({ children }: { children: React.ReactNode }) {
+  return <div className="animate-copilot-chip mt-1 mb-2 ml-6">{children}</div>;
+}
+
+/** Twins or role plays the copilot listed: the first three as cards, the rest on request. */
+function LibraryList({ items, kind }: { items: z.infer<typeof libraryItem>[]; kind: "twin" | "roleplay" }) {
+  const [all, setAll] = useState(false);
+  const shown = all ? items : items.slice(0, 3);
+  return <LibraryCards items={shown} kind={kind} more={items.length - shown.length} onMore={() => setAll(true)} />;
 }
 
 /** The frame every view sits in: the panel's own surface, set in from the step line it belongs to. */
@@ -167,37 +207,6 @@ function SessionList({ sessions, more }: { sessions: Session[]; more: boolean })
 }
 
 const KIND_LABEL: Record<string, string> = { twin: "Twin", roleplay: "Role play", bot: "Website bot" };
-
-/** The session the copilot read: who, what, when, its badges and topics, and the way to its page. */
-function SessionCard({ session: s }: { session: z.infer<typeof SCHEMAS.session_read> }) {
-  const length = minutesText(s.minutes);
-  return (
-    <Frame label="Session the copilot read">
-      <Item size="row" render={<Link href={sessionHref(s)} />}>
-        <ItemMedia>
-          <UserAvatar user={{ name: s.learner }} size="lg" />
-        </ItemMedia>
-        <ItemContent>
-          <ItemTitle>{s.learner}</ItemTitle>
-          <ItemDescription>
-            {KIND_LABEL[s.kind]}: {s.agent.name}
-            {s.startedAt ? <> · <span className="whitespace-nowrap"><SessionTime iso={s.startedAt} /></span></> : null}
-            {length ? <> · <span className="whitespace-nowrap">{length}</span></> : null}
-            {s.mode ? ` · ${s.mode}` : ""}
-          </ItemDescription>
-        </ItemContent>
-        <ItemActions>
-          <SessionBadge session={s} />
-        </ItemActions>
-      </Item>
-      {s.tags?.length ? (
-        <div className="flex flex-wrap gap-1.5 border-t py-2.5">
-          {s.tags.map((tag) => <Badge key={tag} variant="outline">{tag}</Badge>)}
-        </div>
-      ) : null}
-    </Frame>
-  );
-}
 
 /** Minutes as a share of the total: name, minutes, and a bar. */
 function UsageRows({ rows, total }: { rows: { key: string; name: string; hint: string; minutes: number }[]; total: number }) {

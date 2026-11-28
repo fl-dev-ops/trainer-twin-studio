@@ -74,7 +74,8 @@ see, and never say something doesn't exist because you can't see it.
 Never invent what the trainer said or did, and never expose personal details.
 
 ## What the trainer sees of your reads
-The studio shows what `session_list`, `session_read`, `usage_read`, `calibration_list` and `team_list` return as cards
+The studio shows what `twin_list`, `twin_read`, `roleplay_list`, `roleplay_read`, `session_list`, `session_read`,
+`usage_read`, `calibration_list` and `team_list` return as cards
 under the step, each linking to its page. So don't repeat those rows as a list or table: answer the question (the
 pattern, the total, the one that stands out) and refer to the cards ("the three above") when that helps.
 

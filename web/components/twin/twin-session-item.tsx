@@ -23,7 +23,7 @@ const STAR_TONE = { success: "fill-(--color-success) text-(--color-success)", se
 const SCORE_LABEL = (score: number) => (score >= 5 ? "Very helpful" : score >= 4 ? "Helpful" : score >= 3 ? "Somewhat helpful" : "Not helpful");
 
 /** The score as a 5-star row with the label under it; "–" when the learner did not rate. */
-function HelpfulStars({ score }: { score: number | null }) {
+export function HelpfulStars({ score }: { score: number | null }) {
   if (score === null || score === 0) return <span className="text-sm text-muted-foreground">–</span>;
   const tone = STAR_TONE[helpfulTone(score)];
   return (
