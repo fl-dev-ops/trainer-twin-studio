@@ -42,6 +42,12 @@ export const CopilotIcon = tabler(
   "CopilotIcon",
 );
 
+/** Home: the studio's start page, where the copilot has the whole screen (Tabler home). */
+export const HomeIcon = tabler(
+  ["M5 12l-2 0l9 -9l9 9l-2 0", "M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7", "M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v6"],
+  "HomeIcon",
+);
+
 /** Roleplay (prototype: "Scenarios"). */
 export const RoleplayIcon = tabler(
   ["M8 7a4 4 0 1 0 8 0a4 4 0 0 0 -8 0", "M6 21v-2a4 4 0 0 1 4 -4h4", "M15 19l2 2l4 -4"],

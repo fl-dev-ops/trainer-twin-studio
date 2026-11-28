@@ -1,7 +1,7 @@
 import { defineTool } from "eve/tools";
 import { always } from "eve/tools/approval";
 import { z } from "zod";
-import { proposedInput } from "../lib/changes";
+import { proposedInput, suggestedNames } from "../lib/changes";
 import { studioResult } from "../lib/studio";
 
 // The Personas page's form (web/lib/persona.ts personaInputSchema): the studio checks it again.
@@ -25,7 +25,7 @@ export default defineTool({
   approval: {
     request: always(),
     prompt: ({ input }) => {
-      const suggested = input?.proposed?.length ? ` Suggested by the copilot: ${input.proposed.join(", ")}.` : "";
+      const suggested = input?.proposed?.length ? ` Suggested by the copilot: ${suggestedNames(input.proposed)}.` : "";
       const voice = input?.voiceId ? ` with the voice ${input.voiceLabel ?? input.voiceId}` : " with no voice yet";
       return `Create the persona "${input?.name ?? ""}" (${input?.role ?? ""})${voice}?${suggested}`;
     },

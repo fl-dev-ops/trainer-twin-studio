@@ -12,7 +12,9 @@ if (!url) throw new Error("DATABASE_URL in .env must be a local database (localh
 const name = new URL(url).pathname.slice(1);
 const server = new URL(url);
 server.pathname = "/postgres";
-server.search = "";
+// Keep only how to reach the server (a socket directory, ?host=/tmp), not options meant for the app's database.
+const socket = server.searchParams.get("host");
+server.search = socket ? `?host=${encodeURIComponent(socket)}` : "";
 const client = new Client({ connectionString: server.toString() });
 await client.connect();
 const exists = await client.query("SELECT 1 FROM pg_database WHERE datname = $1", [name]);

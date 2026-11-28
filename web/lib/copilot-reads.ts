@@ -199,6 +199,8 @@ export async function listCalibrations(orgId: string, input: { twin?: string; of
  * Minutes used in the last 7, 30 or 90 days: by twin / role play, and by person (learners' calls, and the team's own
  * calls). Only usage: no balance, grants or credit movements (billing is out of reach), no ledger notes, no emails.
  */
+const WEBSITE_VISITORS = "Website visitors";
+
 export async function readUsage(orgId: string, days: 7 | 30 | 90 = 30) {
   const since = new Date(Date.now() - days * DAY_MS);
   const [byAgent, byPerson] = await Promise.all([
@@ -229,7 +231,8 @@ export async function readUsage(orgId: string, days: 7 | 30 | 90 = 30) {
       minutes: minutes(row.seconds),
     })),
     byPerson: byPerson.map((row) => ({
-      name: (row.userId && nameOf.get(row.userId)) || UNNAMED_LEARNER,
+      // Minutes with no account behind them are website visitors' calls on a public bot, counted together.
+      name: row.userId ? nameOf.get(row.userId) || UNNAMED_LEARNER : WEBSITE_VISITORS,
       as: row.type === "usage" ? "learner" : "team",
       minutes: minutes(row.seconds),
     })),

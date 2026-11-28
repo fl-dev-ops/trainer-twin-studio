@@ -334,7 +334,8 @@ export async function runCopilotStudio(actor: Actor, input: CopilotStudioInput, 
     }
 
     case "createPersona": {
-      const { action: _action, ...fields } = input;
+      const { action, ...fields } = input;
+      void action;
       try {
         const created = await d.savePersona(orgId, fields);
         return { ok: true, slug: created.slug, name: fields.name, role: fields.role, voice: fields.voiceId ?? null };
@@ -345,7 +346,8 @@ export async function runCopilotStudio(actor: Actor, input: CopilotStudioInput, 
     }
 
     case "updatePersona": {
-      const { action: _action, slug: personaSlug, ...patch } = input;
+      const { action, slug: personaSlug, ...patch } = input;
+      void action;
       const existing = await d.db.persona.findFirst({ where: { orgId, slug: personaSlug }, select: { name: true, isOwn: true, data: true } });
       if (!existing) throw new ScenarioIngestError(`Persona "${personaSlug}" was not found`, 404);
       if (existing.isOwn) throw new ScenarioIngestError("The trainer's own persona is edited in Personas, not from the copilot", 403);

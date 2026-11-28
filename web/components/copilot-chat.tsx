@@ -98,6 +98,7 @@ import {
 import { type CopilotPage, copilotPageOf, homeStarters, startersFor } from "@/lib/copilot-page";
 import { dashRoute } from "@/lib/routes";
 import { cn } from "@/lib/utils";
+import { useRefresh } from "@/lib/use-refresh";
 
 const TOOL_TITLES: Record<string, string> = {
   eve__skill: "Load skill",
@@ -173,6 +174,8 @@ function toolPhrase(title: string, tense: "doing" | "done") {
   return `${forms[tense === "doing" ? 0 : 1]}${object ? ` ${object.charAt(0).toLowerCase()}${object.slice(1)}` : ""}`;
 }
 const toolTitle = (part: EveToolPart) => TOOL_TITLES[part.name] ?? part.label ?? part.name;
+/** The copilot's tools that change the studio (they all ask for approval): twin_update, persona_create, roleplay_publish… */
+const isWriteTool = (name: string) => /_(create|update|set|publish)$/.test(name);
 const isRunning = (state: EveToolPart["state"]) => state === "streaming" || state === "requested" || state === "running";
 
 /** What the copilot is doing right now, for the waiting line: its latest running tool, or thinking. */
@@ -377,6 +380,27 @@ function CopilotConversation({
     report?.(status, activity);
   }, [report, status, activity]);
 
+  // A change the copilot makes shows on the page beside it: when a write it was seen running finishes, the page's
+  // data reloads. Writes seen only already done (a resumed conversation) don't reload anything.
+  const refreshPage = useRefresh();
+  const pendingWrites = useRef(new Set<string>());
+  useEffect(() => {
+    let changed = false;
+    for (const message of agent.messages) {
+      for (const part of message.parts) {
+        if (part.type !== "tool" || !isWriteTool(part.name)) continue;
+        if (part.state === "completed") {
+          if (pendingWrites.current.delete(part.callId)) changed = true;
+        } else if (isRunning(part.state) || part.state === "approval" || part.state === "blocked") {
+          pendingWrites.current.add(part.callId);
+        } else {
+          pendingWrites.current.delete(part.callId);
+        }
+      }
+    }
+    if (changed) refreshPage();
+  }, [agent.messages, refreshPage]);
+
   // Opening the panel (or ⌘J on home) puts you in the composer; a first load of home doesn't steal focus.
   const focusSignal = copilot?.focusSignal ?? 0;
   useEffect(() => {
@@ -561,9 +585,12 @@ function CopilotConversation({
                   <HeaderAction label="New conversation" onClick={newConversation} disabled={busy}>
                     <Plus />
                   </HeaderAction>
-                  <HeaderAction label="Float over the page" onClick={() => copilot?.setLayout("floating")}>
-                    <PictureInPicture2 />
-                  </HeaderAction>
+                  {/* On a phone the copilot is always a full-screen sheet, so there's no layout to switch to. */}
+                  <span className="hidden md:contents">
+                    <HeaderAction label="Float over the page" onClick={() => copilot?.setLayout("floating")}>
+                      <PictureInPicture2 />
+                    </HeaderAction>
+                  </span>
                   <HeaderAction label="Open full page" href={dashRoute("/")} onClick={onExpand}>
                     <Maximize2 />
                   </HeaderAction>
@@ -993,6 +1020,39 @@ function ChatMessage({
   );
 }
 
+/**
+ * What a card asks, as the copilot's tools write it (copilot/agent/lib/changes.ts): a sentence, then one
+ * `field → value` line per change. The changes become rows, so a trainer reads what changes, not a run-on line.
+ */
+function ApprovalPrompt({ prompt }: { prompt: string }) {
+  const [head, ...rest] = prompt.split("\n");
+  const rows = rest.map((line) => {
+    const at = line.indexOf(" → ");
+    if (at < 0) return { field: "", value: line, suggested: false };
+    const value = line.slice(at + 3);
+    const suggested = value.endsWith(" (suggested)");
+    return { field: line.slice(0, at), value: suggested ? value.slice(0, -" (suggested)".length) : value, suggested };
+  }).filter((row) => row.value.trim());
+  return (
+    <div className="flex flex-col gap-2 text-sm">
+      <p>{head.replace(/:\s*$/, "")}</p>
+      {rows.length > 0 && (
+        <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 rounded-lg bg-muted/60 px-3 py-2">
+          {rows.map((row, index) => (
+            <div key={index} className="contents">
+              <dt className="text-muted-foreground first-letter:uppercase">{row.field}</dt>
+              <dd className="min-w-0 break-words">
+                {row.value}
+                {row.suggested && <span className="ml-1.5 text-xs text-muted-foreground">suggested</span>}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      )}
+    </div>
+  );
+}
+
 function ToolPartView({
   part,
   respond,
@@ -1022,19 +1082,20 @@ function ToolPartView({
             : "One decision needed"}
         </ConfirmationTitle>
         <ConfirmationRequest>
-          <p className="text-sm">{request.prompt}</p>
+          <ApprovalPrompt prompt={request.prompt} />
           {request.options && (
             <ConfirmationActions>
               {request.options.map((option) => (
                 <ConfirmationAction
                   key={option.id}
-                  variant={option.style === "primary" ? "default" : "secondary"}
+                  // eve's approval card leaves its options unstyled: Approve is the action the card is for.
+                  variant={option.style === "primary" || (request.kind === "approval" && option.id === "approve") ? "default" : "secondary"}
                   disabled={busy || answered}
                   onClick={() =>
                     reply([{ interactionId: interaction.interactionId, optionId: option.id }])
                   }
                 >
-                  {option.label}
+                  {request.kind === "approval" && option.id === "deny" ? "Decline" : option.label}
                 </ConfirmationAction>
               ))}
             </ConfirmationActions>

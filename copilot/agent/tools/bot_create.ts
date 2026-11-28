@@ -1,7 +1,7 @@
 import { defineTool } from "eve/tools";
 import { always } from "eve/tools/approval";
 import { z } from "zod";
-import { proposedInput } from "../lib/changes";
+import { proposedInput, suggestedNames } from "../lib/changes";
 import { studioResult } from "../lib/studio";
 
 const inputSchema = z.object({
@@ -17,7 +17,7 @@ export default defineTool({
   inputSchema,
   approval: {
     request: always(),
-    prompt: ({ input }) => `Create bot "${input?.name}" speaking as ${input?.persona}: ${input?.objective ?? ""}${input?.proposed?.length ? ` (suggested: ${input.proposed.join(", ")})` : ""}`,
+    prompt: ({ input }) => `Create bot "${input?.name}" speaking as ${input?.persona}: ${input?.objective ?? ""}${input?.proposed?.length ? ` (suggested: ${suggestedNames(input.proposed)})` : ""}`,
   },
   async execute({ persona, name, objective }, ctx) {
     return studioResult(ctx, { action: "createBot", persona, name, objective });

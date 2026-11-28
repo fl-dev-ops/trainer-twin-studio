@@ -5,6 +5,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import {
   BrandMark,
   BotIcon,
+  HomeIcon,
   PersonaIcon,
   RoleplayIcon,
   SessionsIcon,
@@ -157,6 +158,25 @@ export function AppSidebar({
       </SidebarHeader>
       <SidebarContent className="group-data-[collapsible=icon]:overflow-y-auto">
         <nav aria-label="Sections" className="flex flex-col gap-4">
+          {/* Home: the copilot on the whole screen. The floating button opens it beside any page; this is its own page. */}
+          <SidebarGroup>
+            <SidebarGroupContent>
+              <SidebarMenu className="gap-1">
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    render={<Link href={dashRoute("/")} />}
+                    isActive={pathname === "/"}
+                    aria-current={pathname === "/" ? "page" : undefined}
+                    tooltip="Home"
+                    variant="nav"
+                  >
+                    <HomeIcon />
+                    <span>Home</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
           {groups.map((group) => (
             <SidebarGroup key={group.label}>
               <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
