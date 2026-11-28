@@ -99,6 +99,7 @@ import { type CopilotPage, copilotPageOf, homeStarters, startersFor } from "@/li
 import { dashRoute } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 import { useRefresh } from "@/lib/use-refresh";
+import { CopilotReadView } from "@/components/copilot/views";
 
 const TOOL_TITLES: Record<string, string> = {
   eve__skill: "Load skill",
@@ -1126,6 +1127,7 @@ function ToolPartView({
   }
 
   return (
+    <>
     <div
       className="flex min-h-7 items-center gap-2 py-1 text-sm"
       title={part.state === "failed" ? part.error?.message : undefined}
@@ -1146,6 +1148,9 @@ function ToolPartView({
         <span className="min-w-0 truncate text-xs text-destructive">{part.error.message}</span>
       )}
     </div>
+    {/* What a finished read looked at, as the studio shows it (components/copilot/views.tsx). */}
+    {part.state === "completed" && <CopilotReadView name={part.name} output={part.output} />}
+    </>
   );
 }
 

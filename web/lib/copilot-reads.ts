@@ -1,5 +1,7 @@
 import { Prisma } from "@/lib/generated/prisma/client";
 import { db } from "@/lib/db";
+import { orgPeople } from "@/lib/org-people";
+import { STUDIO_ROLES } from "@/lib/roles";
 import { isSessionReport, type SessionReport } from "@/lib/session-report";
 
 /**
@@ -174,7 +176,7 @@ export async function listCalibrations(orgId: string, input: { twin?: string; of
     skip: offset,
     take: LIST_LIMIT + 1,
     select: {
-      createdAt: true, turns: true, offTurns: true, scoredAt: true, createdByUserId: true,
+      id: true, createdAt: true, turns: true, offTurns: true, scoredAt: true, createdByUserId: true,
       session: { select: { id: true, agent: { select: { name: true, slug: true } } } },
     },
   });
@@ -183,6 +185,7 @@ export async function listCalibrations(orgId: string, input: { twin?: string; of
   const nameOf = new Map(people.map((person) => [person.id, nameOnly(person.name)]));
   return {
     calibrations: page.map((row) => ({
+      id: row.id,
       sessionId: row.session.id,
       twin: { name: row.session.agent.name || row.session.agent.slug, slug: row.session.agent.slug },
       by: nameOf.get(row.createdByUserId) ?? "A team member",
@@ -233,7 +236,8 @@ export async function readUsage(orgId: string, days: 7 | 30 | 90 = 30) {
     byPerson: byPerson.map((row) => ({
       // Minutes with no account behind them are website visitors' calls on a public bot, counted together.
       name: row.userId ? nameOf.get(row.userId) || UNNAMED_LEARNER : WEBSITE_VISITORS,
-      as: row.type === "usage" ? "learner" : "team",
+      // No account: website visitors on a public bot (their minutes are the org's, but they aren't the team).
+      as: !row.userId ? "visitor" : row.type === "usage" ? "learner" : "team",
       minutes: minutes(row.seconds),
     })),
   };
@@ -241,17 +245,15 @@ export async function readUsage(orgId: string, days: 7 | 30 | 90 = 30) {
 
 /** The studio's team: names, roles and whether they're disabled. Never emails. */
 export async function listTeam(orgId: string) {
-  const members = await db.member.findMany({
-    where: { organizationId: orgId, role: { in: ["admin", "team"] } },
-    orderBy: { createdAt: "asc" },
-    select: { role: true, createdAt: true, disabledAt: true, user: { select: { name: true } } },
-  });
+  // Through the people service (the one place member lists are read, tests/lib/org-people-architecture.test.ts). It
+  // hands over emails too, and a nameless person's email as their name: only the fields below leave this function.
+  const members = await orgPeople(orgId, { roles: [...STUDIO_ROLES], includeDisabled: true });
   return {
     team: members.map((member) => ({
-      name: nameOnly(member.user.name) ?? "Unnamed member",
+      name: nameOnly(member.name) ?? "Unnamed member",
       role: member.role,
-      disabled: Boolean(member.disabledAt),
-      since: iso(member.createdAt),
+      disabled: member.disabled,
+      since: iso(member.addedAt),
     })),
   };
 }
