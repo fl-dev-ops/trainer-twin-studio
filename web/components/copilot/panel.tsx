@@ -22,7 +22,7 @@ import { CopilotFloating } from "@/components/copilot/floating";
 import { CopilotLauncher } from "@/components/copilot/pill";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { seedCopilot } from "@/lib/copilot-handoff";
-import { isCopilotHome } from "@/lib/copilot-page";
+import { type CopilotOffRoute, isCopilotHome, isCopilotOff } from "@/lib/copilot-page";
 import { dashRoute } from "@/lib/routes";
 
 /**
@@ -70,6 +70,8 @@ type CopilotPanelContext = {
   toggle: () => void;
   /** On home the full-page chat is the copilot; the panel steps aside. */
   onHome: boolean;
+  /** On a page the copilot stays off (hiddenOn): nothing of it shows. */
+  off: boolean;
   status: CopilotStatus;
   /** A reply finished while the panel was closed. */
   unread: boolean;
@@ -104,7 +106,7 @@ export function useCopilotHandoff() {
   const copilot = useCopilotPanel();
   const router = useRouter();
   return useCallback((text: string) => {
-    if (copilot && !copilot.onHome) return copilot.openWith(text);
+    if (copilot && !copilot.onHome && !copilot.off) return copilot.openWith(text);
     seedCopilot(text);
     router.push(dashRoute("/"));
   }, [copilot, router]);
@@ -116,15 +118,24 @@ export function CopilotPanelProvider({
   defaultWidth = COPILOT_DEFAULT_WIDTH,
   defaultLayout = "docked",
   roleplay = true,
+  hiddenOn = [],
 }: {
   children: ReactNode;
   defaultOpen?: boolean;
   defaultWidth?: number;
   defaultLayout?: CopilotLayout;
   roleplay?: boolean;
+  /**
+   * Pages the copilot stays off (copilotOff in lib/copilot-page.ts): no button, no panel, ⌘J does nothing. Its open
+   * state is kept, so it's back as it was on the next page.
+   */
+  hiddenOn?: readonly CopilotOffRoute[];
 }) {
   const pathname = usePathname();
   const onHome = isCopilotHome(pathname);
+  const off = isCopilotOff(pathname, hiddenOn);
+  // Where there's no panel: home (the page is the copilot) and the pages it stays off.
+  const away = onHome || off;
   const isMobile = useIsMobile();
   const [desktopOpen, setDesktopOpen] = useState(defaultOpen);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -145,9 +156,9 @@ export function CopilotPanelProvider({
   const returnFocus = useRef<HTMLElement | null>(null);
   const dock = useRef<HTMLDivElement>(null);
   // The latest state for callbacks and listeners. Updated in a layout effect: the chats' status effects run after it.
-  const live = useRef({ open, onHome, status });
+  const live = useRef({ open, onHome, off, status });
   useLayoutEffect(() => {
-    live.current = { open, onHome, status };
+    live.current = { open, onHome, off, status };
   });
 
   // Leaving home while the copilot works or waits for you: bring the conversation along, so a running build never
@@ -157,7 +168,7 @@ export function CopilotPanelProvider({
   if (wasHome !== onHome) {
     setWasHome(onHome);
     if (onHome) setUnread(false);
-    else if (status !== "idle" && !isMobile) {
+    else if (status !== "idle" && !isMobile && !off) {
       setMounted(true);
       setDesktopOpen(true);
     }
@@ -228,7 +239,7 @@ export function CopilotPanelProvider({
       event.preventDefault();
       if (event.repeat) return;
       if (live.current.onHome) setFocusSignal((n) => n + 1);
-      else toggle();
+      else if (!live.current.off) toggle();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -244,20 +255,21 @@ export function CopilotPanelProvider({
 
   const value = useMemo<CopilotPanelContext>(
     () => ({
-      open: open && !onHome, setOpen, toggle, onHome, status, unread, report, openWith, prefetch, focusSignal,
+      open: open && !away, setOpen, toggle, onHome, off, status, unread, report, openWith, prefetch, focusSignal,
       layout, setLayout, expanded, setExpanded, roleplay,
     }),
-    [open, onHome, setOpen, toggle, status, unread, report, openWith, prefetch, focusSignal, layout, setLayout, expanded, roleplay],
+    [open, away, setOpen, toggle, onHome, off, status, unread, report, openWith, prefetch, focusSignal, layout, setLayout, expanded, roleplay],
   );
 
   // Never two chats on one conversation: on home the page's chat runs it and the panel's is unmounted.
-  const chat = mounted && !onHome ? <CopilotChat key={chatKey} variant="panel" /> : null;
+  // On a page it stays off, the conversation is put away too; it resumes on the next page (it's saved per person).
+  const chat = mounted && !away ? <CopilotChat key={chatKey} variant="panel" /> : null;
 
   return (
     <Context.Provider value={value}>
       {children}
       {isMobile ? (
-        <Sheet open={mobileOpen && !onHome} onOpenChange={setOpen}>
+        <Sheet open={mobileOpen && !away} onOpenChange={setOpen}>
           <SheetContent
             side="right"
             showCloseButton={false}
@@ -272,7 +284,7 @@ export function CopilotPanelProvider({
             <div className="flex h-full min-h-0 flex-col bg-sidebar">{chat}</div>
           </SheetContent>
         </Sheet>
-      ) : onHome ? null : layout === "floating" ? (
+      ) : away ? null : layout === "floating" ? (
         <CopilotFloating
           ref={dock}
           open={desktopOpen}
@@ -292,7 +304,7 @@ export function CopilotPanelProvider({
         </Dock>
       )}
       {/* The way in, bottom right: in the docked layout and on phones (floating has it built into its shape). */}
-      {!onHome && (isMobile || layout === "docked") && (
+      {!away && (isMobile || layout === "docked") && (
         <CopilotLauncher
           hidden={open}
           status={status}

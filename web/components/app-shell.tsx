@@ -5,9 +5,20 @@ import { usePathname } from "next/navigation";
 import { AppSidebar } from "@/components/app-sidebar";
 import type { CopilotLayout } from "@/components/copilot/cookies";
 import { CopilotPanelProvider } from "@/components/copilot/panel";
+import { copilotOff } from "@/lib/copilot-page";
 import type { SwitchableOrg } from "@/components/org-switcher";
 import { LoadingTable } from "@/components/page-skeletons";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+
+/**
+ * Pages the copilot stays off: live calls (calibration calls and the trainer's own test session), where a button in
+ * the corner or a panel opening would get in the way of talking.
+ */
+const COPILOT_OFF = [
+  copilotOff("/talk"),
+  copilotOff("/twin/[id]/calibrate"),
+  copilotOff("/roleplay/[id]/calibrate"),
+];
 
 /** Dash pages that render without the studio chrome. */
 const FULLSCREEN = [
@@ -57,7 +68,7 @@ export function AppShell({ children, hideRoleplay = false, bots = false, orgs = 
       style={{ "--sidebar-width-left": "18rem" } as CSSProperties}
     >
       {/* The copilot sits beside every page (components/copilot/panel.tsx): its dock is the row's last column. */}
-      <CopilotPanelProvider defaultOpen={copilot?.open} defaultWidth={copilot?.width} defaultLayout={copilot?.layout} roleplay={!hideRoleplay}>
+      <CopilotPanelProvider defaultOpen={copilot?.open} defaultWidth={copilot?.width} defaultLayout={copilot?.layout} roleplay={!hideRoleplay} hiddenOn={COPILOT_OFF}>
         <AppSidebar hideRoleplay={hideRoleplay} bots={bots} orgs={orgs} orgId={orgId} />
         {/* Prototype: flat content panel, flush against the rail (reference .main). */}
         <SidebarInset className="min-h-0 min-w-0 overflow-hidden">

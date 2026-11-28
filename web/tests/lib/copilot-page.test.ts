@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { decodeCopilotMessage, encodeCopilotMessage } from "@/lib/copilot-message";
-import { copilotPageOf, dashPath, homeStarters, isCopilotHome, sectionOf, startersFor } from "@/lib/copilot-page";
+import { copilotOff, copilotPageOf, dashPath, homeStarters, isCopilotHome, isCopilotOff, sectionOf, startersFor } from "@/lib/copilot-page";
 
 describe("copilot page context", () => {
   test("the dash URL is the same with or without the /dash folder prefix", () => {
@@ -68,5 +68,26 @@ describe("copilot page context", () => {
     expect(decodeCopilotMessage(sent)).toEqual({ page, skill: "roleplay-creator", files: [{ id: "d1", title: "Deck" }], text: "Make it harder" });
     expect(decodeCopilotMessage(encodeCopilotMessage({ page, files: [], text: "hi" }))).toEqual({ page, skill: undefined, files: [], text: "hi" });
     expect("page" in decodeCopilotMessage("hello")).toBe(false);
+  });
+});
+
+describe("pages the copilot stays off", () => {
+  const off = [copilotOff("/talk"), copilotOff("/twin/[id]/calibrate"), copilotOff("/roleplay/[id]/calibrate")];
+  test("matches those pages, on either host form, and nothing around them", () => {
+    expect(isCopilotOff("/talk", off)).toBe(true);
+    expect(isCopilotOff("/dash/talk/", off)).toBe(true);
+    expect(isCopilotOff("/twin/olga-twin/calibrate", off)).toBe(true);
+    expect(isCopilotOff("/roleplay/renewal-call/calibrate", off)).toBe(true);
+    expect(isCopilotOff("/twin/olga-twin", off)).toBe(false);
+    expect(isCopilotOff("/twin/olga-twin/calibration", off)).toBe(false);
+    expect(isCopilotOff("/twin/sessions/abc", off)).toBe(false);
+    expect(isCopilotOff("/twin/a/b/calibrate", off)).toBe(false);
+    expect(isCopilotOff("/", off)).toBe(false);
+  });
+  test("catch-all segments", () => {
+    const rest = ["/voice/[...rest]", "/knowledge/[[...rest]]"] as unknown as Parameters<typeof isCopilotOff>[1];
+    expect(isCopilotOff("/voice/a/b", rest)).toBe(true);
+    expect(isCopilotOff("/voice", rest)).toBe(false);
+    expect(isCopilotOff("/knowledge", rest)).toBe(true);
   });
 });

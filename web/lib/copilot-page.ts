@@ -1,3 +1,4 @@
+import type { DashHref } from "@/lib/routes";
 /**
  * The studio page a copilot message was sent from (plans/copilot-everywhere.md, "Page context"): its dash path and the
  * name a trainer would give it. Sent as a <page> tag (lib/copilot-message.ts) so "this", "here" and "these" resolve.
@@ -10,6 +11,36 @@ export type CopilotPage = { path: string; title: string };
 export function dashPath(pathname: string): string {
   const path = pathname.replace(/^\/dash(?=\/|$)/, "") || "/";
   return path.length > 1 ? path.replace(/\/+$/, "") : path;
+}
+
+declare const copilotOffBrand: unique symbol;
+/** A studio page the copilot stays off, by its folder in app/dash: "/twin/[id]/calibrate". Made with copilotOff. */
+export type CopilotOffRoute = string & { readonly [copilotOffBrand]: true };
+
+/**
+ * Keep the copilot off a studio page: no button, no panel, no ⌘J. Written as the page's folder under app/dash and
+ * checked against it by typed routes, so a moved or renamed page is a compile error, not a silent miss.
+ *
+ *   copilotOff("/twin/[id]/calibrate")   // ok
+ *   copilotOff("/twin/[id]/calibrat")    // type error: app/dash has no such page
+ */
+export function copilotOff<Href extends string>(href: DashHref<Href>): CopilotOffRoute {
+  return href as unknown as CopilotOffRoute;
+}
+
+/** Whether this URL is one of those pages: "[id]" matches one segment, "[...rest]" and "[[...rest]]" the rest. */
+export function isCopilotOff(pathname: string, routes: readonly CopilotOffRoute[]): boolean {
+  const path = dashPath(pathname).split("/").filter(Boolean);
+  return routes.some((route) => {
+    const pattern = route.split("/").filter(Boolean);
+    for (let i = 0; i < pattern.length; i++) {
+      const part = pattern[i];
+      if (/^\[\[?\.\.\./.test(part)) return part.startsWith("[[") || path.length > i;
+      if (i >= path.length) return false;
+      if (!(part.startsWith("[") && part.endsWith("]")) && part !== decodeURIComponent(path[i])) return false;
+    }
+    return pattern.length === path.length;
+  });
 }
 
 /**
