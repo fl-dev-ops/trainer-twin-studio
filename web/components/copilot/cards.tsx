@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import type { Route } from "next";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowUpRight } from "lucide-react";
 import { GRADIENTS, LearnerAvatars } from "@/components/library-card-parts";
@@ -10,9 +11,12 @@ import { scoreTone } from "@/components/roleplay/roleplay-session-item";
 import { HelpfulStars } from "@/components/twin/twin-session-item";
 import { TwinFace } from "@/components/twin/twin-face";
 import { Badge } from "@/components/ui/badge";
+import { PersonaPhoto, RoleChip } from "@/components/persona/persona-parts";
+import { Progress, ProgressLabel } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { UserAvatar, UserAvatarGroup } from "@/components/user-avatar";
 import { api } from "@/lib/api";
+import type { RoleplayOutputs } from "@/lib/roleplay/trpc";
 import { dashRoute } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 
@@ -31,6 +35,8 @@ import { cn } from "@/lib/utils";
 const STALE = 30_000;
 const useTwinLibrary = () =>
   useQuery({ queryKey: ["copilot.cards.twins"], queryFn: () => api.twin.agents.list.query(), staleTime: STALE });
+const usePersonaLibrary = () =>
+  useQuery({ queryKey: ["copilot.cards.personas"], queryFn: () => api.page.personas.query(), staleTime: STALE });
 const useRoleplayLibrary = () =>
   useQuery({ queryKey: ["copilot.cards.roleplays"], queryFn: () => api.roleplay.scenarios.list.query(), staleTime: STALE });
 
@@ -53,16 +59,6 @@ function CardLink({ href, label, children, className }: { href: Route; label: st
     >
       {children}
     </Link>
-  );
-}
-
-/** "Open" with an arrow that nudges when the card is hovered: where a click takes you. */
-function OpenHint({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="flex shrink-0 items-center gap-0.5 text-xs text-muted-foreground transition-colors group-hover/card:text-foreground">
-      {children}
-      <ArrowUpRight aria-hidden className="size-3.5 transition-transform duration-200 group-hover/card:translate-x-0.5 group-hover/card:-translate-y-0.5 motion-reduce:transition-none" />
-    </span>
   );
 }
 
@@ -134,7 +130,7 @@ export function TwinCard({ item }: { item: ReadItem }) {
         name={twin?.name ?? item.name}
         description={twin?.description ?? item.description}
         learners={twin ? <LearnerAvatars learners={twin.learners} /> : <span />}
-        kind={item.kind}
+        kind={twin ? (twin.allSkills ? "main-twin" : "twin-skill") : item.kind}
         version={item.version}
         archived={item.archived}
       />
@@ -169,6 +165,34 @@ export function RoleplayCard({ item }: { item: ReadItem }) {
   );
 }
 
+/** A persona: their photo, who they are, how they come across, their voice and how many agents use them (as in Personas). */
+export function PersonaCard({ slug, name }: { slug: string; name: string }) {
+  const library = usePersonaLibrary();
+  if (library.isPending) return <CardSkeleton />;
+  const item = library.data?.find((p) => p.slug === slug);
+  const persona = item?.persona;
+  return (
+    <CardLink href={dashRoute(`/personas/${encodeURIComponent(slug)}`)} label={`Open ${persona?.name ?? name}`} className="flex-col gap-2 p-3">
+      <span className="flex items-center gap-3">
+        <PersonaPhoto name={persona?.name ?? name} photoUrl={item?.photoUrl ?? null} />
+        <span className="flex min-w-0 flex-1 flex-col items-start gap-0.5">
+          <span className="max-w-full truncate text-body-s leading-body-s font-semibold tracking-title text-foreground">{persona?.name ?? name}</span>
+          <RoleChip className={cn("text-xs", item?.isOwn && "bg-(--brand)/15 text-(--brand-strong) dark:text-(--brand)")}>
+            {item?.isOwn ? "Your persona" : persona?.role || "No role yet"}
+          </RoleChip>
+        </span>
+      </span>
+      {persona?.about ? <span className="line-clamp-2 text-body-s leading-body-s text-(--text-secondary)">{persona.about}</span> : null}
+      {item ? (
+        <span className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+          <span>{item.voice ? `Voice: ${item.voice.name}` : "No voice yet"}</span>
+          <span>{item.usedBy.length ? `Used by ${item.usedBy.length} ${item.usedBy.length === 1 ? "agent" : "agents"}` : "Not used yet"}</span>
+        </span>
+      ) : null}
+    </CardLink>
+  );
+}
+
 /** Several twins or role plays: stacked cards, the first few, the rest a click away. */
 export function LibraryCards({ items, kind, more, onMore }: { items: ReadItem[]; kind: "twin" | "roleplay"; more: number; onMore: () => void }) {
   const Card = kind === "twin" ? TwinCard : RoleplayCard;
@@ -188,7 +212,7 @@ export function LibraryCards({ items, kind, more, onMore }: { items: ReadItem[];
   );
 }
 
-/** What the copilot's session read says: the fallback card when the studio's own session view isn't available. */
+/** What the copilot's session read says: the fallback when the studio's own session view isn't available. */
 export type ReadSession = {
   id: string;
   kind: "twin" | "roleplay" | "bot";
@@ -199,6 +223,9 @@ export type ReadSession = {
   score?: number;
   learnerRating?: number;
   tags?: string[];
+  learnerFeedback?: string;
+  /** The turns this read returned (lib/copilot-reads.ts sessionDetail): the ones the copilot's answer can cite. */
+  transcript?: { totalTurns: number; fromTurn: number; turns: { n: number; speaker: string; text: string }[] };
 };
 
 /** The session's header: learner, what they talked to, when and how long. */
@@ -227,12 +254,178 @@ function SessionHead({ learner, image, context, at, length }: {
 const sessionHref = (kind: ReadSession["kind"], id: string) =>
   kind === "roleplay" ? dashRoute(`/roleplay/sessions/${id}`) : dashRoute(`/twin/sessions/${id}`);
 
-/** A session, as its page shows it in brief: for a twin the rating, topics and what it couldn't answer; for a role play the score and the report's summary. */
+/** A session, as its page shows it in brief, with its report and the turns the copilot read a click away. */
 export function SessionCard({ session }: { session: ReadSession }) {
   return session.kind === "roleplay" ? <RoleplaySessionCard session={session} /> : <TwinSessionCard session={session} />;
 }
 
+type Panel = "report" | "transcript";
+
+/**
+ * The session card's frame: the top opens the session page; the footer holds the status on the left and, on the
+ * right, toggles that open the report details or the transcript the copilot read, in place (the card grows; the
+ * conversation doesn't jump to another page).
+ */
+function SessionFrame({ href, label, head, children, status, panels, open, onOpen }: {
+  href: Route;
+  label: string;
+  head: React.ReactNode;
+  children?: React.ReactNode;
+  status: React.ReactNode;
+  panels: { id: Panel; label: string; content: React.ReactNode }[];
+  open: Panel | null;
+  onOpen: (panel: Panel | null) => void;
+}) {
+  const current = panels.find((panel) => panel.id === open);
+  return (
+    <article className="flex min-w-0 flex-col overflow-hidden rounded-tt-md border border-(--card-border) bg-card shadow-elevation-1 transition-shadow duration-200 has-[a:hover]:shadow-elevation-2">
+      <Link href={href} aria-label={label} className="group/card flex flex-col gap-2.5 p-3 pb-2.5 outline-none focus-visible:bg-muted/50">
+        <span className="flex items-start gap-2">
+          <span className="min-w-0 flex-1">{head}</span>
+          <ArrowUpRight aria-hidden className="mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-hover/card:translate-x-0.5 group-hover/card:-translate-y-0.5 group-hover/card:text-foreground motion-reduce:transition-none" />
+        </span>
+        {children}
+      </Link>
+      <div className="flex min-h-10 items-center justify-between gap-2 border-t border-(--card-border) px-3 py-1.5">
+        <span className="min-w-0">{status}</span>
+        {panels.length ? (
+          <span className="flex shrink-0 gap-0.5" role="group" aria-label="Show more of this session">
+            {panels.map((panel) => (
+              <button
+                key={panel.id}
+                type="button"
+                aria-expanded={open === panel.id}
+                onClick={() => onOpen(open === panel.id ? null : panel.id)}
+                className={cn(
+                  "rounded-full px-2.5 py-1 text-xs font-medium text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
+                  open === panel.id && "bg-muted text-foreground",
+                )}
+              >
+                {panel.label}
+              </button>
+            ))}
+          </span>
+        ) : null}
+      </div>
+      {current ? (
+        <div key={current.id} className="animate-copilot-chip border-t border-(--card-border) bg-(--sidebar) px-3 py-3">
+          {current.content}
+        </div>
+      ) : null}
+    </article>
+  );
+}
+
+/** The turns the copilot read, numbered as it cites them ("turn 12"), in a short scrolling well. */
+function TranscriptExcerpt({ transcript, href }: { transcript: NonNullable<ReadSession["transcript"]>; href: Route }) {
+  const first = transcript.turns[0]?.n ?? transcript.fromTurn;
+  const last = transcript.turns.at(-1)?.n ?? first;
+  return (
+    <div className="flex flex-col gap-2">
+      <ol className="flex max-h-72 flex-col gap-2 overflow-y-auto overscroll-contain">
+        {transcript.turns.map((turn) => {
+          const learner = turn.speaker === "learner";
+          return (
+            <li key={turn.n} className={cn("flex gap-2", learner && "flex-row-reverse")}>
+              <span className="w-6 shrink-0 pt-1.5 text-center text-xs text-muted-foreground tabular-nums" aria-label={`Turn ${turn.n}`}>{turn.n}</span>
+              <p className={cn("max-w-[85%] rounded-tt-md px-2.5 py-1.5 text-body-s leading-body-s whitespace-pre-wrap", learner ? "bg-(--brand)/10" : "bg-card")}>
+                {turn.text}
+              </p>
+            </li>
+          );
+        })}
+      </ol>
+      <span className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+        <span className="tabular-nums">
+          {transcript.turns.length ? `Turns ${first}–${last} of ${transcript.totalTurns}` : "No transcript was saved"}
+        </span>
+        <Link href={href} className="rounded-sm font-medium outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">Full transcript</Link>
+      </span>
+    </div>
+  );
+}
+
+const GOAL = {
+  met: { label: "Met", tone: "success" },
+  partly: { label: "Partly", tone: "warning" },
+  not_met: { label: "Missed", tone: "secondary" },
+} as const;
+
+/** A role play's report in brief: goals, the rubric as bars, and the biggest opportunity (as on its report page). */
+function RoleplayReportDetails({ report }: { report: NonNullable<RoleplayOutputs["sessions"]["get"]["report"]> }) {
+  const rubric = report.rubricScores ?? [];
+  const earned = rubric.reduce((sum, row) => sum + row.points, 0);
+  const total = rubric.reduce((sum, row) => sum + row.maxPoints, 0);
+  return (
+    <div className="flex flex-col gap-4">
+      {report.goalResults?.length ? (
+        <section className="flex flex-col gap-2">
+          <h4 className="text-xs font-medium text-muted-foreground">Learner goals</h4>
+          <ul className="flex flex-col gap-2">
+            {report.goalResults.map((goal) => (
+              <li key={goal.goal} className="flex items-start justify-between gap-3">
+                <span className="flex min-w-0 flex-col gap-0.5">
+                  <span className="text-body-s leading-body-s">{goal.goal}</span>
+                  {goal.evidence ? <span className="text-xs text-muted-foreground">{goal.evidence}</span> : null}
+                </span>
+                <Badge variant={GOAL[goal.status].tone}>{GOAL[goal.status].label}</Badge>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+      {rubric.length ? (
+        <section className="flex flex-col gap-2">
+          <h4 className="flex items-baseline justify-between text-xs font-medium text-muted-foreground">
+            Scoring rubric <span className="tabular-nums"><b className="text-foreground">{earned}</b> / {total}</span>
+          </h4>
+          <ul className="flex flex-col gap-2.5">
+            {rubric.map((row) => (
+              <li key={row.criterion} title={row.reason}>
+                <Progress value={row.maxPoints ? Math.round((row.points / row.maxPoints) * 100) : 0}>
+                  <ProgressLabel className="min-w-0 flex-1 basis-0 truncate font-normal">{row.criterion}</ProgressLabel>
+                  <span className="ml-auto shrink-0 text-sm text-muted-foreground tabular-nums">{row.points} / {row.maxPoints}</span>
+                </Progress>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+      {report.focusNextTime ? (
+        <p className="rounded-tt-md bg-card p-2.5 text-body-s leading-body-s">
+          <b>Biggest opportunity:</b> {report.focusNextTime}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/** A twin session's report in brief: what it couldn't answer, and the learner's own words about it. */
+function TwinReportDetails({ unanswered, feedback }: { unanswered: string[]; feedback: string | null }) {
+  return (
+    <div className="flex flex-col gap-4">
+      {unanswered.length ? (
+        <section className="flex flex-col gap-2">
+          <h4 className="text-xs font-medium text-muted-foreground">Questions it couldn’t answer</h4>
+          <ul className="flex list-disc flex-col gap-1 pl-4 text-body-s leading-body-s marker:text-caution">
+            {unanswered.map((question) => <li key={question}>{question}</li>)}
+          </ul>
+        </section>
+      ) : null}
+      {feedback ? (
+        <section className="flex flex-col gap-1">
+          <h4 className="text-xs font-medium text-muted-foreground">Learner feedback</h4>
+          <p className="text-body-s leading-body-s text-(--text-secondary)">“{feedback}”</p>
+        </section>
+      ) : null}
+    </div>
+  );
+}
+
+const readLength = (read: ReadSession) => (read.minutes === null ? null : `${Math.max(1, Math.round(read.minutes))} min`);
+
 function TwinSessionCard({ session: read }: { session: ReadSession }) {
+  const [open, setOpen] = useState<Panel | null>(null);
   const { data, isPending } = useQuery({
     queryKey: ["copilot.cards.twin-session", read.id],
     queryFn: () => api.twin.sessions.get.query({ id: read.id }),
@@ -240,40 +433,51 @@ function TwinSessionCard({ session: read }: { session: ReadSession }) {
     retry: false,
   });
   if (isPending) return <CardSkeleton />;
+  const href = sessionHref(read.kind, read.id);
+  const learner = shownName(data?.learner ?? read.learner);
   const topics = data?.topics ?? read.tags ?? [];
-  const unanswered = data?.unanswered.length ?? 0;
+  const unanswered = data?.unanswered ?? [];
+  const feedback = data?.feedbackNote?.trim() || read.learnerFeedback || null;
+  const rating = data?.rating ?? read.learnerRating ?? null;
   return (
-    <CardLink href={sessionHref(read.kind, read.id)} label={`Open the session with ${shownName(data?.learner ?? read.learner)}`} className="flex-col gap-2.5 p-3">
-      <SessionHead
-        learner={shownName(data?.learner ?? read.learner)}
-        context={<>{read.kind === "bot" ? "Website bot: " : "with "}{data?.agentName ?? read.agent.name}</>}
-        at={data?.at ?? read.startedAt}
-        length={data ? lengthOf(data.seconds) : read.minutes === null ? null : `${Math.max(1, Math.round(read.minutes))} min`}
-      />
+    <SessionFrame
+      href={href}
+      label={`Open the session with ${learner}`}
+      head={
+        <SessionHead
+          learner={learner}
+          context={<>{read.kind === "bot" ? "Website bot: " : "with "}{data?.agentName ?? read.agent.name}</>}
+          at={data?.at ?? read.startedAt}
+          length={data ? lengthOf(data.seconds) : readLength(read)}
+        />
+      }
+      status={
+        <span className="flex flex-col gap-0.5">
+          {rating ? <HelpfulStars score={rating} /> : <span className="text-xs text-muted-foreground">Not rated yet</span>}
+          {unanswered.length ? (
+            <span className="text-xs text-caution">{unanswered.length === 1 ? "1 question it couldn't answer" : `${unanswered.length} questions it couldn't answer`}</span>
+          ) : null}
+        </span>
+      }
+      panels={[
+        ...(unanswered.length || feedback ? [{ id: "report" as const, label: "Report", content: <TwinReportDetails unanswered={unanswered} feedback={feedback} /> }] : []),
+        ...(read.transcript ? [{ id: "transcript" as const, label: "Transcript", content: <TranscriptExcerpt transcript={read.transcript} href={href} /> }] : []),
+      ]}
+      open={open}
+      onOpen={setOpen}
+    >
       {topics.length ? (
         <span className="flex flex-wrap gap-1.5">
           {topics.slice(0, 3).map((topic) => <Badge key={topic} variant="outline">{topic}</Badge>)}
           {topics.length > 3 ? <Badge variant="outline">+{topics.length - 3}</Badge> : null}
         </span>
       ) : null}
-      <span className="flex items-end justify-between gap-3 border-t border-(--card-border) pt-2.5">
-        <span className="flex flex-col gap-1">
-          {(data?.rating ?? read.learnerRating) ? (
-            <HelpfulStars score={data?.rating ?? read.learnerRating ?? null} />
-          ) : (
-            <span className="text-xs text-muted-foreground">Not rated yet</span>
-          )}
-          {unanswered ? (
-            <span className="text-xs text-caution">{unanswered === 1 ? "1 question it couldn't answer" : `${unanswered} questions it couldn't answer`}</span>
-          ) : null}
-        </span>
-        <OpenHint>Open session</OpenHint>
-      </span>
-    </CardLink>
+    </SessionFrame>
   );
 }
 
 function RoleplaySessionCard({ session: read }: { session: ReadSession }) {
+  const [open, setOpen] = useState<Panel | null>(null);
   const { data, isPending } = useQuery({
     queryKey: ["copilot.cards.roleplay-session", read.id],
     queryFn: () => api.roleplay.sessions.get.query({ id: read.id }),
@@ -281,27 +485,39 @@ function RoleplaySessionCard({ session: read }: { session: ReadSession }) {
     retry: false,
   });
   if (isPending) return <CardSkeleton />;
+  const href = sessionHref("roleplay", read.id);
+  const learner = shownName(data?.learner.name ?? read.learner);
   const score = data?.score ?? read.score ?? null;
+  const report = data?.report ?? null;
+  const hasDetails = Boolean(report && (report.goalResults?.length || report.rubricScores?.length || report.focusNextTime));
   return (
-    <CardLink href={sessionHref("roleplay", read.id)} label={`Open the report for ${shownName(data?.learner.name ?? read.learner)}`} className="flex-col gap-2.5 p-3">
-      <SessionHead
-        learner={shownName(data?.learner.name ?? read.learner)}
-        image={data?.learner.image}
-        context={<>{data?.roleplay.name ?? read.agent.name}{data?.client.name ? ` · with ${data.client.name}` : ""}</>}
-        at={data?.at ?? read.startedAt}
-        length={data ? lengthOf(data.seconds) : read.minutes === null ? null : `${Math.max(1, Math.round(read.minutes))} min`}
-      />
-      {data?.report?.summary ? (
-        <span className="line-clamp-3 text-body-s leading-body-s text-(--text-secondary)">{data.report.summary}</span>
-      ) : null}
-      <span className="flex items-center justify-between gap-3 border-t border-(--card-border) pt-2.5">
-        {score !== null ? (
+    <SessionFrame
+      href={href}
+      label={`Open the report for ${learner}`}
+      head={
+        <SessionHead
+          learner={learner}
+          image={data?.learner.image}
+          context={<>{data?.roleplay.name ?? read.agent.name}{data?.client.name ? ` · with ${data.client.name}` : ""}</>}
+          at={data?.at ?? read.startedAt}
+          length={data ? lengthOf(data.seconds) : readLength(read)}
+        />
+      }
+      status={
+        score !== null ? (
           <Badge variant={scoreTone(score)}><span className="tabular-nums">Score {score}</span></Badge>
         ) : data?.reportState === "pending" ? (
           <span className="text-xs text-muted-foreground">Preparing report…</span>
-        ) : <span />}
-        <OpenHint>Open report</OpenHint>
-      </span>
-    </CardLink>
+        ) : null
+      }
+      panels={[
+        ...(report && hasDetails ? [{ id: "report" as const, label: "Report", content: <RoleplayReportDetails report={report} /> }] : []),
+        ...(read.transcript ? [{ id: "transcript" as const, label: "Transcript", content: <TranscriptExcerpt transcript={read.transcript} href={href} /> }] : []),
+      ]}
+      open={open}
+      onOpen={setOpen}
+    >
+      {report?.summary ? <span className="line-clamp-3 text-body-s leading-body-s text-(--text-secondary)">{report.summary}</span> : null}
+    </SessionFrame>
   );
 }

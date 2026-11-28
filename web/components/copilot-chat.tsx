@@ -99,7 +99,7 @@ import { type CopilotPage, copilotPageOf, homeStarters, startersFor } from "@/li
 import { dashRoute } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 import { useRefresh } from "@/lib/use-refresh";
-import { CopilotReadView } from "@/components/copilot/views";
+import { CopilotChangeView, CopilotReadView } from "@/components/copilot/views";
 
 const TOOL_TITLES: Record<string, string> = {
   eve__skill: "Load skill",
@@ -1150,6 +1150,7 @@ function ToolPartView({
     </div>
     {/* What a finished read looked at, as the studio shows it (components/copilot/views.tsx). */}
     {part.state === "completed" && <CopilotReadView name={part.name} output={part.output} />}
+    {part.state === "completed" && <CopilotChangeView name={part.name} input={part.input} output={part.output} />}
     </>
   );
 }

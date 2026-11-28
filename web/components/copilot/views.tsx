@@ -12,7 +12,7 @@ import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemMedia, 
 import { Progress, ProgressLabel } from "@/components/ui/progress";
 import { UserAvatar } from "@/components/user-avatar";
 import { dashRoute } from "@/lib/routes";
-import { LibraryCards, RoleplayCard, SessionCard, TwinCard } from "@/components/copilot/cards";
+import { LibraryCards, PersonaCard, RoleplayCard, SessionCard, TwinCard } from "@/components/copilot/cards";
 
 /**
  * What the copilot read, shown with the studio's own pieces (phase 3.1, plans/copilot-everywhere.md): under a finished
@@ -50,13 +50,24 @@ const libraryItem = z.object({
 });
 const library = z.object({ items: z.array(libraryItem) });
 
+const persona = z.object({ slug: z.string(), name: z.string(), own: z.boolean().optional() });
+
 const SCHEMAS = {
+  persona_list: z.object({ personas: z.array(persona) }),
   twin_list: library,
   roleplay_list: library,
   twin_read: libraryItem,
   roleplay_read: libraryItem,
   session_list: z.object({ days: z.number(), sessions: z.array(session), nextOffset: z.number().optional() }),
-  session_read: session.extend({ hasRecording: z.boolean().optional() }),
+  session_read: session.extend({
+    hasRecording: z.boolean().optional(),
+    learnerFeedback: z.string().optional(),
+    transcript: z.object({
+      totalTurns: z.number(),
+      fromTurn: z.number(),
+      turns: z.array(z.object({ n: z.number(), speaker: z.string(), text: z.string() })),
+    }).optional(),
+  }),
   usage_read: z.object({
     days: z.number(),
     byAgent: z.array(z.object({ name: z.string(), kind: z.string(), minutes: z.number() })),
@@ -104,6 +115,10 @@ export function CopilotReadView({ name, output }: { name: string; output: unknow
         .sort((a, b) => Number(b.kind === "main-twin") - Number(a.kind === "main-twin"));
       return items.length ? <Frameless><LibraryList items={items} kind={name === "twin_list" ? "twin" : "roleplay"} /></Frameless> : null;
     }
+    case "persona_list": {
+      const personas = (data as z.infer<typeof SCHEMAS.persona_list>).personas;
+      return personas.length ? <Frameless><PersonaList personas={personas} /></Frameless> : null;
+    }
     case "twin_read":
       return <Frameless><TwinCard item={data as z.infer<typeof libraryItem>} /></Frameless>;
     case "roleplay_read":
@@ -131,6 +146,47 @@ function LibraryList({ items, kind }: { items: z.infer<typeof libraryItem>[]; ki
   const [all, setAll] = useState(false);
   const shown = all ? items : items.slice(0, 3);
   return <LibraryCards items={shown} kind={kind} more={items.length - shown.length} onMore={() => setAll(true)} />;
+}
+
+function PersonaList({ personas }: { personas: z.infer<typeof persona>[] }) {
+  const [all, setAll] = useState(false);
+  const shown = all ? personas : personas.slice(0, 3);
+  return (
+    <div className="flex flex-col gap-2">
+      {shown.map((p) => <PersonaCard key={p.slug} slug={p.slug} name={p.name} />)}
+      {personas.length > shown.length ? (
+        <button
+          type="button"
+          onClick={() => setAll(true)}
+          className="self-start rounded-full px-2 py-1 text-xs font-medium text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          Show {personas.length - shown.length} more
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * After an approved change: the thing that changed, as it is now (the page refresh after a write reloads the cards'
+ * data too, components/copilot-chat.tsx). Keyed by the slug the tool was given, or the one a create returned.
+ */
+const TWIN_WRITES = new Set(["twin_update", "twin_settings_update"]);
+const ROLEPLAY_WRITES = new Set(["roleplay_update", "roleplay_settings_update", "roleplay_tools_update", "roleplay_character_set", "roleplay_personas_set"]);
+const PERSONA_WRITES = new Set(["persona_create", "persona_update"]);
+const written = z.object({ slug: z.string().min(1), label: z.string().optional(), name: z.string().optional() });
+
+export function CopilotChangeView({ name, input, output }: { name: string; input: unknown; output: unknown }) {
+  if (!TWIN_WRITES.has(name) && !ROLEPLAY_WRITES.has(name) && !PERSONA_WRITES.has(name)) return null;
+  // A refused or failed change shows no card: the step line already says what happened.
+  if (!output || typeof output !== "object" || "error" in output || (output as { ok?: unknown }).ok === false) return null;
+  const target = written.safeParse({ ...(input as object), ...(name === "persona_create" ? output : {}) });
+  if (!target.success) return null;
+  const { slug, label } = target.data;
+  const title = label ?? target.data.name ?? slug;
+  if (PERSONA_WRITES.has(name)) return <Frameless><PersonaCard slug={slug} name={title} /></Frameless>;
+  const item = { slug, name: title, kind: TWIN_WRITES.has(name) ? "twin-skill" : "roleplay-builder" };
+  return <Frameless>{TWIN_WRITES.has(name) ? <TwinCard item={item} /> : <RoleplayCard item={item} />}</Frameless>;
 }
 
 /** The frame every view sits in: the panel's own surface, set in from the step line it belongs to. */
